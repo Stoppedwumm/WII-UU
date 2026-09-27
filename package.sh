@@ -12,4 +12,8 @@ cp -r src resources build.sh package.sh "dist/$NAME/source/"
 chmod +x "dist/$NAME/install.sh" "dist/$NAME/emulators.sh" "dist/$NAME/source/build.sh" "dist/$NAME/source/package.sh"
 (cd dist && zip -qr -X "$NAME.zip" "$NAME")
 rm -rf "dist/$NAME"
-echo "Packaged dist/$NAME.zip"
+# the website (docs/, served at wiiuu.stoppedwumm.net) hosts the downloads too
+mkdir -p docs/download
+cp "dist/$NAME.zip" "docs/download/$NAME.zip"
+cp "dist/$NAME.zip" docs/download/WII-UU-latest.zip
+echo "Packaged dist/$NAME.zip (also docs/download/)"

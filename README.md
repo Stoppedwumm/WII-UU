@@ -3,6 +3,9 @@
 A Wii U Menu–style emulator frontend written in Java, with a built-in web server that turns
 any phone into a Wii U–like GamePad. There are no dependencies beyond Java 17+.
 
+Website: **https://wiiuu.stoppedwumm.net** (served from `docs/`). It has a one-line install for
+Linux, Raspberry Pi and macOS: `curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash`.
+
 ![Menu](docs/menu.png)
 ![Phone GamePad](docs/gamepad.png)
 

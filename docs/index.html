@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WII-UU — Wii U style emulator launcher</title>
+<meta name="description" content="A Wii U Menu style emulator frontend in Java. Use your phone as the GamePad. NES to Wii U and Switch, PS1 to PS4. Runs on Linux, Windows, macOS and Raspberry Pi.">
+<meta property="og:title" content="WII-UU">
+<meta property="og:description" content="Wii U style emulator launcher with your phone as the GamePad.">
+<meta property="og:image" content="https://wiiuu.stoppedwumm.net/menu.png">
+<meta property="og:url" content="https://wiiuu.stoppedwumm.net/">
+<meta name="theme-color" content="#f4f6f8">
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --bg2: #e3e7eb;
+    --stripe: rgba(0, 0, 0, .035);
+    --card: #ffffff;
+    --ink: #3c4043;
+    --dim: #6f7780;
+    --line: rgba(0, 0, 0, .08);
+    --accent: #00a8e8;
+    --accent-ink: #0082b4;
+    --code-bg: #1f2328;
+    --code-ink: #e8edf2;
+    --shadow: 0 1px 2px rgba(40, 50, 60, .08), 0 6px 18px rgba(40, 50, 60, .10);
+    --radius: 22px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16191d; --bg2: #0f1113; --stripe: rgba(255, 255, 255, .025); --card: #22262c; --ink: #e6e9ec;
+      --dim: #9aa3ad; --line: rgba(255, 255, 255, .08); --accent: #26b9f2; --accent-ink: #6fd3ff;
+      --code-bg: #0d0f12; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16191d; --bg2: #0f1113; --stripe: rgba(255, 255, 255, .025); --card: #22262c; --ink: #e6e9ec;
+    --dim: #9aa3ad; --line: rgba(255, 255, 255, .08); --accent: #26b9f2; --accent-ink: #6fd3ff;
+    --code-bg: #0d0f12; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; color: var(--ink); line-height: 1.55;
+    font-family: "Nunito", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    background: var(--bg);
+    background-image: repeating-linear-gradient(0deg, var(--stripe) 0 2px, transparent 2px 6px),
+                      linear-gradient(180deg, var(--bg), var(--bg2));
+    background-attachment: fixed;
+  }
+  a { color: var(--accent-ink); }
+  img { max-width: 100%; height: auto; display: block; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+
+  /* top bar, like the Wii U menu's pills */
+  header { position: sticky; top: 0; z-index: 5; padding: 12px 0; backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--bg) 80%, transparent); }
+  header .wrap { display: flex; align-items: center; gap: 10px; }
+  .pill { display: inline-flex; align-items: center; gap: 10px; background: var(--card); border-radius: 999px;
+    padding: 8px 16px; box-shadow: var(--shadow); text-decoration: none; color: var(--ink); font-weight: 800; }
+  .logo { font-size: 20px; letter-spacing: .02em; gap: 0; }
+  .logo b { color: var(--accent); }
+  nav { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  nav a { text-decoration: none; color: var(--dim); font-weight: 700; padding: 8px 12px; border-radius: 999px; }
+  nav a:hover { color: var(--ink); background: var(--card); }
+  #theme { border: 0; cursor: pointer; font: inherit; }
+
+  /* hero */
+  .hero { display: grid; grid-template-columns: 1fr 1.25fr; gap: 40px; align-items: center; padding: 48px 0 32px; }
+  h1 { font-size: clamp(34px, 5vw, 56px); line-height: 1.05; margin: 0 0 16px; letter-spacing: -.01em; }
+  h1 span { color: var(--accent); }
+  .lead { font-size: 19px; color: var(--dim); margin: 0 0 26px; }
+  .buttons { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 999px; font-weight: 800;
+    text-decoration: none; box-shadow: var(--shadow); background: var(--card); color: var(--ink); }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn:hover { transform: translateY(-1px); }
+  .shot { border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line);
+    outline: 4px solid var(--accent); outline-offset: 5px; }
+  .meta { margin-top: 18px; color: var(--dim); font-size: 14px; }
+
+  section { padding: 44px 0; }
+  h2 { font-size: 30px; margin: 0 0 8px; }
+  .sub { color: var(--dim); margin: 0 0 26px; max-width: 70ch; }
+
+  /* tile grid, like menu tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+  .tile { background: var(--card); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
+  .tile .art { height: 78px; display: grid; place-items: center; color: #fff; font-weight: 900; font-size: 30px;
+    position: relative; }
+  .tile .art::after { content: ""; position: absolute; inset: 0 0 50% 0;
+    background: linear-gradient(rgba(255, 255, 255, .28), rgba(255, 255, 255, 0)); }
+  .tile .art small { position: absolute; top: 6px; left: 10px; font-size: 10px; letter-spacing: .06em; opacity: .85; }
+  .tile .art i { position: absolute; top: 6px; right: 10px; font-size: 10px; font-style: normal; opacity: .85; }
+  .tile .cap { padding: 8px 10px 10px; text-align: center; font-weight: 700; font-size: 14px; }
+  .tile .cap span { display: block; color: var(--dim); font-weight: 600; font-size: 12px; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { background: var(--card); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); }
+  .card h3 { margin: 6px 0 6px; font-size: 19px; }
+  .card p { margin: 0; color: var(--dim); }
+  .icon { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--bg);
+    color: var(--accent); }
+
+  .split { display: grid; grid-template-columns: 1.3fr 1fr; gap: 36px; align-items: center; }
+  .split.rev { grid-template-columns: 1fr 1.3fr; }
+  ol.steps { padding-left: 1.2em; margin: 0; }
+  ol.steps li { margin: 0 0 10px; }
+
+  /* install tabs */
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .tab { border: 0; cursor: pointer; font: inherit; font-weight: 800; padding: 9px 16px; border-radius: 999px;
+    background: var(--card); color: var(--dim); box-shadow: var(--shadow); }
+  .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
+  .panel[hidden] { display: none; }
+  .code { position: relative; background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 16px 18px;
+    font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-x: auto; margin: 0 0 14px; }
+  .code .c { color: #8b949e; }
+  .copy { position: absolute; top: 8px; right: 8px; border: 0; border-radius: 8px; padding: 5px 10px; cursor: pointer;
+    font: 12px/1 inherit; font-weight: 800; background: rgba(255, 255, 255, .12); color: var(--code-ink); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em;
+    background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 1px 6px; border-radius: 6px; }
+  .code code { background: none; padding: 0; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: var(--radius); overflow: hidden;
+    box-shadow: var(--shadow); font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  th { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); }
+  tr:last-child td { border-bottom: 0; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 999px; }
+  .tag.rel { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-ink); }
+  .tag.src { background: color-mix(in srgb, #f28c28 18%, transparent); color: #c96a0e; }
+  .tag.x86 { background: var(--bg); color: var(--dim); }
+  .tablewrap { overflow-x: auto; border-radius: var(--radius); }
+
+  details { background: var(--card); border-radius: 16px; padding: 14px 18px; box-shadow: var(--shadow); margin-bottom: 12px; }
+  summary { font-weight: 800; cursor: pointer; }
+  details p { color: var(--dim); margin: 10px 0 0; }
+
+  footer { padding: 40px 0 60px; color: var(--dim); font-size: 14px; }
+  footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+
+  @media (max-width: 900px) {
+    .hero, .split, .split.rev { grid-template-columns: 1fr; }
+    .cards { grid-template-columns: 1fr; }
+    .hero { padding-top: 24px; }
+    nav a.hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="pill logo" href="#top">WII-<b>UU</b></a>
+    <nav>
+      <a href="#features" class="hide-sm">Features</a>
+      <a href="#gamepad" class="hide-sm">GamePad</a>
+      <a href="#install">Install</a>
+      <a href="#emulators" class="hide-sm">Emulators</a>
+      <a href="https://github.com/Stoppedwumm/WII-UU">GitHub</a>
+      <button id="theme" class="pill" aria-label="Toggle dark mode" title="Toggle dark mode">◐</button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <h1>Your games, the <span>Wii U</span> way.</h1>
+        <p class="lead">WII-UU is an emulator launcher styled after the Wii U Menu. It finds your games, starts the
+          right emulator, and turns any phone into the GamePad. It supports consoles from the NES to the Wii U and Switch, and from the PS1 to the PS4.</p>
+        <div class="buttons">
+          <a class="btn primary" href="download/WII-UU-latest.zip">⤓ Download</a>
+          <a class="btn" href="#install">Install guide</a>
+        </div>
+        <p class="meta">Version 1.0.0 · Linux · Windows · macOS · Raspberry Pi · Java 17+</p>
+      </div>
+      <img class="shot" src="menu.png" alt="The WII-UU home screen: a grid of console tiles with a blue cursor, a clock and a GamePad status pill" width="1600" height="900">
+    </div>
+  </div>
+
+  <section id="systems">
+    <div class="wrap">
+      <h2>20 consoles, one menu</h2>
+      <p class="sub">Drop games into a folder per system and they show up as tiles. Covers are optional; PS3 and PS4 icons are picked up automatically.</p>
+      <div class="tiles" id="tiles"></div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>What it does</h2>
+      <p class="sub">A small Java app with no extra dependencies, drawn by hand to feel like the Wii U Menu.</p>
+      <div class="cards">
+        <div class="card"><div class="icon">▦</div><h3>Wii U style menu</h3>
+          <p>Paged tiles with a gliding cursor, a dock and soft menu sounds. It runs smoothly on a Raspberry Pi.</p></div>
+        <div class="card"><div class="icon">▣</div><h3>Phone as GamePad</h3>
+          <p>Scan a QR code and your phone becomes the controller, with sticks, D-pad, ABXY, shoulder buttons and HOME. Up to 4 players.</p></div>
+        <div class="card"><div class="icon">⤓</div><h3>Emulators installed for you</h3>
+          <p>It downloads official releases for your CPU, or builds the latest source when a project has no build for it. Emulators are set up automatically.</p></div>
+        <div class="card"><div class="icon">▶</div><h3>One-button launch</h3>
+          <p>Press A and the matching emulator opens your game. Press HOME on the phone to close it and return to the menu.</p></div>
+        <div class="card"><div class="icon">⚙</div><h3>Fully configurable</h3>
+          <p>Set the ROM folders, emulator commands and GamePad key mapping in a settings screen, or in a plain properties file.</p></div>
+        <div class="card"><div class="icon">⌂</div><h3>Runs where you do</h3>
+          <p>Linux, Windows and macOS, on x86-64 or 64-bit ARM. Installers set up shortcuts, ROM folders and the firewall.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="gamepad">
+    <div class="wrap split">
+      <img class="shot" src="gamepad.png" alt="The phone GamePad page: two sticks, a D-pad, ABXY buttons and a centre screen listing NES games" width="1688" height="780">
+      <div>
+        <h2>The GamePad is your phone</h2>
+        <p class="sub">WII-UU has a built-in web server, so there's no app to install. The phone's screen works like the Wii U GamePad's.</p>
+        <ol class="steps">
+          <li>Press <b>+</b> (or <b>F2</b>) on the TV to show the QR code.</li>
+          <li>Scan it with your phone on the same Wi-Fi. The pairing code is filled in for you.</li>
+          <li>Browse your library on the phone and tap a game to start it on the TV.</li>
+          <li>Press <b>HOME</b> during a game to close it and return to the menu.</li>
+        </ol>
+        <p class="meta">While a game runs, button presses are sent to the emulator as keyboard keys. Set each emulator to the same keys once. The defaults follow RetroArch.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split rev">
+      <div>
+        <h2>Pair in seconds</h2>
+        <p class="sub">The QR code on the TV includes a pairing code, so only phones that can see your screen can connect.</p>
+      </div>
+      <img class="shot" src="pairing.png" alt="The pairing card on the TV showing a QR code, the GamePad URL and a 4-digit code" width="1600" height="900">
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <h2>Install</h2>
+      <p class="sub">You need Java 17 or newer, and the installers offer to set it up. Your ROMs and settings are kept if you uninstall.</p>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" data-panel="p-linux">Linux &amp; Raspberry Pi</button>
+        <button class="tab" role="tab" aria-selected="false" data-panel="p-win">Windows</button>
+        <button class="tab" role="tab" aria-selected="false" data-panel="p-mac">macOS</button>
+      </div>
+
+      <div class="panel" id="p-linux" role="tabpanel">
+        <pre class="code"><code><span class="c"># WII-UU only</span>
+curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash
+
+<span class="c"># WII-UU plus emulators for your CPU (x86-64 or Raspberry Pi 4/5)</span>
+curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash -s -- --with-emulators</code></pre>
+        <p>Or <a href="download/WII-UU-latest.zip">download the zip</a>, unzip it and run <code>./install.sh</code>. Then start WII-UU from the app menu or with <code>wiiuu</code>.
+          On a Pi, use the 64-bit Raspberry Pi OS.</p>
+      </div>
+      <div class="panel" id="p-win" role="tabpanel" hidden>
+        <p><a href="download/WII-UU-latest.zip">Download the zip</a>, unzip it and double-click <b>install.bat</b>.
+          It installs Java with winget if needed, adds Start-menu and Desktop shortcuts, and opens the GamePad port in the firewall when run as administrator.</p>
+        <p>Then set each emulator's path under <b>Settings (F1)</b>.</p>
+      </div>
+      <div class="panel" id="p-mac" role="tabpanel" hidden>
+        <pre class="code"><code>curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash</code></pre>
+        <p>This installs <b>WII-UU.app</b> in <code>~/Applications</code>. Install emulators from their websites and set their paths under <b>Settings (F1)</b>.
+          Allow Java under <i>Privacy &amp; Security → Accessibility</i> so the GamePad can type into emulators.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="emulators">
+    <div class="wrap">
+      <h2>Emulators</h2>
+      <p class="sub"><code>wiiuu-emulators</code> installs emulators on Linux. It uses the newest official release for your CPU when one exists and builds the latest source otherwise.
+        Heavy source builds are opt-in with <code>--all</code>.</p>
+      <pre class="code"><code>wiiuu-emulators --list       <span class="c"># what's available / installed on this machine</span>
+wiiuu-emulators              <span class="c"># install everything that fits this machine</span>
+wiiuu-emulators --update     <span class="c"># update; skips what's already newest</span>
+wiiuu-emulators --only ppsspp,duckstation
+wiiuu-emulators --nightly    <span class="c"># allow pre-release builds</span>
+wiiuu-emulators --source     <span class="c"># build everything from source</span></code></pre>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>System</th><th>Emulator</th><th>How it's installed</th></tr></thead>
+          <tbody>
+            <tr><td>NES</td><td>FCEUX</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>SNES</td><td>Snes9x</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>Game Boy / Color / Advance</td><td>mGBA</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>Nintendo 64</td><td>Mupen64Plus</td><td><span class="tag src">source</span></td></tr>
+            <tr><td>Nintendo DS</td><td>melonDS</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>GameCube / Wii</td><td>Dolphin</td><td><span class="tag src">source</span> (heavy)</td></tr>
+            <tr><td>Nintendo 3DS</td><td>Azahar</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>Wii U</td><td>Cemu</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>Switch</td><td>Ryujinx</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>Master System / Genesis / Saturn</td><td>Mednafen</td><td><span class="tag src">source</span></td></tr>
+            <tr><td>Dreamcast</td><td>Flycast</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>PlayStation</td><td>DuckStation (or Mednafen)</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>PlayStation 2</td><td>PCSX2</td><td><span class="tag rel">release</span> <span class="tag x86">x86-64 only</span></td></tr>
+            <tr><td>PSP</td><td>PPSSPP</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>PlayStation 3</td><td>RPCS3</td><td><span class="tag rel">release</span> or source</td></tr>
+            <tr><td>PlayStation 4</td><td>shadPS4</td><td><span class="tag rel">release</span> <span class="tag x86">x86-64 only</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="meta">"Release or source" depends on whether the project publishes a Linux build for your CPU. WII-UU is a launcher: you need your own legally dumped games and, where an emulator requires it, your own firmware or keys.</p>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <h2>FAQ</h2>
+      <details><summary>Does it emulate the consoles itself?</summary>
+        <p>No. WII-UU is the menu and the GamePad. It launches well-known emulators for each system and points them at your games.</p></details>
+      <details><summary>My phone can't connect.</summary>
+        <p>Phone and computer must be on the same network, and the GamePad port (8080 by default) must be allowed through the firewall. The installer prints the command for ufw and firewalld, and Windows asks on first start.</p></details>
+      <details><summary>Buttons don't reach the emulator.</summary>
+        <p>Set the emulator's keyboard controls to the keys listed under <b>Settings → GamePad Keys</b>. On Linux under Wayland, keys reach X11/XWayland windows. On macOS, allow Java under Accessibility.</p></details>
+      <details><summary>Will a Raspberry Pi run everything?</summary>
+        <p>The older consoles run well on a Pi 4/5. GameCube, Wii U, Switch, PS3 and PS4 are too demanding to play well on a Pi, and PS2 and PS4 emulators only run on x86-64.</p></details>
+      <details><summary>Where are my settings?</summary>
+        <p>In <code>~/.wiiuu/config.properties</code>. Games go in <code>~/WiiUU/roms/&lt;system&gt;</code> by default; you can change this in Settings.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>WII-UU · not affiliated with Nintendo, Sony or Sega. All trademarks belong to their owners.</span>
+    <a href="https://github.com/Stoppedwumm/WII-UU">Source on GitHub</a>
+  </div>
+</footer>
+
+<script>
+  // system tiles, same colours as the app
+  const SYSTEMS = [
+    ["NES", "Nintendo Entertainment System", "Nintendo", 1983, "#E60012"], ["SNES", "Super Nintendo", "Nintendo", 1990, "#5C4B9E"],
+    ["GB", "Game Boy / Color", "Nintendo", 1989, "#8B9A3B"], ["N64", "Nintendo 64", "Nintendo", 1996, "#1A9E3F"],
+    ["GBA", "Game Boy Advance", "Nintendo", 2001, "#4B3FA0"], ["GCN", "GameCube", "Nintendo", 2001, "#6A5ACD"],
+    ["DS", "Nintendo DS", "Nintendo", 2004, "#7A7A7A"], ["Wii", "Wii", "Nintendo", 2006, "#33B5E5"],
+    ["3DS", "Nintendo 3DS", "Nintendo", 2011, "#CE181E"], ["Wii U", "Wii U", "Nintendo", 2012, "#009AC7"],
+    ["Switch", "Nintendo Switch", "Nintendo", 2017, "#E60012"], ["SMS", "Master System", "Sega", 1985, "#1F4E9E"],
+    ["MD", "Genesis / Mega Drive", "Sega", 1988, "#2a2a2a"], ["SAT", "Saturn", "Sega", 1994, "#3A3A6A"],
+    ["DC", "Dreamcast", "Sega", 1998, "#F28C28"], ["PS1", "PlayStation", "Sony", 1994, "#8C8C8C"],
+    ["PS2", "PlayStation 2", "Sony", 2000, "#1C3F94"], ["PSP", "PlayStation Portable", "Sony", 2004, "#2B2B2B"],
+    ["PS3", "PlayStation 3", "Sony", 2006, "#111111"], ["PS4", "PlayStation 4", "Sony", 2013, "#003791"]
+  ];
+  const tiles = document.getElementById("tiles");
+  for (const [short, name, maker, year, color] of SYSTEMS) {
+    const t = document.createElement("div");
+    t.className = "tile";
+    t.innerHTML = `<div class="art" style="background:${color}"><small>${maker.toUpperCase()}</small><i>${year}</i>${short}</div>`
+      + `<div class="cap">${name}</div>`;
+    tiles.appendChild(t);
+  }
+
+  // install tabs
+  document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t === tab));
+    document.querySelectorAll(".panel").forEach(p => p.hidden = p.id !== tab.dataset.panel);
+  }));
+  const ua = navigator.userAgent;
+  const guess = /Windows/.test(ua) ? "p-win" : /Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua) ? "p-mac" : null;
+  if (guess) document.querySelector(`.tab[data-panel="${guess}"]`).click();
+
+  // copy buttons on code blocks (without the comment lines)
+  document.querySelectorAll(".code").forEach(pre => {
+    const b = document.createElement("button");
+    b.className = "copy"; b.textContent = "Copy";
+    b.onclick = async () => {
+      const text = [...pre.querySelector("code").childNodes].filter(n => !(n.classList && n.classList.contains("c")))
+        .map(n => n.textContent).join("").split("\n").map(l => l.trimEnd()).filter(Boolean).join("\n");
+      try { await navigator.clipboard.writeText(text); b.textContent = "Copied"; } catch (e) { b.textContent = "Select & copy"; }
+      setTimeout(() => b.textContent = "Copy", 1600);
+    };
+    pre.appendChild(b);
+  });
+
+  // theme toggle (remembered per browser)
+  const root = document.documentElement;
+  try { const t = localStorage.getItem("wiiuu-theme"); if (t) root.dataset.theme = t; } catch (e) {}
+  document.getElementById("theme").onclick = () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("wiiuu-theme", root.dataset.theme); } catch (e) {}
+  };
+</script>
+</body>
+</html>
