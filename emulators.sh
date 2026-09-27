@@ -232,7 +232,8 @@ build_snes9x() {
 
 build_mgba() {
   fetch_git mgba https://github.com/mgba-emu/mgba.git
-  cmake_build "$SRC/mgba" "$SRC/mgba/build" -DCMAKE_INSTALL_PREFIX="$E" -DBUILD_QT=ON -DBUILD_SDL=OFF \
+  # SKIP_GIT: mGBA's CMake reads release tags, which a shallow clone doesn't have
+  cmake_build "$SRC/mgba" "$SRC/mgba/build" -DCMAKE_INSTALL_PREFIX="$E" -DBUILD_QT=ON -DBUILD_SDL=OFF -DSKIP_GIT=ON \
     -DUSE_DISCORD_RPC=OFF -DCMAKE_INSTALL_RPATH="$E/lib"
   cmake --install "$SRC/mgba/build"
 }
