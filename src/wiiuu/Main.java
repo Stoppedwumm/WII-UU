@@ -1,0 +1,305 @@
+package wiiuu;
+
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Frame;
+import java.awt.GradientPaint;
+import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
+import java.awt.KeyboardFocusManager;
+import java.awt.RenderingHints;
+import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.geom.RoundRectangle2D;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.concurrent.CompletableFuture;
+
+import javax.imageio.ImageIO;
+import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+
+import wiiuu.core.Config;
+import wiiuu.core.Game;
+import wiiuu.core.Launcher;
+import wiiuu.core.Library;
+import wiiuu.input.InputRouter;
+import wiiuu.input.KeyMap;
+import wiiuu.net.GamepadServer;
+import wiiuu.ui.MenuView;
+import wiiuu.ui.SettingsDialog;
+
+/** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
+public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
+    public static final String VERSION = "1.0.0";
+
+    private final Config config;
+    private final Library library;
+    private final Launcher launcher;
+    private final InputRouter router;
+    private GamepadServer server;
+    private JFrame frame;
+    private MenuView view;
+
+    private Main(Config config) {
+        this.config = config;
+        this.library = new Library(config);
+        this.launcher = new Launcher(config);
+        this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
+        launcher.addListener(this);
+    }
+
+    public static void main(String[] args) throws Exception {
+        Path home = Config.defaultHome();
+        Boolean fullscreen = null;
+        Integer port = null;
+        boolean noServer = false;
+        String snapshot = null, snapshotView = "home";
+        for (int i = 0; i < args.length; i++) {
+            switch (args[i]) {
+                case "--fullscreen" -> fullscreen = true;
+                case "--windowed" -> fullscreen = false;
+                case "--port" -> port = Integer.parseInt(args[++i]);
+                case "--no-server" -> noServer = true;
+                case "--home" -> home = Paths.get(args[++i]);
+                case "--snapshot" -> snapshot = args[++i];
+                case "--snapshot-view" -> snapshotView = args[++i];
+                case "--write-icon" -> {
+                    ImageIO.write(appIcon(256), "png", Paths.get(args[++i]).toFile());
+                    return;
+                }
+                case "--version" -> {
+                    System.out.println("WII-UU " + VERSION);
+                    return;
+                }
+                case "--help", "-h" -> {
+                    System.out.println("""
+                            WII-UU %s - Wii U style emulator launcher
+                              --fullscreen / --windowed   override the saved window mode
+                              --port N                    GamePad web server port (default 8080)
+                              --no-server                 do not start the phone GamePad server
+                              --home DIR                  settings folder (default ~/.wiiuu)
+                            Keys: arrows move, Enter opens, Esc back, F1 settings, F2 GamePad, F5 refresh,
+                                  F11 fullscreen, Ctrl+Q closes a running game.""".formatted(VERSION));
+                    return;
+                }
+                default -> System.err.println("Ignoring unknown option " + args[i]);
+            }
+        }
+        Config config = new Config(home);
+        if (port != null) config.set("server.port", port.toString());
+        if (fullscreen != null) config.set("ui.fullscreen", fullscreen.toString());
+        if (!Files.exists(home.resolve("config.properties"))) config.save();
+
+        Main app = new Main(config);
+        if (snapshot != null) {
+            app.snapshot(Paths.get(snapshot), snapshotView);
+            System.exit(0);
+        }
+        if (GraphicsEnvironment.isHeadless()) {
+            System.err.println("WII-UU needs a desktop session (no display found).");
+            System.exit(1);
+        }
+        boolean startServer = !noServer && config.getBool("server.enabled", true);
+        SwingUtilities.invokeAndWait(app::createWindow);
+        app.library.addListener(s -> SwingUtilities.invokeLater(() -> app.view.setSnapshot(s)));
+        app.library.rescanAsync();
+        if (startServer) app.startServer();
+    }
+
+    private void startServer() {
+        server = new GamepadServer(config, library, launcher, router, this);
+        try {
+            server.start(config.port());
+            SwingUtilities.invokeLater(() -> view.setServer(server.url(), server.pairingUrl(), server.code(), server.requiresCode()));
+        } catch (IOException e) {
+            server = null;
+            SwingUtilities.invokeLater(() -> view.showToast("GamePad server could not use port " + config.port() + ": " + e.getMessage()));
+        }
+    }
+
+    private void createWindow() {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception ignored) {
+            // default look and feel is fine
+        }
+        view = new MenuView(config, this);
+        router.setMenu(view);
+        frame = new JFrame("WII-UU");
+        frame.setIconImage(appIcon(64));
+        frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                quit();
+            }
+
+            @Override
+            public void windowActivated(WindowEvent e) {
+                view.requestFocusInWindow();
+            }
+        });
+        frame.setContentPane(view);
+        frame.setMinimumSize(new Dimension(960, 540));
+        frame.setSize(1280, 720);
+        frame.setLocationRelativeTo(null);
+        applyFullscreen(config.getBool("ui.fullscreen", false));
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(e -> {
+            if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_F11 && frame.isActive()) {
+                applyFullscreen(!frame.isUndecorated());
+                return true;
+            }
+            return false;
+        });
+        view.requestFocusInWindow();
+    }
+
+    private void applyFullscreen(boolean on) {
+        if (frame.isDisplayable() && frame.isUndecorated() == on) return;
+        if (frame.isDisplayable()) frame.dispose();
+        frame.setUndecorated(on);
+        if (on) frame.setExtendedState(Frame.MAXIMIZED_BOTH);
+        else {
+            frame.setExtendedState(Frame.NORMAL);
+            frame.setSize(1280, 720);
+            frame.setLocationRelativeTo(null);
+        }
+        frame.setVisible(true);
+        view.requestFocusInWindow();
+    }
+
+    // ---- MenuView.Actions ---------------------------------------------------------------
+
+    @Override
+    public void launch(Game game) {
+        try {
+            launcher.launch(game);
+        } catch (Launcher.LaunchException e) {
+            view.showToast(e.getMessage());
+        }
+    }
+
+    @Override
+    public void openSettings() {
+        new SettingsDialog(frame, config, () -> {
+            view.setSoundsEnabled(config.getBool("ui.sounds", true));
+            view.showToast("Settings saved");
+            library.rescanAsync();
+        }).setVisible(true);
+        view.requestFocusInWindow();
+    }
+
+    @Override
+    public void quit() {
+        launcher.stop();
+        if (server != null) server.stop();
+        System.exit(0);
+    }
+
+    @Override
+    public void refresh() {
+        library.rescanAsync();
+    }
+
+    @Override
+    public void closeGame() {
+        launcher.stop();
+    }
+
+    // ---- GamepadServer.Host -------------------------------------------------------------
+
+    @Override
+    public String launchFromPad(Game game) {
+        CompletableFuture<String> result = new CompletableFuture<>();
+        SwingUtilities.invokeLater(() -> {
+            try {
+                launcher.launch(game);
+                result.complete(null);
+            } catch (Launcher.LaunchException e) {
+                view.showToast(e.getMessage());
+                result.complete(e.getMessage());
+            }
+        });
+        return result.join();
+    }
+
+    @Override
+    public void padsChanged(int connected) {
+        SwingUtilities.invokeLater(() -> {
+            if (view != null) view.setPads(connected);
+        });
+    }
+
+    // ---- Launcher.Listener --------------------------------------------------------------
+
+    @Override
+    public void started(Game game) {
+        SwingUtilities.invokeLater(() -> {
+            view.setPlaying(game);
+            if (config.getBool("ui.minimizeOnLaunch", true)) frame.setState(Frame.ICONIFIED);
+        });
+    }
+
+    @Override
+    public void exited(Game game, int exitCode, boolean quickFailure, Path log) {
+        SwingUtilities.invokeLater(() -> {
+            view.setPlaying(null);
+            frame.setState(Frame.NORMAL);
+            frame.toFront();
+            frame.requestFocus();
+            view.requestFocusInWindow();
+            if (quickFailure) {
+                view.showToast(game.system().emulator() + " quit with error " + exitCode + " - see " + log);
+            }
+        });
+    }
+
+    // ---- misc ---------------------------------------------------------------------------
+
+    private static BufferedImage appIcon(int size) {
+        BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.scale(size / 64.0, size / 64.0);
+        g.setPaint(new GradientPaint(0, 0, new Color(0x3FC4F5), 0, 64, new Color(0x0090D0)));
+        g.fill(new RoundRectangle2D.Float(2, 2, 60, 60, 18, 18));
+        g.setColor(Color.WHITE);
+        g.fill(new RoundRectangle2D.Float(14, 18, 36, 28, 8, 8));
+        g.setColor(new Color(0x0090D0));
+        g.fill(new RoundRectangle2D.Float(20, 23, 24, 18, 4, 4));
+        g.dispose();
+        return img;
+    }
+
+    /** Renders the menu to a PNG without a window (used for docs and testing). */
+    private void snapshot(Path out, String which) throws IOException {
+        MenuView v = new MenuView(config, this);
+        v.setSize(1600, 900);
+        v.setSnapshot(library.rescan());
+        v.setServer("http://" + GamepadServer.lanAddress() + ":" + config.port() + "/",
+                "http://" + GamepadServer.lanAddress() + ":" + config.port() + "/?code=4821", "4821", true);
+        switch (which) {
+            case "games" -> v.activate();
+            case "pad" -> v.toggleGamepadInfo();
+            case "playing" -> {
+                v.activate();
+                var s = library.snapshot();
+                s.games().values().stream().filter(l -> !l.isEmpty()).findFirst().ifPresent(l -> v.setPlaying(l.get(0)));
+            }
+            default -> { }
+        }
+        v.settle();
+        BufferedImage img = new BufferedImage(1600, 900, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        v.paint(g);
+        g.dispose();
+        ImageIO.write(img, "png", out.toFile());
+        System.out.println("wrote " + out);
+    }
+}

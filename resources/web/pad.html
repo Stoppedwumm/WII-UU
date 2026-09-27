@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1c1f24">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon.png">
+<title>WII-UU GamePad</title>
+<style>
+  :root {
+    --body: #1c1f24;
+    --body2: #2a2e35;
+    --btn: #3a3f47;
+    --btn-hi: #50565f;
+    --ink: #e9edf1;
+    --dim: #9aa3ad;
+    --accent: #0ab5f0;
+    --screen: #f4f6f8;
+    --screen-ink: #3c4043;
+    --stick: min(30vh, 19vw);
+    --face: min(12.5vh, 8vw);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0e1013; color: var(--ink);
+    font-family: "Nunito", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #pad { position: fixed; inset: 0; display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 1.5vw;
+    padding: max(2.5vh, env(safe-area-inset-top)) max(2vw, env(safe-area-inset-right))
+             max(2.5vh, env(safe-area-inset-bottom)) max(2vw, env(safe-area-inset-left));
+    background: radial-gradient(120% 140% at 50% 0%, var(--body2), var(--body) 60%, #15171b);
+    border-radius: 0; touch-action: none; }
+  .col { display: flex; flex-direction: column; align-items: center; justify-content: space-between; min-width: 0; }
+  .shoulders { display: flex; gap: 2vw; width: 100%; }
+  .right .shoulders { flex-direction: row-reverse; }
+  .sh { flex: 1; height: min(11vh, 48px); border-radius: 14px; background: linear-gradient(#474d56, #33373e);
+    display: grid; place-items: center; font-weight: 800; color: var(--dim); font-size: min(4.2vh, 18px);
+    box-shadow: 0 3px 0 #111, inset 0 1px 0 rgba(255,255,255,.12); }
+  .sh.z { flex: .8; background: linear-gradient(#3d424a, #2a2d33); }
+  [data-b].on, .sh.on { background: var(--accent) !important; color: #fff !important; transform: translateY(2px);
+    box-shadow: 0 1px 0 #075c7a !important; }
+
+  .stick { position: relative; width: var(--stick); height: var(--stick); border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, #15171b 0 55%, #262a30 56% 100%);
+    box-shadow: inset 0 3px 10px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.06); }
+  .knob { position: absolute; left: 50%; top: 50%; width: 52%; height: 52%; margin: -26% 0 0 -26%; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #6b727c, #3a3f47 60%, #2c3036);
+    box-shadow: 0 6px 12px rgba(0,0,0,.5), inset 0 -3px 6px rgba(0,0,0,.4); will-change: transform; }
+  .knob::after { content: ""; position: absolute; inset: 22%; border-radius: 50%;
+    background: radial-gradient(circle, #2a2e35 0 60%, #33383f 61%); }
+  .stick.on .knob { box-shadow: 0 0 0 3px var(--accent), 0 6px 12px rgba(0,0,0,.5); }
+
+  .dpad { position: relative; width: var(--stick); height: var(--stick); }
+  .dpad .arm { position: absolute; background: linear-gradient(#454a52, #34383f); box-shadow: 0 3px 0 #111; }
+  .dpad .h { left: 4%; right: 4%; top: 35%; bottom: 35%; border-radius: 10px; }
+  .dpad .v { top: 4%; bottom: 4%; left: 35%; right: 35%; border-radius: 10px; }
+  .dpad .dir { position: absolute; width: 30%; height: 30%; display: grid; place-items: center; color: #7f8791;
+    font-size: min(4vh, 16px); z-index: 1; border-radius: 8px; }
+  .dpad .dir.on { background: var(--accent); color: #fff; }
+  .d-up { left: 35%; top: 5%; } .d-down { left: 35%; bottom: 5%; }
+  .d-left { top: 35%; left: 5%; } .d-right { top: 35%; right: 5%; }
+
+  .face { position: relative; width: calc(var(--face) * 3.1); height: calc(var(--face) * 3.1); }
+  .face [data-b] { position: absolute; width: var(--face); height: var(--face); border-radius: 50%;
+    display: grid; place-items: center; font-weight: 800; font-size: calc(var(--face) * .42);
+    background: radial-gradient(circle at 40% 30%, #555b64, #3a3f47 70%); color: #d8dde2;
+    box-shadow: 0 4px 0 #111, inset 0 1px 0 rgba(255,255,255,.15); }
+  .face .bx { left: 50%; top: 0; transform: translateX(-50%); }
+  .face .by { left: 0; top: 50%; transform: translateY(-50%); }
+  .face .ba { right: 0; top: 50%; transform: translateY(-50%); }
+  .face .bb { left: 50%; bottom: 0; transform: translateX(-50%); }
+  .face .bx.on { transform: translateX(-50%) translateY(2px); }
+  .face .bb.on { transform: translateX(-50%) translateY(2px); }
+  .face .by.on, .face .ba.on { transform: translateY(-50%) translateY(2px); }
+
+  .center { display: flex; flex-direction: column; gap: 2vh; min-width: 0; }
+  .screen { flex: 1; min-height: 0; border-radius: 16px; background: #0b0c0e; padding: 1.6vh; position: relative;
+    box-shadow: inset 0 0 0 2px #000, 0 1px 0 rgba(255,255,255,.08); touch-action: pan-y; }
+  .lcd { position: absolute; inset: 1.6vh; border-radius: 8px; overflow: hidden; background: var(--screen); color: var(--screen-ink);
+    display: flex; flex-direction: column;
+    background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.028) 0 2px, transparent 2px 6px); }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.1); font-size: 13px; font-weight: 700; flex: none; }
+  .logo b { color: var(--accent); }
+  .pill { padding: 2px 9px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 12px; }
+  .pill.off { background: #c3c8ce; }
+  .grow { flex: 1; }
+  .iconbtn { border: 0; background: #eef0f2; color: var(--screen-ink); border-radius: 99px; padding: 4px 10px;
+    font: inherit; font-size: 12px; font-weight: 700; }
+  .view { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 10px; touch-action: pan-y; }
+  .hidden { display: none !important; }
+
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; touch-action: pan-x; flex: none; }
+  .chip { flex: none; padding: 5px 12px; border-radius: 99px; background: #fff; font-weight: 800; font-size: 13px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.12); border: 2px solid transparent; }
+  .chip.sel { border-color: var(--accent); color: var(--accent); }
+  .games { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+  .game { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 10px; padding: 7px 9px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.12); font-size: 13px; font-weight: 700; min-width: 0; }
+  .game:active { outline: 3px solid var(--accent); }
+  .game i { flex: none; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
+    color: #fff; font-style: normal; font-size: 10px; font-weight: 900; }
+  .game span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty { color: #8a9099; font-size: 13px; text-align: center; padding: 16px 8px; line-height: 1.5; }
+
+  .playing { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;
+    text-align: center; gap: 8px; }
+  .playing .band { width: 100%; padding: 10px; border-radius: 12px; color: #fff; font-weight: 800; font-size: 12px; letter-spacing: .08em; }
+  .playing h2 { margin: 4px 0 0; font-size: 20px; }
+  .playing p { margin: 0; color: #8a9099; font-size: 12px; }
+  .bigbtn { border: 0; border-radius: 99px; padding: 9px 18px; font: inherit; font-weight: 800; font-size: 14px;
+    background: var(--accent); color: #fff; box-shadow: 0 2px 0 #07779f; }
+  .bigbtn.grey { background: #e3e6ea; color: var(--screen-ink); box-shadow: 0 2px 0 #b9bec4; }
+  .row { display: flex; gap: 10px; justify-content: center; }
+
+  .pair { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; text-align: center; }
+  .pair h2 { margin: 0; font-size: 18px; }
+  .pair input { width: 150px; font: inherit; font-size: 26px; letter-spacing: .4em; text-align: center; padding: 6px;
+    border-radius: 12px; border: 2px solid #d5d9de; background: #fff; color: var(--screen-ink); }
+  .err { color: #d0342c; font-size: 12px; min-height: 1em; }
+
+  .sys { display: flex; justify-content: center; align-items: center; gap: 5vw; flex: none; }
+  .sys [data-b] { width: min(9vh, 40px); height: min(9vh, 40px); border-radius: 50%; display: grid; place-items: center;
+    background: linear-gradient(#474d56, #33373e); box-shadow: 0 3px 0 #111; font-weight: 900; color: var(--dim); font-size: min(5vh, 22px); }
+  .sys .home { width: min(11vh, 50px); height: min(11vh, 50px); font-size: min(3.3vh, 14px); letter-spacing: .03em; }
+
+  .toast { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); background: rgba(40,44,50,.92);
+    color: #fff; padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap;
+    opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 95%; overflow: hidden; text-overflow: ellipsis; }
+  .toast.show { opacity: 1; }
+  .sheet { position: absolute; inset: 0; background: rgba(244,246,248,.94); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px; }
+  .sheet h3 { margin: 0; }
+
+  #rotate { position: fixed; inset: 0; background: #15171b; display: none; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px; text-align: center; padding: 30px; z-index: 10; }
+  #rotate .phone { width: 60px; height: 100px; border: 4px solid var(--accent); border-radius: 12px; animation: turn 2s infinite ease-in-out; }
+  @keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+  @media (orientation: portrait) { #rotate { display: flex; } }
+</style>
+</head>
+<body>
+<div id="pad">
+  <!-- left: ZL L, left stick, d-pad -->
+  <div class="col left">
+    <div class="shoulders"><div class="sh z" data-b="ZL">ZL</div><div class="sh" data-b="L">L</div></div>
+    <div class="stick" data-stick="0"><div class="knob"></div></div>
+    <div class="dpad" data-dpad>
+      <div class="arm h"></div><div class="arm v"></div>
+      <div class="dir d-up" data-dir="UP">&#9650;</div>
+      <div class="dir d-down" data-dir="DOWN">&#9660;</div>
+      <div class="dir d-left" data-dir="LEFT">&#9664;</div>
+      <div class="dir d-right" data-dir="RIGHT">&#9654;</div>
+    </div>
+  </div>
+
+  <!-- centre: the GamePad screen + / HOME / - -->
+  <div class="center">
+    <div class="screen">
+      <div class="lcd">
+        <div class="bar">
+          <span class="logo">WII-<b>UU</b></span>
+          <span class="pill off" id="player">&ndash;</span>
+          <span class="grow"></span>
+          <button class="iconbtn" id="fs">&#x26F6; Full</button>
+        </div>
+        <div class="view" id="v-pair">
+          <form class="pair" id="pairForm">
+            <h2>Connect GamePad</h2>
+            <div style="font-size:12px;color:#8a9099">Enter the code shown on the TV (press + there)</div>
+            <input id="code" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="0000">
+            <button class="bigbtn" type="submit">Connect</button>
+            <div class="err" id="pairErr"></div>
+          </form>
+        </div>
+        <div class="view hidden" id="v-lib">
+          <div class="chips" id="chips"></div>
+          <div class="games" id="games"></div>
+        </div>
+        <div class="view hidden" id="v-play">
+          <div class="playing">
+            <div class="band" id="playBand">NOW PLAYING</div>
+            <h2 id="playName"></h2>
+            <p id="playSys"></p>
+            <p id="keysWarn" class="hidden" style="color:#d0342c">Key injection unavailable on the PC (headless or Wayland-only session).</p>
+            <div class="row"><button class="bigbtn grey" id="closeGame">Close game</button></div>
+          </div>
+        </div>
+        <div class="sheet hidden" id="homeSheet">
+          <h3>HOME Menu</h3>
+          <div class="row">
+            <button class="bigbtn grey" id="sheetResume">Resume</button>
+            <button class="bigbtn" id="sheetClose">Close game</button>
+          </div>
+          <label style="font-size:12px;color:#8a9099"><input type="checkbox" id="haptics"> Vibrate on press</label>
+        </div>
+        <div class="toast" id="toast"></div>
+      </div>
+    </div>
+    <div class="sys">
+      <div data-b="MINUS">&minus;</div>
+      <div class="home" data-b="HOME">HOME</div>
+      <div data-b="PLUS">+</div>
+    </div>
+  </div>
+
+  <!-- right: R ZR, face buttons, right stick -->
+  <div class="col right">
+    <div class="shoulders"><div class="sh z" data-b="ZR">ZR</div><div class="sh" data-b="R">R</div></div>
+    <div class="face">
+      <div class="bx" data-b="X">X</div>
+      <div class="by" data-b="Y">Y</div>
+      <div class="ba" data-b="A">A</div>
+      <div class="bb" data-b="B">B</div>
+    </div>
+    <div class="stick" data-stick="1"><div class="knob"></div></div>
+  </div>
+</div>
+
+<div id="rotate">
+  <div class="phone"></div>
+  <div style="font-weight:800;font-size:20px">Rotate your phone</div>
+  <div style="color:#9aa3ad">The GamePad works in landscape.</div>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem("wiiuu." + k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem("wiiuu." + k, v); } catch (e) {} }
+};
+const S = { id: store.get("id"), code: store.get("code") || "", player: 0, mode: null, game: null,
+            libVersion: -1, lib: null, sys: store.get("sys"), online: false, haptics: store.get("haptics") !== "0" };
+
+// ---------------------------------------------------------------- networking
+function form(obj) { return Object.entries(obj).map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(v ?? "")).join("&"); }
+
+async function hello(code) {
+  const r = await fetch("/api/hello", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                        body: form({ code, id: S.id || "" }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+  S.id = j.id; S.player = j.player; S.code = code;
+  store.set("id", S.id); store.set("code", code);
+  return j;
+}
+
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({ "X-Pad": S.id || "" }, opts.headers || {});
+  const r = await fetch(path, opts);
+  if (r.status === 401) { S.id = null; await reconnect(); throw new Error("re-paired"); }
+  return r;
+}
+
+let reconnecting = null;
+function reconnect() {
+  if (!reconnecting) {
+    reconnecting = hello(S.code).then(() => { show(S.mode === "game" ? "play" : "lib"); poll(); })
+      .catch(() => show("pair"))
+      .finally(() => { reconnecting = null; });
+  }
+  return reconnecting;
+}
+
+// input batching: at most one request in flight, sticks coalesced to the latest value
+const queue = []; let sticks = {}; let inflight = false;
+function sendButton(b, down) {
+  queue.push("b " + b + " " + (down ? 1 : 0));
+  if (down && S.haptics && navigator.vibrate) navigator.vibrate(8);
+  flush();
+}
+function sendStick(i, x, y) { sticks[i] = "s " + i + " " + x.toFixed(3) + " " + y.toFixed(3); flush(); }
+async function flush() {
+  if (inflight || !S.id) return;
+  const lines = queue.splice(0).concat(Object.values(sticks)); sticks = {};
+  if (!lines.length) return;
+  inflight = true;
+  try { await api("/api/input", { method: "POST", headers: { "Content-Type": "text/plain" }, body: lines.join("\n") }); }
+  catch (e) { /* status poll reports connectivity */ }
+  finally { inflight = false; if (queue.length || Object.keys(sticks).length) flush(); }
+}
+
+async function poll() {
+  if (!S.id) return;
+  try {
+    const r = await api("/api/status");
+    const j = await r.json();
+    setOnline(true);
+    S.player = j.player;
+    $("player").textContent = j.player > 0 ? "P" + j.player : "Viewer";
+    $("keysWarn").classList.toggle("hidden", j.keys !== false);
+    if (j.library !== S.libVersion) loadLibrary();
+    if (j.mode !== S.mode || JSON.stringify(j.game) !== JSON.stringify(S.game)) {
+      S.mode = j.mode; S.game = j.game;
+      if (j.mode === "game") {
+        $("playName").textContent = j.game.name;
+        $("playSys").textContent = j.game.system;
+        $("playBand").style.background = j.game.color;
+        show("play");
+      } else { $("homeSheet").classList.add("hidden"); show("lib"); }
+    }
+  } catch (e) { setOnline(false); }
+}
+setInterval(poll, 1000);
+
+function setOnline(on) {
+  S.online = on;
+  $("player").classList.toggle("off", !on);
+  if (!on) $("player").textContent = "Offline";
+}
+
+async function loadLibrary() {
+  try {
+    const j = await (await api("/api/library")).json();
+    S.lib = j; S.libVersion = j.version;
+    if (!S.lib.systems.find((s) => s.id === S.sys)) S.sys = S.lib.systems[0]?.id;
+    renderLibrary();
+  } catch (e) {}
+}
+
+// ---------------------------------------------------------------- screen views
+function show(which) {
+  for (const v of ["pair", "lib", "play"]) $("v-" + v).classList.toggle("hidden", v !== which);
+}
+
+function renderLibrary() {
+  const chips = $("chips"), games = $("games");
+  chips.textContent = ""; games.textContent = "";
+  if (!S.lib || !S.lib.systems.length) {
+    games.innerHTML = '<div class="empty">No games found yet.<br>Copy ROMs into the WII-UU roms folders on the PC, then press &minus; to refresh.</div>';
+    return;
+  }
+  for (const s of S.lib.systems) {
+    const c = document.createElement("div");
+    c.className = "chip" + (s.id === S.sys ? " sel" : "");
+    c.textContent = s.short + " · " + s.games.length;
+    c.onclick = () => { S.sys = s.id; store.set("sys", s.id); renderLibrary(); };
+    chips.appendChild(c);
+  }
+  const sys = S.lib.systems.find((s) => s.id === S.sys);
+  for (const g of sys.games) {
+    const el = document.createElement("div");
+    el.className = "game";
+    const icon = document.createElement("i");
+    icon.style.background = sys.color;
+    icon.textContent = sys.short.slice(0, 4);
+    const name = document.createElement("span");
+    name.textContent = g.name;
+    el.append(icon, name);
+    el.onclick = () => launch(sys, g);
+    games.appendChild(el);
+  }
+}
+
+async function launch(sys, g) {
+  toast("Starting " + g.name + "…");
+  try {
+    const r = await api("/api/launch", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                         body: form({ sys: sys.id, id: g.id }) });
+    const j = await r.json();
+    if (!r.ok) toast(j.error || "Could not start");
+    else poll();
+  } catch (e) { toast("Not connected"); }
+}
+
+async function closeGame() {
+  $("homeSheet").classList.add("hidden");
+  try { await api("/api/close", { method: "POST" }); toast("Closing game…"); } catch (e) {}
+}
+
+let toastTimer;
+function toast(text) {
+  const t = $("toast"); t.textContent = text; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+$("pairForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("pairErr").textContent = "";
+  try { await hello($("code").value.trim()); show("lib"); poll(); }
+  catch (err) { $("pairErr").textContent = err.message; }
+});
+$("closeGame").onclick = closeGame;
+$("sheetClose").onclick = closeGame;
+$("sheetResume").onclick = () => $("homeSheet").classList.add("hidden");
+$("haptics").checked = S.haptics;
+$("haptics").onchange = (e) => { S.haptics = e.target.checked; store.set("haptics", S.haptics ? "1" : "0"); };
+$("fs").onclick = async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else { await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+           if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => {}); }
+  } catch (e) { toast("Use Share → Add to Home Screen for fullscreen"); }
+};
+
+// ---------------------------------------------------------------- touch controls
+const pad = $("pad");
+const touches = new Map(); // pointerId -> state
+const held = new Map();    // button -> number of fingers holding it
+
+function press(b) { const n = held.get(b) || 0; held.set(b, n + 1); if (n === 0) { sendButton(b, true); mark(b, true); } }
+function release(b) { const n = held.get(b) || 0; if (n <= 1) { held.delete(b); if (n === 1) { sendButton(b, false); mark(b, false); } } else held.set(b, n - 1); }
+function mark(b, on) {
+  document.querySelectorAll('[data-b="' + b + '"],[data-dir="' + b + '"]').forEach((el) => el.classList.toggle("on", on));
+  if (b === "HOME" && on) onHome();
+}
+
+function onHome() {
+  if (S.mode === "game") $("homeSheet").classList.toggle("hidden");
+  else { show(S.id ? "lib" : "pair"); $("v-lib").scrollTop = 0; }
+}
+
+function buttonAt(x, y) {
+  const el = document.elementFromPoint(x, y);
+  return el && el.closest("[data-b]") ? el.closest("[data-b]").dataset.b : null;
+}
+
+function dpadDirs(el, x, y) {
+  const r = el.getBoundingClientRect();
+  const nx = (x - r.left - r.width / 2) / (r.width / 2), ny = (y - r.top - r.height / 2) / (r.height / 2);
+  if (Math.hypot(nx, ny) < 0.22) return [];
+  const sector = ((Math.round(Math.atan2(ny, nx) / (Math.PI / 4)) % 8) + 8) % 8;
+  return [["RIGHT"], ["RIGHT", "DOWN"], ["DOWN"], ["DOWN", "LEFT"], ["LEFT"], ["LEFT", "UP"], ["UP"], ["UP", "RIGHT"]][sector];
+}
+
+function stickMove(t, x, y) {
+  const r = t.el.getBoundingClientRect(), rad = r.width / 2;
+  let dx = (x - r.left - rad) / (rad * 0.8), dy = (y - r.top - rad) / (rad * 0.8);
+  const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+  if (Math.hypot(dx, dy) > 0.15) t.moved = true;
+  t.knob.style.transform = "translate(" + (dx * rad * 0.48) + "px," + (dy * rad * 0.48) + "px)";
+  sendStick(t.idx, dx, dy);
+}
+
+pad.addEventListener("pointerdown", (e) => {
+  if (e.target.closest(".screen")) return;
+  e.preventDefault();
+  wakeLock();
+  const stick = e.target.closest("[data-stick]");
+  const dpad = e.target.closest("[data-dpad]");
+  if (stick) {
+    const t = { type: "stick", el: stick, knob: stick.querySelector(".knob"), idx: +stick.dataset.stick, start: Date.now(), moved: false };
+    stick.classList.add("on");
+    touches.set(e.pointerId, t);
+    stickMove(t, e.clientX, e.clientY);
+  } else if (dpad) {
+    const t = { type: "dpad", el: dpad, dirs: dpadDirs(dpad, e.clientX, e.clientY) };
+    t.dirs.forEach(press);
+    touches.set(e.pointerId, t);
+  } else {
+    const b = buttonAt(e.clientX, e.clientY);
+    touches.set(e.pointerId, { type: "btn", b });
+    if (b) press(b);
+  }
+}, { passive: false });
+
+pad.addEventListener("pointermove", (e) => {
+  const t = touches.get(e.pointerId);
+  if (!t) return;
+  e.preventDefault();
+  if (t.type === "stick") stickMove(t, e.clientX, e.clientY);
+  else if (t.type === "dpad") {
+    const now = dpadDirs(t.el, e.clientX, e.clientY);
+    t.dirs.filter((d) => !now.includes(d)).forEach(release);
+    now.filter((d) => !t.dirs.includes(d)).forEach(press);
+    t.dirs = now;
+  } else {
+    // slide between buttons like a real pad (e.g. A -> B)
+    const b = buttonAt(e.clientX, e.clientY);
+    if (b !== t.b && (b === null || !["HOME", "PLUS", "MINUS"].includes(b))) {
+      if (t.b) release(t.b);
+      t.b = b;
+      if (b) press(b);
+    }
+  }
+}, { passive: false });
+
+function end(e) {
+  const t = touches.get(e.pointerId);
+  if (!t) return;
+  touches.delete(e.pointerId);
+  if (t.type === "stick") {
+    t.el.classList.remove("on");
+    t.knob.style.transform = "";
+    sendStick(t.idx, 0, 0);
+    if (!t.moved && Date.now() - t.start < 220) {   // quick tap on a stick = L3 / R3
+      const b = t.idx === 0 ? "L3" : "R3";
+      press(b); setTimeout(() => release(b), 80);
+    }
+  } else if (t.type === "dpad") t.dirs.forEach(release);
+  else if (t.b) release(t.b);
+}
+pad.addEventListener("pointerup", end);
+pad.addEventListener("pointercancel", end);
+window.addEventListener("blur", () => { for (const id of [...touches.keys()]) end({ pointerId: id }); });
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+// physical keyboard (handy for testing on a laptop)
+const KEYS = { ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT", KeyX: "A", KeyZ: "B",
+               KeyS: "X", KeyA: "Y", KeyQ: "L", KeyW: "R", Enter: "PLUS", ShiftRight: "MINUS", KeyH: "HOME" };
+addEventListener("keydown", (e) => { const b = KEYS[e.code]; if (b && !e.repeat && e.target.tagName !== "INPUT") { press(b); e.preventDefault(); } });
+addEventListener("keyup", (e) => { const b = KEYS[e.code]; if (b && e.target.tagName !== "INPUT") release(b); });
+
+let lock = null;
+async function wakeLock() {
+  if (lock || !navigator.wakeLock) return;
+  try { lock = await navigator.wakeLock.request("screen"); lock.addEventListener("release", () => { lock = null; }); } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { lock = null; poll(); } });
+
+// ---------------------------------------------------------------- start
+(async () => {
+  const urlCode = new URLSearchParams(location.search).get("code");
+  if (urlCode) { S.code = urlCode; history.replaceState(null, "", "/"); }
+  $("code").value = S.code;
+  try { await hello(S.code); show("lib"); poll(); }
+  catch (e) { show("pair"); if (S.code) $("pairErr").textContent = e.message; }
+})();
+</script>
+</body>
+</html>
