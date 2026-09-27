@@ -127,12 +127,12 @@ apt_deps() {
   case "$1" in
     fceux) echo "qtbase5-dev libqt5opengl5-dev libsdl2-dev zlib1g-dev libminizip-dev libarchive-dev liblua5.1-0-dev" ;;
     snes9x) echo "libgtkmm-3.0-dev libsdl2-dev libepoxy-dev libminizip-dev libx11-dev libxrandr-dev libxext-dev libpulse-dev libasound2-dev portaudio19-dev libwayland-dev gettext python3" ;;
-    mgba) echo "qtbase5-dev qtmultimedia5-dev qttools5-dev qttools5-dev-tools libsdl2-dev libzip-dev libedit-dev libelf-dev libpng-dev libsqlite3-dev libepoxy-dev" ;;
+    mgba) echo "qtbase5-dev qtmultimedia5-dev qttools5-dev qttools5-dev-tools libsdl2-dev libzip-dev zipcmp zipmerge ziptool libedit-dev libelf-dev libpng-dev libsqlite3-dev libepoxy-dev" ;;
     mupen64plus) echo "libsdl2-dev libpng-dev zlib1g-dev libfreetype-dev libgl-dev libglu1-mesa-dev libspeexdsp-dev libsamplerate0-dev nasm" ;;
     mednafen) echo "libsdl2-dev zlib1g-dev libasound2-dev libsndfile1-dev libflac-dev libvorbis-dev libzstd-dev" ;;
     melonds) echo "qt6-base-dev qt6-base-private-dev qt6-multimedia-dev libqt6svg6-dev libqt6opengl6-dev libsdl2-dev libarchive-dev libenet-dev libzstd-dev libfaad-dev extra-cmake-modules" ;;
     ppsspp) echo "libsdl2-dev libsdl2-ttf-dev libgl1-mesa-dev libglu1-mesa-dev libvulkan-dev libfontconfig1-dev libcurl4-openssl-dev python3" ;;
-    flycast) echo "libsdl2-dev libcurl4-openssl-dev libudev-dev libzip-dev libgl1-mesa-dev libvulkan-dev libasound2-dev libpulse-dev libao-dev libminiupnpc-dev libflac-dev" ;;
+    flycast) echo "libsdl2-dev libcurl4-openssl-dev libudev-dev libzip-dev zipcmp zipmerge ziptool libgl1-mesa-dev libvulkan-dev libasound2-dev libpulse-dev libao-dev libminiupnpc-dev libflac-dev" ;;
     dolphin) echo "qt6-base-dev qt6-base-private-dev libqt6svg6-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libxi-dev libxrandr-dev libudev-dev libevdev-dev libsfml-dev libminiupnpc-dev libmbedtls-dev libcurl4-openssl-dev libhidapi-dev libsystemd-dev libbluetooth-dev libasound2-dev libpulse-dev libpugixml-dev libbz2-dev libzstd-dev liblzo2-dev libpng-dev libusb-1.0-0-dev gettext" ;;
     azahar) echo "clang lld qt6-base-dev qt6-base-private-dev qt6-multimedia-dev qt6-tools-dev qt6-tools-dev-tools libqt6opengl6-dev libsdl2-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libssl-dev libusb-1.0-0-dev libudev-dev glslang-tools" ;;
     cemu) echo "clang libbluetooth-dev libgcrypt20-dev libgl1-mesa-dev libgtk-3-dev libpulse-dev libsecret-1-dev libsystemd-dev libudev-dev libusb-1.0-0-dev freeglut3-dev autoconf automake libtool nasm" ;;
@@ -169,8 +169,8 @@ for t in git cmake make cc c++; do command -v "$t" >/dev/null 2>&1 || die "'$t' 
 mkdir -p "$SRC" "$EMU" "$LOGS" "$CONF_DIR"; touch "$CONF"
 
 # clone or fast-forward to the newest commit (shallow, to save space and time on a Pi)
-fetch_git() {  # dir url
-  local dir="$SRC/$1" url="$2"
+fetch_git() {  # dir url [submodule paths...]  (default: all submodules)
+  local dir="$SRC/$1" url="$2"; shift 2
   if [ -d "$dir/.git" ]; then
     git -C "$dir" fetch --depth 1 origin HEAD || return 1
     git -C "$dir" reset --hard FETCH_HEAD || return 1
@@ -180,8 +180,8 @@ fetch_git() {  # dir url
   fi
   echo "source: $url @ $(git -C "$dir" rev-parse --short HEAD)"
   git -C "$dir" submodule sync --recursive
-  git -C "$dir" submodule update --init --recursive --depth 1 --jobs 4 \
-    || git -C "$dir" submodule update --init --recursive --jobs 4 || return 1
+  git -C "$dir" submodule update --init --recursive --depth 1 --jobs 4 -- "$@" \
+    || git -C "$dir" submodule update --init --recursive --jobs 4 -- "$@" || return 1
 }
 
 cmake_build() {  # srcdir builddir [cmake args...]  -> configures, builds (Release)
@@ -200,7 +200,9 @@ build_fceux() {
 }
 
 build_snes9x() {
-  fetch_git snes9x https://github.com/snes9xgit/snes9x.git
+  # only the submodules the Linux GTK port uses (skips the Windows-only win32/* ones)
+  fetch_git snes9x https://github.com/snes9xgit/snes9x.git \
+    external/SPIRV-Cross external/glslang external/vulkan-headers external/cubeb
   cmake_build "$SRC/snes9x/gtk" "$SRC/snes9x/build" -DCMAKE_INSTALL_PREFIX="$E"
   mkdir -p "$E/bin"; cp "$SRC/snes9x/build/snes9x-gtk" "$E/bin/"
   cmake --install "$SRC/snes9x/build" >/dev/null 2>&1 || true   # locale/data files, optional
