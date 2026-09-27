@@ -131,7 +131,7 @@ apt_deps() {
     mupen64plus) echo "libsdl2-dev libpng-dev zlib1g-dev libfreetype-dev libgl-dev libglu1-mesa-dev libspeexdsp-dev libsamplerate0-dev nasm" ;;
     mednafen) echo "libsdl2-dev zlib1g-dev libasound2-dev libsndfile1-dev libflac-dev libvorbis-dev libzstd-dev" ;;
     melonds) echo "qt6-base-dev qt6-base-private-dev qt6-multimedia-dev libqt6svg6-dev libqt6opengl6-dev libsdl2-dev libarchive-dev libenet-dev libzstd-dev libfaad-dev extra-cmake-modules" ;;
-    ppsspp) echo "libsdl2-dev libsdl2-ttf-dev libgl1-mesa-dev libglu1-mesa-dev libvulkan-dev libfontconfig1-dev libcurl4-openssl-dev python3" ;;
+    ppsspp) echo "libsdl3-dev libsdl3-ttf-dev libfreetype-dev libwayland-dev libxkbcommon-dev libdecor-0-dev libsdl2-dev libsdl2-ttf-dev libgl1-mesa-dev libglu1-mesa-dev libvulkan-dev libfontconfig1-dev libcurl4-openssl-dev python3" ;;
     flycast) echo "libsdl2-dev libcurl4-openssl-dev libudev-dev libzip-dev zipcmp zipmerge ziptool libgl1-mesa-dev libvulkan-dev libasound2-dev libpulse-dev libao-dev libminiupnpc-dev libflac-dev" ;;
     dolphin) echo "qt6-base-dev qt6-base-private-dev libqt6svg6-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libxi-dev libxrandr-dev libudev-dev libevdev-dev libsfml-dev libminiupnpc-dev libmbedtls-dev libcurl4-openssl-dev libhidapi-dev libsystemd-dev libbluetooth-dev libasound2-dev libpulse-dev libpugixml-dev libbz2-dev libzstd-dev liblzo2-dev libpng-dev libusb-1.0-0-dev gettext" ;;
     azahar) echo "clang lld qt6-base-dev qt6-base-private-dev qt6-multimedia-dev qt6-tools-dev qt6-tools-dev-tools libqt6opengl6-dev libsdl2-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libssl-dev libusb-1.0-0-dev libudev-dev glslang-tools" ;;
@@ -180,8 +180,30 @@ fetch_git() {  # dir url [submodule paths...]  (default: all submodules)
   fi
   echo "source: $url @ $(git -C "$dir" rev-parse --short HEAD)"
   git -C "$dir" submodule sync --recursive
-  git -C "$dir" submodule update --init --recursive --depth 1 --jobs 4 -- "$@" \
-    || git -C "$dir" submodule update --init --recursive --jobs 4 -- "$@" || return 1
+  git -C "$dir" submodule update --init --recursive --depth 1 --jobs 4 -- "$@" && return 0
+  # retry with full history, and via official GitHub mirrors for hosts that are often unreachable
+  git -C "$dir" -c url."https://github.com/freetype/freetype.git".insteadOf="https://gitlab.freedesktop.org/freetype/freetype.git" \
+      -c url."https://github.com/pnggroup/libpng.git".insteadOf="https://git.code.sf.net/p/libpng/code" \
+      submodule update --init --recursive --jobs 4 -- "$@" || return 1
+}
+
+# SDL3 is newer than what Raspberry Pi OS Bookworm / Ubuntu 24.04 ship; build the latest release
+# into $ROOT/deps when the system doesn't have it. Launchers add $ROOT/deps/lib to the library path.
+ensure_sdl3() {
+  if pkg-config --exists sdl3 && pkg-config --exists sdl3-ttf; then return 0; fi
+  if [ -f "$ROOT/deps/lib/pkgconfig/sdl3.pc" ] && [ -f "$ROOT/deps/lib/pkgconfig/sdl3-ttf.pc" ] && [ "$UPDATE" != 1 ]; then return 0; fi
+  local tag
+  tag="$(git ls-remote --tags --refs https://github.com/libsdl-org/SDL.git 'release-3.*' | sed 's|.*/||' | sort -V | tail -1)"
+  echo "building SDL3 $tag from source"
+  rm -rf "$SRC/sdl3"; git clone --depth 1 --branch "$tag" https://github.com/libsdl-org/SDL.git "$SRC/sdl3"
+  cmake_build "$SRC/sdl3" "$SRC/sdl3/build" -DCMAKE_INSTALL_PREFIX="$ROOT/deps" -DCMAKE_INSTALL_LIBDIR=lib -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+  cmake --install "$SRC/sdl3/build"
+  tag="$(git ls-remote --tags --refs https://github.com/libsdl-org/SDL_ttf.git 'release-3.*' | sed 's|.*/||' | sort -V | tail -1)"
+  echo "building SDL3_ttf $tag from source"
+  rm -rf "$SRC/sdl3_ttf"; git clone --depth 1 --branch "$tag" https://github.com/libsdl-org/SDL_ttf.git "$SRC/sdl3_ttf"
+  cmake_build "$SRC/sdl3_ttf" "$SRC/sdl3_ttf/build" -DCMAKE_INSTALL_PREFIX="$ROOT/deps" -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_PREFIX_PATH="$ROOT/deps" -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF -DSDLTTF_PLUTOSVG=OFF -DSDLTTF_SAMPLES=OFF
+  cmake --install "$SRC/sdl3_ttf/build"
 }
 
 cmake_build() {  # srcdir builddir [cmake args...]  -> configures, builds (Release)
@@ -249,7 +271,10 @@ build_melonds() {
 
 build_ppsspp() {
   fetch_git ppsspp https://github.com/hrydgard/ppsspp.git
-  cmake_build "$SRC/ppsspp" "$SRC/ppsspp/build" -DUSING_QT_UI=OFF -DHEADLESS=OFF -DUNITTEST=OFF
+  ensure_sdl3
+  export PKG_CONFIG_PATH="$ROOT/deps/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+  cmake_build "$SRC/ppsspp" "$SRC/ppsspp/build" -DUSING_QT_UI=OFF -DHEADLESS=OFF -DUNITTEST=OFF \
+    -DCMAKE_PREFIX_PATH="$ROOT/deps"
   # PPSSPP runs from its build folder (binary + assets/ side by side)
   rm -rf "$E"; mkdir -p "$E"
   cp "$SRC/ppsspp/build/PPSSPPSDL" "$E/"
@@ -344,7 +369,7 @@ write_launcher() {  # name binary
   local e="$EMU/$1"
   cat > "$e/run" <<EOF
 #!/usr/bin/env bash
-export LD_LIBRARY_PATH="$e/lib:$e/lib64\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$e/lib:$e/lib64:$ROOT/deps/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
 cd "$e"
 exec "$e/$2" "\$@"
 EOF
