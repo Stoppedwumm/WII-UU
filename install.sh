@@ -2,7 +2,8 @@
 # WII-UU installer for Linux and macOS.
 #
 #   ./install.sh                  install for the current user
-#   ./install.sh --with-emulators also install emulators from Flathub (Linux) and point WII-UU at them
+#   ./install.sh --with-emulators also build the newest emulators from source (Linux, incl. Raspberry Pi)
+#                                 and point WII-UU at them; --with-all-emulators adds the heavy ones
 #   ./install.sh --uninstall      remove WII-UU (keeps your ROMs and settings)
 #
 # Options: --prefix DIR  --bin DIR  --roms DIR  --port N  --yes  --no-shortcut
@@ -40,6 +41,7 @@ while [ $# -gt 0 ]; do
     --port) PORT="$2"; shift ;;
     --yes|-y) YES=1 ;;
     --with-emulators) EMULATORS=1 ;;
+    --with-all-emulators) EMULATORS=all ;;
     --no-shortcut) SHORTCUT=0 ;;
     --uninstall) UNINSTALL=1 ;;
     -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -51,11 +53,13 @@ done
 # ---------------------------------------------------------------------------- uninstall
 if [ "$UNINSTALL" = 1 ]; then
   say "Removing $APP"
-  rm -rf "$PREFIX" "$BIN/wiiuu" \
+  rm -rf "$PREFIX" "$BIN/wiiuu" "$BIN/wiiuu-emulators" \
          "$HOME/.local/share/applications/wiiuu.desktop" \
          "$HOME/.local/share/icons/hicolor/256x256/apps/wiiuu.png" \
          "$HOME/Applications/WII-UU.app"
   ok "Removed. Your ROMs ($ROMS) and settings ($CONF_DIR) were kept."
+  EMU_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/wiiuu-emulators"
+  [ -d "$EMU_ROOT" ] && ok "Emulators built from source were kept in $EMU_ROOT (delete it to free the space)."
   exit 0
 fi
 
@@ -178,38 +182,20 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------- emulators (optional)
-if [ "$EMULATORS" = 1 ]; then
+# Always install the builder so `wiiuu-emulators --update` works later.
+if [ -f "$HERE/emulators.sh" ]; then
+  cp "$HERE/emulators.sh" "$PREFIX/emulators.sh"; chmod +x "$PREFIX/emulators.sh"
+  printf '#!/usr/bin/env bash\nexec "%s/emulators.sh" "$@"\n' "$PREFIX" > "$BIN/wiiuu-emulators"
+  chmod +x "$BIN/wiiuu-emulators"
+fi
+if [ "$EMULATORS" != 0 ]; then
   if [ "$OS" = "Darwin" ]; then
-    warn "--with-emulators is Linux-only. On macOS install emulators from their websites, then set paths in WII-UU Settings (F1)."
-  elif ! command -v flatpak >/dev/null 2>&1; then
-    warn "flatpak not found; install it (https://flathub.org/setup) or install emulators with your package manager."
+    warn "Building emulators from source is Linux-only. On macOS install emulators from their websites, then set paths in WII-UU Settings (F1)."
   else
-    say "Installing emulators from Flathub (this can take a while)"
-    flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
-    # system(s) | flatpak id | arguments
-    EMUS="snes|com.snes9x.Snes9x|{rom}
-gb gba|io.mgba.mGBA|-f {rom}
-n64|com.github.Rosalie241.RMG|{rom}
-gc wii|org.DolphinEmu.dolphin-emu|-b -e {rom}
-nds|net.kuribo64.melonDS|-f {rom}
-3ds|org.azahar_emu.Azahar|{rom}
-wiiu|info.cemu.Cemu|-f -g {rom}
-switch|io.github.ryubing.Ryujinx|--fullscreen {rom}
-dc|org.flycast.Flycast|{rom}
-ps1|org.duckstation.DuckStation|-fullscreen -batch -- {rom}
-ps2|net.pcsx2.PCSX2|-fullscreen -batch -- {rom}
-psp|org.ppsspp.PPSSPP|--fullscreen {rom}
-ps3|net.rpcs3.RPCS3|--no-gui {rom}
-ps4|net.shadps4.shadPS4|-g {rom}"
-    while IFS='|' read -r systems id args; do
-      if flatpak install --user -y --noninteractive flathub "$id" >/dev/null 2>&1 || flatpak info "$id" >/dev/null 2>&1; then
-        for s in $systems; do set_conf "system.$s.command" "flatpak run $id $args" force; done
-        ok "$id  ->  $systems"
-      else
-        warn "could not install $id (skipped; set the $systems emulator in Settings)"
-      fi
-    done <<< "$EMUS"
-    warn "NES/Sega: install Mesen or Mednafen with your package manager (e.g. 'sudo apt install mednafen')."
+    say "Building emulators from source (newest versions, native for $(uname -m))"
+    extra=""; [ "$EMULATORS" = all ] && extra="--all"; [ "$YES" = 1 ] && extra="$extra --yes"
+    # shellcheck disable=SC2086
+    WIIUU_HOME="$CONF_DIR" "$PREFIX/emulators.sh" $extra || warn "some emulators failed to build; see the summary above"
   fi
 fi
 

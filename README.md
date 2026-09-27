@@ -22,8 +22,8 @@ your own legally dumped games and, where an emulator requires it, your own firmw
 Download `WII-UU-1.0.0.zip`, unzip it, then:
 
 * **Linux / macOS:** `./install.sh`
-  (`./install.sh --with-emulators` also installs most emulators from Flathub on Linux and
-  configures them for you.)
+  (on Linux, `./install.sh --with-emulators` also builds the emulators from source and
+  configures them for you; see below.)
 * **Windows:** double-click `install.bat`
 
 The installer:
@@ -35,6 +35,36 @@ The installer:
   `firewalld` command to run
 
 To uninstall, run `./install.sh --uninstall` or `install.ps1 -Uninstall`. Your ROMs and settings are kept.
+
+## Emulators built from source (Linux, Raspberry Pi)
+
+`emulators.sh` (installed as `wiiuu-emulators`) clones each emulator's newest source, compiles
+it natively for the machine (x86-64 or 64-bit ARM such as a Raspberry Pi 4/5), and sets
+WII-UU's command for the matching systems. It doesn't use Flatpak or containers.
+
+```sh
+wiiuu-emulators              # light set: FCEUX, Snes9x, mGBA, Mupen64Plus, Mednafen, melonDS, PPSSPP, Flycast
+wiiuu-emulators --all        # + Dolphin, Azahar, Cemu, Ryujinx, DuckStation, RPCS3 (and shadPS4 on x86-64)
+wiiuu-emulators --only ppsspp,dolphin
+wiiuu-emulators --update     # pull the newest source of everything built so far and rebuild
+wiiuu-emulators --list       # what is available / already built on this machine
+```
+
+* **What it does:**
+  * installs build dependencies with apt (Raspberry Pi OS, Debian, Ubuntu). It only requests
+    the packages your release actually has.
+  * picks the number of parallel compile jobs from your RAM, so a Pi doesn't run out of memory.
+  * logs each build to `~/.wiiuu/logs/build/<name>.log`.
+  * keeps going when one emulator fails, and prints a summary at the end.
+* **Where things go:** source is kept in `~/.local/share/wiiuu-emulators/emu-src` and the
+  builds in `.../emulators`. Uninstalling WII-UU keeps them.
+* **The light set** builds in minutes to about an hour on a Pi 5 and runs well there.
+* **The heavy set** can take several hours on a Pi and needs about 4 GB of swap on boards with
+  under 6 GB of RAM. Those consoles are mostly too demanding for a Pi to play well anyway.
+* **Not built:**
+  * **PCSX2 (PS2)** only runs on x86-64. On a PC, use its official AppImage.
+  * **shadPS4 (PS4)** also needs an x86-64 CPU.
+* **Other distros:** without apt, install the dependencies yourself first.
 
 ## Use
 
