@@ -2,8 +2,9 @@
 # WII-UU installer for Linux and macOS.
 #
 #   ./install.sh                  install for the current user
-#   ./install.sh --with-emulators also build the newest emulators from source (Linux, incl. Raspberry Pi)
-#                                 and point WII-UU at them; --with-all-emulators adds the heavy ones
+#   ./install.sh --with-emulators also install emulators (Linux, incl. Raspberry Pi): official prebuilt
+#                                 releases for this CPU, built from source where none exist;
+#                                 --with-all-emulators also builds heavy ones that have no release
 #   ./install.sh --uninstall      remove WII-UU (keeps your ROMs and settings)
 #
 # Options: --prefix DIR  --bin DIR  --roms DIR  --port N  --yes  --no-shortcut
@@ -190,9 +191,9 @@ if [ -f "$HERE/emulators.sh" ]; then
 fi
 if [ "$EMULATORS" != 0 ]; then
   if [ "$OS" = "Darwin" ]; then
-    warn "Building emulators from source is Linux-only. On macOS install emulators from their websites, then set paths in WII-UU Settings (F1)."
+    warn "The emulator installer is Linux-only. On macOS install emulators from their websites, then set paths in WII-UU Settings (F1)."
   else
-    say "Building emulators from source (newest versions, native for $(uname -m))"
+    say "Installing emulators for $(uname -m) (official releases, source builds where none exist)"
     extra=""; [ "$EMULATORS" = all ] && extra="--all"; [ "$YES" = 1 ] && extra="$extra --yes"
     # shellcheck disable=SC2086
     WIIUU_HOME="$CONF_DIR" "$PREFIX/emulators.sh" $extra || warn "some emulators failed to build; see the summary above"

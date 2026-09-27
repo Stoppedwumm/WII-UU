@@ -22,7 +22,7 @@ your own legally dumped games and, where an emulator requires it, your own firmw
 Download `WII-UU-1.0.0.zip`, unzip it, then:
 
 * **Linux / macOS:** `./install.sh`
-  (on Linux, `./install.sh --with-emulators` also builds the emulators from source and
+  (on Linux, `./install.sh --with-emulators` also installs the emulators, from official releases or source, and
   configures them for you; see below.)
 * **Windows:** double-click `install.bat`
 
@@ -36,35 +36,41 @@ The installer:
 
 To uninstall, run `./install.sh --uninstall` or `install.ps1 -Uninstall`. Your ROMs and settings are kept.
 
-## Emulators built from source (Linux, Raspberry Pi)
+## Installing emulators (Linux, Raspberry Pi)
 
-`emulators.sh` (installed as `wiiuu-emulators`) clones each emulator's newest source, compiles
-it natively for the machine (x86-64 or 64-bit ARM such as a Raspberry Pi 4/5), and sets
-WII-UU's command for the matching systems. It doesn't use Flatpak or containers.
+`emulators.sh` (installed as `wiiuu-emulators`) sets up the emulators and points WII-UU's system
+commands at them. It doesn't use Flatpak or containers.
+
+* **Official releases first:** for each emulator it downloads the newest prebuilt Linux release
+  for your CPU (x86-64 or 64-bit ARM such as a Raspberry Pi 4/5) from the project's GitHub or
+  GitLab releases. The right file is chosen by name at install time, so new versions are picked
+  up automatically. AppImages are unpacked, so they run without FUSE.
+* **Source as fallback:** if a project publishes no Linux build for your CPU (for example
+  Dolphin, or most ARM builds), the script compiles its latest source instead.
 
 ```sh
-wiiuu-emulators              # light set: FCEUX, Snes9x, mGBA, Mupen64Plus, Mednafen, melonDS, PPSSPP, Flycast
-wiiuu-emulators --all        # + Dolphin, Azahar, Cemu, Ryujinx, DuckStation, RPCS3 (and shadPS4 on x86-64)
-wiiuu-emulators --only ppsspp,dolphin
-wiiuu-emulators --update     # pull the newest source of everything built so far and rebuild
-wiiuu-emulators --list       # what is available / already built on this machine
+wiiuu-emulators              # releases where available; builds the light rest from source
+wiiuu-emulators --all        # also build heavy emulators that have no release (e.g. Dolphin)
+wiiuu-emulators --only ppsspp,duckstation
+wiiuu-emulators --update     # update everything installed; skips what is already newest
+wiiuu-emulators --list       # what is available / installed on this machine
+wiiuu-emulators --nightly    # allow pre-release / rolling builds
+wiiuu-emulators --source     # always build from source (bleeding edge)
+wiiuu-emulators --releases-only
 ```
 
-* **What it does:**
-  * installs build dependencies with apt (Raspberry Pi OS, Debian, Ubuntu). It only requests
-    the packages your release actually has.
-  * picks the number of parallel compile jobs from your RAM, so a Pi doesn't run out of memory.
-  * logs each build to `~/.wiiuu/logs/build/<name>.log`.
-  * keeps going when one emulator fails, and prints a summary at the end.
-* **Where things go:** source is kept in `~/.local/share/wiiuu-emulators/emu-src` and the
-  builds in `.../emulators`. Uninstalling WII-UU keeps them.
-* **The light set** builds in minutes to about an hour on a Pi 5 and runs well there.
-* **The heavy set** can take several hours on a Pi and needs about 4 GB of swap on boards with
-  under 6 GB of RAM. Those consoles are mostly too demanding for a Pi to play well anyway.
-* **Not built:**
-  * **PCSX2 (PS2)** only runs on x86-64. On a PC, use its official AppImage.
-  * **shadPS4 (PS4)** also needs an x86-64 CPU.
-* **Other distros:** without apt, install the dependencies yourself first.
+* **Emulators:**
+  * With official releases: DuckStation, RPCS3, Ryujinx, Cemu, Azahar, melonDS, PPSSPP, Flycast,
+    mGBA, Snes9x, FCEUX, and on x86-64 also PCSX2 and shadPS4. Whether an ARM64 build exists is
+    up to each project.
+  * Always built from source: Mupen64Plus, Mednafen and Dolphin, which publish no Linux binaries.
+* **Build details:** source builds install their apt dependencies only when needed, and pick the
+  number of parallel jobs from your RAM. Heavy builds can take hours on a Pi and need about 4 GB
+  of swap on boards with under 6 GB of RAM.
+* **Logs and files:** logs go to `~/.wiiuu/logs/build/<name>.log`. Emulators are kept in
+  `~/.local/share/wiiuu-emulators`, and uninstalling WII-UU keeps them.
+* **Rate limit:** GitHub allows 60 anonymous API requests per hour. Set `GITHUB_TOKEN` if you hit it.
+* **Not supported:** PCSX2 (PS2) and shadPS4 (PS4) only run on x86-64.
 
 ## Use
 

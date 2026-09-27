@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
-# Builds emulators from their latest source (git master / newest release) natively for this
-# machine - x86-64 PCs and 64-bit ARM boards such as the Raspberry Pi 4/5 - and points WII-UU
-# at the results. No flatpak, no containers.
+# Installs emulators for WII-UU on Linux - x86-64 PCs and 64-bit ARM boards such as the
+# Raspberry Pi 4/5 - and points WII-UU at them. No flatpak, no containers.
 #
-#   ./emulators.sh                 build the "light" set (runs well on a Raspberry Pi)
-#   ./emulators.sh --all           also build the heavy ones (Dolphin, Cemu, Ryujinx, RPCS3 ...)
+# For each emulator it downloads the newest official prebuilt Linux release for this CPU
+# (AppImage / tarball from the project's GitHub or GitLab releases). Where a project publishes
+# no build for this CPU, it compiles the latest source instead.
+#
+#   ./emulators.sh                 install everything that has a release for this machine,
+#                                  and build the "light" rest from source
+#   ./emulators.sh --all           also build heavy emulators that have no release (Dolphin ...)
 #   ./emulators.sh --only ppsspp,dolphin
-#   ./emulators.sh --update        pull the newest source of everything built before and rebuild
-#   ./emulators.sh --list          show what can be built on this machine
+#   ./emulators.sh --update        update everything installed before (skips if already newest)
+#   ./emulators.sh --list          show what is available / installed on this machine
 #
-# Options: --jobs N  --no-deps (skip apt)  --yes  --prefix DIR  --keep-going (default)
+# Options: --source (always build)  --releases-only (never build)  --nightly (allow pre-releases)
+#          --jobs N  --no-deps (skip apt)  --yes  --prefix DIR
+# Set GITHUB_TOKEN to avoid GitHub's 60 requests/hour limit for anonymous users.
 set -uo pipefail
 
 ROOT="${WIIUU_EMU_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/wiiuu-emulators}"
@@ -18,8 +24,8 @@ EMU="$ROOT/emulators"
 CONF_DIR="${WIIUU_HOME:-$HOME/.wiiuu}"
 CONF="$CONF_DIR/config.properties"
 LOGS="$CONF_DIR/logs/build"
-ARCH="$(uname -m)"
-YES=0; DEPS=1; ALL=0; UPDATE=0; LIST=0; ONLY=""; JOBS=""
+ARCH="${WIIUU_ARCH:-$(uname -m)}"
+YES=0; DEPS=1; ALL=0; UPDATE=0; LIST=0; ONLY=""; JOBS=""; MODE=auto; NIGHTLY=0
 
 c_blue=$'\033[1;36m'; c_green=$'\033[1;32m'; c_yellow=$'\033[1;33m'; c_red=$'\033[1;31m'; c_dim=$'\033[2m'; c_off=$'\033[0m'
 [ -t 1 ] || { c_blue=; c_green=; c_yellow=; c_red=; c_dim=; c_off=; }
@@ -39,8 +45,11 @@ while [ $# -gt 0 ]; do
     --no-deps) DEPS=0 ;;
     --yes|-y) YES=1 ;;
     --prefix) ROOT="$2"; SRC="$ROOT/emu-src"; EMU="$ROOT/emulators"; shift ;;
+    --source) MODE=source ;;
+    --releases-only) MODE=release ;;
+    --nightly) NIGHTLY=1 ;;
     --keep-going) ;;
-    -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option $1 (see --help)" ;;
   esac
   shift
@@ -63,7 +72,30 @@ cemu|wiiu|heavy|x86_64 aarch64|Cemu_release|-f -g {rom}
 ryujinx|switch|heavy|x86_64 aarch64|Ryujinx|--fullscreen {rom}
 duckstation|ps1|heavy|x86_64 aarch64|bin/duckstation-qt|-fullscreen -batch -- {rom}
 rpcs3|ps3|heavy|x86_64 aarch64|bin/rpcs3|--no-gui {rom}
-shadps4|ps4|heavy|x86_64|shadps4|-g {rom}"
+shadps4|ps4|heavy|x86_64|shadps4|-g {rom}
+pcsx2|ps2|heavy|x86_64|-|-fullscreen -batch -- {rom}"
+
+# Official prebuilt releases:
+# name | host (github, or gitlab:<domain>) | repo | repo for aarch64 (- = same) | preferred-asset regex | executables
+# Assets are chosen at run time by name (linux + this CPU; AppImage > tarball > zip), so new
+# versions are picked up without editing this table.
+RELEASES="fceux|github|TASEmulators/fceux|-||fceux
+snes9x|github|snes9xgit/snes9x|-|gtk|snes9x-gtk snes9x
+mgba|github|mgba-emu/mgba|-|qt|mgba-qt mgba
+melonds|github|melonDS-emu/melonDS|-||melonDS
+ppsspp|github|hrydgard/ppsspp|-|sdl|PPSSPPSDL PPSSPPQt ppsspp
+flycast|github|flyinghead/flycast|-||flycast
+azahar|github|azahar-emu/azahar|-|qt|azahar azahar-qt
+cemu|github|cemu-project/Cemu|-||Cemu
+ryujinx|gitlab:git.ryujinx.app|ryubing/ryujinx|-||Ryujinx.sh Ryujinx
+duckstation|github|stenzek/duckstation|-||duckstation-qt DuckStation
+rpcs3|github|RPCS3/rpcs3-binaries-linux|RPCS3/rpcs3-binaries-linux-arm64||rpcs3
+shadps4|github|shadps4-emu/shadPS4|-|sdl|shadps4 Shadps4-sdl
+pcsx2|github|PCSX2/pcsx2|-|qt|pcsx2-qt pcsx2"
+
+rfield() { printf '%s\n' "$RELEASES" | awk -F'|' -v n="$1" -v f="$2" '$1 == n { print $f }'; }
+has_release() { [ -n "$(rfield "$1" 1)" ]; }
+has_source() { declare -F "build_$1" >/dev/null 2>&1; }
 
 field() { printf '%s\n' "$CATALOGUE" | awk -F'|' -v n="$1" -v f="$2" '$1 == n { print $f }'; }
 supported() { local a; a="$(field "$1" 4)"; [ "$a" = any ] || [[ " $a " == *" $ARCH "* ]]; }
@@ -72,11 +104,12 @@ supported() { local a; a="$(field "$1" 4)"; [ "$a" = any ] || [[ " $a " == *" $A
 if [ "$LIST" = 1 ]; then
   printf '%-12s %-24s %-6s %s\n' EMULATOR SYSTEMS TIER "ON THIS MACHINE ($ARCH)"
   while IFS='|' read -r n sys tier arch _ _; do
-    if supported "$n"; then st="yes"; [ -f "$EMU/$n/.built" ] && st="built ($(cat "$EMU/$n/.built"))"; else st="no (needs $arch)"; fi
+    how="source"; has_release "$n" && how="release"; [ "$n" = pcsx2 ] && how="release only"
+    if supported "$n"; then st="available ($how)"; [ -f "$EMU/$n/.built" ] && st="installed: $(cat "$EMU/$n/.built")"
+    else st="no (needs $arch)"; fi
     printf '%-12s %-24s %-6s %s\n' "$n" "$sys" "$tier" "$st"
   done <<< "$CATALOGUE"
-  echo; echo "PCSX2 (PS2) is not built here: it only runs on x86-64 and needs its own dependency toolchain;"
-  echo "on a PC use the official AppImage from pcsx2.net and set its path in WII-UU Settings."
+  echo; echo "\"release\" = official prebuilt download when the project publishes one for $ARCH, else built from source."
   exit 0
 fi
 
@@ -87,15 +120,14 @@ elif [ "$UPDATE" = 1 ]; then
   for n in $(printf '%s\n' "$CATALOGUE" | cut -d'|' -f1); do [ -f "$EMU/$n/.built" ] && SELECTED="$SELECTED $n"; done
   [ -n "$SELECTED" ] || die "nothing built yet - run without --update first"
 else
-  while IFS='|' read -r n _ tier _ _ _; do
-    { [ "$tier" = light ] || [ "$ALL" = 1 ]; } && SELECTED="$SELECTED $n"
-  done <<< "$CATALOGUE"
+  # everything; heavy emulators are only *built* with --all (a release download is always fine)
+  while IFS='|' read -r n _ _ _ _ _; do SELECTED="$SELECTED $n"; done <<< "$CATALOGUE"
 fi
 TODO=""
 for n in $SELECTED; do
-  if supported "$n"; then TODO="$TODO $n"; else warn "$n does not support $ARCH - skipped"; fi
+  if supported "$n"; then TODO="$TODO $n"; elif [ -n "$ONLY" ]; then warn "$n does not run on $ARCH - skipped"; fi
 done
-[ -n "$TODO" ] || die "nothing to build"
+[ -n "$TODO" ] || die "nothing to install"
 
 case "$ARCH" in
   x86_64|aarch64) ;;
@@ -110,15 +142,19 @@ if [ -z "$JOBS" ]; then
   JOBS=$(( MEM_MB / 1500 )); [ "$JOBS" -lt 1 ] && JOBS=1; [ "$JOBS" -gt "$CPUS" ] && JOBS=$CPUS
 fi
 
-printf '\n%s  WII-UU emulator builder%s  %s%s, %s CPUs, %s MB RAM, %s parallel jobs%s\n\n' \
-  "$c_blue" "$c_off" "$c_dim" "$ARCH" "$CPUS" "$MEM_MB" "$JOBS" "$c_off"
-say "Will build:$TODO"
-for n in $TODO; do
-  if [ "$(field "$n" 3)" = heavy ] && [ "$MEM_MB" -lt 6000 ]; then
-    warn "$n is a large build; with ${MEM_MB} MB RAM make sure you have >= 4 GB swap (Raspberry Pi OS: CONF_SWAPSIZE in /etc/dphys-swapfile)."
-    break
-  fi
-done
+printf '\n%s  WII-UU emulator installer%s  %s%s, %s CPUs, %s MB RAM, mode: %s%s\n\n' \
+  "$c_blue" "$c_off" "$c_dim" "$ARCH" "$CPUS" "$MEM_MB" "$MODE" "$c_off"
+say "Emulators:$TODO"
+case "$MODE" in
+  auto) echo "  Official prebuilt releases where available for $ARCH; the rest is built from source." ;;
+  source) echo "  Building everything from the latest source."
+    for n in $TODO; do
+      if [ "$(field "$n" 3)" = heavy ] && [ "$MEM_MB" -lt 6000 ]; then
+        warn "heavy builds with ${MEM_MB} MB RAM need >= 4 GB swap (Raspberry Pi OS: CONF_SWAPSIZE in /etc/dphys-swapfile)."; break
+      fi
+    done ;;
+  release) echo "  Official prebuilt releases only." ;;
+esac
 ask "Continue?" || exit 1
 
 # ------------------------------------------------------------------------------ dependencies (apt)
@@ -144,26 +180,46 @@ apt_deps() {
 }
 
 SUDO=sudo; [ "$(id -u)" = 0 ] && SUDO=""
-if [ "$DEPS" = 1 ]; then
-  if command -v apt-get >/dev/null 2>&1; then
-    say "Installing build dependencies (apt)"
-    want="$APT_COMMON"; for n in $TODO; do want="$want $(apt_deps "$n")"; done
-    $SUDO apt-get update -qq || warn "apt-get update had errors"
-    # only ask apt for packages this distro actually has (names differ between releases)
-    pkgs=""; missing=""
-    for p in $(printf '%s\n' $want | sort -u); do
-      [ "$p" = nasm ] && [ "$ARCH" != x86_64 ] && continue
-      if apt-cache show "$p" >/dev/null 2>&1; then pkgs="$pkgs $p"; else missing="$missing $p"; fi
-    done
-    [ -n "$missing" ] && warn "not in your apt sources (skipped):$missing"
-    # shellcheck disable=SC2086
-    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $pkgs || warn "some packages failed to install; builds may fail"
+APT_UPDATED=0
+apt_install() {  # packages... (only those this distro actually has; names differ between releases)
+  command -v apt-get >/dev/null 2>&1 || return 1
+  [ "$APT_UPDATED" = 1 ] || { $SUDO apt-get update -qq || warn "apt-get update had errors"; APT_UPDATED=1; }
+  local pkgs="" missing="" p
+  for p in $(printf '%s\n' "$@" | sort -u); do
+    [ "$p" = nasm ] && [ "$ARCH" != x86_64 ] && continue
+    if apt-cache show "$p" >/dev/null 2>&1; then pkgs="$pkgs $p"; else missing="$missing $p"; fi
+  done
+  [ -n "$missing" ] && warn "not in your apt sources (skipped):$missing"
+  # shellcheck disable=SC2086
+  $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $pkgs || warn "some packages failed to install"
+}
+
+# build dependencies are only installed for emulators that actually get compiled
+build_deps() {  # name
+  if [ "$DEPS" = 1 ]; then
+    if command -v apt-get >/dev/null 2>&1; then
+      say "Installing build dependencies for $1 (apt)"
+      # shellcheck disable=SC2046
+      apt_install $APT_COMMON $(apt_deps "$1")
+    else
+      warn "No apt found; install $1's build dependencies (compiler, cmake, ninja, git, SDL2, Qt dev packages) yourself."
+    fi
+  fi
+  local t
+  for t in git cmake make cc c++; do command -v "$t" >/dev/null 2>&1 || { warn "'$t' is missing - install build tools first"; return 1; }; done
+}
+
+# tools needed to download and unpack releases
+need=""
+for t in curl python3 tar unzip xz; do command -v "$t" >/dev/null 2>&1 || need="$need $t"; done
+if [ -n "$need" ]; then
+  if [ "$DEPS" = 1 ] && command -v apt-get >/dev/null 2>&1; then
+    say "Installing download tools:$need"
+    apt_install curl ca-certificates python3 tar unzip xz-utils file
   else
-    warn "No apt found. Install the build dependencies listed in each emulator's BUILD/README yourself"
-    warn "(compiler, cmake, ninja, git, SDL2, Qt 5 and Qt 6 dev packages); trying to build anyway."
+    die "please install:$need"
   fi
 fi
-for t in git cmake make cc c++; do command -v "$t" >/dev/null 2>&1 || die "'$t' is missing - install build tools first"; done
 
 # ------------------------------------------------------------------------------ helpers
 mkdir -p "$SRC" "$EMU" "$LOGS" "$CONF_DIR"; touch "$CONF"
@@ -209,6 +265,10 @@ ensure_sdl3() {
 
 cmake_build() {  # srcdir builddir [cmake args...]  -> configures, builds (Release)
   local s="$1" b="$2"; shift 2
+  # a build folder configured for another location (e.g. after moving --prefix) is unusable
+  if [ -f "$b/CMakeCache.txt" ] && ! grep -qxF "CMAKE_HOME_DIRECTORY:INTERNAL=$(cd "$s" && pwd -P)" "$b/CMakeCache.txt"; then
+    rm -rf "$b"
+  fi
   cmake -S "$s" -B "$b" -G Ninja -DCMAKE_BUILD_TYPE=Release "$@"
   cmake --build "$b" --parallel "$JOBS"
 }
@@ -372,42 +432,219 @@ write_launcher() {  # name binary
   cat > "$e/run" <<EOF
 #!/usr/bin/env bash
 export LD_LIBRARY_PATH="$e/lib:$e/lib64:$ROOT/deps/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+export APPIMAGE_EXTRACT_AND_RUN=1   # only matters if an AppImage could not be unpacked
 cd "$e"
 exec "$e/$2" "\$@"
 EOF
   chmod +x "$e/run"
 }
 
-# ------------------------------------------------------------------------------ build loop
+# ------------------------------------------------------------------------------ releases
+# Prints "version<TAB>url<TAB>filename" of the best Linux asset for this CPU, or fails.
+rel_pick() {  # host repo prefer
+  python3 - "$1" "$2" "$ARCH" "$NIGHTLY" "$3" <<'PY'
+import json, os, re, sys, urllib.parse, urllib.request
+host, repo, arch, nightly, prefer = sys.argv[1:6]
+mock = os.environ.get("WIIUU_RELEASES_MOCK")          # test hook: directory of saved API responses
+def get(url):
+    if mock:
+        with open(os.path.join(mock, repo.replace("/", "_") + ".json")) as f:
+            return json.load(f)
+    req = urllib.request.Request(url, headers={"User-Agent": "wiiuu-emulators", "Accept": "application/json"})
+    tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if tok and "api.github.com" in url:
+        req.add_header("Authorization", "Bearer " + tok)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.load(r)
+try:
+    if host == "github":
+        rels = [{"tag": r["tag_name"], "pre": r["prerelease"],
+                 "assets": [(a["name"], a["browser_download_url"], a.get("updated_at", "")) for a in r["assets"]]}
+                for r in get(f"https://api.github.com/repos/{repo}/releases?per_page=20") if not r["draft"]]
+    else:  # gitlab:<domain>
+        dom = host.split(":", 1)[1]
+        rels = [{"tag": r["tag_name"], "pre": bool(r.get("upcoming_release")),
+                 "assets": [(l["name"], l.get("direct_asset_url") or l["url"], "") for l in r.get("assets", {}).get("links", [])]}
+                for r in get(f"https://{dom}/api/v4/projects/{urllib.parse.quote(repo, safe='')}/releases?per_page=20")]
+except Exception as e:
+    print(f"release lookup failed: {e}", file=sys.stderr)
+    sys.exit(2)
+
+ARM = r"(aarch64|arm64|armv8)"
+X86 = r"(x86[_-]?64|amd64|x64|linux64)"
+want, other = (ARM, X86) if arch == "aarch64" else (X86, ARM)
+BAD = (r"(windows|win32|win64|msvc|mingw|macos|mac-|-mac|osx|darwin|apple|universal|android|\.apk$|\.dmg$|\.exe$|"
+       r"\.msi$|\.pkg$|debug|symbols|\.pdb|\.sha\d*$|\.sig$|\.asc$|\.zsync$|\.sym$|source|\.deb$|\.rpm$|flatpak|"
+       r"armhf|armv7|i386|i686|riscv|ppc|freebsd|\bios\b|\.ipa$|libretro)")
+
+def score(name):
+    n = name.lower()
+    if re.search(BAD, n):
+        return None
+    if n.endswith(".appimage"):
+        ext = 3
+    elif re.search(r"(\.tar\.(gz|xz|zst|bz2)|\.tgz)$", n):
+        ext = 2
+    elif n.endswith(".zip"):
+        ext = 1
+    else:
+        return None
+    linuxish = any(k in n for k in ("linux", "appimage", "ubuntu", "debian"))
+    if not linuxish:
+        return None
+    if re.search(want, n):
+        s = 10
+    elif re.search(other, n) or arch != "x86_64":
+        return None           # other CPU, or untagged (untagged builds are x86-64 by convention)
+    else:
+        s = 0
+    s += ext * 3
+    if prefer and re.search(prefer, n, re.I):
+        s += 5
+    return s
+
+def best(rel):
+    cands = [(score(n), n, u, t) for n, u, t in rel["assets"]]
+    cands = [c for c in cands if c[0] is not None]
+    return max(cands) if cands else None
+
+order = rels if nightly == "1" else [r for r in rels if not r["pre"]] + [r for r in rels if r["pre"]]
+for rel in order:                       # API lists newest first
+    b = best(rel)
+    if b:
+        # stamp: rolling tags (e.g. DuckStation "latest") keep their name, so include the upload time
+        stamp = rel["tag"] + ("@" + b[3][:16] if b[3] else "")
+        print(f"{stamp}\t{b[2]}\t{b[1]}")
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
+# Unpacks an AppImage into $2/app so it runs without FUSE (not always present on a Pi).
+# Sets RELBIN to the program to launch, relative to $2.
+unpack_appimage() {  # file dest
+  chmod +x "$1"
+  if (cd "$2" && "$1" --appimage-extract >/dev/null 2>&1) && [ -e "$2/squashfs-root/AppRun" ]; then
+    mv "$2/squashfs-root" "$2/app"; rm -f "$1"; RELBIN="app/AppRun"
+  else
+    rm -rf "$2/squashfs-root"
+    mv "$1" "$2/emulator.AppImage"; RELBIN="emulator.AppImage"   # launched with APPIMAGE_EXTRACT_AND_RUN
+  fi
+}
+
+# Finds the emulator executable inside an unpacked archive (ordered candidate names).
+find_exe() {  # dir names...
+  local dir="$1" nm f; shift
+  for nm in "$@"; do
+    f="$(find "$dir" -type f -iname "$nm" -perm -u+x 2>/dev/null | awk '{ print length, $0 }' | sort -n | head -1 | cut -d' ' -f2-)"
+    [ -z "$f" ] && f="$(find "$dir" -type f -iname "$nm" 2>/dev/null | awk '{ print length, $0 }' | sort -n | head -1 | cut -d' ' -f2-)"
+    [ -n "$f" ] && { chmod +x "$f"; echo "${f#$dir/}"; return 0; }
+  done
+  return 1
+}
+
+# Downloads and unpacks the newest release into $E. Exit codes: 0 ok, 3 already newest,
+# 4 no release for this CPU. Sets RELBIN and REL_TAG.
+install_release() {  # name
+  local n="$1" host repo prefer line url file tag new app
+  host="$(rfield "$n" 2)"; repo="$(rfield "$n" 3)"; prefer="$(rfield "$n" 5)"
+  [ "$ARCH" = aarch64 ] && [ "$(rfield "$n" 4)" != "-" ] && repo="$(rfield "$n" 4)"
+  line="$(rel_pick "$host" "$repo" "$prefer")"
+  case $? in 0) ;; 1) echo "no Linux $ARCH asset in $repo releases"; return 4 ;; *) return 1 ;; esac
+  IFS=$'\t' read -r tag url file <<< "$line"
+  REL_TAG="$tag"
+  if [ "$UPDATE" = 1 ] && [ -f "$E/.built" ] && grep -q "^release $tag " "$E/.built" && [ -e "$E/run" ]; then
+    echo "already newest ($tag)"; return 3
+  fi
+  echo "release $tag: $url"
+  new="$E.new"; rm -rf "$new"; mkdir -p "$new/dl"
+  local auth=()
+  [ -n "${GITHUB_TOKEN:-}" ] && [[ "$url" == https://github.com/* ]] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
+  curl -fL --retry 3 --connect-timeout 20 "${auth[@]}" -o "$new/dl/$file" "$url" || return 1
+  case "$file" in
+    *.AppImage|*.appimage) unpack_appimage "$new/dl/$file" "$new" ;;
+    *)
+      mkdir -p "$new/pkg"
+      case "$file" in
+        *.zip) unzip -q "$new/dl/$file" -d "$new/pkg" ;;
+        *) tar -xf "$new/dl/$file" -C "$new/pkg" ;;
+      esac || return 1
+      # archives often just wrap an AppImage (shadPS4, melonDS, Azahar ...)
+      app="$(find "$new/pkg" -iname '*.appimage' -type f | head -1)"
+      if [ -n "$app" ]; then
+        unpack_appimage "$app" "$new"
+      else
+        # shellcheck disable=SC2046
+        RELBIN="pkg/$(find_exe "$new/pkg" $(rfield "$n" 6))" || { echo "no executable found in $file"; return 1; }
+      fi ;;
+  esac
+  rm -rf "$new/dl"
+  [ -e "$new/$RELBIN" ] || { echo "unpacked, but $RELBIN is missing"; return 1; }
+  rm -rf "$E"; mv "$new" "$E"      # replace the old install only once the new one is complete
+}
+
+# ------------------------------------------------------------------------------ install loop
 declare -A RESULT
 START_ALL=$(date +%s)
 for n in $TODO; do
   E="$EMU/$n"; export E
   log="$LOGS/$n.log"
-  say "Building $n  ${c_dim}(log: $log)${c_off}"
   t0=$(date +%s)
-  mkdir -p "$E"
-  # run outside an `if` so `set -e` really aborts the build at the first failing step
-  ( set -eo pipefail; "build_$n" ) >"$log" 2>&1
-  rc=$?
-  if [ "$rc" -eq 0 ]; then
-    bin="$(field "$n" 5)"
-    if [ ! -x "$E/$bin" ]; then
-      RESULT[$n]="FAILED (binary $bin missing)"; warn "$n: build finished but $E/$bin is missing"
+  : > "$log"
+  prev_how=""; [ -f "$E/.built" ] && prev_how="$(cut -d' ' -f1 "$E/.built")"
+  bin=""; how=""
+  use_release=0
+  if has_release "$n" && [ "$MODE" != source ]; then
+    # on --update keep a source-built emulator on source unless it was a release before
+    { [ "$UPDATE" != 1 ] || [ "$prev_how" = release ] || [ -z "$prev_how" ] || [ "$MODE" = release ]; } && use_release=1
+  fi
+
+  if [ "$use_release" = 1 ]; then
+    say "Downloading $n  ${c_dim}(log: $log)${c_off}"
+    RELBIN=""; REL_TAG=""
+    install_release "$n" >>"$log" 2>&1
+    rc=$?
+    case $rc in
+      0) bin="$RELBIN"; how="release $REL_TAG" ;;
+      3) RESULT[$n]="ok up to date ($REL_TAG)"; ok "$n is already the newest release ($REL_TAG)"; continue ;;
+      4) warn "$n: no official Linux $ARCH release"; tail -n 1 "$log" | sed 's/^/      /' ;;
+      *) warn "$n: release download failed"; tail -n 3 "$log" | sed 's/^/      /' ;;
+    esac
+    rm -rf "$E.new"
+  fi
+
+  if [ -z "$bin" ]; then
+    if [ "$MODE" = release ] || ! has_source "$n"; then
+      RESULT[$n]="FAILED (no release for $ARCH$(has_source "$n" || echo ', no source build'))"; continue
+    fi
+    if [ "$(field "$n" 3)" = heavy ] && [ "$ALL" != 1 ] && [ -z "$ONLY" ] && [ "$MODE" != source ] && [ "$prev_how" = "" ]; then
+      RESULT[$n]="skipped (no release; build it with --all or --only $n)"; continue
+    fi
+    say "Building $n from source  ${c_dim}(log: $log)${c_off}"
+    build_deps "$n" >>"$log" 2>&1 || { RESULT[$n]="FAILED (build tools missing)"; continue; }
+    mkdir -p "$E"
+    # run outside an `if` so `set -e` really aborts the build at the first failing step
+    ( set -eo pipefail; "build_$n" ) >>"$log" 2>&1
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      RESULT[$n]="FAILED"
+      warn "$n failed. Last lines of the log:"
+      tail -n 15 "$log" | sed 's/^/      /'
       continue
     fi
-    write_launcher "$n" "$bin"
-    rev="$(git -C "$SRC/$n" rev-parse --short HEAD 2>/dev/null || git -C "$SRC/$n-core" rev-parse --short HEAD 2>/dev/null || echo release)"
-    echo "$rev $(date +%Y-%m-%d)" > "$E/.built"
-    args="$(field "$n" 6)"; args="${args//@E@/$E}"
-    for s in $(field "$n" 2); do set_conf "system.$s.command" "$E/run $args"; done
-    RESULT[$n]="ok $rev ($(( ($(date +%s) - t0) / 60 )) min)"
-    ok "$n $rev -> $(field "$n" 2)"
-  else
-    RESULT[$n]="FAILED"
-    warn "$n failed. Last lines of the log:"
-    tail -n 15 "$log" | sed 's/^/      /'
+    bin="$(field "$n" 5)"
+    how="source $(git -C "$SRC/$n" rev-parse --short HEAD 2>/dev/null || git -C "$SRC/$n-core" rev-parse --short HEAD 2>/dev/null || echo tarball)"
   fi
+
+  if [ ! -e "$E/$bin" ]; then
+    RESULT[$n]="FAILED ($bin missing)"; warn "$n: finished but $E/$bin is missing"; continue
+  fi
+  write_launcher "$n" "$bin"
+  echo "$how $(date +%Y-%m-%d)" > "$E/.built"
+  args="$(field "$n" 6)"; args="${args//@E@/$E}"
+  for s in $(field "$n" 2); do set_conf "system.$s.command" "$E/run $args"; done
+  RESULT[$n]="ok $how ($(( ($(date +%s) - t0) / 60 )) min)"
+  ok "$n ($how) -> $(field "$n" 2)"
 done
 
 # ------------------------------------------------------------------------------ summary
@@ -415,8 +652,11 @@ printf '\n%sSummary%s  (%s min total)\n' "$c_blue" "$c_off" "$(( ($(date +%s) - 
 fails=0
 for n in $TODO; do
   r="${RESULT[$n]}"
-  case "$r" in ok*) printf '  %s✓%s %-12s %s\n' "$c_green" "$c_off" "$n" "${r#ok }" ;;
-               *) printf '  %s✗%s %-12s %s\n' "$c_red" "$c_off" "$n" "$r  - see $LOGS/$n.log"; fails=$((fails+1)) ;; esac
+  case "$r" in
+    ok*) printf '  %s✓%s %-12s %s\n' "$c_green" "$c_off" "$n" "${r#ok }" ;;
+    skipped*) printf '  %s-%s %-12s %s\n' "$c_dim" "$c_off" "$n" "$r" ;;
+    *) printf '  %s✗%s %-12s %s\n' "$c_red" "$c_off" "$n" "$r  - see $LOGS/$n.log"; fails=$((fails+1)) ;;
+  esac
 done
 echo
 echo "Emulators live in $EMU and WII-UU's settings were updated ($CONF)."
