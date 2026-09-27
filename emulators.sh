@@ -180,11 +180,12 @@ fetch_git() {  # dir url [submodule paths...]  (default: all submodules)
   fi
   echo "source: $url @ $(git -C "$dir" rev-parse --short HEAD)"
   git -C "$dir" submodule sync --recursive
-  git -C "$dir" submodule update --init --recursive --depth 1 --jobs 4 -- "$@" && return 0
+  # --force re-checks-out every submodule, repairing empty folders left by an interrupted earlier fetch
+  git -C "$dir" submodule update --init --recursive --force --depth 1 --jobs 4 -- "$@" && return 0
   # retry with full history, and via official GitHub mirrors for hosts that are often unreachable
   git -C "$dir" -c url."https://github.com/freetype/freetype.git".insteadOf="https://gitlab.freedesktop.org/freetype/freetype.git" \
       -c url."https://github.com/pnggroup/libpng.git".insteadOf="https://git.code.sf.net/p/libpng/code" \
-      submodule update --init --recursive --jobs 4 -- "$@" || return 1
+      submodule update --init --recursive --force --jobs 4 -- "$@" || return 1
 }
 
 # SDL3 is newer than what Raspberry Pi OS Bookworm / Ubuntu 24.04 ship; build the latest release
