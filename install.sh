@@ -108,7 +108,7 @@ cp "$JAR" "$PREFIX/wiiuu.jar"
 java -jar "$PREFIX/wiiuu.jar" --write-icon "$PREFIX/wiiuu.png" 2>/dev/null || true
 cat > "$BIN/wiiuu" <<EOF
 #!/usr/bin/env bash
-exec java -Dsun.java2d.opengl=true -jar "$PREFIX/wiiuu.jar" "\$@"
+exec java -jar "$PREFIX/wiiuu.jar" "\$@"
 EOF
 chmod +x "$BIN/wiiuu"
 ok "Launcher: $BIN/wiiuu"

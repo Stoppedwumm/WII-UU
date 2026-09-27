@@ -9,10 +9,13 @@ import java.awt.FontMetrics;
 import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsEnvironment;
 import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.Shape;
+import java.awt.Toolkit;
+import java.awt.Transparency;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -32,6 +35,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -76,6 +80,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     static final Color CARD = Color.WHITE;
     private static final int COLS = 5, ROWS = 3, PER_PAGE = COLS * ROWS;
     private static final String FONT = pickFont();
+    /** Sprites are drawn at the selected (largest) size so zooming in never upsamples. */
+    private static final float SPRITE_SCALE = 1.06f;
+    private static final Map<Long, Font> FONTS = new ConcurrentHashMap<>();
 
     private enum Screen { HOME, GAMES }
 
@@ -93,6 +100,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         final Game game;
         final int count;
         float scale = 1f;
+
+        Object id() {
+            return game != null ? game.path() : system.id();
+        }
 
         Tile(GameSystem system, Game game, int count) {
             this.system = system;
@@ -143,6 +154,23 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         return t;
     });
     private BufferedImage bg;
+    private BufferedImage topCache, dockCache;
+    private volatile GraphicsConfiguration gc;
+
+    // Tile sprites are rendered off the Swing thread and kept in a size-bounded LRU cache,
+    // so opening a system or flipping pages never blocks input.
+    private static final long SPRITE_BUDGET_BYTES = 128L << 20;
+    private final LinkedHashMap<Object, BufferedImage> sprites = new LinkedHashMap<>(64, 0.75f, true);
+    private long spriteBytes;
+    private final Set<Object> spritePending = ConcurrentHashMap.newKeySet();
+    private final ExecutorService spriteRenderer = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "tile-sprites");
+        t.setDaemon(true);
+        t.setPriority(Thread.NORM_PRIORITY - 1);
+        return t;
+    });
+    private boolean syncSprites; // snapshots render inline
+    private String topKey, dockKey;
 
     public MenuView(Config config, Actions actions) {
         this.config = config;
@@ -481,7 +509,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             toast = null;
             dirty = true;
         }
-        if (toast != null) dirty = true;
+        if (toast != null && System.currentTimeMillis() > toastUntil) dirty = true; // fading out
         if (playing == null && getWidth() > 0) {
             float target = page();
             if (Math.abs(scrollPage - target) > 0.001f) {
@@ -520,6 +548,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** Runs the animations to completion (for offscreen snapshots). */
     public void settle() {
+        syncSprites = true;
         for (int i = 0; i < 200; i++) tick();
     }
 
@@ -586,18 +615,65 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
         Layout L = geom();
+        gc = getGraphicsConfiguration();
         paintBackground(g);
-        paintTopBar(g, L);
+        paintTopBarCached(g, L);
         if (tiles.isEmpty()) paintEmpty(g, L);
         else paintGrid(g, L);
-        paintDock(g, L);
+        paintDockCached(g, L);
+        paintDockCursor(g);
         paintToast(g, L);
         if (playing != null) paintNowPlaying(g, L);
         else if (showPad) paintPadOverlay(g, L);
         else if (confirmQuit) paintConfirm(g);
         g.dispose();
+        Toolkit.getDefaultToolkit().sync(); // flush X11 so animation doesn't stutter on Linux
     }
 
+    private static void quality(Graphics2D g) {
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+    }
+
+    /** Translucent image in the screen's native format, so blitting it is cheap. */
+    private BufferedImage layer(int w, int h) {
+        w = Math.max(1, w);
+        h = Math.max(1, h);
+        GraphicsConfiguration gc = this.gc;
+        return gc != null ? gc.createCompatibleImage(w, h, Transparency.TRANSLUCENT)
+                : new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+    }
+
+    private void paintTopBarCached(Graphics2D g, Layout L) {
+        String key = (int) L.w + "x" + (int) L.h + "|" + (screen == Screen.GAMES && openSystem != null ? openSystem.id() : "")
+                + "|" + pads + "|" + serverOn + "|" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"));
+        if (!key.equals(topKey)) {
+            topCache = layer((int) L.w, (int) (L.topH * 1.2f));
+            Graphics2D c = topCache.createGraphics();
+            quality(c);
+            paintTopBar(c, L);
+            c.dispose();
+            topKey = key;
+        }
+        g.drawImage(topCache, 0, 0, null);
+    }
+
+    private void paintDockCached(Graphics2D g, Layout L) {
+        int top = (int) L.dockY - 8;
+        String key = (int) L.w + "x" + (int) L.h + "|" + screen + "|" + inDock + "|" + dockSel;
+        if (!key.equals(dockKey)) {
+            dockCache = layer((int) L.w, (int) L.h - top);
+            Graphics2D c = dockCache.createGraphics();
+            quality(c);
+            c.translate(0, -top);
+            paintDock(c, L);
+            c.dispose();
+            dockKey = key;
+        }
+        g.drawImage(dockCache, 0, top, null);
+    }
     private void paintBackground(Graphics2D g) {
         int w = getWidth(), h = getHeight();
         if (bg == null || bg.getWidth() != w || bg.getHeight() != h) {
@@ -697,6 +773,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (!inDock && sel >= first && sel <= last) paintTile(g, L, sel);
         if (!modal() && hlInit && !inDock) paintCursor(g, 26);
         g.setClip(oldClip);
+        // warm up the neighbouring pages in the background so paging is instant
+        int cur = page();
+        for (int i = Math.max(0, (cur - 1) * PER_PAGE); i < Math.min(tiles.size(), (cur + 2) * PER_PAGE); i++) {
+            sprite(tiles.get(i), L, 1f);
+        }
 
         // page dots
         int pages = pageCount();
@@ -713,11 +794,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private void paintCursor(Graphics2D g, float radius) {
         RoundRectangle2D r = new RoundRectangle2D.Float(hl[0], hl[1], hl[2], hl[3], radius, radius);
-        for (int i = 4; i >= 1; i--) {
-            g.setColor(new Color(0, 168, 232, 18 * (5 - i)));
-            g.setStroke(new BasicStroke(4 + i * 3.5f));
-            g.draw(r);
-        }
+        g.setColor(new Color(0, 168, 232, 60));
+        g.setStroke(new BasicStroke(12f));
+        g.draw(r);
         g.setColor(ACCENT);
         g.setStroke(new BasicStroke(4.5f));
         g.draw(r);
@@ -727,12 +806,98 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void paintTile(Graphics2D g, Layout L, int i) {
         Tile t = tiles.get(i);
         Rectangle2D base = tileRect(L, i, scrollPage);
-        if (base.getMaxX() < 0 || base.getX() > L.w) return;
-        double w = base.getWidth() * t.scale, h = base.getHeight() * t.scale;
-        float x = (float) (base.getCenterX() - w / 2), y = (float) (base.getCenterY() - h / 2);
-        float rad = (float) Math.min(w, h) * 0.12f;
-        RoundRectangle2D card = new RoundRectangle2D.Float(x, y, (float) w, (float) h, rad, rad);
-        shadow(g, card, t.scale > 1.01f ? 8 : 5);
+        if (base.getMaxX() < -40 || base.getX() > L.w + 40) return;
+        boolean zoomed = Math.abs(t.scale - 1f) >= 0.002f;
+        BufferedImage rest = sprite(t, L, 1f);
+        BufferedImage sprite = zoomed ? sprite(t, L, SPRITE_SCALE) : null;
+        if (sprite == null) {
+            if (rest == null) {
+                paintPlaceholder(g, t, base);
+                return;
+            }
+            if (!zoomed) {
+                // resting tile: plain 1:1 copy, the cheapest possible draw
+                g.drawImage(rest, (int) Math.round(base.getCenterX() - rest.getWidth() / 2.0),
+                        (int) Math.round(base.getCenterY() - rest.getHeight() / 2.0), null);
+                return;
+            }
+            sprite = rest; // zoom sprite still rendering: stretch the 1:1 one for a frame
+        }
+        double f = t.scale / (sprite == rest ? 1f : SPRITE_SCALE);
+        double w = sprite.getWidth() * f, h = sprite.getHeight() * f;
+        int x = (int) Math.round(base.getCenterX() - w / 2), y = (int) Math.round(base.getCenterY() - h / 2);
+        if (Math.abs(f - 1) < 1e-3) g.drawImage(sprite, x, y, null);
+        else g.drawImage(sprite, x, y, (int) Math.round(w), (int) Math.round(h), null);
+    }
+
+    /** @return the cached sprite, or null after queueing it for background rendering */
+    private BufferedImage sprite(Tile t, Layout L, float scale) {
+        BufferedImage cover = t.game == null ? null : cover(t.game);
+        Object key = List.of(t.id(), (int) L.tileW, (int) L.tileH, scale,
+                cover == null ? "" : System.identityHashCode(cover), t.count);
+        synchronized (sprites) {
+            BufferedImage img = sprites.get(key);
+            if (img != null) return img;
+        }
+        if (syncSprites) {
+            storeSprite(key, renderSprite(t, L, scale));
+            return sprite(t, L, scale);
+        }
+        if (spritePending.add(key)) {
+            spriteRenderer.execute(() -> {
+                try {
+                    storeSprite(key, renderSprite(t, L, scale));
+                } finally {
+                    spritePending.remove(key);
+                }
+                repaint();
+            });
+        }
+        return null;
+    }
+
+    private void storeSprite(Object key, BufferedImage img) {
+        synchronized (sprites) {
+            BufferedImage old = sprites.put(key, img);
+            if (old != null) spriteBytes -= bytes(old);
+            spriteBytes += bytes(img);
+            var it = sprites.entrySet().iterator();
+            while (spriteBytes > SPRITE_BUDGET_BYTES && it.hasNext()) {
+                var e = it.next();
+                if (e.getKey().equals(key)) continue;
+                spriteBytes -= bytes(e.getValue());
+                it.remove();
+            }
+        }
+    }
+
+    private static long bytes(BufferedImage img) {
+        return 4L * img.getWidth() * img.getHeight();
+    }
+
+    /** Cheap stand-in shown for the frame or two before a tile's sprite is ready. */
+    private static void paintPlaceholder(Graphics2D g, Tile t, Rectangle2D r) {
+        float rad = (float) Math.min(r.getWidth(), r.getHeight()) * 0.12f;
+        g.setColor(new Color(40, 50, 60, 18));
+        g.fill(new RoundRectangle2D.Double(r.getX(), r.getY() + 3, r.getWidth(), r.getHeight(), rad, rad));
+        g.setColor(CARD);
+        g.fill(new RoundRectangle2D.Double(r.getX(), r.getY(), r.getWidth(), r.getHeight(), rad, rad));
+        g.setColor(t.game == null ? t.system.color() : vary(t.system.color(), t.game.name()));
+        g.fill(new RoundRectangle2D.Double(r.getX(), r.getY(), r.getWidth(), r.getHeight() * 0.72, rad, rad));
+        g.fill(new Rectangle2D.Double(r.getX(), r.getY() + rad, r.getWidth(), r.getHeight() * 0.72 - rad));
+    }
+
+    /** Renders a tile (card, art, text and soft shadow) once; re-used every frame until it changes. */
+    private BufferedImage renderSprite(Tile t, Layout L, float scale) {
+        float w = L.tileW * scale, h = L.tileH * scale;
+        int pad = 16;
+        BufferedImage img = layer((int) Math.ceil(w) + 2 * pad, (int) Math.ceil(h) + 2 * pad);
+        Graphics2D g = img.createGraphics();
+        quality(g);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        float rad = Math.min(w, h) * 0.12f;
+        RoundRectangle2D card = new RoundRectangle2D.Float(pad, pad, w, h, rad, rad);
+        shadow(g, card, 6);
         g.setColor(CARD);
         g.fill(card);
         if (t.game == null) paintSystemTile(g, t, card);
@@ -740,6 +905,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.setColor(new Color(0, 0, 0, 22));
         g.setStroke(new BasicStroke(1f));
         g.draw(card);
+        g.dispose();
+        return img;
     }
 
     private void paintSystemTile(Graphics2D g, Tile t, RoundRectangle2D card) {
@@ -876,19 +1043,21 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             g.setFont(font(Font.BOLD, L.dockH * 0.12f));
             drawCentered(g, items[i].label, (float) r.getCenterX(), (float) (r.getMaxY() + L.dockH * 0.2f));
         }
-        if (inDock && !modal() && hlInit) {
-            RoundRectangle2D ring = new RoundRectangle2D.Float(hl[0], hl[1], hl[2], hl[3], hl[2], hl[3]);
-            g.setColor(ACCENT);
-            g.setStroke(new BasicStroke(4f));
-            g.draw(ring);
-            g.setStroke(new BasicStroke(1));
-        }
         // hint line
         g.setFont(font(Font.PLAIN, L.dockH * 0.1f));
         g.setColor(TEXT_DIM);
         String hint = screen == Screen.HOME ? "A: Open   B: Back   L/R Page   + GamePad   \u2212 Refresh"
                 : "A: Play   B: Back   L/R Page   + GamePad   \u2212 Refresh";
         g.drawString(hint, L.w * 0.03f, L.h - L.dockH * 0.12f);
+    }
+
+    private void paintDockCursor(Graphics2D g) {
+        if (!inDock || modal() || !hlInit) return;
+        RoundRectangle2D ring = new RoundRectangle2D.Float(hl[0], hl[1], hl[2], hl[3], hl[2], hl[3]);
+        g.setColor(ACCENT);
+        g.setStroke(new BasicStroke(4f));
+        g.draw(ring);
+        g.setStroke(new BasicStroke(1));
     }
 
     private void drawDockIcon(Graphics2D g, Dock d, Rectangle2D r, Color c) {
@@ -1109,22 +1278,31 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     // ---- drawing helpers ----------------------------------------------------------------
 
+    /** Soft drop shadow built from a few growing translucent fills (fills are far cheaper than wide strokes). */
     private static void shadow(Graphics2D g, Shape s, int depth) {
-        Composite old = g.getComposite();
-        for (int i = depth; i >= 1; i--) {
-            g.setColor(new Color(40, 50, 60, Math.max(4, 22 - i * 2)));
-            g.translate(0, i * 0.8);
-            g.setStroke(new BasicStroke(i * 1.6f));
-            g.draw(s);
-            g.fill(s);
-            g.translate(0, -i * 0.8);
+        Rectangle2D b = s.getBounds2D();
+        boolean round = s instanceof RoundRectangle2D;
+        boolean oval = s instanceof Ellipse2D;
+        double arc = round ? ((RoundRectangle2D) s).getArcWidth() : 0;
+        int layers = Math.min(4, depth);
+        for (int i = layers; i >= 1; i--) {
+            double grow = depth * 0.45 * i / layers, dy = depth * 0.35 * i / layers + 1;
+            g.setColor(new Color(40, 50, 60, 9 + (layers - i) * 3));
+            double x = b.getX() - grow, y = b.getY() - grow + dy, w = b.getWidth() + 2 * grow, h = b.getHeight() + 2 * grow;
+            if (round) g.fill(new RoundRectangle2D.Double(x, y, w, h, arc + 2 * grow, arc + 2 * grow));
+            else if (oval) g.fill(new Ellipse2D.Double(x, y, w, h));
+            else {
+                g.translate(0, dy);
+                g.fill(s);
+                g.translate(0, -dy);
+            }
         }
-        g.setStroke(new BasicStroke(1));
-        g.setComposite(old);
     }
 
     private static Font font(int style, float size) {
-        return new Font(FONT, style, 1).deriveFont(style, Math.max(8f, size));
+        float sz = Math.max(8f, Math.round(size * 2) / 2f); // half-point buckets keep the cache small
+        return FONTS.computeIfAbsent(((long) style << 32) | Float.floatToIntBits(sz),
+                k -> new Font(FONT, style, 1).deriveFont(style, sz));
     }
 
     private static String pickFont() {
