@@ -27,6 +27,7 @@ public final class Launcher {
     }
 
     private final Config config;
+    private final DolphinInput dolphin;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private Process process;
     private Game current;
@@ -36,6 +37,8 @@ public final class Launcher {
 
     public Launcher(Config config) {
         this.config = config;
+        this.dolphin = new DolphinInput(config);
+        dolphin.recover();
     }
 
     public void addListener(Listener l) {
@@ -56,6 +59,9 @@ public final class Launcher {
         List<String> cmd = expand(template, game);
         if (cmd.isEmpty()) throw new LaunchException("No emulator command set for " + game.system().name());
         cmd = resolve(cmd, game.system());
+        boolean dolphinPatched = dolphin.applies(game, cmd);
+        if (dolphinPatched) cmd = dolphin.before(game, cmd);
+        cmd = new ArrayList<>(cmd);
         flatpakApp = flatpakId(cmd);
         macApp = macAppName(cmd);
         // own process group (Linux): closing the game then reaches every process the emulator started
@@ -76,6 +82,7 @@ public final class Launcher {
         try {
             p = pb.start();
         } catch (IOException e) {
+            if (dolphinPatched) dolphin.after();
             throw new LaunchException(game.system().emulator() + " is not installed (\"" + cmd.get(LINUX && cmd.get(0).equals("setsid") ? 1 : 0)
                     + "\"). " + (LINUX ? "Run: wiiuu-emulators --only " + EMU_DIRS.getOrDefault(game.system().emulator(), "?") + "  or set" : "Set")
                     + " the emulator in Settings (F1).");
@@ -91,6 +98,7 @@ public final class Launcher {
                     current = null;
                 }
             }
+            if (dolphinPatched) dolphin.after();         // give the user's own controller settings back
             int code = done.exitValue();
             boolean quick = code != 0 && System.currentTimeMillis() - startedAt < 4000;
             for (Listener l : listeners) l.exited(game, code, quick, log);

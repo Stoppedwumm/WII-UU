@@ -200,6 +200,28 @@ emulator, flip axes with `dsu.motionSigns`: accel x y z, then gyro pitch yaw rol
 Screen streaming and touch use X11/XWayland windows on Linux (install `x11-utils`), user32 on
 Windows, and Accessibility / Screen Recording permissions on macOS.
 
+## macOS setup
+
+macOS blocks two things until you allow them. Until then the GamePad screen comes back **black**
+and the GamePad buttons don't reach emulators. `install.sh` builds a native `WII-UU.app`
+(`~/Applications`, using the JDK's `jpackage`) so these permissions have an app to belong to:
+
+1. Start WII-UU from **~/Applications/WII-UU.app**, not from a terminal.
+2. In *System Settings → Privacy & Security*, turn on **WII-UU** under **Screen Recording** and
+   **Accessibility**. *Settings (F1) → General → macOS permissions* opens both pages.
+3. Restart WII-UU.
+
+If the picture is black, the phone and the TV now say so instead of showing a black screen.
+
+**Dolphin:** there are no virtual controllers on macOS. So while a GameCube or Wii game runs,
+WII-UU temporarily gives Dolphin a keyboard mapping that matches exactly what the phone sends:
+* **GameCube:** a standard controller in port 1.
+* **Wii:** a Wii Remote with Nunchuk. The pointer follows the mouse, which tapping on the phone's
+  TV mirror moves.
+
+Your own Dolphin controller settings are backed up and restored when the game ends, or at the
+next start if WII-UU was killed. Turn this off with `input.dolphinMapping=off`.
+
 ## Updating
 
 * **In the app:** *Settings (F1) → General → Check for updates*. WII-UU also checks once at each

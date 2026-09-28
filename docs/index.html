@@ -176,7 +176,7 @@
           <a class="btn primary" href="download/WII-UU-latest.zip">⤓ Download</a>
           <a class="btn" href="#install">Install guide</a>
         </div>
-        <p class="meta">Version 1.1.1 · Linux · Windows · macOS · Raspberry Pi · Java 17+</p>
+        <p class="meta">Version 1.1.2 · Linux · Windows · macOS · Raspberry Pi · Java 17+</p>
       </div>
       <img class="shot" src="menu.png" alt="The WII-UU home screen: a grid of console tiles with a blue cursor, a clock and a GamePad status pill" width="1600" height="900">
     </div>
@@ -351,6 +351,8 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
           For other emulators, set the emulator's keyboard controls to the keys listed under <b>Settings → GamePad Keys</b>. On Linux under Wayland, keys reach X11/XWayland windows. On macOS, allow Java under Accessibility.</p></details>
       <details><summary>Will a Raspberry Pi run everything?</summary>
         <p>The older consoles run well on a Pi 4/5. GameCube, Wii U, Switch, PS3 and PS4 are too demanding to play well on a Pi, and PS2 and PS4 emulators only run on x86-64.</p></details>
+      <details><summary>The GamePad screen is black on my Mac.</summary>
+        <p>macOS blocks screen capture until you allow it. Start WII-UU from ~/Applications/WII-UU.app, then turn on WII-UU under System Settings → Privacy &amp; Security → <b>Screen Recording</b> and <b>Accessibility</b> (Settings F1 → General → macOS permissions opens both), and restart WII-UU.</p></details>
       <details><summary>Where are my settings?</summary>
         <p>In <code>~/.wiiuu/config.properties</code>. Games go in <code>~/WiiUU/roms/&lt;system&gt;</code> by default; you can change this in Settings.</p></details>
     </div>

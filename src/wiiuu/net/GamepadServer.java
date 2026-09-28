@@ -447,7 +447,8 @@ public final class GamepadServer {
                 .kv("tv", screen != null && screen.available())
                 .kv("dsu", dsu != null)
                 .kv("pad", pads != null && pads.usable())
-                .kv("stream", screen == null ? "off" : screen.backend());
+                .kv("stream", screen == null ? "off" : screen.backend())
+                .kv("captureBlocked", screen != null && screen.captureBlocked());
         String secure = httpsUrl();
         j.key("https");
         if (secure == null) j.val((String) null);

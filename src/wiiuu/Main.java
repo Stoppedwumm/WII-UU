@@ -40,7 +40,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.1.1";
+    public static final String VERSION = "1.1.2";
 
     private final Config config;
     private final Library library;
@@ -156,6 +156,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         dsuServer = dsu;
         ScreenStreamer screen = config.getBool("stream.enabled", true) ? new ScreenStreamer(config, launcher::current) : null;
+        if (screen != null) {
+            screen.setOnBlocked(msg -> SwingUtilities.invokeLater(() -> view.showToast(
+                    System.getProperty("os.name", "").toLowerCase().contains("mac")
+                            ? "GamePad screen is black: allow Screen Recording for WII-UU (Settings F1 > General > macOS permissions)"
+                            : "GamePad screen is black: screen capture seems blocked")));
+        }
         server = new GamepadServer(config, library, launcher, router, this, screen, dsu);
         if (config.getBool("input.gamepad", true)) {
             VirtualPads v = new VirtualPads();

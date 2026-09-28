@@ -114,9 +114,17 @@ public final class Updater {
             cmd = List.of("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", ps);
         } else {
             String relaunch = jar != null ? "\"" + java + "\" -jar \"" + jar + "\"" : "\"$HOME/.local/bin/wiiuu\"";
+            String home = System.getProperty("java.home", "");
+            int app = home.indexOf(".app/Contents/");
+            if (OS.contains("mac") && app > 0) {
+                // native WII-UU.app: start it through macOS so its permissions (screen, keys) apply
+                relaunch = "open \"" + home.substring(0, app + 4) + "\"";
+            } else if (OS.contains("mac")) {
+                relaunch = "open \"$HOME/Applications/WII-UU.app\" || " + relaunch;
+            }
             String sh = "while kill -0 " + pid + " 2>/dev/null; do sleep 0.5; done; "
                     + "bash \"" + release.resolve("install.sh") + "\" --yes > \"" + log + "\" 2>&1 < /dev/null; "
-                    + "exec " + relaunch + " >/dev/null 2>&1";
+                    + "( " + relaunch + " ) >/dev/null 2>&1";
             cmd = List.of("nohup", "bash", "-c", sh);
         }
         new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)

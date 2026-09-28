@@ -331,6 +331,18 @@ public final class SettingsDialog extends JDialog {
         JLabel updateInfo = new JLabel("Version " + wiiuu.Main.VERSION);
         update.addActionListener(e -> checkForUpdates(update, updateInfo));
         row = addRow(p, c, row, "Updates", update, updateInfo);
+        if (System.getProperty("os.name", "").toLowerCase().contains("mac")) {
+            // macOS silently blocks screen capture (black GamePad screen) and synthetic keys without these
+            JPanel perms = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            JButton rec = new JButton("Screen Recording\u2026");
+            rec.addActionListener(e -> openMacPane("Privacy_ScreenCapture"));
+            JButton acc = new JButton("Accessibility\u2026");
+            acc.addActionListener(e -> openMacPane("Privacy_Accessibility"));
+            perms.add(rec);
+            perms.add(acc);
+            row = addRow(p, c, row, "macOS permissions", perms,
+                    new JLabel("<html>Turn on <b>WII-UU</b> (or Java / Terminal) in both,<br>then restart WII-UU.</html>"));
+        }
         for (JCheckBox box : new JCheckBox[]{serverOn, requireCode, fullscreen, minimize, sounds, hideEmpty}) {
             c.gridx = 1;
             c.gridy = row++;
@@ -349,6 +361,14 @@ public final class SettingsDialog extends JDialog {
         JPanel wrap = new JPanel(new BorderLayout());
         wrap.add(p, BorderLayout.NORTH);
         return wrap;
+    }
+
+    private void openMacPane(String anchor) {
+        try {
+            new ProcessBuilder("open", "x-apple.systempreferences:com.apple.preference.security?" + anchor).start();
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Open System Settings > Privacy & Security yourself.");
+        }
     }
 
     /** Lets the dialog upgrade WII-UU; {@code exit} quits the app so the installer can replace it. */

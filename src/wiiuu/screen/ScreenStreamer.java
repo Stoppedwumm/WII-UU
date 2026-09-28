@@ -57,6 +57,8 @@ public final class ScreenStreamer {
     private final String ffmpeg;
     private final Map<String, Channel> channels = new ConcurrentHashMap<>();
     private volatile boolean mouseDown;
+    private volatile boolean captureBlocked;
+    private volatile java.util.function.Consumer<String> onBlocked = m -> { };
 
     public ScreenStreamer(Config config, Supplier<Game> currentGame) {
         this.config = config;
@@ -81,6 +83,35 @@ public final class ScreenStreamer {
 
     public boolean available() {
         return robot != null;
+    }
+
+    /** True while the OS hands us only black pictures (macOS without Screen Recording permission). */
+    public boolean captureBlocked() {
+        return captureBlocked;
+    }
+
+    public void setOnBlocked(java.util.function.Consumer<String> onBlocked) {
+        this.onBlocked = onBlocked;
+    }
+
+    static String blockedMessage() {
+        return OS.contains("mac")
+                ? "The Mac sends a black picture: macOS is blocking screen capture. On the Mac open System Settings > "
+                  + "Privacy & Security > Screen Recording, turn on WII-UU (or Java / Terminal if you start it from there), "
+                  + "then restart WII-UU."
+                : "The PC sends only a black picture. Screen capture may be blocked (Wayland-only session?).";
+    }
+
+    /** Samples a grid of pixels: a capture without permission comes back completely black. */
+    static boolean isBlack(BufferedImage img) {
+        int w = img.getWidth(), h = img.getHeight();
+        for (int y = 0; y < 12; y++) {
+            for (int x = 0; x < 16; x++) {
+                int rgb = img.getRGB(x * (w - 1) / 15, y * (h - 1) / 11);
+                if (((rgb >> 16) & 0xFF) > 10 || ((rgb >> 8) & 0xFF) > 10 || (rgb & 0xFF) > 10) return false;
+            }
+        }
+        return true;
     }
 
     public String backend() {
@@ -267,6 +298,7 @@ public final class ScreenStreamer {
         }
 
         private boolean javaFallback;
+        private boolean sawPicture;
         private int ffmpegFailures;
 
         private void produce() {
@@ -388,6 +420,7 @@ public final class ScreenStreamer {
             java.util.concurrent.atomic.AtomicLong newestSent = new java.util.concurrent.atomic.AtomicLong(-1);
             ThreadLocal<ImageWriter> writers = ThreadLocal.withInitial(() -> ImageIO.getImageWritersByFormatName("jpeg").next());
             long captured = 0;
+            int blackInARow = 0;
             try {
                 while (!stopped && r.equals(region)) {
                     long start = System.nanoTime();
@@ -398,6 +431,24 @@ public final class ScreenStreamer {
                     } catch (RuntimeException e) {
                         free.release();
                         throw e;
+                    }
+                    // A whole desktop that has been pure black from the start means capture is blocked (a game's
+                    // second screen can legitimately start black): say what to do instead of streaming black.
+                    if (mode.equals("tv") && !sawPicture && isBlack(img)) {
+                        if (++blackInARow >= 10) {
+                            free.release();
+                            if (!captureBlocked) {
+                                captureBlocked = true;
+                                System.err.println("[screen] capture returns only black - " + blockedMessage());
+                                onBlocked.accept(blockedMessage());
+                            }
+                            publish(message(blockedMessage()));
+                            sleep(2000);
+                            continue;
+                        }
+                    } else {
+                        sawPicture = true;
+                        captureBlocked = false;
                     }
                     long seq = ++captured;
                     pool.execute(() -> {

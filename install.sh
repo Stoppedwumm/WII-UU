@@ -142,28 +142,61 @@ ok "Settings: $CONF"
 # ---------------------------------------------------------------------------- shortcuts
 if [ "$SHORTCUT" = 1 ]; then
   if [ "$OS" = "Darwin" ]; then
-    APPDIR="$HOME/Applications/WII-UU.app/Contents"
-    mkdir -p "$APPDIR/MacOS" "$APPDIR/Resources"
-    cat > "$APPDIR/MacOS/wiiuu" <<EOF
-#!/bin/bash
-export PATH="/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:\$PATH"
-exec java -Xdock:name=WII-UU -jar "$PREFIX/wiiuu.jar"
-EOF
-    chmod +x "$APPDIR/MacOS/wiiuu"
-    cat > "$APPDIR/Info.plist" <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>CFBundleName</key><string>WII-UU</string>
-  <key>CFBundleIdentifier</key><string>io.github.wiiuu</string>
-  <key>CFBundleExecutable</key><string>wiiuu</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0.0</string>
-  <key>NSHighResolutionCapable</key><true/>
-</dict></plist>
-EOF
-    ok "App: ~/Applications/WII-UU.app"
-    warn "macOS: allow 'Accessibility' for Java in System Settings > Privacy & Security so the GamePad can type into emulators."
+    # A real app (native launcher + bundled Java runtime, made with the JDK's jpackage) lets macOS attach
+    # Screen Recording (GamePad screen) and Accessibility (GamePad keys) to "WII-UU"; with a script app
+    # those permissions have nothing to attach to and capture just comes back black.
+    APP="$HOME/Applications/WII-UU.app"
+    JPACKAGE="$(command -v jpackage 2>/dev/null || true)"
+    if [ -z "$JPACKAGE" ] && [ -x "$(/usr/libexec/java_home 2>/dev/null)/bin/jpackage" ]; then JPACKAGE="$(/usr/libexec/java_home)/bin/jpackage"; fi
+    for jp in /opt/homebrew/opt/openjdk*/bin/jpackage /usr/local/opt/openjdk*/bin/jpackage; do
+      if [ -z "$JPACKAGE" ] && [ -x "$jp" ]; then JPACKAGE="$jp"; fi
+    done
+    mkdir -p "$HOME/Applications"
+    built=0
+    if [ -n "$JPACKAGE" ]; then
+      say "Building WII-UU.app (native macOS app, about a minute)"
+      stage="$(mktemp -d)"; cp "$PREFIX/wiiuu.jar" "$stage/"
+      icon=()
+      if [ -f "$PREFIX/wiiuu.png" ] && command -v iconutil >/dev/null 2>&1; then
+        set_dir="$stage/WII-UU.iconset"; mkdir -p "$set_dir"
+        for sz in 16 32 128 256; do
+          sips -z $sz $sz "$PREFIX/wiiuu.png" --out "$set_dir/icon_${sz}x${sz}.png" >/dev/null 2>&1
+          sips -z $((sz*2)) $((sz*2)) "$PREFIX/wiiuu.png" --out "$set_dir/icon_${sz}x${sz}@2x.png" >/dev/null 2>&1
+        done
+        iconutil -c icns "$set_dir" -o "$stage/WII-UU.icns" 2>/dev/null && icon=(--icon "$stage/WII-UU.icns")
+      fi
+      version="$(java -jar "$PREFIX/wiiuu.jar" --version 2>/dev/null | awk '{print $2}')"
+      rm -rf "$APP"
+      if "$JPACKAGE" --type app-image --name WII-UU --app-version "${version:-1.0.0}" --input "$stage" \
+           --main-jar wiiuu.jar --main-class wiiuu.Main --dest "$HOME/Applications" \
+           --mac-package-identifier io.github.wiiuu ${icon[@]+"${icon[@]}"} >/dev/null 2>&1; then
+        built=1
+        ok "App: ~/Applications/WII-UU.app"
+      else
+        warn "jpackage failed; using a simple launcher app instead"
+      fi
+      rm -rf "$stage"
+    fi
+    if [ "$built" = 0 ]; then
+      APPDIR="$APP/Contents"
+      mkdir -p "$APPDIR/MacOS" "$APPDIR/Resources"
+      printf '#!/bin/bash\nexport PATH="/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH"\nexec java -Xdock:name=WII-UU -jar "%s/wiiuu.jar"\n' "$PREFIX" > "$APPDIR/MacOS/wiiuu"
+      chmod +x "$APPDIR/MacOS/wiiuu"
+      printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
+        '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+        '<plist version="1.0"><dict>' \
+        '  <key>CFBundleName</key><string>WII-UU</string>' \
+        '  <key>CFBundleIdentifier</key><string>io.github.wiiuu</string>' \
+        '  <key>CFBundleExecutable</key><string>wiiuu</string>' \
+        '  <key>CFBundlePackageType</key><string>APPL</string>' \
+        '  <key>NSHighResolutionCapable</key><true/>' \
+        '</dict></plist>' > "$APPDIR/Info.plist"
+      ok "App: ~/Applications/WII-UU.app (simple launcher; install a JDK with jpackage for the native app)"
+    fi
+    say "macOS permissions (needed for the GamePad screen and GamePad buttons)"
+    warn "In System Settings > Privacy & Security, turn on WII-UU under BOTH 'Screen Recording' and 'Accessibility'."
+    warn "Start WII-UU from ~/Applications/WII-UU.app (not the terminal) so the permissions belong to WII-UU."
+    open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || true
   else
     mkdir -p "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/256x256/apps"
     [ -f "$PREFIX/wiiuu.png" ] && cp "$PREFIX/wiiuu.png" "$HOME/.local/share/icons/hicolor/256x256/apps/wiiuu.png"

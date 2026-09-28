@@ -69,6 +69,10 @@ public final class KeyMap {
      * Users can override any entry with keys.&lt;profile&gt;.&lt;BUTTON&gt;=KEY.
      */
     private static final Map<String, Map<PadButton, String>> PROFILES = Map.of(
+            // Dolphin Wii Remote + Nunchuk as written by DolphinInput (macOS): A=X B=Z 1=C 2=S -=N +=Return Home=M,
+            // D-pad arrows, Nunchuk C=Q Z=W, Nunchuk stick TFGH
+            "dolphin-wii", profile("A=X B=Z X=C Y=S MINUS=N PLUS=ENTER HOME=M UP=UP DOWN=DOWN LEFT=LEFT RIGHT=RIGHT "
+                    + "L=Q R=W ZL=Q ZR=W LS_UP=T LS_DOWN=G LS_LEFT=F LS_RIGHT=H"),
             // Dolphin GameCube pad: A=X B=Z X=C Y=S Z=D L=Q R=W Start=Return, D-pad TFGH, stick arrows, C-stick IJKL
             "dolphin", profile("A=X B=Z X=C Y=S ZR=D L=Q R=W PLUS=ENTER UP=T DOWN=G LEFT=F RIGHT=H "
                     + "LS_UP=UP LS_DOWN=DOWN LS_LEFT=LEFT LS_RIGHT=RIGHT RS_UP=I RS_DOWN=K RS_LEFT=J RS_RIGHT=L"),
@@ -104,7 +108,7 @@ public final class KeyMap {
     /** Which built-in layout fits the emulator in this command (null = the generic defaults). */
     public static String profileFor(String systemId, String command) {
         String c = command == null ? "" : command.toLowerCase(java.util.Locale.ROOT);
-        if (c.contains("dolphin")) return "gc".equals(systemId) ? "dolphin" : null;   // Wii remotes differ
+        if (c.contains("dolphin")) return "gc".equals(systemId) ? "dolphin" : "wii".equals(systemId) ? "dolphin-wii" : null;
         for (String p : new String[]{"ppsspp", "mgba", "melonds", "duckstation", "ryujinx", "azahar"}) {
             if (c.contains(p)) return p;
         }
