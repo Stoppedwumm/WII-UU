@@ -7,7 +7,7 @@ Website: **https://wiiuu.stoppedwumm.net** (served from `docs/`). It has a one-l
 Linux, Raspberry Pi and macOS: `curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash`.
 
 ![Menu](docs/menu.png)
-![Phone GamePad](docs/gamepad.png)
+![TV and phone GamePad](docs/tv-and-gamepad.jpg)
 
 It covers consoles from the NES to the Wii U and Switch, and Sony up to the PS4:
 
@@ -137,6 +137,8 @@ Notes:
 ## The GamePad screen: Wii U, DS and 3DS
 
 As on a real Wii U, the phone's screen shows a picture from the PC and you can touch it.
+
+![Phone GamePad showing the Wii U GamePad screen](docs/gamepad.png)
 The picture is streamed as MJPEG at 20 fps by default.
 
 * **GamePad / Touch screen:** when a game with a second screen starts, the phone switches to it
