@@ -73,9 +73,9 @@ public final class ScreenStreamer {
         }
         this.robot = r;
         String backend = config.get("stream.backend", "auto").trim().toLowerCase(Locale.ROOT);
-        // macOS: ffmpeg's screen capture (AVFoundation) needs its own permission and Retina scaling, so
-        // Java capture is the default there; stream.backend=ffmpeg opts in.
-        boolean useFfmpeg = backend.equals("ffmpeg") || (backend.equals("auto") && !OS.contains("mac"));
+        // ffmpeg when installed (x11grab / gdigrab / AVFoundation on macOS, which inherits WII-UU's Screen
+        // Recording permission); if it yields no picture, capture falls back to Java automatically.
+        boolean useFfmpeg = !backend.equals("java");
         this.ffmpeg = useFfmpeg ? findFfmpeg(config.get("stream.ffmpeg", "ffmpeg")) : null;
         System.out.println("[screen] GamePad streaming via " + (ffmpeg != null ? "ffmpeg (" + ffmpeg + ")"
                 : "Java (install ffmpeg for a much higher frame rate)"));
@@ -206,6 +206,17 @@ public final class ScreenStreamer {
                 return null;
             }
             return clip(p.locate(win));
+        }
+        // TV while a game runs: just the emulator's window (much less to capture than a whole Retina
+        // desktop, and no other apps around it); otherwise the whole screen
+        Game g = currentGame.get();
+        if (g != null && config.getBool("stream.tvFollowsGame", true)) {
+            Rectangle w = windows.find(java.util.regex.Pattern.quote(g.name()));
+            if (w == null) w = windows.find(java.util.regex.Pattern.quote(g.system().emulator()));
+            if (w != null && w.width >= 200 && w.height >= 150) {
+                Rectangle c = clip(w);
+                if (c != null) return c;
+            }
         }
         return clip(GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice()
                 .getDefaultConfiguration().getBounds());
@@ -495,7 +506,9 @@ public final class ScreenStreamer {
         }
         String exe = OS.contains("win") && !configured.endsWith(".exe") ? configured + ".exe" : configured;
         String path = System.getenv("PATH");
-        if (path == null) return null;
+        if (path == null) path = "";
+        // apps started from Finder get a minimal PATH without Homebrew / MacPorts
+        path += File.pathSeparator + "/opt/homebrew/bin" + File.pathSeparator + "/usr/local/bin" + File.pathSeparator + "/opt/local/bin";
         for (String dir : path.split(File.pathSeparator)) {
             File f = new File(dir, exe);
             if (f.canExecute()) return f.getAbsolutePath();

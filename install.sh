@@ -264,6 +264,15 @@ if [ "$OS" = "Linux" ]; then
   fi
 fi
 
+# ---------------------------------------------------------------------------- GamePad screen speed (macOS)
+if [ "$OS" = "Darwin" ] && ! command -v ffmpeg >/dev/null 2>&1 && [ ! -x /opt/homebrew/bin/ffmpeg ] && [ ! -x /usr/local/bin/ffmpeg ]; then
+  if command -v brew >/dev/null 2>&1 && ask "Install ffmpeg with Homebrew for a much smoother GamePad screen?"; then
+    brew install ffmpeg || warn "could not install ffmpeg"
+  else
+    warn "For a smoother GamePad screen install ffmpeg (brew install ffmpeg)."
+  fi
+fi
+
 # ---------------------------------------------------------------------------- network hint
 if command -v ufw >/dev/null 2>&1 && sudo -n ufw status 2>/dev/null | grep -q "Status: active"; then
   warn "Firewall active: run 'sudo ufw allow $PORT/tcp && sudo ufw allow 8443/tcp' so phones can reach the GamePad (8443 = secure address for gyro)."

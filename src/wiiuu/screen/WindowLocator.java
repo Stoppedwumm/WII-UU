@@ -8,8 +8,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -23,24 +21,30 @@ public final class WindowLocator {
     private static final long CACHE_MS = 1000;
     private static final String OS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
 
-    private record Hit(Rectangle rect, long at) {}
+    // one window listing serves every search for a second (listing can take ~1 s on macOS)
+    private List<Win> listing = List.of();
+    private long listedAt;
 
-    private final Map<String, Hit> cache = new ConcurrentHashMap<>();
+    private synchronized List<Win> windowsNow() {
+        long now = System.currentTimeMillis();
+        if (now - listedAt >= CACHE_MS) {
+            try {
+                listing = list();
+            } catch (RuntimeException e) {
+                listing = List.of();
+            }
+            listedAt = System.currentTimeMillis();
+        }
+        return listing;
+    }
 
     /** @return the largest visible window whose title matches {@code titleRegex}, or null */
     public Rectangle find(String titleRegex) {
-        Hit h = cache.get(titleRegex);
-        long now = System.currentTimeMillis();
-        if (h != null && now - h.at < CACHE_MS) return h.rect;
-        Rectangle r;
         try {
-            Pattern p = Pattern.compile(titleRegex, Pattern.CASE_INSENSITIVE);
-            r = largest(list(), p);
+            return largest(windowsNow(), Pattern.compile(titleRegex, Pattern.CASE_INSENSITIVE));
         } catch (RuntimeException e) {
-            r = null;
+            return null;
         }
-        cache.put(titleRegex, new Hit(r, now));
-        return r;
     }
 
     private record Win(String title, Rectangle rect) {}

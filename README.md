@@ -160,9 +160,10 @@ The picture is streamed at 30 fps.
 
 * **Linux and Windows:** with **ffmpeg** installed (the installers offer it), capture and encoding
   are fast enough for a Raspberry Pi.
-* **macOS:** uses Java capture, which encodes on several cores at once. Allow *Screen Recording*
-  for Java (or your terminal) under *System Settings → Privacy & Security*. `stream.backend=ffmpeg`
-  tries ffmpeg's AVFoundation capture instead.
+* **macOS:** uses ffmpeg's AVFoundation capture when ffmpeg is installed (`brew install ffmpeg`),
+  and otherwise Java capture. Either way, WII-UU needs *Screen Recording* (see macOS setup).
+* **TV mode during a game** streams only the emulator's window, not the whole desktop.
+  `stream.tvFollowsGame=false` mirrors the whole screen instead.
 * **If ffmpeg fails:** WII-UU switches to Java capture on its own.
 * **On the phone:** only the newest frame is drawn, so a slow phone drops frames instead of
   falling behind.
