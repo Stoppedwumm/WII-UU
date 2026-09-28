@@ -183,6 +183,8 @@ public final class GamepadServer {
             t.setDaemon(true);
             return t;
         });
+        // send small packets (button replies, frame headers) at once instead of waiting to batch them
+        System.setProperty("sun.net.httpserver.nodelay", "true");
         http = HttpServer.create(new InetSocketAddress(port), 0);
         http.setExecutor(pool);
         http.createContext("/", this::handle);
@@ -289,6 +291,7 @@ public final class GamepadServer {
                     switch (path) {
                         case "/api/status" -> json(ex, 200, status(c));
                         case "/api/stream" -> stream(ex, query(ex).getOrDefault("m", "tv"), "1".equals(query(ex).get("raw")));
+                        case "/api/frame" -> frame(ex, query(ex));
                         case "/api/library" -> json(ex, 200, libraryJson());
                         case "/api/input" -> {
                             if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
@@ -537,6 +540,40 @@ public final class GamepadServer {
             screen.stream("second".equals(mode) ? "second" : "tv", out);
         } catch (IOException closed) {
             // phone stopped watching
+        }
+    }
+
+    /** One JPEG of the screen, newer than {@code after}; 204 when none arrived within two seconds. */
+    private void frame(HttpExchange ex, Map<String, String> q) throws IOException {
+        if (screen == null) {
+            json(ex, 404, error("screen streaming is off"));
+            return;
+        }
+        long after;
+        try {
+            after = Long.parseLong(q.getOrDefault("after", "0"));
+        } catch (NumberFormatException e) {
+            after = 0;
+        }
+        ScreenStreamer.Frame f;
+        try {
+            f = screen.nextFrame("second".equals(q.get("m")) ? "second" : "tv", after, 2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+        ex.getResponseHeaders().set("Cache-Control", "no-store");
+        if (f == null) {
+            ex.sendResponseHeaders(204, -1);
+            return;
+        }
+        ex.getResponseHeaders().set("Content-Type", "image/jpeg");
+        ex.getResponseHeaders().set("X-Seq", Long.toString(f.seq()));
+        ex.sendResponseHeaders(200, f.jpeg().length);
+        try (OutputStream out = ex.getResponseBody()) {
+            out.write(f.jpeg());
+        } catch (IOException closed) {
+            // phone went away
         }
     }
 

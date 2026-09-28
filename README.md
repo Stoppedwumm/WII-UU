@@ -252,8 +252,12 @@ emulators, run `wiiuu-emulators --update`.
   * **Linux:** the whole process group is stopped, and Flatpak apps with `flatpak kill`.
   * **macOS:** apps started with `open -a App` receive Quit, then their process is stopped by its
     path inside the `.app` bundle.
-* **Choppy GamePad screen:** install `ffmpeg`. The phone mentions it when it isn't installed. On
-  slow Wi-Fi, lower `stream.maxWidth` or `stream.quality`.
+* **Choppy GamePad screen:** install `ffmpeg` (Linux/Windows). The phone mentions it when it isn't
+  installed. On slow Wi-Fi, lower `stream.maxWidth` or `stream.quality`.
+* **Delayed GamePad screen:** the phone fetches one picture at a time, so delay can't build up in the
+  network. What's left comes from Wi-Fi and the frame rate:
+  * Use 5 GHz Wi-Fi, or put the PC on a cable.
+  * Try `stream.fps=60` for less delay, if the Wi-Fi keeps up.
 
 ## Settings file
 

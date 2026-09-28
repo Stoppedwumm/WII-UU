@@ -167,6 +167,32 @@ public final class ScreenStreamer {
         }
     }
 
+    /** One pulled frame: its sequence number and JPEG bytes. */
+    public record Frame(long seq, byte[] jpeg) {}
+
+    /**
+     * Returns the newest frame once it differs from {@code after} (the phone's last one), waiting up
+     * to {@code waitMs}; null when nothing new arrived. The phone asks for the next frame only after
+     * the previous one has arrived, so frames never queue up in the network: that is what keeps the
+     * delay low, instead of letting a continuous stream fill buffers whenever Wi-Fi hiccups.
+     */
+    public Frame nextFrame(String mode, long after, long waitMs) throws InterruptedException {
+        Channel ch = channels.compute(mode, (k, c) -> c != null && c.alive() ? c : new Channel(k));
+        ch.join();
+        try {
+            synchronized (ch) {
+                long deadline = System.currentTimeMillis() + waitMs;
+                // seq 0 is the empty placeholder; "!=" (not ">") also copes with a restarted channel
+                while ((ch.seq == 0 || ch.seq == after) && System.currentTimeMillis() < deadline) {
+                    ch.wait(Math.max(1, deadline - System.currentTimeMillis()));
+                }
+                return ch.seq == 0 || ch.seq == after ? null : new Frame(ch.seq, ch.frame);
+            }
+        } finally {
+            ch.leave();
+        }
+    }
+
     /** A tap on the phone: x/y are fractions of the streamed picture; state 1 = down, 2 = move, 0 = up. */
     public synchronized void touch(String mode, double x, double y, int state) {
         Channel ch = channels.get(mode);
