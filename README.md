@@ -184,6 +184,23 @@ The picture is streamed at 30 fps.
   secure pages, so WII-UU also serves `https://<pc>:8443/`. The phone offers this link, and you
   accept its self-signed certificate once.
 
+### Sound on the phone
+
+Tap **🔇 Sound** on the phone to hear the PC's sound there as well. Phones only play sound after a
+tap, so after reloading the page the first tap turns it back on. The phone keeps about 0.1 s of
+sound buffered, so the sound runs slightly behind the picture.
+
+* **macOS 13 or newer:** the ScreenCaptureKit helper records the sound as well. It uses the same
+  *Screen Recording* permission as the picture.
+* **Linux:** records the default output's monitor with `parec`, from `pulseaudio-utils`
+  (PulseAudio or PipeWire), or with ffmpeg.
+* **Windows:** needs ffmpeg and a loopback recording device. Turn on *Stereo Mix* under Sound
+  settings → Recording, or install a virtual cable. Set `audio.device` to pick a device by name.
+* **iPhone:** with the silent switch on, only iOS 17 and newer play the sound.
+* **If there's no sound:** the phone shows why, and details are in `~/.wiiuu/logs/audio.log`.
+  `audio.enabled=false` turns sound off, and `audio.command` replaces the recorder. The command
+  must write raw 48 kHz 16-bit stereo PCM to its output.
+
 ### Real controller input with DSU
 
 The phone also appears as a DSU ("cemuhook") controller at `127.0.0.1:26760`, one slot per player.
@@ -274,6 +291,7 @@ server.requireCode=true
 server.code=1234            # pairing code (created once and kept; change it to unpair phones)
 server.https=true           # secure address for gyro (server.httpsPort=8443)
 stream.fps=30               # GamePad screen: stream.maxWidth=854, stream.quality=60, stream.backend=auto|ffmpeg|java
+audio.enabled=true          # sound on the phone; audio.device=<name>, audio.command=<recorder writing s16le 48 kHz stereo>
 input.keys=auto             # type keys too? auto = only without virtual controllers | on | off
 update.check=true           # look for a new version at start
 screen.nds.region=0,0.5,1,0.5   # second screen: screen.<id>.window / .aspect / .region

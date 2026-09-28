@@ -34,13 +34,14 @@ import wiiuu.input.KeyMap;
 import wiiuu.input.VirtualPads;
 import wiiuu.net.DsuServer;
 import wiiuu.net.GamepadServer;
+import wiiuu.screen.AudioStreamer;
 import wiiuu.screen.ScreenStreamer;
 import wiiuu.ui.MenuView;
 import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.1.6";
+    public static final String VERSION = "1.2.0";
 
     private final Config config;
     private final Library library;
@@ -165,6 +166,9 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                             : "GamePad screen is black: screen capture seems blocked")));
         }
         server = new GamepadServer(config, library, launcher, router, this, screen, dsu);
+        if (config.getBool("audio.enabled", true)) {
+            server.setAudio(new AudioStreamer(config, screen != null ? screen::macAudioHelper : () -> null));
+        }
         if (config.getBool("input.gamepad", true)) {
             VirtualPads v = new VirtualPads();
             if (v.start(config.home())) {

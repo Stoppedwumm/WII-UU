@@ -47,6 +47,7 @@ import wiiuu.input.KeyMap;
 import wiiuu.input.PadButton;
 import wiiuu.input.VirtualPads;
 import wiiuu.screen.ScreenProfile;
+import wiiuu.screen.AudioStreamer;
 import wiiuu.screen.ScreenStreamer;
 
 /**
@@ -167,6 +168,53 @@ public final class GamepadServer {
             }
         } catch (IOException e) {
             System.err.println("[gamepad] could not save paired phones: " + e.getMessage());
+        }
+    }
+
+    private volatile AudioStreamer audio;
+
+    /** The PC's sound for the phones (optional). */
+    public void setAudio(AudioStreamer audio) {
+        this.audio = audio;
+    }
+
+    /** Raw 16-bit stereo PCM newer than {@code after}; 204 (with the reason, if any) when none came. */
+    private void audio(HttpExchange ex, Map<String, String> q) throws IOException {
+        AudioStreamer a = audio;
+        if (a == null) {
+            json(ex, 404, error("sound is off (audio.enabled=false)"));
+            return;
+        }
+        long after;
+        try {
+            after = Long.parseLong(q.getOrDefault("after", "-1"));
+        } catch (NumberFormatException e) {
+            after = -1;
+        }
+        AudioStreamer.Chunk c;
+        try {
+            c = a.next(after, 1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+        ex.getResponseHeaders().set("Cache-Control", "no-store");
+        ex.getResponseHeaders().set("X-Rate", Integer.toString(AudioStreamer.RATE));
+        if (c == null) {
+            String why = a.problem();
+            if (why != null) ex.getResponseHeaders().set("X-Problem", why.replaceAll("[^\\x20-\\x7e]", " "));
+            ex.sendResponseHeaders(204, -1);
+            return;
+        }
+        ex.getResponseHeaders().set("Content-Type", "application/octet-stream");
+        ex.getResponseHeaders().set("X-Seq", Long.toString(c.seq()));
+        ex.sendResponseHeaders(200, c.pcm().length == 0 ? -1 : c.pcm().length);
+        if (c.pcm().length > 0) {
+            try (OutputStream out = ex.getResponseBody()) {
+                out.write(c.pcm());
+            } catch (IOException closed) {
+                // phone went away
+            }
         }
     }
 
@@ -292,6 +340,7 @@ public final class GamepadServer {
                         case "/api/status" -> json(ex, 200, status(c));
                         case "/api/stream" -> stream(ex, query(ex).getOrDefault("m", "tv"), "1".equals(query(ex).get("raw")));
                         case "/api/frame" -> frame(ex, query(ex));
+                        case "/api/audio" -> audio(ex, query(ex));
                         case "/api/library" -> json(ex, 200, libraryJson());
                         case "/api/input" -> {
                             if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
@@ -451,6 +500,7 @@ public final class GamepadServer {
                 .kv("dsu", dsu != null)
                 .kv("pad", pads != null && pads.usable())
                 .kv("stream", screen == null ? "off" : screen.backend())
+                .kv("audio", audio != null)
                 .kv("captureBlocked", screen != null && screen.captureBlocked());
         String secure = httpsUrl();
         j.key("https");

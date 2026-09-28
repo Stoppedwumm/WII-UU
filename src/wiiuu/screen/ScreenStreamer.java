@@ -60,6 +60,8 @@ public final class ScreenStreamer {
     private volatile boolean captureBlocked;
     /** macOS ScreenCaptureKit helper, once compiled (see resources/mac/capture.swift) */
     private volatile java.nio.file.Path macHelper;
+    /** macOS sound helper (resources/mac/audio.swift), once compiled */
+    private volatile java.nio.file.Path macAudioHelper;
     private volatile java.util.function.Consumer<String> onBlocked = m -> { };
 
     public ScreenStreamer(Config config, Supplier<Game> currentGame) {
@@ -93,6 +95,11 @@ public final class ScreenStreamer {
         return robot != null;
     }
 
+    /** The compiled macOS sound helper, or null (not macOS, not built yet, or failed). */
+    public java.nio.file.Path macAudioHelper() {
+        return macAudioHelper;
+    }
+
     /** True while the OS hands us only black pictures (macOS without Screen Recording permission). */
     public boolean captureBlocked() {
         return captureBlocked;
@@ -123,7 +130,7 @@ public final class ScreenStreamer {
     }
 
     public String backend() {
-        return ffmpeg != null ? "ffmpeg" : "java";
+        return ffmpeg != null ? "ffmpeg" : macHelper != null ? "screencapturekit" : "java";
     }
 
     /** The second-screen profile for the running game, or null. */
@@ -599,54 +606,65 @@ public final class ScreenStreamer {
     }
 
     /**
-     * macOS: compiles the ScreenCaptureKit helper with the Xcode Command Line Tools (installed with
-     * Homebrew) the first time, and again only when its source changes.
+     * macOS: compiles the ScreenCaptureKit helpers with the Xcode Command Line Tools (installed with
+     * Homebrew) the first time, and again only when their source changes: first the picture, then
+     * the sound (a separate program, so a problem with sound never costs the picture).
      */
     private void buildMacHelper() {
+        try {
+            Process check = new ProcessBuilder("xcode-select", "-p").redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+            if (!check.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) || check.exitValue() != 0) {
+                System.out.println("[screen] for a smooth GamePad screen and sound install the Xcode Command Line Tools: xcode-select --install");
+                return;
+            }
+        } catch (Exception e) {
+            System.err.println("[screen] capture helper unavailable: " + e.getMessage());
+            return;
+        }
+        macHelper = buildSwift("wiiuu-capture", "capture");
+        if (macHelper != null) System.out.println("[screen] GamePad streaming via ScreenCaptureKit");
+        macAudioHelper = buildSwift("wiiuu-audio", "audio");
+    }
+
+    /** Compiles resources/mac/{source}.swift to ~/.wiiuu/bin/{exeName} unless already up to date. */
+    private java.nio.file.Path buildSwift(String exeName, String source) {
         java.nio.file.Path dir = config.home().resolve("bin");
-        java.nio.file.Path exe = dir.resolve("wiiuu-capture"), stamp = dir.resolve("wiiuu-capture.sha256");
-        java.nio.file.Path buildLog = config.logDir().resolve("capture-build.log");
-        try (InputStream res = ScreenStreamer.class.getResourceAsStream("/mac/capture.swift")) {
-            if (res == null) return;
+        java.nio.file.Path exe = dir.resolve(exeName), stamp = dir.resolve(exeName + ".sha256");
+        java.nio.file.Path buildLog = config.logDir().resolve(source + "-build.log");
+        try (InputStream res = ScreenStreamer.class.getResourceAsStream("/mac/" + source + ".swift")) {
+            if (res == null) return null;
             byte[] src = res.readAllBytes();
             String hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(src));
             if (java.nio.file.Files.isExecutable(exe) && java.nio.file.Files.exists(stamp)
                     && java.nio.file.Files.readString(stamp).trim().equals(hash)) {
-                macHelper = exe;
-                System.out.println("[screen] GamePad streaming via ScreenCaptureKit");
-                return;
-            }
-            Process check = new ProcessBuilder("xcode-select", "-p").redirectErrorStream(true)
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
-            if (!check.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) || check.exitValue() != 0) {
-                System.out.println("[screen] for a smooth GamePad screen install the Xcode Command Line Tools: xcode-select --install");
-                return;
+                return exe;
             }
             java.nio.file.Files.createDirectories(dir);
             java.nio.file.Files.createDirectories(buildLog.getParent());
-            java.nio.file.Path swift = dir.resolve("capture.swift");
+            java.nio.file.Path swift = dir.resolve(source + ".swift");
             java.nio.file.Files.write(swift, src);
-            System.out.println("[screen] building the macOS capture helper (first start only, about a minute)...");
+            System.out.println("[screen] building the macOS " + (source.equals("audio") ? "sound" : "capture")
+                    + " helper (first start only, about a minute)...");
             Process p = new ProcessBuilder("xcrun", "swiftc", "-O", "-swift-version", "5", "-o", exe.toString(), swift.toString())
                     .redirectErrorStream(true).redirectOutput(buildLog.toFile()).start();
             if (p.waitFor(300, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0 && java.nio.file.Files.isExecutable(exe)) {
                 java.nio.file.Files.writeString(stamp, hash);
-                macHelper = exe;
-                System.out.println("[screen] GamePad streaming via ScreenCaptureKit");
-            } else {
-                p.destroyForcibly();
-                System.err.println("[screen] could not build the capture helper (see " + buildLog + "): " + lastLine(buildLog));
+                return exe;
             }
+            p.destroyForcibly();
+            System.err.println("[screen] could not build the " + source + " helper (see " + buildLog + "): " + lastLine(buildLog));
         } catch (Exception e) {
-            System.err.println("[screen] capture helper unavailable: " + e.getMessage());
+            System.err.println("[screen] " + source + " helper unavailable: " + e.getMessage());
         }
+        return null;
     }
 
     private static long even(double v) {
         return Math.round(v) & ~1L;
     }
 
-    private static String findFfmpeg(String configured) {
+    static String findFfmpeg(String configured) {
         if (configured.contains(File.separator) || configured.contains("/")) {
             return new File(configured).canExecute() ? configured : null;
         }

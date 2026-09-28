@@ -235,14 +235,16 @@ fi
 
 # ---------------------------------------------------------------------------- GamePad extras (Linux)
 # ffmpeg: fast GamePad screen streaming · x11-utils: finds emulator windows · python3 + uinput:
-# phones become real virtual controllers that every emulator detects on its own
+# phones become real virtual controllers that every emulator detects on its own · pulseaudio-utils
+# (parec): the PC's sound on the phone (PulseAudio and PipeWire)
 if [ "$OS" = "Linux" ]; then
   missing=""
   command -v ffmpeg >/dev/null 2>&1 || missing="$missing ffmpeg"
   command -v xwininfo >/dev/null 2>&1 || command -v xdotool >/dev/null 2>&1 || missing="$missing x11-utils"
   command -v python3 >/dev/null 2>&1 || missing="$missing python3"
+  command -v parec >/dev/null 2>&1 || missing="$missing pulseaudio-utils"
   if [ -n "$missing" ]; then
-    if command -v apt-get >/dev/null 2>&1 && ask "Install GamePad extras ($missing ) for a smooth GamePad screen and real controllers?"; then
+    if command -v apt-get >/dev/null 2>&1 && ask "Install GamePad extras ($missing ) for a smooth GamePad screen, sound and real controllers?"; then
       sudo apt-get install -y $missing || warn "could not install:$missing"
     else
       warn "For the best GamePad experience install:$missing"
@@ -264,12 +266,14 @@ if [ "$OS" = "Linux" ]; then
   fi
 fi
 
-# ---------------------------------------------------------------------------- GamePad screen speed (macOS)
-if [ "$OS" = "Darwin" ] && ! command -v ffmpeg >/dev/null 2>&1 && [ ! -x /opt/homebrew/bin/ffmpeg ] && [ ! -x /usr/local/bin/ffmpeg ]; then
-  if command -v brew >/dev/null 2>&1 && ask "Install ffmpeg with Homebrew for a much smoother GamePad screen?"; then
-    brew install ffmpeg || warn "could not install ffmpeg"
+# ---------------------------------------------------------------------------- GamePad screen + sound (macOS)
+# WII-UU compiles its ScreenCaptureKit helper (smooth GamePad screen, sound) with the Command Line Tools
+if [ "$OS" = "Darwin" ] && ! xcode-select -p >/dev/null 2>&1; then
+  if ask "Install Apple's Command Line Tools for a smooth GamePad screen and sound on the phone?"; then
+    xcode-select --install 2>/dev/null || true
+    ok "Finish the Command Line Tools installer that just opened, then start WII-UU"
   else
-    warn "For a smoother GamePad screen install ffmpeg (brew install ffmpeg)."
+    warn "For a smooth GamePad screen and sound install the Command Line Tools: xcode-select --install"
   fi
 fi
 

@@ -185,6 +185,7 @@
           <span class="grow"></span>
           <button class="iconbtn" id="tvBtn" title="Show the TV on the GamePad">&#9635; TV</button>
           <button class="iconbtn" id="gyroBtn" title="Motion controls">&#10227; Gyro</button>
+          <button class="iconbtn" id="soundBtn" title="Play the PC's sound on this device">&#128263; Sound</button>
           <button class="iconbtn" id="fs">&#x26F6;</button>
         </div>
         <div class="view" id="v-pair">
@@ -207,6 +208,7 @@
             <button data-m="second" id="segSecond">GamePad</button>
             <button data-m="tv" id="segTv">TV</button>
             <button id="segGyro">Gyro</button>
+            <button id="segSound">Sound</button>
             <button id="segMenu">&#9776;</button>
           </div>
         </div>
@@ -353,6 +355,8 @@ async function poll() {
     $("segSecond").classList.toggle("hidden", !S.second);
     if (S.second) $("segSecond").textContent = S.second;
     $("tvBtn").classList.toggle("hidden", !S.tv);
+    $("soundBtn").classList.toggle("hidden", j.audio === false);
+    $("segSound").classList.toggle("hidden", j.audio === false);
     $("playTv").classList.toggle("hidden", !S.tv);
     if (j.mode !== S.mode || JSON.stringify(j.game) !== JSON.stringify(S.game) || secondChanged) {
       const started = j.mode === "game" && S.mode !== "game";
@@ -591,6 +595,83 @@ async function toggleGyro() {
   toast("Gyro on - emulators read it via DSU (127.0.0.1:26760)");
 }
 
+// ---------------------------------------------------------------- sound
+// The PC's sound arrives as 20 ms chunks of 16-bit stereo PCM, pulled like the picture (so it can't
+// pile up in the network) and scheduled back to back on Web Audio with only a small cushion.
+let soundOn = false, soundCtl = null, audioCtx = null;
+const SOUND_CUSHION = 0.08, SOUND_MAX_AHEAD = 0.13;      // seconds
+function setSoundUi() {
+  for (const id of ["soundBtn", "segSound"]) {
+    $(id).classList.toggle("on", soundOn);
+    $(id).style.background = soundOn ? "var(--accent)" : "";
+    $(id).style.color = soundOn ? "#fff" : "";
+  }
+  $("soundBtn").innerHTML = (soundOn ? "&#128266;" : "&#128263;") + " Sound";
+}
+// must run inside a tap: phones only allow sound that the user started
+function toggleSound() {
+  if (soundOn) {
+    soundOn = false; stopSound(); store.set("sound", "0"); setSoundUi(); toast("Sound off"); return;
+  }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) { toast("This browser can't play sound"); return; }
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}  // iPhone: ignore the silent switch
+  if (!audioCtx) { try { audioCtx = new AC({ latencyHint: "interactive" }); } catch (e) { audioCtx = new AC(); } }
+  const unlock = audioCtx.createBufferSource();      // older iOS: a silent sound inside the tap unlocks audio
+  unlock.buffer = audioCtx.createBuffer(1, 1, 22050); unlock.connect(audioCtx.destination); unlock.start(0);
+  audioCtx.resume();
+  soundOn = true; store.set("sound", "1"); setSoundUi(); startSound();
+  toast("Sound on");
+}
+function startSound() {
+  if (!soundOn || !S.id || document.hidden) return;
+  stopSound();
+  const ctl = new AbortController(); soundCtl = ctl;
+  pullSound(ctl).catch(() => {
+    if (!ctl.signal.aborted) setTimeout(() => { if (soundCtl === ctl) startSound(); }, 1000);
+  });
+}
+function stopSound() { if (soundCtl) { soundCtl.abort(); soundCtl = null; } }
+async function pullSound(ctl) {
+  let seq = -1, playAt = 0, warned = false;
+  while (soundCtl === ctl) {
+    const r = await fetch("/api/audio?c=" + encodeURIComponent(S.id) + "&after=" + seq + "&t=" + Date.now(),
+                          { signal: ctl.signal, cache: "no-store" });
+    if (r.status === 204) {                      // silence, or no sound capture: say why once
+      const why = r.headers.get("X-Problem");
+      if (why && !warned) { warned = true; toast(why); }
+      continue;
+    }
+    if (!r.ok) throw new Error("sound " + r.status);
+    const rate = +r.headers.get("X-Rate") || 48000;
+    seq = r.headers.get("X-Seq") || seq;
+    const bytes = await r.arrayBuffer();
+    const n = bytes.byteLength >> 2;
+    if (!n || audioCtx.state !== "running") continue;
+    const pcm = new Int16Array(bytes, 0, n * 2);
+    const buf = audioCtx.createBuffer(2, n, rate);
+    const left = buf.getChannelData(0), right = buf.getChannelData(1);
+    for (let i = 0; i < n; i++) { left[i] = pcm[2 * i] / 32768; right[i] = pcm[2 * i + 1] / 32768; }
+    const now = audioCtx.currentTime;
+    if (playAt < now + 0.005) playAt = now + SOUND_CUSHION;    // ran dry (or first chunk): small cushion again
+    else if (playAt > now + SOUND_MAX_AHEAD) continue;          // drifted behind: drop a chunk to catch up
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf; src.connect(audioCtx.destination); src.start(playAt);
+    playAt += buf.duration;
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  if (!soundOn) return;
+  if (document.hidden) stopSound(); else startSound();
+});
+// the phone may pause audio (call, other app); any tap brings it back. After a reload, the first
+// tap turns sound back on if it was on before (phones need a tap for that).
+document.addEventListener("pointerdown", (e) => {
+  if (e.target.closest && e.target.closest("#soundBtn, #segSound")) return;
+  if (soundOn && audioCtx && audioCtx.state !== "running") audioCtx.resume();
+  else if (!soundOn && store.get("sound") === "1" && S.id) toggleSound();
+}, true);
+
 function renderLibrary() {
   const chips = $("chips"), games = $("games");
   chips.textContent = ""; games.textContent = "";
@@ -658,6 +739,8 @@ $("segTv").onclick = () => openScreen("tv");
 $("segMenu").onclick = () => show(S.mode === "game" ? "play" : "lib");
 $("gyroBtn").onclick = toggleGyro;
 $("segGyro").onclick = toggleGyro;
+$("soundBtn").onclick = toggleSound;
+$("segSound").onclick = toggleSound;
 $("gyroCancel").onclick = () => $("gyroSheet").classList.add("hidden");
 $("haptics").checked = S.haptics;
 $("haptics").onchange = (e) => { S.haptics = e.target.checked; store.set("haptics", S.haptics ? "1" : "0"); };
