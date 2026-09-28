@@ -135,6 +135,22 @@
     align-items: center; justify-content: center; gap: 12px; }
   .sheet h3 { margin: 0; }
 
+  /* GamePad screen: live picture from the PC (second screen or TV mirror), touchable */
+  body.big #pad { grid-template-columns: .78fr 2.4fr .78fr; }
+  body.big { --stick: min(27vh, 13.5vw); --face: min(11vh, 6.2vw); }
+  .lcd.full .bar { display: none; }
+  .screenview { padding: 0; background: #000; overflow: hidden; touch-action: none; }
+  .stage { position: absolute; inset: 0; touch-action: none; }
+  .stage img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none;
+    -webkit-user-drag: none; user-select: none; }
+  .seg { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 4px; opacity: .85; }
+  .seg button { border: 0; border-radius: 99px; padding: 4px 10px; font: inherit; font-size: 11px; font-weight: 800;
+    background: rgba(20, 22, 26, .7); color: #fff; }
+  .seg button.sel { background: var(--accent); }
+  .seg button.on { box-shadow: 0 0 0 2px var(--accent) inset; }
+  .sheet p { margin: 0 16px; font-size: 12px; color: #6f7780; text-align: center; max-width: 380px; }
+  a.bigbtn { text-decoration: none; }
+
   #rotate { position: fixed; inset: 0; background: #15171b; display: none; flex-direction: column; align-items: center;
     justify-content: center; gap: 16px; text-align: center; padding: 30px; z-index: 10; }
   #rotate .phone { width: 60px; height: 100px; border: 4px solid var(--accent); border-radius: 12px; animation: turn 2s infinite ease-in-out; }
@@ -165,7 +181,9 @@
           <span class="logo">WII-<b>UU</b></span>
           <span class="pill off" id="player">&ndash;</span>
           <span class="grow"></span>
-          <button class="iconbtn" id="fs">&#x26F6; Full</button>
+          <button class="iconbtn" id="tvBtn" title="Show the TV on the GamePad">&#9635; TV</button>
+          <button class="iconbtn" id="gyroBtn" title="Motion controls">&#10227; Gyro</button>
+          <button class="iconbtn" id="fs">&#x26F6;</button>
         </div>
         <div class="view" id="v-pair">
           <form class="pair" id="pairForm">
@@ -180,13 +198,25 @@
           <div class="chips" id="chips"></div>
           <div class="games" id="games"></div>
         </div>
+        <div class="view hidden screenview" id="v-screen">
+          <div class="stage" id="stage"><img id="stream" alt=""></div>
+          <div class="seg">
+            <button data-m="second" id="segSecond">GamePad</button>
+            <button data-m="tv" id="segTv">TV</button>
+            <button id="segGyro">Gyro</button>
+            <button id="segMenu">&#9776;</button>
+          </div>
+        </div>
         <div class="view hidden" id="v-play">
           <div class="playing">
             <div class="band" id="playBand">NOW PLAYING</div>
             <h2 id="playName"></h2>
             <p id="playSys"></p>
             <p id="keysWarn" class="hidden" style="color:#d0342c">Key injection unavailable on the PC (headless or Wayland-only session).</p>
-            <div class="row"><button class="bigbtn grey" id="closeGame">Close game</button></div>
+            <div class="row">
+              <button class="bigbtn" id="playTv">Show TV here</button>
+              <button class="bigbtn grey" id="closeGame">Close game</button>
+            </div>
           </div>
         </div>
         <div class="sheet hidden" id="homeSheet">
@@ -196,6 +226,15 @@
             <button class="bigbtn" id="sheetClose">Close game</button>
           </div>
           <label style="font-size:12px;color:#8a9099"><input type="checkbox" id="haptics"> Vibrate on press</label>
+        </div>
+        <div class="sheet hidden" id="gyroSheet">
+          <h3>Motion controls</h3>
+          <p>Phones only share the gyro with secure pages. Open the secure GamePad address and accept the
+             certificate warning once (it is this PC's own certificate).</p>
+          <div class="row">
+            <button class="bigbtn grey" id="gyroCancel">Not now</button>
+            <a class="bigbtn" id="httpsLink" href="#">Open secure GamePad</a>
+          </div>
         </div>
         <div class="toast" id="toast"></div>
       </div>
@@ -234,7 +273,8 @@ const store = {
   set(k, v) { try { localStorage.setItem("wiiuu." + k, v); } catch (e) {} }
 };
 const S = { id: store.get("id"), code: store.get("code") || "", player: 0, mode: null, game: null,
-            libVersion: -1, lib: null, sys: store.get("sys"), online: false, haptics: store.get("haptics") !== "0" };
+            libVersion: -1, lib: null, sys: store.get("sys"), online: false, haptics: store.get("haptics") !== "0",
+            view: "pair", streamMode: "tv", second: null, https: null, tv: false };
 
 // ---------------------------------------------------------------- networking
 function form(obj) { return Object.entries(obj).map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(v ?? "")).join("&"); }
@@ -259,7 +299,7 @@ async function api(path, opts = {}) {
 let reconnecting = null;
 function reconnect() {
   if (!reconnecting) {
-    reconnecting = hello(S.code).then(() => { show(S.mode === "game" ? "play" : "lib"); poll(); })
+    reconnecting = hello(S.code).then(() => { show(S.view === "pair" ? "lib" : S.view); poll(); })
       .catch(() => show("pair"))
       .finally(() => { reconnecting = null; });
   }
@@ -268,6 +308,7 @@ function reconnect() {
 
 // input batching: at most one request in flight, sticks coalesced to the latest value
 const queue = []; let sticks = {}; let inflight = false;
+let touchMove = null, motionLine = null;   // coalesced: only the newest matters
 function sendButton(b, down) {
   queue.push("b " + b + " " + (down ? 1 : 0));
   if (down && S.haptics && navigator.vibrate) navigator.vibrate(8);
@@ -276,12 +317,15 @@ function sendButton(b, down) {
 function sendStick(i, x, y) { sticks[i] = "s " + i + " " + x.toFixed(3) + " " + y.toFixed(3); flush(); }
 async function flush() {
   if (inflight || !S.id) return;
-  const lines = queue.splice(0).concat(Object.values(sticks)); sticks = {};
+  const lines = queue.splice(0).concat(Object.values(sticks));
+  if (touchMove) lines.push(touchMove);
+  if (motionLine) lines.push(motionLine);
+  sticks = {}; touchMove = null; motionLine = null;
   if (!lines.length) return;
   inflight = true;
   try { await api("/api/input", { method: "POST", headers: { "Content-Type": "text/plain" }, body: lines.join("\n") }); }
   catch (e) { /* status poll reports connectivity */ }
-  finally { inflight = false; if (queue.length || Object.keys(sticks).length) flush(); }
+  finally { inflight = false; if (queue.length || Object.keys(sticks).length || touchMove || motionLine) flush(); }
 }
 
 async function poll() {
@@ -294,14 +338,27 @@ async function poll() {
     $("player").textContent = j.player > 0 ? "P" + j.player : "Viewer";
     $("keysWarn").classList.toggle("hidden", j.keys !== false);
     if (j.library !== S.libVersion) loadLibrary();
-    if (j.mode !== S.mode || JSON.stringify(j.game) !== JSON.stringify(S.game)) {
+    S.https = j.https; S.tv = j.tv;
+    const secondChanged = j.second !== S.second;
+    S.second = j.second;
+    $("segSecond").classList.toggle("hidden", !S.second);
+    if (S.second) $("segSecond").textContent = S.second;
+    $("tvBtn").classList.toggle("hidden", !S.tv);
+    $("playTv").classList.toggle("hidden", !S.tv);
+    if (j.mode !== S.mode || JSON.stringify(j.game) !== JSON.stringify(S.game) || secondChanged) {
+      const started = j.mode === "game" && S.mode !== "game";
       S.mode = j.mode; S.game = j.game;
       if (j.mode === "game") {
         $("playName").textContent = j.game.name;
         $("playSys").textContent = j.game.system;
         $("playBand").style.background = j.game.color;
-        show("play");
-      } else { $("homeSheet").classList.add("hidden"); show("lib"); }
+        // like the Wii U: games with a second screen put it on the GamePad
+        if (S.second && (started || S.view !== "screen")) openScreen("second");
+        else if (started || (S.view === "screen" && S.streamMode === "second" && !S.second)) show("play");
+      } else {
+        $("homeSheet").classList.add("hidden");
+        if (!(S.view === "screen" && S.streamMode === "tv")) show("lib");
+      }
     }
   } catch (e) { setOnline(false); }
 }
@@ -324,7 +381,111 @@ async function loadLibrary() {
 
 // ---------------------------------------------------------------- screen views
 function show(which) {
-  for (const v of ["pair", "lib", "play"]) $("v-" + v).classList.toggle("hidden", v !== which);
+  S.view = which;
+  for (const v of ["pair", "lib", "play", "screen"]) $("v-" + v).classList.toggle("hidden", v !== which);
+  const big = which === "screen";
+  document.body.classList.toggle("big", big);
+  document.querySelector(".lcd").classList.toggle("full", big);
+  if (big) startStream(); else stopStream();
+}
+
+// ---------------------------------------------------------------- GamePad screen (live picture + touch)
+const BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+function openScreen(mode) {
+  S.streamMode = mode;
+  $("segSecond").classList.toggle("sel", mode === "second");
+  $("segTv").classList.toggle("sel", mode === "tv");
+  if (S.view === "screen") startStream(); else show("screen");
+}
+function startStream() {
+  if (!S.id || document.hidden) return;
+  $("stream").src = "/api/stream?m=" + S.streamMode + "&c=" + encodeURIComponent(S.id) + "&t=" + Date.now();
+}
+function stopStream() { $("stream").src = BLANK; }   // closes the MJPEG connection
+document.addEventListener("visibilitychange", () => {
+  if (S.view !== "screen") return;
+  if (document.hidden) stopStream(); else startStream();
+});
+$("stream").addEventListener("error", () => { if (S.view === "screen") setTimeout(startStream, 1500); });
+
+// map a finger to 0..1 coordinates on the picture (object-fit: contain letterboxes it)
+function picturePoint(e) {
+  const img = $("stream"), r = img.getBoundingClientRect();
+  const nw = img.naturalWidth || 16, nh = img.naturalHeight || 9;
+  const sc = Math.min(r.width / nw, r.height / nh), w = nw * sc, h = nh * sc;
+  return [(e.clientX - r.left - (r.width - w) / 2) / w, (e.clientY - r.top - (r.height - h) / 2) / h];
+}
+let touchPointer = null, lastTouch = [0, 0];
+const stage = $("stage");
+stage.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (touchPointer !== null) return;
+  const [x, y] = picturePoint(e);
+  if (x < 0 || x > 1 || y < 0 || y > 1) return;
+  touchPointer = e.pointerId; lastTouch = [x, y];
+  try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+  queue.push("t " + S.streamMode + " " + x.toFixed(4) + " " + y.toFixed(4) + " 1");
+  if (S.haptics && navigator.vibrate) navigator.vibrate(5);
+  flush();
+});
+stage.addEventListener("pointermove", (e) => {
+  if (e.pointerId !== touchPointer) return;
+  e.preventDefault();
+  let [x, y] = picturePoint(e);
+  x = Math.max(0, Math.min(1, x)); y = Math.max(0, Math.min(1, y)); lastTouch = [x, y];
+  touchMove = "t " + S.streamMode + " " + x.toFixed(4) + " " + y.toFixed(4) + " 2";
+  flush();
+});
+function touchEnd(e) {
+  if (e.pointerId !== touchPointer) return;
+  touchPointer = null; touchMove = null;   // a stale move must not arrive after the release
+  queue.push("t " + S.streamMode + " " + lastTouch[0].toFixed(4) + " " + lastTouch[1].toFixed(4) + " 0");
+  flush();
+}
+stage.addEventListener("pointerup", touchEnd);
+stage.addEventListener("pointercancel", touchEnd);
+
+// ---------------------------------------------------------------- motion controls (gyro via DSU on the PC)
+let gyroOn = false;
+function onMotion(e) {
+  const a = e.accelerationIncludingGravity, r = e.rotationRate;
+  if (!a || a.x == null) return;
+  // the phone is held landscape like a GamePad: express its motion in controller axes
+  // (x = right, y = out of the screen, z = towards the player), whichever way it is rotated
+  const deg = (screen.orientation && typeof screen.orientation.angle === "number") ? screen.orientation.angle
+            : (typeof window.orientation === "number" ? window.orientation : 0);
+  const t = deg * Math.PI / 180, c = Math.cos(t), sn = Math.sin(t);
+  const rx = c, ry = -sn, fx = sn, fy = c;          // screen-right / screen-up in device axes
+  const G = 9.80665;
+  const ax = (a.x * rx + a.y * ry) / G, ay = (a.z || 0) / G, az = -(a.x * fx + a.y * fy) / G;
+  const b = (r && r.beta) || 0, g = (r && r.gamma) || 0, al = (r && r.alpha) || 0;
+  const pitch = b * rx + g * ry, yaw = al, roll = -(b * fx + g * fy);
+  motionLine = "m " + [ax, ay, az].map((v) => v.toFixed(3)).join(" ") + " " + [pitch, yaw, roll].map((v) => v.toFixed(2)).join(" ");
+  flush();
+}
+function setGyroUi() {
+  $("gyroBtn").classList.toggle("on", gyroOn);
+  $("segGyro").classList.toggle("on", gyroOn);
+  $("gyroBtn").style.background = gyroOn ? "var(--accent)" : "";
+  $("gyroBtn").style.color = gyroOn ? "#fff" : "";
+}
+async function toggleGyro() {
+  if (gyroOn) {
+    removeEventListener("devicemotion", onMotion); gyroOn = false; store.set("gyro", "0"); setGyroUi();
+    toast("Gyro off"); return;
+  }
+  if (!window.isSecureContext) {
+    if (!S.https) { toast("Motion needs the secure GamePad address (server.https=true on the PC)"); return; }
+    $("httpsLink").href = S.https; $("gyroSheet").classList.remove("hidden"); return;
+  }
+  if (typeof DeviceMotionEvent === "undefined") { toast("This phone has no motion sensors"); return; }
+  if (typeof DeviceMotionEvent.requestPermission === "function") {   // iOS asks the user
+    try {
+      if (await DeviceMotionEvent.requestPermission() !== "granted") { toast("Motion permission was denied"); return; }
+    } catch (err) { toast("Motion permission failed"); return; }
+  }
+  addEventListener("devicemotion", onMotion); gyroOn = true; store.set("gyro", "1"); setGyroUi();
+  toast("Gyro on - emulators read it via DSU (127.0.0.1:26760)");
 }
 
 function renderLibrary() {
@@ -387,6 +548,14 @@ $("pairForm").addEventListener("submit", async (e) => {
 $("closeGame").onclick = closeGame;
 $("sheetClose").onclick = closeGame;
 $("sheetResume").onclick = () => $("homeSheet").classList.add("hidden");
+$("tvBtn").onclick = () => openScreen("tv");
+$("playTv").onclick = () => openScreen("tv");
+$("segSecond").onclick = () => openScreen("second");
+$("segTv").onclick = () => openScreen("tv");
+$("segMenu").onclick = () => show(S.mode === "game" ? "play" : "lib");
+$("gyroBtn").onclick = toggleGyro;
+$("segGyro").onclick = toggleGyro;
+$("gyroCancel").onclick = () => $("gyroSheet").classList.add("hidden");
 $("haptics").checked = S.haptics;
 $("haptics").onchange = (e) => { S.haptics = e.target.checked; store.set("haptics", S.haptics ? "1" : "0"); };
 $("fs").onclick = async () => {
@@ -412,6 +581,7 @@ function mark(b, on) {
 function onHome() {
   if (S.mode === "game") $("homeSheet").classList.toggle("hidden");
   else { show(S.id ? "lib" : "pair"); $("v-lib").scrollTop = 0; }
+  $("gyroSheet").classList.add("hidden");
 }
 
 function buttonAt(x, y) {
@@ -517,7 +687,12 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
   const urlCode = new URLSearchParams(location.search).get("code");
   if (urlCode) { S.code = urlCode; history.replaceState(null, "", "/"); }
   $("code").value = S.code;
-  try { await hello(S.code); show("lib"); poll(); }
+  try {
+    await hello(S.code); show("lib"); poll();
+    // Android needs no prompt, so a gyro that was on stays on across reloads
+    if (store.get("gyro") === "1" && window.isSecureContext && typeof DeviceMotionEvent !== "undefined"
+        && typeof DeviceMotionEvent.requestPermission !== "function") toggleGyro();
+  }
   catch (e) { show("pair"); if (S.code) $("pairErr").textContent = e.message; }
 })();
 </script>

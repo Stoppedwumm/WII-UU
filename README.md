@@ -134,7 +134,44 @@ Notes:
   can be forced with `QT_QPA_PLATFORM=xcb`.
 * **macOS:** allow Java under *Privacy & Security → Accessibility*.
 
-## Settings file
+## The GamePad screen: Wii U, DS and 3DS
+
+As on a real Wii U, the phone's screen shows a picture from the PC and you can touch it.
+The picture is streamed as MJPEG at 20 fps by default.
+
+* **GamePad / Touch screen:** when a game with a second screen starts, the phone switches to it
+  automatically, and a tap becomes a mouse click at that spot. Emulators read those clicks as
+  touch input.
+  * **Wii U (Cemu):** turn on *View → Separate GamePad view* in Cemu. The phone then shows the
+    "GamePad View" window.
+  * **DS (melonDS):** the phone shows the bottom screen. Use melonDS's default vertical layout.
+  * **3DS (Azahar):** the phone shows the bottom screen. Use the default layout.
+* **TV:** mirrors the whole screen, including the WII-UU menu (Off-TV play).
+* **Gyro (motion controls):** tap *Gyro* on the phone. Phones only share motion sensors with
+  secure pages, so WII-UU also serves `https://<pc>:8443/`. The phone offers this link, and you
+  accept its self-signed certificate once.
+
+### Real controller input with DSU
+
+The phone also appears as a DSU ("cemuhook") controller at `127.0.0.1:26760`, one slot per player.
+Unlike the keyboard keys, this gives real **analog sticks**, **gyro/accelerometer** and **touch**.
+Set it up once in each emulator:
+
+| Emulator | Where to set it up |
+|---|---|
+| Cemu (Wii U) | Input settings: emulated controller *Wii U GamePad*, API *DSUController*, 127.0.0.1 : 26760. Map the buttons and enable motion. |
+| Dolphin (GC/Wii) | Controller settings → Alternate input sources → DSU Client → add 127.0.0.1 : 26760. |
+| Azahar (3DS) | Controls → Motion / Touch → *CemuhookUDP*, 127.0.0.1 : 26760. |
+| Ryujinx (Switch) | Input → Motion → CemuHook compatible motion, 127.0.0.1 : 26760. |
+
+If an emulator reads the phone through DSU, set `system.<id>.keys=false` (for example
+`system.wiiu.keys=false`) so WII-UU stops also typing keys into it. If motion feels inverted in an
+emulator, flip axes with `dsu.motionSigns`: accel x y z, then gyro pitch yaw roll, e.g. `+-+ +++`.
+
+Screen streaming and touch use X11/XWayland windows on Linux (install `x11-utils`), user32 on
+Windows, and Accessibility / Screen Recording permissions on macOS.
+
+
 
 Settings are stored in `~/.wiiuu/config.properties`. You can move this folder with `WIIUU_HOME` or `--home`.
 Useful keys:
@@ -147,6 +184,10 @@ system.sms.hidden=true
 server.port=8080
 server.requireCode=true
 server.code=1234            # fixed pairing code (random each start if unset)
+server.https=true           # secure address for gyro (server.httpsPort=8443)
+stream.fps=20               # GamePad screen: stream.maxWidth=960, stream.quality=60
+screen.nds.region=0,0.5,1,0.5   # second screen: screen.<id>.window / .aspect / .region
+dsu.port=26760              # DSU controller server (dsu.enabled, dsu.motionSigns)
 keys.p1.A=X
 ui.fullscreen=true
 ui.minimizeOnLaunch=true

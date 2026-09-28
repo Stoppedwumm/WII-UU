@@ -31,6 +31,8 @@ import javax.imageio.ImageIO;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsServer;
 
 import wiiuu.core.Config;
 import wiiuu.core.Game;
@@ -40,6 +42,8 @@ import wiiuu.core.Library;
 import wiiuu.input.InputRouter;
 import wiiuu.input.KeyMap;
 import wiiuu.input.PadButton;
+import wiiuu.screen.ScreenProfile;
+import wiiuu.screen.ScreenStreamer;
 
 /**
  * Serves the phone gamepad web page and its small API:
@@ -85,34 +89,58 @@ public final class GamepadServer {
     private final Launcher launcher;
     private final InputRouter router;
     private final Host host;
+    private final ScreenStreamer screen;
+    private final DsuServer dsu;
     private final String code;
     private final Map<String, Client> clients = new ConcurrentHashMap<>();
     private HttpServer http;
+    private HttpsServer https;
+    private int httpsPort;
     private ScheduledExecutorService reaper;
     private byte[] pageCache;
     private byte[] iconCache;
     private int port;
 
-    public GamepadServer(Config config, Library library, Launcher launcher, InputRouter router, Host host) {
+    public GamepadServer(Config config, Library library, Launcher launcher, InputRouter router, Host host,
+                         ScreenStreamer screen, DsuServer dsu) {
         this.config = config;
         this.library = library;
         this.launcher = launcher;
         this.router = router;
         this.host = host;
+        this.screen = screen;
+        this.dsu = dsu;
         String fixed = config.get("server.code", "").trim();
         this.code = fixed.isEmpty() ? String.format("%04d", new SecureRandom().nextInt(10000)) : fixed;
     }
 
     public void start(int port) throws IOException {
         this.port = port;
-        http = HttpServer.create(new InetSocketAddress(port), 0);
-        http.setExecutor(Executors.newFixedThreadPool(8, r -> {
+        // cached pool: every open screen stream holds a thread for as long as it is watched
+        var pool = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "gamepad-http");
             t.setDaemon(true);
             return t;
-        }));
+        });
+        http = HttpServer.create(new InetSocketAddress(port), 0);
+        http.setExecutor(pool);
         http.createContext("/", this::handle);
         http.start();
+        if (config.getBool("server.https", true)) {
+            // phones only give web pages the gyro over https, so offer a second, secure address
+            int hp = config.getInt("server.httpsPort", 8443);
+            try {
+                https = HttpsServer.create(new InetSocketAddress(hp), 0);
+                https.setHttpsConfigurator(new HttpsConfigurator(Tls.context(config.home(), lanAddress())));
+                https.setExecutor(pool);
+                https.createContext("/", this::handle);
+                https.start();
+                httpsPort = hp;
+            } catch (Exception e) {
+                https = null;
+                System.err.println("[gamepad] https (for motion controls) unavailable: " + e.getMessage());
+            }
+        }
         reaper = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "gamepad-reaper");
             t.setDaemon(true);
@@ -124,6 +152,7 @@ public final class GamepadServer {
 
     public void stop() {
         if (http != null) http.stop(0);
+        if (https != null) https.stop(0);
         if (reaper != null) reaper.shutdownNow();
     }
 
@@ -137,6 +166,11 @@ public final class GamepadServer {
 
     public String url() {
         return "http://" + lanAddress() + ":" + port + "/";
+    }
+
+    /** The secure address (needed for gyro on phones), or null. */
+    public String httpsUrl() {
+        return https == null ? null : "https://" + lanAddress() + ":" + httpsPort + "/";
     }
 
     /** URL including the pairing code, used for the QR code. */
@@ -192,6 +226,7 @@ public final class GamepadServer {
                     }
                     switch (path) {
                         case "/api/status" -> json(ex, 200, status(c));
+                        case "/api/stream" -> stream(ex, query(ex).getOrDefault("m", "tv"));
                         case "/api/library" -> json(ex, 200, libraryJson());
                         case "/api/input" -> {
                             if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
@@ -238,6 +273,7 @@ public final class GamepadServer {
 
     private Client auth(HttpExchange ex) {
         String id = ex.getRequestHeaders().getFirst("X-Pad");
+        if (id == null) id = query(ex).get("c");     // <img> stream requests can't send headers
         if (id == null) return null;
         Client c = clients.get(id);
         if (c != null) touch(c);
@@ -251,6 +287,7 @@ public final class GamepadServer {
             c.player = freePlayer(c);
             host.padsChanged(connectedPads());
         }
+        if (dsu != null && c.player > 0) dsu.setConnected(c.player, true);
     }
 
     private synchronized int freePlayer(Client self) {
@@ -271,7 +308,11 @@ public final class GamepadServer {
         for (Client c : clients.values()) {
             if (c.active && now - c.lastSeen > STALE_MS) {
                 c.active = false;
-                if (c.player > 0) router.releaseAll(c.player);
+                if (c.player > 0) {
+                    router.releaseAll(c.player);
+                    if (dsu != null) dsu.setConnected(c.player, false);
+                }
+                if (screen != null) screen.releaseTouch();
                 changed = true;
             } else if (!c.active && now - c.lastSeen > FORGET_MS) {
                 clients.remove(c.id);
@@ -287,9 +328,31 @@ public final class GamepadServer {
             try {
                 if (p.length == 3 && p[0].equals("b")) {
                     PadButton b = PadButton.parse(p[1]);
-                    if (b != null) router.button(c.player, b, p[2].equals("1"));
+                    if (b != null) {
+                        router.button(c.player, b, p[2].equals("1"));
+                        if (dsu != null) dsu.button(c.player, b, p[2].equals("1"));
+                    }
                 } else if (p.length == 4 && p[0].equals("s")) {
-                    router.stick(c.player, Integer.parseInt(p[1]), clamp(Float.parseFloat(p[2])), clamp(Float.parseFloat(p[3])));
+                    int stick = Integer.parseInt(p[1]);
+                    float x = clamp(Float.parseFloat(p[2])), y = clamp(Float.parseFloat(p[3]));
+                    router.stick(c.player, stick, x, y);
+                    if (dsu != null) dsu.stick(c.player, stick, x, y);
+                } else if (p.length == 5 && p[0].equals("t")) {
+                    // touch on the GamePad screen: "t <mode> <x> <y> <1 down | 2 move | 0 up>", x/y in 0..1
+                    float x = Float.parseFloat(p[2]), y = Float.parseFloat(p[3]);
+                    int state = Integer.parseInt(p[4]);
+                    if (screen != null) screen.touch(p[1], x, y, state);
+                    if (dsu != null) dsu.touch(c.player, x, y, state != 0);
+                } else if (p.length == 7 && p[0].equals("m")) {
+                    // motion, already in controller axes: accel (g) x y z, gyro (deg/s) pitch yaw roll
+                    if (dsu != null) {
+                        float[] v = new float[6];
+                        for (int i = 0; i < 6; i++) {
+                            float f = Float.parseFloat(p[i + 1]);
+                            v[i] = Float.isFinite(f) ? Math.max(-4000, Math.min(4000, f)) : 0;
+                        }
+                        dsu.motion(c.player, v[0], v[1], v[2], v[3], v[4], v[5]);
+                    }
                 }
             } catch (NumberFormatException ignored) {
                 // malformed line from the client; skip it
@@ -310,7 +373,17 @@ public final class GamepadServer {
                 .kv("player", c.player)
                 .kv("pads", connectedPads())
                 .kv("library", library.snapshot().version())
-                .kv("keys", router.canInjectKeys());
+                .kv("keys", router.canInjectKeys())
+                .kv("tv", screen != null && screen.available())
+                .kv("dsu", dsu != null);
+        String secure = httpsUrl();
+        j.key("https");
+        if (secure == null) j.val((String) null);
+        else j.val(secure + (requiresCode() ? "?code=" + code : ""));
+        ScreenProfile second = screen == null ? null : screen.secondScreen();
+        j.key("second");
+        if (second == null) j.val((String) null);
+        else j.val(second.label());
         j.key("game");
         if (g == null) j.val((String) null);
         else j.obj().kv("name", g.name()).kv("system", g.system().name()).kv("color", g.system().hexColor()).endObj();
@@ -370,6 +443,26 @@ public final class GamepadServer {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ImageIO.write(img, "png", out);
         return iconCache = out.toByteArray();
+    }
+
+    private void stream(HttpExchange ex, String mode) throws IOException {
+        if (screen == null) {
+            json(ex, 404, error("screen streaming is off"));
+            return;
+        }
+        ex.getResponseHeaders().set("Content-Type", "multipart/x-mixed-replace; boundary=" + ScreenStreamer.BOUNDARY);
+        ex.getResponseHeaders().set("Cache-Control", "no-store");
+        ex.sendResponseHeaders(200, 0);
+        try (OutputStream out = ex.getResponseBody()) {
+            screen.stream("second".equals(mode) ? "second" : "tv", out);
+        } catch (IOException closed) {
+            // phone stopped watching
+        }
+    }
+
+    private static Map<String, String> query(HttpExchange ex) {
+        String q = ex.getRequestURI().getRawQuery();
+        return q == null ? Map.of() : form(q);
     }
 
     // ---- helpers ------------------------------------------------------------------------

@@ -49,6 +49,8 @@ public final class InputRouter {
         return t;
     });
     private volatile MenuActions menu;
+    /** false while a game whose emulator reads the phone through DSU instead of the keyboard runs */
+    private volatile BooleanSupplier keysEnabled = () -> true;
 
     // all state below is only touched on the exec thread
     private final Map<Integer, Set<PadButton>> held = new HashMap<>();
@@ -71,6 +73,10 @@ public final class InputRouter {
             }
         }
         this.robot = r;
+    }
+
+    public void setKeysEnabled(BooleanSupplier keysEnabled) {
+        this.keysEnabled = keysEnabled;
     }
 
     public void setMenu(MenuActions menu) {
@@ -142,7 +148,7 @@ public final class InputRouter {
     // ---- game mode ----------------------------------------------------------------------
 
     private void injectKey(int player, PadButton b, boolean down) {
-        if (robot == null) return;
+        if (robot == null || (down && !keysEnabled.getAsBoolean())) return;
         int code = keyMap.keyCode(player, b);
         if (code < 0) return;
         int refs = keyRefs.getOrDefault(code, 0);

@@ -30,7 +30,9 @@ import wiiuu.core.Launcher;
 import wiiuu.core.Library;
 import wiiuu.input.InputRouter;
 import wiiuu.input.KeyMap;
+import wiiuu.net.DsuServer;
 import wiiuu.net.GamepadServer;
+import wiiuu.screen.ScreenStreamer;
 import wiiuu.ui.MenuView;
 import wiiuu.ui.SettingsDialog;
 
@@ -43,6 +45,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     private final Launcher launcher;
     private final InputRouter router;
     private GamepadServer server;
+    private DsuServer dsuServer;
     private JFrame frame;
     private MenuView view;
 
@@ -51,6 +54,11 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.library = new Library(config);
         this.launcher = new Launcher(config);
         this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
+        // system.<id>.keys=false: that emulator reads the phone via DSU, don't also type keys into it
+        router.setKeysEnabled(() -> {
+            Game g = launcher.current();
+            return g == null || config.getBool("system." + g.system().id() + ".keys", true);
+        });
         launcher.addListener(this);
     }
 
@@ -113,7 +121,21 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     }
 
     private void startServer() {
-        server = new GamepadServer(config, library, launcher, router, this);
+        DsuServer dsu = null;
+        if (config.getBool("dsu.enabled", true)) {
+            dsu = new DsuServer();
+            dsu.setMotionSigns(config.get("dsu.motionSigns", "+++ +++"));
+            try {
+                // loopback only: emulators on this PC connect to 127.0.0.1:26760
+                dsu.start(config.get("dsu.bind", DsuServer.loopback()), config.getInt("dsu.port", 26760));
+            } catch (IOException e) {
+                System.err.println("[dsu] could not start: " + e.getMessage());
+                dsu = null;
+            }
+        }
+        dsuServer = dsu;
+        ScreenStreamer screen = config.getBool("stream.enabled", true) ? new ScreenStreamer(config, launcher::current) : null;
+        server = new GamepadServer(config, library, launcher, router, this, screen, dsu);
         try {
             server.start(config.port());
             SwingUtilities.invokeLater(() -> view.setServer(server.url(), server.pairingUrl(), server.code(), server.requiresCode()));
@@ -199,6 +221,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     public void quit() {
         launcher.stop();
         if (server != null) server.stop();
+        if (dsuServer != null) dsuServer.stop();
         System.exit(0);
     }
 

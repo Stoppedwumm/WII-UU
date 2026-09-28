@@ -223,8 +223,26 @@
           <li>Browse your library on the phone and tap a game to start it on the TV.</li>
           <li>Press <b>HOME</b> during a game to close it and return to the menu.</li>
         </ol>
-        <p class="meta">While a game runs, button presses are sent to the emulator as keyboard keys. Set each emulator to the same keys once. The defaults follow RetroArch.</p>
+        <p class="meta">While a game runs, the phone's buttons reach the emulator as keyboard keys, and as a DSU
+          controller with real analog sticks, gyro and touch for Cemu, Dolphin, Azahar and Ryujinx.</p>
       </div>
+    </div>
+  </section>
+
+  <section id="screen">
+    <div class="wrap">
+      <h2>A real second screen</h2>
+      <p class="sub">As on a real Wii U, the phone's screen shows a live picture from the PC, and you can touch it.</p>
+      <div class="cards">
+        <div class="card"><div class="icon">▣</div><h3>Wii U GamePad</h3>
+          <p>Cemu's separate GamePad view appears on your phone. Tapping it works as the GamePad's touchscreen, and the phone's gyro works as its motion sensor.</p></div>
+        <div class="card"><div class="icon">⧉</div><h3>DS &amp; 3DS touch screen</h3>
+          <p>The bottom screen of melonDS or Azahar moves to your phone. Draw, tap and swipe right on it while the top screen stays on the TV.</p></div>
+        <div class="card"><div class="icon">▭</div><h3>Off-TV play</h3>
+          <p>Mirror the whole TV to the phone, including the WII-UU menu, and tap tiles to open them.</p></div>
+      </div>
+      <p class="meta">Games with a second screen switch to it automatically. For gyro, open the secure GamePad address (<code>https://&lt;pc&gt;:8443</code>) once, which the phone offers.
+        The <a href="https://github.com/Stoppedwumm/WII-UU#the-gamepad-screen-wii-u-ds-and-3ds">README</a> has the one-time emulator setup.</p>
     </div>
   </section>
 
@@ -315,6 +333,10 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
         <p>No. WII-UU is the menu and the GamePad. It launches well-known emulators for each system and points them at your games.</p></details>
       <details><summary>My phone can't connect.</summary>
         <p>Phone and computer must be on the same network, and the GamePad port (8080 by default) must be allowed through the firewall. The installer prints the command for ufw and firewalld, and Windows asks on first start.</p></details>
+      <details><summary>How do I get the Wii U GamePad screen on my phone?</summary>
+        <p>In Cemu, turn on View → Separate GamePad view. When a Wii U game starts, the phone switches to that window automatically. Tap <b>TV</b> or <b>GamePad</b> on the phone to switch.</p></details>
+      <details><summary>How do I use gyro / motion controls?</summary>
+        <p>Tap <b>Gyro</b> on the phone and open the secure address it offers (accept the certificate once). In the emulator, add the DSU / cemuhook controller at 127.0.0.1 port 26760.</p></details>
       <details><summary>Buttons don't reach the emulator.</summary>
         <p>Set the emulator's keyboard controls to the keys listed under <b>Settings → GamePad Keys</b>. On Linux under Wayland, keys reach X11/XWayland windows. On macOS, allow Java under Accessibility.</p></details>
       <details><summary>Will a Raspberry Pi run everything?</summary>

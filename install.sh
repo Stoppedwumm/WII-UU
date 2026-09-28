@@ -200,14 +200,24 @@ if [ "$EMULATORS" != 0 ]; then
   fi
 fi
 
+# ---------------------------------------------------------------------------- GamePad screen (Linux)
+# xwininfo finds emulator windows (Cemu's GamePad View, melonDS ...) to stream them to the phone
+if [ "$OS" = "Linux" ] && ! command -v xwininfo >/dev/null 2>&1 && ! command -v xdotool >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1 && ask "Install x11-utils (lets the phone show the Wii U GamePad / DS touch screen)?"; then
+    sudo apt-get install -y x11-utils || warn "could not install x11-utils"
+  else
+    warn "Install x11-utils (xwininfo) or xdotool so the phone can show emulator second screens."
+  fi
+fi
+
 # ---------------------------------------------------------------------------- network hint
 if command -v ufw >/dev/null 2>&1 && sudo -n ufw status 2>/dev/null | grep -q "Status: active"; then
-  warn "Firewall active: run 'sudo ufw allow $PORT/tcp' so phones can reach the GamePad server."
+  warn "Firewall active: run 'sudo ufw allow $PORT/tcp && sudo ufw allow 8443/tcp' so phones can reach the GamePad (8443 = secure address for gyro)."
 elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
-  warn "Firewall active: run 'sudo firewall-cmd --add-port=$PORT/tcp --permanent && sudo firewall-cmd --reload'."
+  warn "Firewall active: run 'sudo firewall-cmd --add-port=$PORT/tcp --add-port=8443/tcp --permanent && sudo firewall-cmd --reload'."
 fi
 if [ "$OS" = "Linux" ] && [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
-  warn "Wayland session: GamePad key input reaches X11/XWayland emulator windows. If an emulator ignores it, run it with QT_QPA_PLATFORM=xcb or log into an X11 session."
+  warn "Wayland session: GamePad keys, screen streaming and touch work with X11/XWayland windows. If an emulator ignores it, run it with QT_QPA_PLATFORM=xcb or log into an X11 session."
 fi
 
 printf '\n%sDone!%s Start WII-UU with %swiiuu%s (or from your app menu).\n' "$c_green" "$c_off" "$c_blue" "$c_off"

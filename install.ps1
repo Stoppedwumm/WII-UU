@@ -106,7 +106,8 @@ $rule = "WII-UU GamePad ($Port)"
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if ($isAdmin) {
     if (-not (Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue)) {
-        New-NetFirewallRule -DisplayName $rule -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Private | Out-Null
+        # 8443: the secure GamePad address, needed for gyro on phones
+        New-NetFirewallRule -DisplayName $rule -Direction Inbound -Protocol TCP -LocalPort $Port,8443 -Action Allow -Profile Private | Out-Null
     }
     Ok "Firewall rule '$rule' (private networks)"
 } else {
