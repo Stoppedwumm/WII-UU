@@ -11,9 +11,14 @@ import java.awt.Robot;
 import java.awt.event.InputEvent;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -34,16 +39,23 @@ import wiiuu.core.Game;
  *
  * <p>Modes: {@code tv} mirrors the whole screen (Off-TV play); {@code second} shows the running
  * game's second screen as described by its {@link ScreenProfile}.
+ *
+ * <p>Each mode is one shared channel: a producer thread publishes the newest JPEG and every
+ * phone watching just sends whatever is newest, so a slow phone never slows capture down.
+ * Frames come from ffmpeg (x11grab / gdigrab, fast native JPEG encoding) when it is installed,
+ * otherwise from java.awt.Robot + ImageIO, which is several times slower.
  */
 public final class ScreenStreamer {
     public static final String BOUNDARY = "wiiuuframe";
+    private static final String OS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+    private static final long IDLE_STOP_MS = 4000;
 
     private final Config config;
     private final Supplier<Game> currentGame;
     private final WindowLocator windows = new WindowLocator();
     private final Robot robot;
-    /** last region streamed per mode, used to map touches back to screen coordinates */
-    private final Map<String, Rectangle> lastRegion = new ConcurrentHashMap<>();
+    private final String ffmpeg;
+    private final Map<String, Channel> channels = new ConcurrentHashMap<>();
     private volatile boolean mouseDown;
 
     public ScreenStreamer(Config config, Supplier<Game> currentGame) {
@@ -58,10 +70,18 @@ public final class ScreenStreamer {
             }
         }
         this.robot = r;
+        String backend = config.get("stream.backend", "auto").trim().toLowerCase(Locale.ROOT);
+        this.ffmpeg = backend.equals("java") ? null : findFfmpeg(config.get("stream.ffmpeg", "ffmpeg"));
+        System.out.println("[screen] GamePad streaming via " + (ffmpeg != null ? "ffmpeg (" + ffmpeg + ")"
+                : "Java (install ffmpeg for a much higher frame rate)"));
     }
 
     public boolean available() {
         return robot != null;
+    }
+
+    public String backend() {
+        return ffmpeg != null ? "ffmpeg" : "java";
     }
 
     /** The second-screen profile for the running game, or null. */
@@ -70,90 +90,45 @@ public final class ScreenStreamer {
         return g == null ? null : ScreenProfile.forSystem(config, g.system());
     }
 
-    /** @return the screen rectangle for a mode right now, or null (with {@code why} filled in) */
-    private Rectangle region(String mode, String[] why) {
-        if ("second".equals(mode)) {
-            ScreenProfile p = secondScreen();
-            if (p == null) {
-                why[0] = "This game has no second screen";
-                return null;
-            }
-            Rectangle win = windows.find(p.windowRegex());
-            if (win == null) {
-                why[0] = "Waiting for the \"" + p.windowRegex() + "\" window" + ("wiiu".equals(systemId())
-                        ? " (Cemu: View > Separate GamePad view)" : "");
-                return null;
-            }
-            return clip(p.locate(win));
-        }
-        return clip(GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice()
-                .getDefaultConfiguration().getBounds());
-    }
-
-    private String systemId() {
-        Game g = currentGame.get();
-        return g == null ? "" : g.system().id();
-    }
-
-    private static Rectangle clip(Rectangle r) {
-        Rectangle screen = new Rectangle();
-        for (var dev : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
-            screen = screen.union(dev.getDefaultConfiguration().getBounds());
-        }
-        Rectangle c = r.intersection(screen);
-        return c.width < 8 || c.height < 8 ? null : c;
-    }
+    // ---- phones watching ----------------------------------------------------------------
 
     /**
      * Writes an endless multipart JPEG stream until the phone disconnects.
      * The caller has already sent headers with content type {@code multipart/x-mixed-replace}.
      */
     public void stream(String mode, OutputStream out) throws IOException {
-        int fps = Math.max(1, Math.min(60, config.getInt("stream.fps", 20)));
-        int maxW = Math.max(160, config.getInt("stream.maxWidth", 960));
-        float quality = Math.max(0.2f, Math.min(0.95f, config.getInt("stream.quality", 60) / 100f));
-        long frameNanos = 1_000_000_000L / fps;
-        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
-        ImageWriteParam param = writer.getDefaultWriteParam();
-        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-        param.setCompressionQuality(quality);
-        ByteArrayOutputStream buf = new ByteArrayOutputStream(64 * 1024);
-        String[] why = new String[1];
+        Channel ch = channels.compute(mode, (k, c) -> c != null && c.alive() ? c : new Channel(k));
+        ch.join();
         try {
+            long seen = -1;
             while (!Thread.currentThread().isInterrupted()) {
-                long start = System.nanoTime();
-                BufferedImage frame;
-                Rectangle r = robot == null ? null : region(mode, why);
-                if (r != null) {
-                    lastRegion.put(mode, r);
-                    frame = scale(robot.createScreenCapture(r), maxW);
-                } else {
-                    lastRegion.remove(mode);
-                    frame = message(robot == null ? "Screen capture is not available on this PC" : why[0]);
+                byte[] frame;
+                synchronized (ch) {
+                    long deadline = System.currentTimeMillis() + 2000;
+                    while (ch.seq == seen && System.currentTimeMillis() < deadline) {
+                        ch.wait(Math.max(1, deadline - System.currentTimeMillis()));
+                    }
+                    if (ch.seq == seen) continue;     // keep waiting; nothing new
+                    seen = ch.seq;
+                    frame = ch.frame;
                 }
-                buf.reset();
-                try (MemoryCacheImageOutputStream ios = new MemoryCacheImageOutputStream(buf)) {
-                    writer.setOutput(ios);
-                    writer.write(null, new IIOImage(frame, null, null), param);
-                }
-                out.write(("--" + BOUNDARY + "\r\nContent-Type: image/jpeg\r\nContent-Length: " + buf.size()
+                out.write(("--" + BOUNDARY + "\r\nContent-Type: image/jpeg\r\nContent-Length: " + frame.length
                         + "\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
-                buf.writeTo(out);
+                out.write(frame);
                 out.write("\r\n".getBytes(StandardCharsets.US_ASCII));
                 out.flush();
-                long sleep = (r == null ? 500_000_000L : frameNanos) - (System.nanoTime() - start);
-                if (sleep > 0) Thread.sleep(sleep / 1_000_000, (int) (sleep % 1_000_000));
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
-            writer.dispose();
+            ch.leave();
         }
     }
 
     /** A tap on the phone: x/y are fractions of the streamed picture; state 1 = down, 2 = move, 0 = up. */
     public synchronized void touch(String mode, double x, double y, int state) {
-        Rectangle r = lastRegion.get(mode);
+        Channel ch = channels.get(mode);
+        Rectangle r = ch == null ? null : ch.region;
         if (robot == null || r == null) return;
         int px = r.x + (int) Math.round(Math.max(0, Math.min(1, x)) * (r.width - 1));
         int py = r.y + (int) Math.round(Math.max(0, Math.min(1, y)) * (r.height - 1));
@@ -175,6 +150,258 @@ public final class ScreenStreamer {
         }
     }
 
+    // ---- regions ------------------------------------------------------------------------
+
+    /** @return the screen rectangle for a mode right now, or null (with {@code why} filled in) */
+    private Rectangle region(String mode, String[] why) {
+        if (robot == null) {
+            why[0] = "Screen capture is not available on this PC";
+            return null;
+        }
+        if ("second".equals(mode)) {
+            ScreenProfile p = secondScreen();
+            if (p == null) {
+                why[0] = "This game has no second screen";
+                return null;
+            }
+            Rectangle win = windows.find(p.windowRegex());
+            if (win == null) {
+                Game g = currentGame.get();
+                why[0] = "Waiting for the \"" + p.windowRegex() + "\" window"
+                        + (g != null && "wiiu".equals(g.system().id()) ? " (Cemu: View > Separate GamePad view)" : "");
+                return null;
+            }
+            return clip(p.locate(win));
+        }
+        return clip(GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice()
+                .getDefaultConfiguration().getBounds());
+    }
+
+    private static Rectangle clip(Rectangle r) {
+        Rectangle screen = new Rectangle();
+        for (var dev : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+            screen = screen.union(dev.getDefaultConfiguration().getBounds());
+        }
+        Rectangle c = r.intersection(screen);
+        if (c.width < 8 || c.height < 8) return null;
+        // even sizes keep video encoders happy
+        return new Rectangle(c.x, c.y, c.width & ~1, c.height & ~1);
+    }
+
+    // ---- one shared capture per mode --------------------------------------------------------
+
+    private final class Channel {
+        final String mode;
+        volatile Rectangle region;
+        byte[] frame = new byte[0];
+        long seq;
+        private int viewers;
+        private long lastViewer = System.currentTimeMillis();
+        private volatile boolean stopped;
+        private volatile Process process;
+        private final Thread producer, watcher;
+
+        Channel(String mode) {
+            this.mode = mode;
+            producer = new Thread(this::produce, "stream-" + mode);
+            producer.setDaemon(true);
+            watcher = new Thread(this::watch, "stream-" + mode + "-region");
+            watcher.setDaemon(true);
+            String[] why = new String[1];
+            region = region(mode, why);
+            if (region == null) publish(message(why[0]));
+            producer.start();
+            watcher.start();
+        }
+
+        boolean alive() {
+            return !stopped;
+        }
+
+        synchronized void join() {
+            viewers++;
+        }
+
+        synchronized void leave() {
+            viewers--;
+            lastViewer = System.currentTimeMillis();
+        }
+
+        private synchronized boolean idle() {
+            return viewers <= 0 && System.currentTimeMillis() - lastViewer > IDLE_STOP_MS;
+        }
+
+        synchronized void publish(byte[] jpeg) {
+            frame = jpeg;
+            seq++;
+            notifyAll();
+        }
+
+        /** Looks up the window once a second, off the frame path; restarts capture when it moves. */
+        private void watch() {
+            String[] why = new String[1];
+            while (!stopped) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                if (idle()) {
+                    stopped = true;
+                    channels.remove(mode, this);
+                    Process p = process;
+                    if (p != null) p.destroy();
+                    return;
+                }
+                Rectangle now = region(mode, why);
+                if (!java.util.Objects.equals(now, region)) {
+                    region = now;
+                    Process p = process;
+                    if (p != null) p.destroy();          // producer restarts ffmpeg with the new area
+                    if (now == null) publish(message(why[0]));
+                }
+            }
+        }
+
+        private void produce() {
+            int fps = Math.max(1, Math.min(60, config.getInt("stream.fps", ffmpeg != null ? 30 : 20)));
+            while (!stopped) {
+                Rectangle r = region;
+                if (r == null) {
+                    sleep(300);
+                    continue;
+                }
+                if (ffmpeg != null) {
+                    if (!runFfmpeg(r, fps)) sleep(500);   // failed to start or died: brief pause, retry
+                } else {
+                    captureWithJava(r, fps);
+                }
+            }
+        }
+
+        /** Streams frames from one ffmpeg run until it exits (window moved, idle, error). */
+        private boolean runFfmpeg(Rectangle r, int fps) {
+            int maxW = Math.max(160, config.getInt("stream.maxWidth", 854));
+            int quality = Math.max(1, Math.min(100, config.getInt("stream.quality", 60)));
+            int q = Math.round(2 + (100 - quality) * 0.15f);          // 60 -> 8 on ffmpeg's 2 (best)..31 scale
+            List<String> cmd = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-loglevel", "error",
+                    "-fflags", "nobuffer", "-probesize", "32", "-analyzeduration", "0"));
+            if (OS.contains("win")) {
+                cmd.addAll(List.of("-f", "gdigrab", "-draw_mouse", "0", "-framerate", Integer.toString(fps),
+                        "-offset_x", Integer.toString(r.x), "-offset_y", Integer.toString(r.y),
+                        "-video_size", r.width + "x" + r.height, "-i", "desktop"));
+            } else {
+                String display = System.getenv("DISPLAY");
+                if (display == null || display.isBlank()) display = ":0";
+                cmd.addAll(List.of("-f", "x11grab", "-draw_mouse", "0", "-framerate", Integer.toString(fps),
+                        "-video_size", r.width + "x" + r.height, "-i", display + "+" + r.x + "," + r.y));
+            }
+            cmd.addAll(List.of("-an", "-vf", "scale='trunc(min(" + maxW + ",iw)/2)*2':-2",
+                    "-pix_fmt", "yuvj420p", "-q:v", Integer.toString(q), "-f", "mjpeg", "-"));
+            Process p;
+            try {
+                p = new ProcessBuilder(cmd).redirectError(ProcessBuilder.Redirect.DISCARD).start();
+            } catch (IOException e) {
+                System.err.println("[screen] ffmpeg failed to start: " + e.getMessage());
+                return false;
+            }
+            process = p;
+            boolean gotFrame = false;
+            try (InputStream in = p.getInputStream()) {
+                gotFrame = splitJpegs(in);
+            } catch (IOException ignored) {
+                // ffmpeg stopped
+            } finally {
+                p.destroy();
+                process = null;
+            }
+            return gotFrame;
+        }
+
+        /** ffmpeg's MJPEG output is back-to-back JPEGs: cut at each end-of-image marker. */
+        private boolean splitJpegs(InputStream in) throws IOException {
+            byte[] buf = new byte[1 << 16];
+            ByteArrayOutputStream cur = new ByteArrayOutputStream(1 << 17);
+            boolean any = false;
+            int prev = -1, n;
+            while (!stopped && (n = in.read(buf)) > 0) {
+                int start = 0;
+                for (int i = 0; i < n; i++) {
+                    int b = buf[i] & 0xFF;
+                    if (prev == 0xFF && b == 0xD9) {                    // EOI
+                        cur.write(buf, start, i + 1 - start);
+                        byte[] jpeg = cur.toByteArray();
+                        if (jpeg.length > 4 && (jpeg[0] & 0xFF) == 0xFF && (jpeg[1] & 0xFF) == 0xD8) {
+                            publish(jpeg);
+                            any = true;
+                        }
+                        cur.reset();
+                        start = i + 1;
+                        prev = -1;
+                        continue;
+                    }
+                    prev = b;
+                }
+                cur.write(buf, start, n - start);
+            }
+            return any;
+        }
+
+        /** Fallback: Robot capture + ImageIO JPEG, until the region changes or the channel stops. */
+        private void captureWithJava(Rectangle r, int fps) {
+            int maxW = Math.max(160, config.getInt("stream.maxWidth", 640));
+            float quality = Math.max(0.2f, Math.min(0.95f, config.getInt("stream.quality", 60) / 100f));
+            long frameNanos = 1_000_000_000L / fps;
+            ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(quality);
+            ByteArrayOutputStream buf = new ByteArrayOutputStream(64 * 1024);
+            try {
+                while (!stopped && r.equals(region)) {
+                    long start = System.nanoTime();
+                    BufferedImage img = scale(robot.createScreenCapture(r), maxW);
+                    buf.reset();
+                    try (MemoryCacheImageOutputStream ios = new MemoryCacheImageOutputStream(buf)) {
+                        writer.setOutput(ios);
+                        writer.write(null, new IIOImage(img, null, null), param);
+                    }
+                    publish(buf.toByteArray());
+                    long left = frameNanos - (System.nanoTime() - start);
+                    if (left > 0) sleep(left / 1_000_000);
+                }
+            } catch (IOException | RuntimeException e) {
+                sleep(500);
+            } finally {
+                writer.dispose();
+            }
+        }
+    }
+
+    // ---- helpers ------------------------------------------------------------------------
+
+    private static String findFfmpeg(String configured) {
+        if (configured.contains(File.separator) || configured.contains("/")) {
+            return new File(configured).canExecute() ? configured : null;
+        }
+        String exe = OS.contains("win") && !configured.endsWith(".exe") ? configured + ".exe" : configured;
+        String path = System.getenv("PATH");
+        if (path == null) return null;
+        for (String dir : path.split(File.pathSeparator)) {
+            File f = new File(dir, exe);
+            if (f.canExecute()) return f.getAbsolutePath();
+        }
+        return null;
+    }
+
+    private static void sleep(long ms) {
+        try {
+            Thread.sleep(Math.max(1, ms));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private static BufferedImage scale(BufferedImage src, int maxW) {
         if (src.getWidth() <= maxW) return src;
         int w = maxW, h = Math.max(1, (int) Math.round(src.getHeight() * (maxW / (double) src.getWidth())));
@@ -186,7 +413,7 @@ public final class ScreenStreamer {
         return out;
     }
 
-    private static BufferedImage message(String text) {
+    private static byte[] message(String text) {
         BufferedImage img = new BufferedImage(640, 360, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -195,11 +422,9 @@ public final class ScreenStreamer {
         g.setColor(new Color(0x9aa3ad));
         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
         var fm = g.getFontMetrics();
-        // simple word wrap
-        String[] words = text.split(" ");
+        List<String> lines = new ArrayList<>();
         StringBuilder line = new StringBuilder();
-        java.util.List<String> lines = new java.util.ArrayList<>();
-        for (String w : words) {
+        for (String w : text.split(" ")) {
             if (fm.stringWidth(line + " " + w) > 560 && !line.isEmpty()) {
                 lines.add(line.toString());
                 line.setLength(0);
@@ -214,6 +439,12 @@ public final class ScreenStreamer {
             y += fm.getHeight();
         }
         g.dispose();
-        return img;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            ImageIO.write(img, "jpeg", out);
+        } catch (IOException ignored) {
+            // in-memory write cannot fail
+        }
+        return out.toByteArray();
     }
 }

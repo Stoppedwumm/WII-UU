@@ -141,7 +141,7 @@
   .lcd.full .bar { display: none; }
   .screenview { padding: 0; background: #000; overflow: hidden; touch-action: none; }
   .stage { position: absolute; inset: 0; touch-action: none; }
-  .stage img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none;
+  .stage canvas, .stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none;
     -webkit-user-drag: none; user-select: none; }
   .seg { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 4px; opacity: .85; }
   .seg button { border: 0; border-radius: 99px; padding: 4px 10px; font: inherit; font-size: 11px; font-weight: 800;
@@ -199,7 +199,7 @@
           <div class="games" id="games"></div>
         </div>
         <div class="view hidden screenview" id="v-screen">
-          <div class="stage" id="stage"><img id="stream" alt=""></div>
+          <div class="stage" id="stage"><canvas id="stream"></canvas><img id="streamImg" alt="" class="hidden"></div>
           <div class="seg">
             <button data-m="second" id="segSecond">GamePad</button>
             <button data-m="tv" id="segTv">TV</button>
@@ -212,6 +212,7 @@
             <div class="band" id="playBand">NOW PLAYING</div>
             <h2 id="playName"></h2>
             <p id="playSys"></p>
+            <p id="ctlInfo"></p>
             <p id="keysWarn" class="hidden" style="color:#d0342c">Key injection unavailable on the PC (headless or Wayland-only session).</p>
             <div class="row">
               <button class="bigbtn" id="playTv">Show TV here</button>
@@ -338,7 +339,12 @@ async function poll() {
     $("player").textContent = j.player > 0 ? "P" + j.player : "Viewer";
     $("keysWarn").classList.toggle("hidden", j.keys !== false);
     if (j.library !== S.libVersion) loadLibrary();
-    S.https = j.https; S.tv = j.tv;
+    S.https = j.https; S.tv = j.tv; S.stream = j.stream;
+    $("ctlInfo").textContent = j.pad ? "Controls: virtual controller (analog sticks)" : "Controls: keyboard keys";
+    if (j.stream === "java" && !S.ffmpegHint) {
+      S.ffmpegHint = true;
+      if (S.view === "screen") toast("Tip: install ffmpeg on the PC for a much smoother GamePad screen");
+    }
     const secondChanged = j.second !== S.second;
     S.second = j.second;
     $("segSecond").classList.toggle("hidden", !S.second);
@@ -392,26 +398,99 @@ function show(which) {
 // ---------------------------------------------------------------- GamePad screen (live picture + touch)
 const BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
 function openScreen(mode) {
+  if (S.stream === "java" && !S.ffmpegHint) { S.ffmpegHint = true; toast("Tip: install ffmpeg on the PC for a much smoother GamePad screen"); }
   S.streamMode = mode;
   $("segSecond").classList.toggle("sel", mode === "second");
   $("segTv").classList.toggle("sel", mode === "tv");
   if (S.view === "screen") startStream(); else show("screen");
 }
+// The picture arrives as MJPEG. Instead of an <img> (browsers buffer those, adding delay), the page
+// reads the stream itself, keeps only the newest complete JPEG, decodes it off the main thread and
+// draws it on a canvas. If the phone is slower than the PC, frames are dropped, never queued.
+const canvas = $("stream"), g2d = canvas.getContext("2d");
+const canStreamFetch = typeof ReadableStream !== "undefined" && typeof createImageBitmap === "function";
+let streamCtl = null;
+const frameStats = { count: 0, fps: 0, since: performance.now() };
+
+function streamUrl() {
+  return "/api/stream?m=" + S.streamMode + "&c=" + encodeURIComponent(S.id) + "&t=" + Date.now();
+}
 function startStream() {
   if (!S.id || document.hidden) return;
-  $("stream").src = "/api/stream?m=" + S.streamMode + "&c=" + encodeURIComponent(S.id) + "&t=" + Date.now();
+  stopStream();
+  if (!canStreamFetch) {                        // old browsers: let <img> play the MJPEG
+    $("streamImg").classList.remove("hidden"); canvas.classList.add("hidden");
+    $("streamImg").src = streamUrl();
+    return;
+  }
+  const ctl = new AbortController();
+  streamCtl = ctl;
+  readStream(ctl).catch(() => {
+    if (!ctl.signal.aborted && S.view === "screen") setTimeout(() => { if (streamCtl === ctl) startStream(); }, 1000);
+  });
 }
-function stopStream() { $("stream").src = BLANK; }   // closes the MJPEG connection
+function stopStream() {
+  if (streamCtl) { streamCtl.abort(); streamCtl = null; }
+  $("streamImg").src = BLANK;
+}
+
+function concatBytes(a, b) {
+  if (!a.length) return b;
+  const c = new Uint8Array(a.length + b.length); c.set(a); c.set(b, a.length); return c;
+}
+function findMarker(buf, second, from) {       // 0xFF followed by `second`
+  for (let i = from; i < buf.length - 1; i++) if (buf[i] === 0xFF && buf[i + 1] === second) return i;
+  return -1;
+}
+
+async function readStream(ctl) {
+  const r = await fetch(streamUrl(), { signal: ctl.signal, cache: "no-store" });
+  if (!r.ok || !r.body) throw new Error("stream " + r.status);
+  const reader = r.body.getReader();
+  let buf = new Uint8Array(0), newest = null, drawing = false, scanFrom = 0;
+  const draw = async () => {
+    drawing = true;
+    while (newest && streamCtl === ctl) {
+      const jpeg = newest; newest = null;
+      try {
+        const bmp = await createImageBitmap(new Blob([jpeg], { type: "image/jpeg" }));
+        if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; }
+        g2d.drawImage(bmp, 0, 0);
+        bmp.close && bmp.close();
+        frameStats.count++;
+        const now = performance.now();
+        if (now - frameStats.since > 1000) { frameStats.fps = frameStats.count * 1000 / (now - frameStats.since); frameStats.count = 0; frameStats.since = now; }
+      } catch (e) { /* skip a damaged frame */ }
+    }
+    drawing = false;
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) throw new Error("stream ended");
+    buf = concatBytes(buf, value);
+    // cut out every complete JPEG (start FFD8 ... end FFD9); only the newest is kept
+    for (;;) {
+      const start = findMarker(buf, 0xD8, 0);
+      if (start < 0) { buf = buf.slice(Math.max(0, buf.length - 1)); scanFrom = 0; break; }
+      const end = findMarker(buf, 0xD9, Math.max(start + 2, scanFrom));
+      if (end < 0) { if (start > 0) buf = buf.slice(start); scanFrom = Math.max(2, buf.length - 1); break; }
+      newest = buf.slice(start, end + 2);
+      buf = buf.slice(end + 2); scanFrom = 0;
+    }
+    if (newest && !drawing) draw();
+  }
+}
+
 document.addEventListener("visibilitychange", () => {
   if (S.view !== "screen") return;
   if (document.hidden) stopStream(); else startStream();
 });
-$("stream").addEventListener("error", () => { if (S.view === "screen") setTimeout(startStream, 1500); });
+$("streamImg").addEventListener("error", () => { if (S.view === "screen" && !canStreamFetch) setTimeout(startStream, 1500); });
 
 // map a finger to 0..1 coordinates on the picture (object-fit: contain letterboxes it)
 function picturePoint(e) {
-  const img = $("stream"), r = img.getBoundingClientRect();
-  const nw = img.naturalWidth || 16, nh = img.naturalHeight || 9;
+  const img = canStreamFetch ? canvas : $("streamImg"), r = img.getBoundingClientRect();
+  const nw = (canStreamFetch ? canvas.width : img.naturalWidth) || 16, nh = (canStreamFetch ? canvas.height : img.naturalHeight) || 9;
   const sc = Math.min(r.width / nw, r.height / nh), w = nw * sc, h = nh * sc;
   return [(e.clientX - r.left - (r.width - w) / 2) / w, (e.clientY - r.top - (r.height - h) / 2) / h];
 }

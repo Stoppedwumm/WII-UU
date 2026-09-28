@@ -176,7 +176,7 @@
           <a class="btn primary" href="download/WII-UU-latest.zip">⤓ Download</a>
           <a class="btn" href="#install">Install guide</a>
         </div>
-        <p class="meta">Version 1.0.0 · Linux · Windows · macOS · Raspberry Pi · Java 17+</p>
+        <p class="meta">Version 1.1.0 · Linux · Windows · macOS · Raspberry Pi · Java 17+</p>
       </div>
       <img class="shot" src="menu.png" alt="The WII-UU home screen: a grid of console tiles with a blue cursor, a clock and a GamePad status pill" width="1600" height="900">
     </div>
@@ -223,8 +223,8 @@
           <li>Browse your library on the phone and tap a game to start it on the TV.</li>
           <li>Press <b>HOME</b> during a game to close it and return to the menu.</li>
         </ol>
-        <p class="meta">While a game runs, the phone's buttons reach the emulator as keyboard keys, and as a DSU
-          controller with real analog sticks, gyro and touch for Cemu, Dolphin, Azahar and Ryujinx.</p>
+        <p class="meta">On Linux and the Raspberry Pi, each phone becomes a real virtual Xbox 360 controller with analog
+          sticks, which every emulator detects on its own. Gyro and touch reach Cemu, Dolphin, Azahar and Ryujinx through DSU.</p>
       </div>
     </div>
   </section>
@@ -339,8 +339,15 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
         <p>In Cemu, turn on View → Separate GamePad view. When a Wii U game starts, the phone switches to that window automatically. Tap <b>TV</b> or <b>GamePad</b> on the phone to switch.</p></details>
       <details><summary>How do I use gyro / motion controls?</summary>
         <p>Tap <b>Gyro</b> on the phone and open the secure address it offers (accept the certificate once). In the emulator, add the DSU / cemuhook controller at 127.0.0.1 port 26760.</p></details>
+      <details><summary>How do I update WII-UU?</summary>
+        <p>Open Settings (F1) → General → <b>Check for updates</b>, or run <code>wiiuu --upgrade</code>. WII-UU also tells you when a new version is out. Settings, ROMs, paired phones and emulators are kept.</p></details>
+      <details><summary>The GamePad screen is choppy.</summary>
+        <p>Install <code>ffmpeg</code> on the PC (the installers offer it). It captures and encodes the picture at 30 fps, even on a Raspberry Pi.</p></details>
+      <details><summary>Do I have to pair my phone again after a restart?</summary>
+        <p>No. Phones stay paired and keep their player number, and they reconnect by themselves when WII-UU starts again.</p></details>
       <details><summary>Buttons don't reach the emulator.</summary>
-        <p>Set the emulator's keyboard controls to the keys listed under <b>Settings → GamePad Keys</b>. On Linux under Wayland, keys reach X11/XWayland windows. On macOS, allow Java under Accessibility.</p></details>
+        <p>On Linux, let the installer enable virtual controllers, and the phone then shows up as an Xbox 360 pad in every emulator.
+          Otherwise, set the emulator's keyboard controls to the keys listed under <b>Settings → GamePad Keys</b>. On Linux under Wayland, keys reach X11/XWayland windows. On macOS, allow Java under Accessibility.</p></details>
       <details><summary>Will a Raspberry Pi run everything?</summary>
         <p>The older consoles run well on a Pi 4/5. GameCube, Wii U, Switch, PS3 and PS4 are too demanding to play well on a Pi, and PS2 and PS4 emulators only run on x86-64.</p></details>
       <details><summary>Where are my settings?</summary>

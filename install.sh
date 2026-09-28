@@ -200,13 +200,34 @@ if [ "$EMULATORS" != 0 ]; then
   fi
 fi
 
-# ---------------------------------------------------------------------------- GamePad screen (Linux)
-# xwininfo finds emulator windows (Cemu's GamePad View, melonDS ...) to stream them to the phone
-if [ "$OS" = "Linux" ] && ! command -v xwininfo >/dev/null 2>&1 && ! command -v xdotool >/dev/null 2>&1; then
-  if command -v apt-get >/dev/null 2>&1 && ask "Install x11-utils (lets the phone show the Wii U GamePad / DS touch screen)?"; then
-    sudo apt-get install -y x11-utils || warn "could not install x11-utils"
-  else
-    warn "Install x11-utils (xwininfo) or xdotool so the phone can show emulator second screens."
+# ---------------------------------------------------------------------------- GamePad extras (Linux)
+# ffmpeg: fast GamePad screen streaming · x11-utils: finds emulator windows · python3 + uinput:
+# phones become real virtual controllers that every emulator detects on its own
+if [ "$OS" = "Linux" ]; then
+  missing=""
+  command -v ffmpeg >/dev/null 2>&1 || missing="$missing ffmpeg"
+  command -v xwininfo >/dev/null 2>&1 || command -v xdotool >/dev/null 2>&1 || missing="$missing x11-utils"
+  command -v python3 >/dev/null 2>&1 || missing="$missing python3"
+  if [ -n "$missing" ]; then
+    if command -v apt-get >/dev/null 2>&1 && ask "Install GamePad extras ($missing ) for a smooth GamePad screen and real controllers?"; then
+      sudo apt-get install -y $missing || warn "could not install:$missing"
+    else
+      warn "For the best GamePad experience install:$missing"
+    fi
+  fi
+  if [ ! -f /etc/udev/rules.d/60-wiiuu-uinput.rules ]; then
+    if ask "Let WII-UU create virtual controllers (loads the uinput module, adds a udev rule; needs sudo)?"; then
+      if printf 'KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"\n' \
+           | sudo tee /etc/udev/rules.d/60-wiiuu-uinput.rules >/dev/null \
+         && echo uinput | sudo tee /etc/modules-load.d/wiiuu-uinput.conf >/dev/null; then
+        sudo modprobe uinput 2>/dev/null || true
+        sudo udevadm control --reload-rules 2>/dev/null || true
+        sudo udevadm trigger --sysname-match=uinput 2>/dev/null || true
+        ok "Virtual controllers enabled (if WII-UU still says otherwise, log out and back in once)"
+      else
+        warn "could not set up uinput; phones will type keyboard keys instead"
+      fi
+    fi
   fi
 fi
 

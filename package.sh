@@ -16,4 +16,9 @@ rm -rf "dist/$NAME"
 mkdir -p docs/download
 cp "dist/$NAME.zip" "docs/download/$NAME.zip"
 cp "dist/$NAME.zip" docs/download/WII-UU-latest.zip
-echo "Packaged dist/$NAME.zip (also docs/download/)"
+# version.json tells installed copies (Settings > Check for updates, wiiuu --upgrade) what's newest
+BASE_URL="${WIIUU_SITE:-https://wiiuu.stoppedwumm.net}"
+SHA="$(sha256sum "dist/$NAME.zip" | cut -d' ' -f1)"
+printf '{\n  "version": "%s",\n  "zip": "%s/download/%s.zip",\n  "sha256": "%s"\n}\n' \
+  "$VERSION" "$BASE_URL" "$NAME" "$SHA" > docs/version.json
+echo "Packaged dist/$NAME.zip (also docs/download/, docs/version.json)"

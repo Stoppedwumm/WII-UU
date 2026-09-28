@@ -28,8 +28,10 @@ import wiiuu.core.Config;
 import wiiuu.core.Game;
 import wiiuu.core.Launcher;
 import wiiuu.core.Library;
+import wiiuu.core.Updater;
 import wiiuu.input.InputRouter;
 import wiiuu.input.KeyMap;
+import wiiuu.input.VirtualPads;
 import wiiuu.net.DsuServer;
 import wiiuu.net.GamepadServer;
 import wiiuu.screen.ScreenStreamer;
@@ -38,7 +40,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.0.0";
+    public static final String VERSION = "1.1.0";
 
     private final Config config;
     private final Library library;
@@ -46,6 +48,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     private final InputRouter router;
     private GamepadServer server;
     private DsuServer dsuServer;
+    private volatile VirtualPads vpads;
     private JFrame frame;
     private MenuView view;
 
@@ -54,10 +57,18 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.library = new Library(config);
         this.launcher = new Launcher(config);
         this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
-        // system.<id>.keys=false: that emulator reads the phone via DSU, don't also type keys into it
+        // Typing keys into emulators is the fallback for when real virtual controllers aren't available:
+        // input.keys = auto (default: only without virtual pads) | on | off; system.<id>.keys overrides.
         router.setKeysEnabled(() -> {
             Game g = launcher.current();
-            return g == null || config.getBool("system." + g.system().id() + ".keys", true);
+            if (g == null) return true;
+            String perSystem = config.get("system." + g.system().id() + ".keys", null);
+            if (perSystem != null) return Boolean.parseBoolean(perSystem.trim());
+            return switch (config.get("input.keys", "auto").trim().toLowerCase()) {
+                case "on", "true" -> true;
+                case "off", "false" -> false;
+                default -> vpads == null || !vpads.usable();
+            };
         });
         launcher.addListener(this);
     }
@@ -81,6 +92,9 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                     ImageIO.write(appIcon(256), "png", Paths.get(args[++i]).toFile());
                     return;
                 }
+                case "--upgrade", "--check-update" -> {
+                    System.exit(cliUpgrade(new Config(home), args[i].equals("--upgrade")));
+                }
                 case "--version" -> {
                     System.out.println("WII-UU " + VERSION);
                     return;
@@ -92,6 +106,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --port N                    GamePad web server port (default 8080)
                               --no-server                 do not start the phone GamePad server
                               --home DIR                  settings folder (default ~/.wiiuu)
+                              --check-update / --upgrade  check for / install a newer version
                             Keys: arrows move, Enter opens, Esc back, F1 settings, F2 GamePad, F5 refresh,
                                   F11 fullscreen, Ctrl+Q closes a running game.""".formatted(VERSION));
                     return;
@@ -118,6 +133,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         app.library.addListener(s -> SwingUtilities.invokeLater(() -> app.view.setSnapshot(s)));
         app.library.rescanAsync();
         if (startServer) app.startServer();
+        if (config.getBool("update.check", true)) app.checkForUpdateQuietly();
     }
 
     private void startServer() {
@@ -136,6 +152,16 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         dsuServer = dsu;
         ScreenStreamer screen = config.getBool("stream.enabled", true) ? new ScreenStreamer(config, launcher::current) : null;
         server = new GamepadServer(config, library, launcher, router, this, screen, dsu);
+        if (config.getBool("input.gamepad", true)) {
+            VirtualPads v = new VirtualPads();
+            if (v.start(config.home())) {
+                vpads = v;
+                server.setVirtualPads(v);
+                System.out.println("[input] phones appear as virtual Xbox 360 controllers");
+            } else {
+                System.out.println("[input] virtual controllers unavailable (" + v.problem() + "); typing keys instead");
+            }
+        }
         try {
             server.start(config.port());
             SwingUtilities.invokeLater(() -> view.setServer(server.url(), server.pairingUrl(), server.code(), server.requiresCode()));
@@ -213,15 +239,16 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             view.setSoundsEnabled(config.getBool("ui.sounds", true));
             view.showToast("Settings saved");
             library.rescanAsync();
-        }).setVisible(true);
+        }).withUpdater(new Updater(config, VERSION), this::quit).setVisible(true);
         view.requestFocusInWindow();
     }
 
     @Override
     public void quit() {
-        launcher.stop();
+        launcher.stop(true);        // make sure the emulator is really gone before we exit
         if (server != null) server.stop();
         if (dsuServer != null) dsuServer.stop();
+        if (vpads != null) vpads.stop();
         System.exit(0);
     }
 
@@ -278,9 +305,52 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             frame.requestFocus();
             view.requestFocusInWindow();
             if (quickFailure) {
-                view.showToast(game.system().emulator() + " quit with error " + exitCode + " - see " + log);
+                String why = Launcher.lastLogLine(log);
+                view.showToast(game.system().emulator() + " stopped (error " + exitCode + ")"
+                        + (why != null ? ": " + why : " - see " + log));
             }
         });
+    }
+
+    // ---- updates ------------------------------------------------------------------------
+
+    /** Background check at start; a newer version shows a toast pointing at Settings. */
+    private void checkForUpdateQuietly() {
+        Thread t = new Thread(() -> {
+            try {
+                Updater.Release rel = new Updater(config, VERSION).check();
+                if (rel != null) {
+                    SwingUtilities.invokeLater(() -> view.showToast("WII-UU " + rel.version()
+                            + " is available - Settings (F1) > General > Check for updates"));
+                }
+            } catch (Exception ignored) {
+                // offline or site unreachable: try again next start
+            }
+        }, "update-check");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** {@code wiiuu --upgrade} / {@code --check-update} from a terminal. */
+    private static int cliUpgrade(Config config, boolean install) {
+        Updater u = new Updater(config, VERSION);
+        try {
+            System.out.println("WII-UU " + VERSION + ": checking " + config.get("update.url", Updater.DEFAULT_URL));
+            Updater.Release rel = u.check();
+            if (rel == null) {
+                System.out.println("You have the newest version.");
+                return 0;
+            }
+            System.out.println("Version " + rel.version() + " is available.");
+            if (!install) return 0;
+            System.out.println("Downloading " + rel.zipUrl());
+            Path dir = u.download(rel);
+            System.out.println("Checksum OK. Running the installer (settings, ROMs, paired phones are kept)...");
+            return u.installNow(dir);
+        } catch (Exception e) {
+            System.err.println("Upgrade failed: " + e.getMessage());
+            return 1;
+        }
     }
 
     // ---- misc ---------------------------------------------------------------------------

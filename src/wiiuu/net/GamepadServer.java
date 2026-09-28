@@ -16,11 +16,14 @@ import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -42,6 +45,7 @@ import wiiuu.core.Library;
 import wiiuu.input.InputRouter;
 import wiiuu.input.KeyMap;
 import wiiuu.input.PadButton;
+import wiiuu.input.VirtualPads;
 import wiiuu.screen.ScreenProfile;
 import wiiuu.screen.ScreenStreamer;
 
@@ -70,7 +74,8 @@ public final class GamepadServer {
     }
 
     private static final long STALE_MS = 5000;
-    private static final long FORGET_MS = 120_000;
+    /** paired phones are remembered (also across restarts) until unused for this long */
+    private static final long FORGET_MS = 30L * 24 * 3600 * 1000;
 
     private static final class Client {
         final String id;
@@ -91,6 +96,7 @@ public final class GamepadServer {
     private final Host host;
     private final ScreenStreamer screen;
     private final DsuServer dsu;
+    private volatile VirtualPads pads;
     private final String code;
     private final Map<String, Client> clients = new ConcurrentHashMap<>();
     private HttpServer http;
@@ -111,7 +117,62 @@ public final class GamepadServer {
         this.screen = screen;
         this.dsu = dsu;
         String fixed = config.get("server.code", "").trim();
-        this.code = fixed.isEmpty() ? String.format("%04d", new SecureRandom().nextInt(10000)) : fixed;
+        if (fixed.isEmpty()) {
+            // generated once and remembered, so phones stay paired when WII-UU restarts
+            fixed = String.format("%04d", new SecureRandom().nextInt(10000));
+            config.set("server.code", fixed);
+            config.save();
+        }
+        this.code = fixed;
+        loadClients();
+    }
+
+    // ---- remembered phones ---------------------------------------------------------------
+
+    private Path clientsFile() {
+        return config.home().resolve("pads.properties");
+    }
+
+    /** Phones paired before a restart come back as known (inactive) clients with their old player number. */
+    private void loadClients() {
+        Properties p = new Properties();
+        try (InputStream in = Files.newInputStream(clientsFile())) {
+            p.load(in);
+        } catch (IOException e) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        for (String id : p.stringPropertyNames()) {
+            String[] v = p.getProperty(id).split(",");
+            try {
+                long seen = v.length > 1 ? Long.parseLong(v[1].trim()) : now;
+                if (now - seen > FORGET_MS) continue;
+                Client c = new Client(id, Integer.parseInt(v[0].trim()));
+                c.active = false;
+                c.lastSeen = seen;
+                clients.put(id, c);
+            } catch (NumberFormatException ignored) {
+                // corrupt line
+            }
+        }
+    }
+
+    private synchronized void saveClients() {
+        Properties p = new Properties();
+        for (Client c : clients.values()) p.setProperty(c.id, c.player + "," + c.lastSeen);
+        try {
+            Files.createDirectories(config.home());
+            try (var out = Files.newOutputStream(clientsFile())) {
+                p.store(out, "WII-UU paired phones: id = player,lastSeen");
+            }
+        } catch (IOException e) {
+            System.err.println("[gamepad] could not save paired phones: " + e.getMessage());
+        }
+    }
+
+    /** Real virtual controllers (Linux uinput), fed alongside keys and DSU. */
+    public void setVirtualPads(VirtualPads pads) {
+        this.pads = pads;
     }
 
     public void start(int port) throws IOException {
@@ -151,6 +212,7 @@ public final class GamepadServer {
     }
 
     public void stop() {
+        saveClients();
         if (http != null) http.stop(0);
         if (https != null) https.stop(0);
         if (reaper != null) reaper.shutdownNow();
@@ -264,9 +326,11 @@ public final class GamepadServer {
         if (c == null) {
             c = new Client(UUID.randomUUID().toString(), freePlayer(null));
             clients.put(c.id, c);
+            if (dsu != null && c.player > 0) dsu.setConnected(c.player, true);
         } else {
             touch(c);
         }
+        saveClients();
         host.padsChanged(connectedPads());
         json(ex, 200, new Json().obj().kv("id", c.id).kv("player", c.player).endObj());
     }
@@ -284,8 +348,10 @@ public final class GamepadServer {
         c.lastSeen = System.currentTimeMillis();
         if (!c.active) {
             c.active = true;
+            int before = c.player;
             c.player = freePlayer(c);
             host.padsChanged(connectedPads());
+            if (c.player != before) saveClients();
         }
         if (dsu != null && c.player > 0) dsu.setConnected(c.player, true);
     }
@@ -311,11 +377,13 @@ public final class GamepadServer {
                 if (c.player > 0) {
                     router.releaseAll(c.player);
                     if (dsu != null) dsu.setConnected(c.player, false);
+                    if (pads != null) pads.release(c.player);
                 }
                 if (screen != null) screen.releaseTouch();
                 changed = true;
             } else if (!c.active && now - c.lastSeen > FORGET_MS) {
                 clients.remove(c.id);
+                saveClients();
             }
         }
         if (changed) host.padsChanged(connectedPads());
@@ -331,12 +399,14 @@ public final class GamepadServer {
                     if (b != null) {
                         router.button(c.player, b, p[2].equals("1"));
                         if (dsu != null) dsu.button(c.player, b, p[2].equals("1"));
+                        if (pads != null && launcher.isRunning()) pads.button(c.player, b, p[2].equals("1"));
                     }
                 } else if (p.length == 4 && p[0].equals("s")) {
                     int stick = Integer.parseInt(p[1]);
                     float x = clamp(Float.parseFloat(p[2])), y = clamp(Float.parseFloat(p[3]));
                     router.stick(c.player, stick, x, y);
                     if (dsu != null) dsu.stick(c.player, stick, x, y);
+                    if (pads != null && launcher.isRunning()) pads.stick(c.player, stick, x, y);
                 } else if (p.length == 5 && p[0].equals("t")) {
                     // touch on the GamePad screen: "t <mode> <x> <y> <1 down | 2 move | 0 up>", x/y in 0..1
                     float x = Float.parseFloat(p[2]), y = Float.parseFloat(p[3]);
@@ -375,7 +445,9 @@ public final class GamepadServer {
                 .kv("library", library.snapshot().version())
                 .kv("keys", router.canInjectKeys())
                 .kv("tv", screen != null && screen.available())
-                .kv("dsu", dsu != null);
+                .kv("dsu", dsu != null)
+                .kv("pad", pads != null && pads.usable())
+                .kv("stream", screen == null ? "off" : screen.backend());
         String secure = httpsUrl();
         j.key("https");
         if (secure == null) j.val((String) null);

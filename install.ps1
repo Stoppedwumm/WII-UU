@@ -100,6 +100,15 @@ foreach ($lnkPath in @($StartMenu, $DesktopLnk)) {
 }
 Ok "Shortcuts on the Start menu and Desktop"
 
+# ---------------------------------------------------------------- GamePad screen speed
+if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+    if ((Get-Command winget -ErrorAction SilentlyContinue) -and (Ask "Install ffmpeg for a smooth GamePad screen on your phone?")) {
+        winget install --id Gyan.FFmpeg -e --accept-source-agreements --accept-package-agreements
+    } else {
+        Warn "Install ffmpeg (winget install Gyan.FFmpeg) for a much higher GamePad frame rate."
+    }
+}
+
 # ---------------------------------------------------------------- firewall
 Say "Allowing phones to reach the GamePad server (TCP $Port)"
 $rule = "WII-UU GamePad ($Port)"

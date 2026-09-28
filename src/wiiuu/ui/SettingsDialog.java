@@ -44,6 +44,8 @@ import wiiuu.input.PadButton;
 public final class SettingsDialog extends JDialog {
     private final Config config;
     private final Runnable onSaved;
+    private wiiuu.core.Updater updater;
+    private Runnable exitForUpgrade;
 
     // systems tab
     private final List<GameSystem> systems = Systems.ALL;
@@ -324,7 +326,11 @@ public final class SettingsDialog extends JDialog {
         });
         row = addRow(p, c, row, "ROM base folder", romBase, browse);
         row = addRow(p, c, row, "GamePad server port", port, null);
-        row = addRow(p, c, row, "Fixed pairing code", fixedCode, new JLabel("(blank = random each start)"));
+        row = addRow(p, c, row, "Fixed pairing code", fixedCode, new JLabel("(phones stay paired; change it to unpair them)"));
+        JButton update = new JButton("Check for updates");
+        JLabel updateInfo = new JLabel("Version " + wiiuu.Main.VERSION);
+        update.addActionListener(e -> checkForUpdates(update, updateInfo));
+        row = addRow(p, c, row, "Updates", update, updateInfo);
         for (JCheckBox box : new JCheckBox[]{serverOn, requireCode, fullscreen, minimize, sounds, hideEmpty}) {
             c.gridx = 1;
             c.gridy = row++;
@@ -343,6 +349,72 @@ public final class SettingsDialog extends JDialog {
         JPanel wrap = new JPanel(new BorderLayout());
         wrap.add(p, BorderLayout.NORTH);
         return wrap;
+    }
+
+    /** Lets the dialog upgrade WII-UU; {@code exit} quits the app so the installer can replace it. */
+    public SettingsDialog withUpdater(wiiuu.core.Updater updater, Runnable exit) {
+        this.updater = updater;
+        this.exitForUpgrade = exit;
+        return this;
+    }
+
+    private void checkForUpdates(JButton button, JLabel info) {
+        if (updater == null) return;
+        button.setEnabled(false);
+        info.setText("Checking...");
+        new javax.swing.SwingWorker<wiiuu.core.Updater.Release, Void>() {
+            @Override
+            protected wiiuu.core.Updater.Release doInBackground() throws Exception {
+                return updater.check();
+            }
+
+            @Override
+            protected void done() {
+                button.setEnabled(true);
+                wiiuu.core.Updater.Release rel;
+                try {
+                    rel = get();
+                } catch (Exception ex) {
+                    info.setText("Could not check: " + (ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage()));
+                    return;
+                }
+                if (rel == null) {
+                    info.setText("You have the newest version (" + wiiuu.Main.VERSION + ")");
+                    return;
+                }
+                info.setText("Version " + rel.version() + " is available");
+                int ok = JOptionPane.showConfirmDialog(SettingsDialog.this,
+                        "Update WII-UU " + wiiuu.Main.VERSION + " to " + rel.version() + " now?\n\n"
+                                + "Your settings, ROMs, paired phones and emulators are kept.\nWII-UU restarts when done.",
+                        "Update WII-UU", JOptionPane.OK_CANCEL_OPTION);
+                if (ok == JOptionPane.OK_OPTION) upgrade(rel, button, info);
+            }
+        }.execute();
+    }
+
+    private void upgrade(wiiuu.core.Updater.Release rel, JButton button, JLabel info) {
+        button.setEnabled(false);
+        info.setText("Downloading " + rel.version() + "...");
+        new javax.swing.SwingWorker<java.nio.file.Path, Void>() {
+            @Override
+            protected java.nio.file.Path doInBackground() throws Exception {
+                java.nio.file.Path dir = updater.download(rel);
+                updater.installAfterExit(dir);
+                return dir;
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    get();
+                    info.setText("Installing - WII-UU restarts in a moment");
+                    exitForUpgrade.run();
+                } catch (Exception ex) {
+                    button.setEnabled(true);
+                    info.setText("Update failed: " + (ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage()));
+                }
+            }
+        }.execute();
     }
 
     private static int addRow(JPanel p, GridBagConstraints c, int row, String label, JComponent field, JComponent extra) {

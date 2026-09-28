@@ -114,9 +114,21 @@ The GamePad's screen shows your library, and tapping a game starts it on the TV.
 runs, it shows *Now Playing*, and HOME opens a menu with *Close game*. Up to 4 phones can connect,
 and each one is assigned a player number (P1–P4).
 
-**How input reaches emulators:** while a game runs, WII-UU types keyboard keys into the focused
-emulator window. Set each emulator's keyboard controls to match. The defaults follow RetroArch,
-and you can change them under *Settings → GamePad Keys*:
+**Phones stay paired.** The pairing code is created once and kept, and every paired phone keeps
+its player number in `~/.wiiuu/pads.properties`. When WII-UU restarts, phones reconnect on their
+own. To unpair all phones, change the code under *Settings → General*.
+
+### How input reaches emulators
+
+* **Linux (including Raspberry Pi): real controllers.** Each phone becomes a virtual **Xbox 360
+  controller** through the kernel's `uinput`. Emulators detect it like a USB pad, with analog
+  sticks, analog triggers and all buttons, and it works whichever window has focus. Buttons are
+  mapped by position (Nintendo A = right, B = bottom). `install.sh` enables this: it loads
+  `uinput` and adds a udev rule. It needs `python3`.
+* **Fallback: keyboard keys.** Without virtual controllers (Windows, macOS, or no `uinput`
+  access), WII-UU types keyboard keys into the focused emulator window. Set each emulator's
+  keyboard controls to match. The defaults follow RetroArch, and you can change them under
+  *Settings → GamePad Keys*. `input.keys=on` forces keys even when virtual controllers work.
 
 | Button | P1 key | P2 key |
 |---|---|---|
@@ -128,7 +140,7 @@ and you can change them under *Settings → GamePad Keys*:
 | Right stick | I J K L | – |
 | L3 / R3 | C / V | B / Y |
 
-Notes:
+Notes on the keyboard fallback:
 
 * **Linux Wayland:** keys reach X11/XWayland windows. Most emulators accept them, and Qt apps
   can be forced with `QT_QPA_PLATFORM=xcb`.
@@ -139,7 +151,9 @@ Notes:
 As on a real Wii U, the phone's screen shows a picture from the PC and you can touch it.
 
 ![Phone GamePad showing the Wii U GamePad screen](docs/gamepad.png)
-The picture is streamed as MJPEG at 20 fps by default.
+The picture is streamed at 30 fps. With **ffmpeg** installed (the installers offer it), capture
+and JPEG encoding are fast enough for a Raspberry Pi. Without it, a much slower Java encoder is
+used. The phone draws only the newest frame, so a slow phone drops frames instead of falling behind.
 
 * **GamePad / Touch screen:** when a game with a second screen starts, the phone switches to it
   automatically, and a tap becomes a mouse click at that spot. Emulators read those clicks as
@@ -166,14 +180,40 @@ Set it up once in each emulator:
 | Azahar (3DS) | Controls → Motion / Touch → *CemuhookUDP*, 127.0.0.1 : 26760. |
 | Ryujinx (Switch) | Input → Motion → CemuHook compatible motion, 127.0.0.1 : 26760. |
 
-If an emulator reads the phone through DSU, set `system.<id>.keys=false` (for example
-`system.wiiu.keys=false`) so WII-UU stops also typing keys into it. If motion feels inverted in an
+On Linux the virtual controllers already cover buttons and sticks, so use DSU mainly for motion
+and touch. If you use DSU instead of the virtual controller on another OS, set
+`system.<id>.keys=false` (for example `system.wiiu.keys=false`) so WII-UU stops typing keys into it. If motion feels inverted in an
 emulator, flip axes with `dsu.motionSigns`: accel x y z, then gyro pitch yaw roll, e.g. `+-+ +++`.
 
 Screen streaming and touch use X11/XWayland windows on Linux (install `x11-utils`), user32 on
 Windows, and Accessibility / Screen Recording permissions on macOS.
 
+## Updating
 
+* **In the app:** *Settings (F1) → General → Check for updates*. WII-UU also checks once at each
+  start and shows a notification when a new version is out.
+* **In a terminal:** `wiiuu --upgrade`, or `curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash`.
+
+An update downloads the new release, verifies its SHA-256 checksum, and runs its installer.
+Settings, ROMs, paired phones and emulators are kept, and WII-UU restarts. To update the
+emulators, run `wiiuu-emulators --update`.
+
+## Troubleshooting
+
+* **An emulator doesn't start:**
+  * If the configured program isn't installed, WII-UU looks for the emulator under other
+    names, in `wiiuu-emulators`, in Flatpak and in `~/Applications/*.AppImage`.
+  * If none is found, the notification says so. Dolphin, for example, has no Linux release, so
+    install it with `wiiuu-emulators --only dolphin` (a source build).
+  * If the emulator crashes at start, the notification shows the last line of
+    `~/.wiiuu/logs/<system>.log`.
+* **A game doesn't close:** *Close game* (HOME on the phone, or Ctrl+Q) stops the emulator's whole
+  process group. That includes Flatpak apps and emulators waiting on a "stop emulation?" dialog.
+  If it hasn't exited after 3 seconds, it is force-killed.
+* **Choppy GamePad screen:** install `ffmpeg`. The phone mentions it when it isn't installed. On
+  slow Wi-Fi, lower `stream.maxWidth` or `stream.quality`.
+
+## Settings file
 
 Settings are stored in `~/.wiiuu/config.properties`. You can move this folder with `WIIUU_HOME` or `--home`.
 Useful keys:
@@ -185,9 +225,11 @@ system.ps2.romdir=/mnt/games/ps2
 system.sms.hidden=true
 server.port=8080
 server.requireCode=true
-server.code=1234            # fixed pairing code (random each start if unset)
+server.code=1234            # pairing code (created once and kept; change it to unpair phones)
 server.https=true           # secure address for gyro (server.httpsPort=8443)
-stream.fps=20               # GamePad screen: stream.maxWidth=960, stream.quality=60
+stream.fps=30               # GamePad screen: stream.maxWidth=854, stream.quality=60, stream.backend=auto|ffmpeg|java
+input.keys=auto             # type keys too? auto = only without virtual controllers | on | off
+update.check=true           # look for a new version at start
 screen.nds.region=0,0.5,1,0.5   # second screen: screen.<id>.window / .aspect / .region
 dsu.port=26760              # DSU controller server (dsu.enabled, dsu.motionSigns)
 keys.p1.A=X
@@ -195,7 +237,7 @@ ui.fullscreen=true
 ui.minimizeOnLaunch=true
 ```
 
-Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home DIR]`
+Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home DIR] [--check-update|--upgrade]`
 
 ## Build from source
 
