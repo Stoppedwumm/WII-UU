@@ -58,6 +58,8 @@ public final class ScreenStreamer {
     private final Map<String, Channel> channels = new ConcurrentHashMap<>();
     private volatile boolean mouseDown;
     private volatile boolean captureBlocked;
+    /** macOS ScreenCaptureKit helper, once compiled (see resources/mac/capture.swift) */
+    private volatile java.nio.file.Path macHelper;
     private volatile java.util.function.Consumer<String> onBlocked = m -> { };
 
     public ScreenStreamer(Config config, Supplier<Game> currentGame) {
@@ -73,9 +75,15 @@ public final class ScreenStreamer {
         }
         this.robot = r;
         String backend = config.get("stream.backend", "auto").trim().toLowerCase(Locale.ROOT);
-        // ffmpeg when installed (x11grab / gdigrab / AVFoundation on macOS, which inherits WII-UU's Screen
-        // Recording permission); if it yields no picture, capture falls back to Java automatically.
-        boolean useFfmpeg = !backend.equals("java");
+        // Linux / Windows: ffmpeg when installed. macOS: ffmpeg's AVFoundation screen capture no longer
+        // works on current macOS, so the ScreenCaptureKit helper is used there (ffmpeg only on request).
+        // Whatever fails falls back to Java capture automatically.
+        boolean useFfmpeg = backend.equals("ffmpeg") || (backend.equals("auto") && !OS.contains("mac"));
+        if (OS.contains("mac") && !backend.equals("java") && !backend.equals("ffmpeg")) {
+            Thread t = new Thread(this::buildMacHelper, "build-capture-helper");
+            t.setDaemon(true);
+            t.start();
+        }
         this.ffmpeg = useFfmpeg ? findFfmpeg(config.get("stream.ffmpeg", "ffmpeg")) : null;
         System.out.println("[screen] GamePad streaming via " + (ffmpeg != null ? "ffmpeg (" + ffmpeg + ")"
                 : "Java (install ffmpeg for a much higher frame rate)"));
@@ -309,6 +317,8 @@ public final class ScreenStreamer {
         }
 
         private boolean javaFallback;
+        private boolean helperFailed;
+        private int helperFailures;
         private boolean sawPicture;
         private int ffmpegFailures;
 
@@ -320,13 +330,22 @@ public final class ScreenStreamer {
                     sleep(300);
                     continue;
                 }
-                if (ffmpeg != null && !javaFallback) {
+                if (macHelper != null && !helperFailed) {
+                    if (runMacHelper(r, fps)) {
+                        helperFailures = 0;
+                    } else if (++helperFailures >= 2) {
+                        helperFailed = true;
+                        System.err.println("[screen] macOS capture helper gave no picture (see " + captureLog() + "); using Java capture");
+                    } else {
+                        sleep(500);
+                    }
+                } else if (ffmpeg != null && !javaFallback) {
                     if (runFfmpeg(r, fps)) {
                         ffmpegFailures = 0;
                     } else if (++ffmpegFailures >= 2 && robot != null) {
                         // ffmpeg can't capture here (no X11, missing permission, ...): never leave the phone blank
                         javaFallback = true;
-                        System.err.println("[screen] ffmpeg produced no picture; using Java capture for " + mode);
+                        System.err.println("[screen] ffmpeg produced no picture (" + lastLine(captureLog()) + "); using Java capture for " + mode);
                     } else {
                         sleep(500);
                     }
@@ -365,7 +384,7 @@ public final class ScreenStreamer {
                     "-pix_fmt", "yuvj420p", "-q:v", Integer.toString(q), "-f", "mjpeg", "-"));
             Process p;
             try {
-                p = new ProcessBuilder(cmd).redirectError(ProcessBuilder.Redirect.DISCARD).start();
+                p = new ProcessBuilder(cmd).redirectError(ProcessBuilder.Redirect.appendTo(captureLog().toFile())).start();
             } catch (IOException e) {
                 System.err.println("[screen] ffmpeg failed to start: " + e.getMessage());
                 return false;
@@ -412,6 +431,42 @@ public final class ScreenStreamer {
             return any;
         }
 
+        /** macOS: frames from the ScreenCaptureKit helper (4-byte length + JPEG each) until it exits. */
+        private boolean runMacHelper(Rectangle r, int fps) {
+            int maxW = Math.max(160, config.getInt("stream.maxWidth", 854));
+            double quality = Math.max(0.2, Math.min(0.95, config.getInt("stream.quality", 60) / 100.0));
+            Process p;
+            try {
+                p = new ProcessBuilder(macHelper.toString(), Integer.toString(r.x), Integer.toString(r.y),
+                        Integer.toString(r.width), Integer.toString(r.height), Integer.toString(maxW),
+                        Integer.toString(fps), Double.toString(quality))
+                        .redirectError(ProcessBuilder.Redirect.appendTo(captureLog().toFile())).start();
+            } catch (IOException e) {
+                return false;
+            }
+            process = p;
+            boolean any = false;
+            try (java.io.DataInputStream in = new java.io.DataInputStream(new java.io.BufferedInputStream(p.getInputStream(), 1 << 16))) {
+                while (!stopped) {
+                    int len = in.readInt();
+                    if (len <= 0 || len > 16 << 20) break;
+                    byte[] jpeg = new byte[len];
+                    in.readFully(jpeg);
+                    publish(jpeg);
+                    any = true;
+                    sawPicture = true;
+                    captureBlocked = false;
+                }
+            } catch (IOException ignored) {
+                // helper stopped (area changed, idle, error)
+            } finally {
+                p.destroy();
+                process = null;
+            }
+            if (!any) System.err.println("[screen] macOS capture helper: " + lastLine(captureLog()));
+            return any;
+        }
+
         /**
          * Java capture: Robot + ImageIO JPEG, until the region changes or the channel stops.
          * Capturing overlaps with encoding on up to three threads, so the frame rate is limited by
@@ -433,7 +488,7 @@ public final class ScreenStreamer {
             long captured = 0;
             int blackInARow = 0;
             try {
-                while (!stopped && r.equals(region)) {
+                while (!stopped && r.equals(region) && !(macHelper != null && !helperFailed)) {
                     long start = System.nanoTime();
                     free.acquire();
                     BufferedImage img;
@@ -495,6 +550,71 @@ public final class ScreenStreamer {
     }
 
     // ---- helpers ------------------------------------------------------------------------
+
+    private java.nio.file.Path captureLog() {
+        java.nio.file.Path log = config.logDir().resolve("capture.log");
+        try {
+            java.nio.file.Files.createDirectories(log.getParent());
+            if (java.nio.file.Files.exists(log) && java.nio.file.Files.size(log) > 1 << 20) java.nio.file.Files.delete(log);
+        } catch (IOException ignored) {
+            // logging is best effort
+        }
+        return log;
+    }
+
+    private static String lastLine(java.nio.file.Path log) {
+        try {
+            List<String> lines = java.nio.file.Files.readAllLines(log);
+            for (int i = lines.size() - 1; i >= 0; i--) if (!lines.get(i).isBlank()) return lines.get(i).trim();
+        } catch (IOException | RuntimeException ignored) {
+            // no log
+        }
+        return "no details";
+    }
+
+    /**
+     * macOS: compiles the ScreenCaptureKit helper with the Xcode Command Line Tools (installed with
+     * Homebrew) the first time, and again only when its source changes.
+     */
+    private void buildMacHelper() {
+        java.nio.file.Path dir = config.home().resolve("bin");
+        java.nio.file.Path exe = dir.resolve("wiiuu-capture"), stamp = dir.resolve("wiiuu-capture.sha256");
+        java.nio.file.Path buildLog = config.logDir().resolve("capture-build.log");
+        try (InputStream res = ScreenStreamer.class.getResourceAsStream("/mac/capture.swift")) {
+            if (res == null) return;
+            byte[] src = res.readAllBytes();
+            String hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(src));
+            if (java.nio.file.Files.isExecutable(exe) && java.nio.file.Files.exists(stamp)
+                    && java.nio.file.Files.readString(stamp).trim().equals(hash)) {
+                macHelper = exe;
+                System.out.println("[screen] GamePad streaming via ScreenCaptureKit");
+                return;
+            }
+            Process check = new ProcessBuilder("xcode-select", "-p").redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+            if (!check.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) || check.exitValue() != 0) {
+                System.out.println("[screen] for a smooth GamePad screen install the Xcode Command Line Tools: xcode-select --install");
+                return;
+            }
+            java.nio.file.Files.createDirectories(dir);
+            java.nio.file.Files.createDirectories(buildLog.getParent());
+            java.nio.file.Path swift = dir.resolve("capture.swift");
+            java.nio.file.Files.write(swift, src);
+            System.out.println("[screen] building the macOS capture helper (first start only, about a minute)...");
+            Process p = new ProcessBuilder("xcrun", "swiftc", "-O", "-swift-version", "5", "-o", exe.toString(), swift.toString())
+                    .redirectErrorStream(true).redirectOutput(buildLog.toFile()).start();
+            if (p.waitFor(300, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0 && java.nio.file.Files.isExecutable(exe)) {
+                java.nio.file.Files.writeString(stamp, hash);
+                macHelper = exe;
+                System.out.println("[screen] GamePad streaming via ScreenCaptureKit");
+            } else {
+                p.destroyForcibly();
+                System.err.println("[screen] could not build the capture helper (see " + buildLog + "): " + lastLine(buildLog));
+            }
+        } catch (Exception e) {
+            System.err.println("[screen] capture helper unavailable: " + e.getMessage());
+        }
+    }
 
     private static long even(double v) {
         return Math.round(v) & ~1L;

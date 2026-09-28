@@ -160,8 +160,12 @@ The picture is streamed at 30 fps.
 
 * **Linux and Windows:** with **ffmpeg** installed (the installers offer it), capture and encoding
   are fast enough for a Raspberry Pi.
-* **macOS:** uses ffmpeg's AVFoundation capture when ffmpeg is installed (`brew install ffmpeg`),
-  and otherwise Java capture. Either way, WII-UU needs *Screen Recording* (see macOS setup).
+* **macOS:** uses **ScreenCaptureKit** through a small Swift helper (`resources/mac/capture.swift`).
+  The GPU crops and scales the picture, and macOS encodes it. WII-UU compiles the helper itself
+  on first start with the Xcode Command Line Tools (`xcode-select --install`; Homebrew already
+  installs them). Until the helper is ready, or if it fails, slower Java capture is used. It needs
+  *Screen Recording* (see macOS setup). If something fails, the reason is in
+  `~/.wiiuu/logs/capture.log`.
 * **TV mode during a game** streams only the emulator's window, not the whole desktop.
   `stream.tvFollowsGame=false` mirrors the whole screen instead.
 * **If ffmpeg fails:** WII-UU switches to Java capture on its own.
