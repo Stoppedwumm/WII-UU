@@ -288,7 +288,7 @@ public final class GamepadServer {
                     }
                     switch (path) {
                         case "/api/status" -> json(ex, 200, status(c));
-                        case "/api/stream" -> stream(ex, query(ex).getOrDefault("m", "tv"));
+                        case "/api/stream" -> stream(ex, query(ex).getOrDefault("m", "tv"), "1".equals(query(ex).get("raw")));
                         case "/api/library" -> json(ex, 200, libraryJson());
                         case "/api/input" -> {
                             if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
@@ -518,12 +518,19 @@ public final class GamepadServer {
         return iconCache = out.toByteArray();
     }
 
-    private void stream(HttpExchange ex, String mode) throws IOException {
+    /**
+     * @param raw the page's own player reads the bytes itself: send them as a plain byte stream, because
+     *            WebKit (Safari, every iPhone browser) handles multipart/x-mixed-replace specially and
+     *            never hands it to fetch(); &lt;img&gt; players need the multipart type
+     */
+    private void stream(HttpExchange ex, String mode, boolean raw) throws IOException {
         if (screen == null) {
             json(ex, 404, error("screen streaming is off"));
             return;
         }
-        ex.getResponseHeaders().set("Content-Type", "multipart/x-mixed-replace; boundary=" + ScreenStreamer.BOUNDARY);
+        ex.getResponseHeaders().set("Content-Type", raw ? "application/octet-stream"
+                : "multipart/x-mixed-replace; boundary=" + ScreenStreamer.BOUNDARY);
+        ex.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
         ex.getResponseHeaders().set("Cache-Control", "no-store");
         ex.sendResponseHeaders(200, 0);
         try (OutputStream out = ex.getResponseBody()) {

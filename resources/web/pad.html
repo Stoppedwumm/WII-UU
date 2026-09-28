@@ -143,6 +143,8 @@
   .stage { position: absolute; inset: 0; touch-action: none; }
   .stage canvas, .stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none;
     -webkit-user-drag: none; user-select: none; }
+  #streamInfo { position: absolute; left: 0; right: 0; top: 40%; text-align: center; color: #9aa3ad;
+    font-size: 12px; font-weight: 700; pointer-events: none; padding: 0 12px; }
   .seg { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 4px; opacity: .85; }
   .seg button { border: 0; border-radius: 99px; padding: 4px 10px; font: inherit; font-size: 11px; font-weight: 800;
     background: rgba(20, 22, 26, .7); color: #fff; }
@@ -199,7 +201,8 @@
           <div class="games" id="games"></div>
         </div>
         <div class="view hidden screenview" id="v-screen">
-          <div class="stage" id="stage"><canvas id="stream"></canvas><img id="streamImg" alt="" class="hidden"></div>
+          <div class="stage" id="stage"><canvas id="stream"></canvas><img id="streamImg" alt="" class="hidden">
+            <div id="streamInfo"></div></div>
           <div class="seg">
             <button data-m="second" id="segSecond">GamePad</button>
             <button data-m="tv" id="segTv">TV</button>
@@ -408,34 +411,49 @@ function openScreen(mode) {
 // reads the stream itself, keeps only the newest complete JPEG, decodes it off the main thread and
 // draws it on a canvas. If the phone is slower than the PC, frames are dropped, never queued.
 const canvas = $("stream"), g2d = canvas.getContext("2d");
-let canStreamFetch = typeof ReadableStream !== "undefined" && typeof createImageBitmap === "function";
+// WebKit (Safari, and every browser on iPhone/iPad) plays MJPEG well in a plain <img>, which is the
+// player that has always worked there; Chromium-based browsers get the lower-latency canvas player.
+const ua = navigator.userAgent;
+const isWebKit = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  || (/Safari/.test(ua) && !/Chrome|Chromium|Android|Edg/.test(ua));
+let canStreamFetch = !isWebKit && typeof ReadableStream !== "undefined" && typeof createImageBitmap === "function";
 let streamCtl = null;
 const frameStats = { count: 0, fps: 0, since: performance.now() };
 
-function streamUrl() {
-  return "/api/stream?m=" + S.streamMode + "&c=" + encodeURIComponent(S.id) + "&t=" + Date.now();
+function streamUrl(raw) {
+  return "/api/stream?m=" + S.streamMode + "&c=" + encodeURIComponent(S.id) + (raw ? "&raw=1" : "") + "&t=" + Date.now();
 }
+// a status line on the picture until the first frame shows, so a blank screen says why
+function streamInfo(text) { $("streamInfo").textContent = text || ""; }
 function startStream() {
   if (!S.id || document.hidden) return;
   stopStream();
   if (!canStreamFetch) {                        // old browsers: let <img> play the MJPEG
     $("streamImg").classList.remove("hidden"); canvas.classList.add("hidden");
-    $("streamImg").src = streamUrl();
+    streamInfo("Connecting (image player)\u2026");
+    $("streamImg").onload = () => streamInfo("");
+    $("streamImg").src = streamUrl(false);
     return;
   }
+  streamInfo("Connecting\u2026");
   const ctl = new AbortController();
   streamCtl = ctl;
   $("streamImg").classList.add("hidden"); canvas.classList.remove("hidden");
   ctl.drawn = 0;
+  ctl.bytes = 0;
   // safety net: if this browser can't draw the stream itself, fall back to a plain <img> player
   setTimeout(() => {
-    if (streamCtl === ctl && !ctl.drawn) { canStreamFetch = false; startStream(); }
-  }, 5000);
+    if (streamCtl === ctl && !ctl.drawn) {
+      console.log("canvas player drew nothing; received " + ctl.bytes + " bytes - switching to <img>");
+      canStreamFetch = false; startStream();
+    }
+  }, 4000);
   readStream(ctl).catch(() => {
     if (!ctl.signal.aborted && S.view === "screen") setTimeout(() => { if (streamCtl === ctl) startStream(); }, 1000);
   });
 }
 function stopStream() {
+  streamInfo("");
   if (streamCtl) { streamCtl.abort(); streamCtl = null; }
   $("streamImg").src = BLANK;
 }
@@ -450,7 +468,7 @@ function findMarker(buf, second, from) {       // 0xFF followed by `second`
 }
 
 async function readStream(ctl) {
-  const r = await fetch(streamUrl(), { signal: ctl.signal, cache: "no-store" });
+  const r = await fetch(streamUrl(true), { signal: ctl.signal, cache: "no-store" });
   if (!r.ok || !r.body) throw new Error("stream " + r.status);
   const reader = r.body.getReader();
   let buf = new Uint8Array(0), newest = null, drawing = false, scanFrom = 0;
@@ -462,6 +480,7 @@ async function readStream(ctl) {
         const bmp = await createImageBitmap(new Blob([jpeg], { type: "image/jpeg" }));
         if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; }
         g2d.drawImage(bmp, 0, 0);
+        if (!ctl.drawn) streamInfo("");
         ctl.drawn++;
         bmp.close && bmp.close();
         frameStats.count++;
@@ -474,6 +493,8 @@ async function readStream(ctl) {
   for (;;) {
     const { value, done } = await reader.read();
     if (done) throw new Error("stream ended");
+    ctl.bytes += value.length;
+    if (!ctl.drawn) streamInfo("Receiving picture\u2026 " + Math.round(ctl.bytes / 1024) + " KB");
     buf = concatBytes(buf, value);
     // cut out every complete JPEG (start FFD8 ... end FFD9); only the newest is kept
     for (;;) {

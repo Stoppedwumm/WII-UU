@@ -134,7 +134,7 @@ public final class ScreenStreamer {
         Channel ch = channels.compute(mode, (k, c) -> c != null && c.alive() ? c : new Channel(k));
         ch.join();
         try {
-            long seen = -1;
+            long seen = 0;          // frame 0 is the empty placeholder: wait for a real picture first
             while (!Thread.currentThread().isInterrupted()) {
                 byte[] frame;
                 synchronized (ch) {
