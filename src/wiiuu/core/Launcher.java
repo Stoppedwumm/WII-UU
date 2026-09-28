@@ -31,6 +31,8 @@ public final class Launcher {
     private Process process;
     private Game current;
     private String flatpakApp;
+    /** macOS: `open -a <App>` starts the app via launchd, so it isn't our child; stop it by name */
+    private String macApp;
 
     public Launcher(Config config) {
         this.config = config;
@@ -55,6 +57,7 @@ public final class Launcher {
         if (cmd.isEmpty()) throw new LaunchException("No emulator command set for " + game.system().name());
         cmd = resolve(cmd, game.system());
         flatpakApp = flatpakId(cmd);
+        macApp = macAppName(cmd);
         // own process group (Linux): closing the game then reaches every process the emulator started
         if (LINUX && onPath("setsid") != null) cmd.add(0, "setsid");
 
@@ -102,23 +105,24 @@ public final class Launcher {
     /** @param wait block until the emulator is gone (used when WII-UU itself quits) */
     public void stop(boolean wait) {
         Process p;
-        String flatpak;
+        String flatpak, mac;
         synchronized (this) {
             p = process;
             flatpak = flatpakApp;
+            mac = macApp;
         }
         if (p == null || !p.isAlive()) return;
         long pid = p.pid();
         // Emulators that fork or show an "are you sure?" dialog survive a plain destroy(), so signal
         // the whole process group / tree, and force it after a grace period.
-        signalTree(p, pid, flatpak, false);
+        signalTree(p, pid, flatpak, mac, false);
         Runnable force = () -> {
             try {
                 p.waitFor(3, TimeUnit.SECONDS);
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
             }
-            signalTree(p, pid, flatpak, true);
+            signalTree(p, pid, flatpak, mac, true);
         };
         if (wait) {
             force.run();
@@ -134,8 +138,16 @@ public final class Launcher {
         }
     }
 
-    private static void signalTree(Process p, long pid, String flatpak, boolean force) {
+    private static void signalTree(Process p, long pid, String flatpak, String macApp, boolean force) {
         List<ProcessHandle> tree = p.descendants().toList();
+        if (macApp != null) {
+            if (!force) {
+                // like Cmd+Q, so the emulator can save and shut down cleanly
+                quietly("osascript", "-e", "tell application \"" + macApp.replace("\"", "") + "\" to quit");
+            }
+            // the app's real process, found by the executable inside its .app bundle
+            quietly("pkill", force ? "-KILL" : "-TERM", "-f", "/" + macApp + ".app/Contents/MacOS/");
+        }
         if (LINUX || MAC) {
             // negative pid = the whole process group created by setsid
             quietly("kill", force ? "-KILL" : "-TERM", "--", "-" + pid);
@@ -263,6 +275,21 @@ public final class Launcher {
         l.add(prog);
         l.addAll(args);
         return l;
+    }
+
+    /** "open -W -a Dolphin --args ..." -> "Dolphin" (null for anything else). */
+    static String macAppName(List<String> cmd) {
+        if (!MAC || cmd.isEmpty() || !(cmd.get(0).equals("open") || cmd.get(0).endsWith("/open"))) return null;
+        for (int i = 1; i + 1 < cmd.size(); i++) {
+            if (cmd.get(i).equals("--args")) break;
+            if (cmd.get(i).equals("-a")) {
+                String app = cmd.get(i + 1);
+                int slash = app.lastIndexOf('/');
+                if (slash >= 0) app = app.substring(slash + 1);          // "/Applications/Dolphin.app"
+                return app.endsWith(".app") ? app.substring(0, app.length() - 4) : app;
+            }
+        }
+        return null;
     }
 
     private static String flatpakId(List<String> cmd) {

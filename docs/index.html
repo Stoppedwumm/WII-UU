@@ -176,7 +176,7 @@
           <a class="btn primary" href="download/WII-UU-latest.zip">⤓ Download</a>
           <a class="btn" href="#install">Install guide</a>
         </div>
-        <p class="meta">Version 1.1.0 · Linux · Windows · macOS · Raspberry Pi · Java 17+</p>
+        <p class="meta">Version 1.1.1 · Linux · Windows · macOS · Raspberry Pi · Java 17+</p>
       </div>
       <img class="shot" src="menu.png" alt="The WII-UU home screen: a grid of console tiles with a blue cursor, a clock and a GamePad status pill" width="1600" height="900">
     </div>
@@ -347,7 +347,8 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
         <p>No. Phones stay paired and keep their player number, and they reconnect by themselves when WII-UU starts again.</p></details>
       <details><summary>Buttons don't reach the emulator.</summary>
         <p>On Linux, let the installer enable virtual controllers, and the phone then shows up as an Xbox 360 pad in every emulator.
-          Otherwise, set the emulator's keyboard controls to the keys listed under <b>Settings → GamePad Keys</b>. On Linux under Wayland, keys reach X11/XWayland windows. On macOS, allow Java under Accessibility.</p></details>
+          On macOS and Windows, player 1 gets each emulator's own default keys (Dolphin, PPSSPP, mGBA, melonDS, DuckStation, Ryujinx, Azahar).
+          For other emulators, set the emulator's keyboard controls to the keys listed under <b>Settings → GamePad Keys</b>. On Linux under Wayland, keys reach X11/XWayland windows. On macOS, allow Java under Accessibility.</p></details>
       <details><summary>Will a Raspberry Pi run everything?</summary>
         <p>The older consoles run well on a Pi 4/5. GameCube, Wii U, Switch, PS3 and PS4 are too demanding to play well on a Pi, and PS2 and PS4 emulators only run on x86-64.</p></details>
       <details><summary>Where are my settings?</summary>

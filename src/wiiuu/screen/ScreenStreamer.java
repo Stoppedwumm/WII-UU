@@ -71,7 +71,10 @@ public final class ScreenStreamer {
         }
         this.robot = r;
         String backend = config.get("stream.backend", "auto").trim().toLowerCase(Locale.ROOT);
-        this.ffmpeg = backend.equals("java") ? null : findFfmpeg(config.get("stream.ffmpeg", "ffmpeg"));
+        // macOS: ffmpeg's screen capture (AVFoundation) needs its own permission and Retina scaling, so
+        // Java capture is the default there; stream.backend=ffmpeg opts in.
+        boolean useFfmpeg = backend.equals("ffmpeg") || (backend.equals("auto") && !OS.contains("mac"));
+        this.ffmpeg = useFfmpeg ? findFfmpeg(config.get("stream.ffmpeg", "ffmpeg")) : null;
         System.out.println("[screen] GamePad streaming via " + (ffmpeg != null ? "ffmpeg (" + ffmpeg + ")"
                 : "Java (install ffmpeg for a much higher frame rate)"));
     }
@@ -263,16 +266,27 @@ public final class ScreenStreamer {
             }
         }
 
+        private boolean javaFallback;
+        private int ffmpegFailures;
+
         private void produce() {
-            int fps = Math.max(1, Math.min(60, config.getInt("stream.fps", ffmpeg != null ? 30 : 20)));
+            int fps = Math.max(1, Math.min(60, config.getInt("stream.fps", 30)));
             while (!stopped) {
                 Rectangle r = region;
                 if (r == null) {
                     sleep(300);
                     continue;
                 }
-                if (ffmpeg != null) {
-                    if (!runFfmpeg(r, fps)) sleep(500);   // failed to start or died: brief pause, retry
+                if (ffmpeg != null && !javaFallback) {
+                    if (runFfmpeg(r, fps)) {
+                        ffmpegFailures = 0;
+                    } else if (++ffmpegFailures >= 2 && robot != null) {
+                        // ffmpeg can't capture here (no X11, missing permission, ...): never leave the phone blank
+                        javaFallback = true;
+                        System.err.println("[screen] ffmpeg produced no picture; using Java capture for " + mode);
+                    } else {
+                        sleep(500);
+                    }
                 } else {
                     captureWithJava(r, fps);
                 }
@@ -284,19 +298,27 @@ public final class ScreenStreamer {
             int maxW = Math.max(160, config.getInt("stream.maxWidth", 854));
             int quality = Math.max(1, Math.min(100, config.getInt("stream.quality", 60)));
             int q = Math.round(2 + (100 - quality) * 0.15f);          // 60 -> 8 on ffmpeg's 2 (best)..31 scale
+            String crop = "";
             List<String> cmd = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-loglevel", "error",
                     "-fflags", "nobuffer", "-probesize", "32", "-analyzeduration", "0"));
             if (OS.contains("win")) {
                 cmd.addAll(List.of("-f", "gdigrab", "-draw_mouse", "0", "-framerate", Integer.toString(fps),
                         "-offset_x", Integer.toString(r.x), "-offset_y", Integer.toString(r.y),
                         "-video_size", r.width + "x" + r.height, "-i", "desktop"));
+            } else if (OS.contains("mac")) {
+                // AVFoundation captures the main display in device pixels (2x on Retina): crop there
+                double k = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice()
+                        .getDefaultConfiguration().getDefaultTransform().getScaleX();
+                crop = "crop=" + even(r.width * k) + ":" + even(r.height * k) + ":" + Math.round(r.x * k) + ":" + Math.round(r.y * k) + ",";
+                cmd.addAll(List.of("-f", "avfoundation", "-capture_cursor", "0", "-framerate", Integer.toString(fps),
+                        "-i", "Capture screen 0:none"));
             } else {
                 String display = System.getenv("DISPLAY");
                 if (display == null || display.isBlank()) display = ":0";
                 cmd.addAll(List.of("-f", "x11grab", "-draw_mouse", "0", "-framerate", Integer.toString(fps),
                         "-video_size", r.width + "x" + r.height, "-i", display + "+" + r.x + "," + r.y));
             }
-            cmd.addAll(List.of("-an", "-vf", "scale='trunc(min(" + maxW + ",iw)/2)*2':-2",
+            cmd.addAll(List.of("-an", "-vf", crop + "scale='trunc(min(" + maxW + ",iw)/2)*2':-2",
                     "-pix_fmt", "yuvj420p", "-q:v", Integer.toString(q), "-f", "mjpeg", "-"));
             Process p;
             try {
@@ -347,38 +369,74 @@ public final class ScreenStreamer {
             return any;
         }
 
-        /** Fallback: Robot capture + ImageIO JPEG, until the region changes or the channel stops. */
+        /**
+         * Java capture: Robot + ImageIO JPEG, until the region changes or the channel stops.
+         * Capturing overlaps with encoding on up to three threads, so the frame rate is limited by
+         * the slower of the two steps rather than their sum; late frames are dropped, never sent out of order.
+         */
         private void captureWithJava(Rectangle r, int fps) {
             int maxW = Math.max(160, config.getInt("stream.maxWidth", 640));
             float quality = Math.max(0.2f, Math.min(0.95f, config.getInt("stream.quality", 60) / 100f));
             long frameNanos = 1_000_000_000L / fps;
-            ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
-            ImageWriteParam param = writer.getDefaultWriteParam();
-            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            param.setCompressionQuality(quality);
-            ByteArrayOutputStream buf = new ByteArrayOutputStream(64 * 1024);
+            int encoders = Math.max(1, Math.min(3, Runtime.getRuntime().availableProcessors() - 1));
+            java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(encoders, t -> {
+                Thread th = new Thread(t, "stream-" + mode + "-jpeg");
+                th.setDaemon(true);
+                return th;
+            });
+            java.util.concurrent.Semaphore free = new java.util.concurrent.Semaphore(encoders);
+            java.util.concurrent.atomic.AtomicLong newestSent = new java.util.concurrent.atomic.AtomicLong(-1);
+            ThreadLocal<ImageWriter> writers = ThreadLocal.withInitial(() -> ImageIO.getImageWritersByFormatName("jpeg").next());
+            long captured = 0;
             try {
                 while (!stopped && r.equals(region)) {
                     long start = System.nanoTime();
-                    BufferedImage img = scale(robot.createScreenCapture(r), maxW);
-                    buf.reset();
-                    try (MemoryCacheImageOutputStream ios = new MemoryCacheImageOutputStream(buf)) {
-                        writer.setOutput(ios);
-                        writer.write(null, new IIOImage(img, null, null), param);
+                    free.acquire();
+                    BufferedImage img;
+                    try {
+                        img = scale(robot.createScreenCapture(r), maxW);
+                    } catch (RuntimeException e) {
+                        free.release();
+                        throw e;
                     }
-                    publish(buf.toByteArray());
+                    long seq = ++captured;
+                    pool.execute(() -> {
+                        try {
+                            ImageWriter writer = writers.get();
+                            ImageWriteParam param = writer.getDefaultWriteParam();
+                            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                            param.setCompressionQuality(quality);
+                            ByteArrayOutputStream buf = new ByteArrayOutputStream(64 * 1024);
+                            try (MemoryCacheImageOutputStream ios = new MemoryCacheImageOutputStream(buf)) {
+                                writer.setOutput(ios);
+                                writer.write(null, new IIOImage(img, null, null), param);
+                            }
+                            // only publish if no newer frame went out first
+                            if (newestSent.getAndAccumulate(seq, Math::max) < seq) publish(buf.toByteArray());
+                        } catch (IOException | RuntimeException ignored) {
+                            // drop this frame
+                        } finally {
+                            free.release();
+                        }
+                    });
                     long left = frameNanos - (System.nanoTime() - start);
                     if (left > 0) sleep(left / 1_000_000);
                 }
-            } catch (IOException | RuntimeException e) {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException e) {
                 sleep(500);
             } finally {
-                writer.dispose();
+                pool.shutdown();
             }
         }
     }
 
     // ---- helpers ------------------------------------------------------------------------
+
+    private static long even(double v) {
+        return Math.round(v) & ~1L;
+    }
 
     private static String findFfmpeg(String configured) {
         if (configured.contains(File.separator) || configured.contains("/")) {

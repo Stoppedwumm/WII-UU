@@ -125,10 +125,15 @@ own. To unpair all phones, change the code under *Settings → General*.
   sticks, analog triggers and all buttons, and it works whichever window has focus. Buttons are
   mapped by position (Nintendo A = right, B = bottom). `install.sh` enables this: it loads
   `uinput` and adds a udev rule. It needs `python3`.
-* **Fallback: keyboard keys.** Without virtual controllers (Windows, macOS, or no `uinput`
-  access), WII-UU types keyboard keys into the focused emulator window. Set each emulator's
-  keyboard controls to match. The defaults follow RetroArch, and you can change them under
-  *Settings → GamePad Keys*. `input.keys=on` forces keys even when virtual controllers work.
+* **Fallback: keyboard keys (macOS, Windows).** Without virtual controllers, WII-UU types keys
+  into the focused emulator window.
+  * **Player 1:** gets each emulator's own default keyboard layout, so nothing needs mapping for
+    Dolphin (GameCube), PPSSPP, mGBA, melonDS, DuckStation, Ryujinx and Azahar.
+  * **Other emulators and players 2–4:** use the layout under *Settings → GamePad Keys*, which
+    follows RetroArch. Keys you set there always win.
+  * **Adjusting one emulator's layout:** use `keys.<emulator>.<BUTTON>=KEY`, for example
+    `keys.dolphin.ZL=A`.
+  * `input.keys=on` forces keys even when virtual controllers work.
 
 | Button | P1 key | P2 key |
 |---|---|---|
@@ -151,9 +156,16 @@ Notes on the keyboard fallback:
 As on a real Wii U, the phone's screen shows a picture from the PC and you can touch it.
 
 ![Phone GamePad showing the Wii U GamePad screen](docs/gamepad.png)
-The picture is streamed at 30 fps. With **ffmpeg** installed (the installers offer it), capture
-and JPEG encoding are fast enough for a Raspberry Pi. Without it, a much slower Java encoder is
-used. The phone draws only the newest frame, so a slow phone drops frames instead of falling behind.
+The picture is streamed at 30 fps.
+
+* **Linux and Windows:** with **ffmpeg** installed (the installers offer it), capture and encoding
+  are fast enough for a Raspberry Pi.
+* **macOS:** uses Java capture, which encodes on several cores at once. Allow *Screen Recording*
+  for Java (or your terminal) under *System Settings → Privacy & Security*. `stream.backend=ffmpeg`
+  tries ffmpeg's AVFoundation capture instead.
+* **If ffmpeg fails:** WII-UU switches to Java capture on its own.
+* **On the phone:** only the newest frame is drawn, so a slow phone drops frames instead of
+  falling behind.
 
 * **GamePad / Touch screen:** when a game with a second screen starts, the phone switches to it
   automatically, and a tap becomes a mouse click at that spot. Emulators read those clicks as
@@ -207,9 +219,12 @@ emulators, run `wiiuu-emulators --update`.
     install it with `wiiuu-emulators --only dolphin` (a source build).
   * If the emulator crashes at start, the notification shows the last line of
     `~/.wiiuu/logs/<system>.log`.
-* **A game doesn't close:** *Close game* (HOME on the phone, or Ctrl+Q) stops the emulator's whole
-  process group. That includes Flatpak apps and emulators waiting on a "stop emulation?" dialog.
-  If it hasn't exited after 3 seconds, it is force-killed.
+* **A game doesn't close:** *Close game* (HOME on the phone, or Ctrl+Q) asks the emulator to quit,
+  and force-kills it if it's still running after 3 seconds. That includes emulators waiting on a
+  "stop emulation?" dialog.
+  * **Linux:** the whole process group is stopped, and Flatpak apps with `flatpak kill`.
+  * **macOS:** apps started with `open -a App` receive Quit, then their process is stopped by its
+    path inside the `.app` bundle.
 * **Choppy GamePad screen:** install `ffmpeg`. The phone mentions it when it isn't installed. On
   slow Wi-Fi, lower `stream.maxWidth` or `stream.quality`.
 

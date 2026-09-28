@@ -75,6 +75,13 @@ public final class InputRouter {
         this.robot = r;
     }
 
+    /** Which emulator's keyboard layout to use right now (see {@link KeyMap#profileFor}). */
+    private volatile java.util.function.Supplier<String> keyProfile = () -> null;
+
+    public void setKeyProfile(java.util.function.Supplier<String> profile) {
+        this.keyProfile = profile;
+    }
+
     public void setKeysEnabled(BooleanSupplier keysEnabled) {
         this.keysEnabled = keysEnabled;
     }
@@ -149,7 +156,7 @@ public final class InputRouter {
 
     private void injectKey(int player, PadButton b, boolean down) {
         if (robot == null || (down && !keysEnabled.getAsBoolean())) return;
-        int code = keyMap.keyCode(player, b);
+        int code = keyMap.keyCode(player, b, keyProfile.get());
         if (code < 0) return;
         int refs = keyRefs.getOrDefault(code, 0);
         try {

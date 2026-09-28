@@ -40,7 +40,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.1.0";
+    public static final String VERSION = "1.1.1";
 
     private final Config config;
     private final Library library;
@@ -57,6 +57,11 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.library = new Library(config);
         this.launcher = new Launcher(config);
         this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
+        // type each emulator's own default keys (Dolphin, PPSSPP, mGBA, melonDS, ...), so nothing needs mapping
+        router.setKeyProfile(() -> {
+            Game g = launcher.current();
+            return g == null ? null : KeyMap.profileFor(g.system().id(), config.command(g.system()));
+        });
         // Typing keys into emulators is the fallback for when real virtual controllers aren't available:
         // input.keys = auto (default: only without virtual pads) | on | off; system.<id>.keys overrides.
         router.setKeysEnabled(() -> {
