@@ -254,6 +254,7 @@ public final class ScreenStreamer {
         if (g != null && config.getBool("stream.tvFollowsGame", true)) {
             Rectangle w = windows.find(java.util.regex.Pattern.quote(g.name()));
             if (w == null) w = windows.find(java.util.regex.Pattern.quote(g.system().emulator()));
+            if (w == null) w = windows.find("^RetroArch");               // RetroArch mode
             if (w != null && w.width >= 200 && w.height >= 150) {
                 Rectangle c = clip(w);
                 if (c != null) return c;

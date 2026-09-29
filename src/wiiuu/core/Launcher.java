@@ -18,6 +18,10 @@ public final class Launcher {
 
         /** @param quickFailure true when the emulator died within a few seconds with an error code */
         void exited(Game game, int exitCode, boolean quickFailure, Path log);
+
+        /** Something to tell the user outside a launch call (e.g. a delayed start failed). */
+        default void message(String text) {
+        }
     }
 
     public static final class LaunchException extends Exception {
@@ -28,6 +32,9 @@ public final class Launcher {
 
     private final Config config;
     private final DolphinInput dolphin;
+    private final RetroArch retroArch;
+    /** the running game was started in RetroArch (so it reads RetroArch's key layout) */
+    private volatile boolean inRetroArch;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private Process process;
     private Game current;
@@ -38,6 +45,7 @@ public final class Launcher {
     public Launcher(Config config) {
         this.config = config;
         this.dolphin = new DolphinInput(config);
+        this.retroArch = new RetroArch(config);
         dolphin.recover();
     }
 
@@ -53,13 +61,36 @@ public final class Launcher {
         return isRunning() ? current : null;
     }
 
+    /** True while the running game was started through RetroArch (RetroArch mode). */
+    public boolean inRetroArch() {
+        return inRetroArch && isRunning();
+    }
+
     public synchronized void launch(Game game) throws LaunchException {
         if (isRunning()) throw new LaunchException(current.name() + " is already running");
-        String template = config.command(game.system());
-        List<String> cmd = expand(template, game);
-        if (cmd.isEmpty()) throw new LaunchException("No emulator command set for " + game.system().name());
-        cmd = resolve(cmd, game.system());
-        boolean dolphinPatched = dolphin.applies(game, cmd);
+        List<String> cmd = null;
+        if (retroArch.handles(game.system())) {
+            try {
+                // after downloading a missing core, start the game by itself
+                cmd = retroArch.command(game, () -> {
+                    try {
+                        launch(game);
+                    } catch (LaunchException e) {
+                        for (Listener l : listeners) l.message(e.getMessage());
+                    }
+                });
+            } catch (RetroArch.Downloading d) {
+                throw new LaunchException(d.getMessage());
+            }
+        }
+        boolean viaRetroArch = cmd != null;
+        if (cmd == null) {
+            String template = config.command(game.system());
+            cmd = expand(template, game);
+            if (cmd.isEmpty()) throw new LaunchException("No emulator command set for " + game.system().name());
+            cmd = resolve(cmd, game.system());
+        }
+        boolean dolphinPatched = !viaRetroArch && dolphin.applies(game, cmd);
         if (dolphinPatched) cmd = dolphin.before(game, cmd);
         cmd = new ArrayList<>(cmd);
         flatpakApp = flatpakId(cmd);
@@ -89,6 +120,8 @@ public final class Launcher {
         }
         process = p;
         current = game;
+        inRetroArch = viaRetroArch;
+        if (viaRetroArch) System.out.println("[retroarch] " + game.name() + " with " + Path.of(cmd.get(cmd.indexOf("-L") + 1)).getFileName());
         long startedAt = System.currentTimeMillis();
         for (Listener l : listeners) l.started(game);
         p.onExit().thenAccept(done -> {

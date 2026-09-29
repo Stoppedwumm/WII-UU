@@ -117,6 +117,49 @@ comes back afterwards. Both can be turned off under *Settings → General* (`ui.
 follows the system's appearance on macOS, Windows and GNOME/KDE, and switches along when you
 change it.
 
+## RetroArch mode
+
+Turn on *Settings → General → RetroArch mode* (`retroarch.enabled=true`) to run every system that has
+a libretro core in [RetroArch](https://www.retroarch.com) instead of its standalone emulator.
+
+| System | Cores, best first |
+|---|---|
+| NES | Mesen, Nestopia, FCEUmm, QuickNES |
+| SNES | Snes9x, bsnes |
+| Game Boy / Color | SameBoy, Gambatte, mGBA |
+| GBA | mGBA, VBA Next, gpSP |
+| N64 | Mupen64Plus-Next, ParaLLEl N64 |
+| GameCube / Wii | Dolphin |
+| DS | melonDS DS, melonDS, DeSmuME |
+| 3DS | Citra |
+| Master System / Genesis | Genesis Plus GX, PicoDrive |
+| Saturn | Beetle Saturn, YabaSanshiro, Kronos |
+| Dreamcast | Flycast |
+| PS1 | SwanStation, Beetle PSX HW, PCSX ReARMed |
+| PS2 | LRPS2 (PCSX2) |
+| PSP | PPSSPP |
+
+Wii U, Switch, PS3 and PS4 have no cores, so they keep their standalone emulators.
+
+* **Finding RetroArch:** WII-UU looks in `/Applications/RetroArch.app` on macOS, on the `PATH`, in
+  Flatpak (`org.libretro.RetroArch`) and in `C:\RetroArch-Win64`. Set `retroarch.path` if yours is
+  elsewhere.
+* **Cores:** WII-UU uses the best core it finds in RetroArch's core folder or your distribution's
+  libretro packages. If none is installed, it downloads one from the libretro buildbot on first
+  launch, then starts the game by itself.
+  * If that fails, it falls back to the standalone emulator.
+  * `retroarch.core.<system>=snes9x` (or a path) picks a core.
+  * `retroarch.download=false` turns downloads off.
+  * `system.<id>.retroarch=false` keeps one system on its standalone emulator.
+* **Controls:** RetroArch gets WII-UU's own key layout for players 1–4, and on Linux it sees the
+  virtual Xbox pads.
+  * Its keyboard shortcuts (reset, fast-forward, full screen…) only work while **right Ctrl** is held,
+    so stick keys can't trigger them. Change the key with `retroarch.hotkeyEnable`.
+  * These settings are in `~/.wiiuu/retroarch.cfg`. RetroArch loads that file on top of its own
+    settings, only for games WII-UU starts.
+* **BIOS:** some cores need BIOS files in RetroArch's `system` folder, as the core's documentation
+  says: PS1 (SwanStation can run without), PS2, Saturn and, optionally, Dreamcast.
+
 ## Phone as GamePad
 
 Press **+** or **F2** on the TV and scan the QR code. You can also open the URL shown there on a phone
@@ -330,6 +373,7 @@ ui.minimizeOnLaunch=true
 ui.music=true               # background music in the menu; ui.musicVolume=45 (0-100)
 ui.bootAnimation=true       # start-up animation and chime
 ui.theme=auto               # auto (follow the system) | light | dark
+retroarch.enabled=false     # RetroArch mode; retroarch.path, retroarch.core.<id>, retroarch.download
 ```
 
 Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home DIR] [--check-update|--upgrade]`
