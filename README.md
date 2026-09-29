@@ -502,13 +502,20 @@ as its narration. It also writes captions (`.srt`), the chapter timestamps, a th
 
 `presentation/` holds an 8-minute narrated presentation about WII-UU: what it does, how it works
 under the hood, and how to set it up. The slides are styled after the Wii U menu, with a pinstriped
-light background, white cards and pages that glide sideways.
+light background and white cards, in 3D: a GamePad model spins in, the logo is extruded, pages turn
+in space, points flip into place and soft tiles float in the background.
 * The script and slides are in `talk.json`, one entry per slide, with its narration.
 * Every point on a slide appears when the narration reaches it, and each slide is as long as its
   narration.
+* Three part cards (What it does, How it works, Make it yours) split the talk. Each part has its own
+  music theme, all synthesized by `Theme.java` with no samples: an ident, a bright marimba theme, a
+  plucked "tech" theme, a warm electric-piano theme and a reprise at the end. The chimes for page
+  turns, points and part cards are tuned to the theme that's playing.
+* The page exports its timeline, so the music and chimes land exactly on the pictures.
 * `presentation/render.sh` renders `dist/WII-UU-presentation.mp4`, with captions and chapter
   timestamps.
 * `VOICE_ENGINE=elevenlabs ELEVENLABS=<key>` uses an ElevenLabs voice instead of the offline one.
+  `KEEP_VOICE=1` reuses the narration of the last render.
 
 ## Build from source
 

@@ -46,6 +46,14 @@ await page.evaluate(() => {
   document.getElementById("t1").contentWindow.document.head.appendChild(s);
 });
 const duration = await page.evaluate(() => window.DURATION);
+// CUES_OUT: only write the page's timeline (for music and chimes made to fit it), then stop
+if (process.env.CUES_OUT) {
+  const tl = await page.evaluate(() => ({ parts: window.PARTS || [], cues: window.CUES || [] }));
+  fs.writeFileSync(process.env.CUES_OUT, [`duration ${duration}`, ...tl.parts.map(([t, name]) => `part ${t.toFixed(3)} ${name}`),
+    ...tl.cues.map(([t, type, n]) => `cue ${t.toFixed(3)} ${type} ${n || 0}`)].join("\n") + "\n");
+  console.log(`  timeline: ${duration} s, ${tl.parts.length} themes, ${tl.cues.length} cues -> ${process.env.CUES_OUT}`);
+  await browser.close(); server.close(); process.exit(0);
+}
 const voice = await page.evaluate(() => window.VOICE);
 
 // YouTube extras: captions (.srt) and chapter timestamps for the description
@@ -69,12 +77,25 @@ voice.forEach(([id, start], i) => {
   parts.push(`[${i + 1}]aformat=sample_rates=48000:channel_layouts=stereo,adelay=${ms}|${ms},apad[v${i}]`);
   labels.push(`[v${i}]`);
 });
+// SFX: chimes and swooshes, mixed after the ducking so they stay crisp over the voice
+const sfx = process.env.SFX ? voice.length + 1 : -1;
+if (sfx > 0) inputs.push("-i", process.env.SFX);
 const filter = parts.join(";") + `;${labels.join("")}amix=inputs=${labels.length}:normalize=0:duration=longest,atrim=0:${duration}[vo];`
   + `[vo]asplit[vo1][vo2];[0]aformat=sample_rates=48000:channel_layouts=stereo,volume=${process.env.MUSIC_LEVEL || 0.55}[m];`
   + `[m][vo1]sidechaincompress=threshold=0.02:ratio=8:attack=30:release=500[duck];`
-  + `[duck][vo2]amix=inputs=2:normalize=0,atrim=0:${duration},afade=t=out:st=${Math.max(0, duration - 3)}:d=3,loudnorm=I=-16:TP=-1.5:LRA=11[a]`;
+  + (sfx > 0 ? `[${sfx}]aformat=sample_rates=48000:channel_layouts=stereo,volume=${process.env.SFX_LEVEL || 0.5}[fx];` : "")
+  + `[duck][vo2]${sfx > 0 ? "[fx]" : ""}amix=inputs=${sfx > 0 ? 3 : 2}:normalize=0:duration=first,atrim=0:${duration},afade=t=out:st=${Math.max(0, duration - 3)}:d=3,loudnorm=I=-16:TP=-1.5:LRA=11[a]`;
 await new Promise((ok, bad) => spawn("ffmpeg", ["-y", "-loglevel", "error", ...inputs, "-filter_complex", filter, "-map", "[a]", "-ar", "48000", audio],
   { stdio: "inherit" }).on("close", (c) => (c === 0 ? ok() : bad(new Error("audio mix failed")))));
+// AUDIO_ONLY: put the new sound on the video rendered before (same timeline), without drawing frames again
+if (process.env.AUDIO_ONLY) {
+  const tmp = out.replace(/\.mp4$/, ".remux.mp4");
+  await new Promise((ok, bad) => spawn("ffmpeg", ["-y", "-loglevel", "error", "-i", out, "-i", audio, "-map", "0:v", "-map", "1:a", "-c:v", "copy",
+    "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", tmp], { stdio: "inherit" }).on("close", (c) => (c === 0 ? ok() : bad(new Error("remux failed")))));
+  fs.renameSync(tmp, out);
+  console.log(`  new sound on ${out}`);
+  await browser.close(); server.close(); process.exit(0);
+}
 
 const ffmpeg = spawn("ffmpeg", ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(fps), "-c:v", "mjpeg", "-i", "-",
   "-i", audio, "-c:v", "libx264", "-preset", "slow", "-crf", "19", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",

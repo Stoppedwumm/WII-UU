@@ -4,6 +4,7 @@
     {
       "chapter": "Welcome",
       "layout": "title",
+      "theme": "intro",
       "lines": [
         {
           "say": "Hi! This is Wii U U, a free project that turns any computer into a console that looks and feels like the Wii U menu.",
@@ -18,6 +19,12 @@
     {
       "chapter": "The problem",
       "layout": "cards",
+      "theme": "play",
+      "act": {
+        "n": 1,
+        "title": "What it does",
+        "icon": "🎮"
+      },
       "heading": "Emulators are amazing. <em>On a TV, not so much.</em>",
       "cards": [
         {
@@ -61,6 +68,7 @@
     {
       "chapter": "The idea",
       "layout": "idea",
+      "theme": "play",
       "lines": [
         {
           "say": "So the idea behind Wii U U is simple. Take the friendliest console menu there is, the Wii U's, and put all of your games in it.",
@@ -75,6 +83,7 @@
     {
       "chapter": "The menu",
       "layout": "media",
+      "theme": "play",
       "heading": "The menu",
       "media": {
         "type": "image",
@@ -124,6 +133,7 @@
     {
       "chapter": "Twenty consoles",
       "layout": "consoles",
+      "theme": "play",
       "lines": [
         {
           "say": "Wii U U knows twenty consoles. From Nintendo, that's the NES all the way to the Wii U and Switch. From Sega, the Master System to the Dreamcast. And from Sony, the PlayStation 1 to the PlayStation 4.",
@@ -142,6 +152,7 @@
     {
       "chapter": "Installing",
       "layout": "install",
+      "theme": "play",
       "lines": [
         {
           "say": "Installing takes one line in a terminal on Linux, macOS, and the Raspberry Pi. On Windows, you double-click the installer.",
@@ -160,6 +171,7 @@
     {
       "chapter": "Your phone is the GamePad",
       "layout": "media",
+      "theme": "play",
       "heading": "Your phone is the <em>GamePad</em>",
       "media": {
         "type": "demo",
@@ -203,6 +215,7 @@
     {
       "chapter": "Playing a game",
       "layout": "media",
+      "theme": "play",
       "heading": "Playing a game",
       "media": {
         "type": "demo",
@@ -234,6 +247,12 @@
     {
       "chapter": "Under the hood: input",
       "layout": "input",
+      "theme": "tech",
+      "act": {
+        "n": 2,
+        "title": "How it works",
+        "icon": "⚙️"
+      },
       "lines": [
         {
           "say": "So how does a button press on a phone end up in an emulator? Let's look under the hood.",
@@ -264,6 +283,7 @@
     {
       "chapter": "Controllers that just work",
       "layout": "mapping",
+      "theme": "tech",
       "lines": [
         {
           "say": "Typing keys only works if the emulator listens to those keys. So for Dolphin, PCSX2, and DuckStation, Wii U U goes one step further.",
@@ -282,6 +302,7 @@
     {
       "chapter": "A real second screen",
       "layout": "media",
+      "theme": "tech",
       "heading": "A real <em>second screen</em>",
       "media": {
         "type": "demo",
@@ -326,6 +347,7 @@
     {
       "chapter": "Keeping it fast",
       "layout": "stream",
+      "theme": "tech",
       "lines": [
         {
           "say": "Streaming a screen to a phone is easy. Streaming it without lag is the hard part.",
@@ -348,6 +370,7 @@
     {
       "chapter": "Sound and motion",
       "layout": "cards",
+      "theme": "tech",
       "heading": "Sound and <em>motion</em>",
       "cards": [
         {
@@ -377,6 +400,7 @@
     {
       "chapter": "RetroArch mode",
       "layout": "retroarch",
+      "theme": "tech",
       "lines": [
         {
           "say": "If you prefer RetroArch, turn on RetroArch mode. Every console with a core then runs in RetroArch instead.",
@@ -395,6 +419,12 @@
     {
       "chapter": "Console Mode",
       "layout": "media",
+      "theme": "home",
+      "act": {
+        "n": 3,
+        "title": "Make it yours",
+        "icon": "🏠"
+      },
       "heading": "Console <em>Mode</em>",
       "media": {
         "type": "image",
@@ -441,6 +471,7 @@
     {
       "chapter": "The little things",
       "layout": "cards",
+      "theme": "home",
       "heading": "The little <em>things</em>",
       "cards": [
         {
@@ -474,6 +505,7 @@
     {
       "chapter": "Where it runs",
       "layout": "platforms",
+      "theme": "home",
       "lines": [
         {
           "say": "Wii U U runs on Linux, Windows, and macOS, on normal PCs and on the Raspberry Pi 4 and 5.",
@@ -488,6 +520,7 @@
     {
       "chapter": "Try it in five minutes",
       "layout": "steps",
+      "theme": "home",
       "steps": [
         {
           "n": "1",
@@ -530,6 +563,7 @@
     {
       "chapter": "Get it",
       "layout": "end",
+      "theme": "outro",
       "lines": [
         {
           "say": "Wii U U is free. You'll find it at wiiuu dot stoppedwumm dot net, with a one-line installer and all the documentation.",

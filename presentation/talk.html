@@ -6,9 +6,10 @@
 <!--
   An 8-minute narrated presentation about WII-UU (script and slides: talk.json), in the style of
   the Wii U menu: pinstriped light background, white cards, a top bar like the app's, and pages
-  that glide sideways. Each slide lasts as long as its narration, and every point appears when the
-  narration reaches it (the "line" of an element). window.seek(t) lays out frame t exactly.
-  Rendered by render.sh.
+  that turn in 3D. Each slide lasts as long as its narration, and every point flips in when the
+  narration reaches it (the "line" of an element). Three part cards split the talk; each part has
+  its own music theme (Theme.java), and the page exports its timeline (PARTS, CUES) so the music
+  and chimes land on the pictures. window.seek(t) lays out frame t exactly. Rendered by render.sh.
 -->
 <style>
   @font-face { font-family: Inter; font-weight: 400; src: url(../trailer/fonts/inter-latin-400-normal.woff2) format("woff2"); }
@@ -79,10 +80,56 @@
   .step p { font-size: 32px; color: var(--dim); line-height: 1.35; }
   .packet { position: absolute; width: 90px; height: 56px; border-radius: 12px; background: var(--accent); box-shadow: 0 6px 16px rgba(0, 120, 180, .35); }
   #fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 9; }
+  /* 3D: slides turn in space, the background is a slow field of floating tiles */
+  #slides { position: absolute; inset: 0; perspective: 2200px; perspective-origin: 50% 46%; }
+  .r { transform-origin: 50% 0; }
+  #world { position: absolute; inset: 0; perspective: 1400px; perspective-origin: 50% 40%; overflow: hidden; }
+  #world .cam { position: absolute; left: 960px; top: 540px; transform-style: preserve-3d; }
+  .slab { position: absolute; transform-style: preserve-3d; }
+  .slab i { position: absolute; inset: 0; border-radius: 22%; display: block; }
+  /* the GamePad model: layers stacked in depth make the body, sticks and buttons solid */
+  .gp { position: absolute; width: 720px; height: 380px; perspective: 1700px; }
+  .gp .rig { position: absolute; inset: 0; transform-style: preserve-3d; }
+  .gp .ly { position: absolute; inset: 0; border-radius: 110px / 130px; }
+  .gp .front { background: linear-gradient(170deg, #ffffff, #eef1f4 55%, #dfe4e9); box-shadow: inset 0 2px 0 #fff, inset 0 -6px 14px rgba(0, 0, 0, .06); overflow: hidden; }
+  .gp .glint { position: absolute; top: -40%; bottom: -40%; width: 26%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .85), transparent); transform: rotate(18deg); }
+  .gp .bezel { position: absolute; left: 150px; top: 58px; width: 420px; height: 262px; border-radius: 18px; background: #1b1e22; }
+  .gp .scr { position: absolute; left: 12px; top: 13px; width: 396px; height: 223px; border-radius: 6px; overflow: hidden; background: #000; }
+  .gp .scr img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gp .scr .shine { position: absolute; inset: 0; background: linear-gradient(125deg, rgba(255, 255, 255, .28), transparent 40%); }
+  .gp .part { position: absolute; transform-style: preserve-3d; }
+  .gp .disc { position: absolute; inset: 0; border-radius: 50%; }
+  .gp .btn { position: absolute; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #6b727b, #3a3f45);
+    color: #e8ebee; font: 800 18px Inter, sans-serif; display: flex; align-items: center; justify-content: center; }
+  .gp .dp { position: absolute; background: #3a3f45; border-radius: 6px; }
+  .gp .back { position: absolute; inset: 0; transform: scaleX(-1); }
+  .gp .back .grip { position: absolute; top: 150px; width: 150px; height: 70px; border-radius: 35px; background: linear-gradient(180deg, #c9cfd6, #e4e8ec); box-shadow: inset 0 3px 6px rgba(0, 0, 0, .12); }
+  .gp .back .mark { position: absolute; left: 0; right: 0; top: 160px; text-align: center; font: 900 44px Inter, sans-serif; color: #b9c0c8; letter-spacing: -.02em; }
+  .gp .back .mark b { color: #8fcbe8; }
+  .gp .shadow { position: absolute; left: 60px; right: 60px; top: 430px; height: 60px; border-radius: 50%; background: radial-gradient(closest-side, rgba(30, 40, 50, .28), transparent); }
+  /* extruded logo */
+  .l3 { position: absolute; perspective: 1600px; }
+  .l3 .in { position: relative; transform-style: preserve-3d; }
+  .l3 .ll { position: absolute; left: 0; right: 0; top: 0; font-weight: 900; letter-spacing: -.02em; white-space: nowrap; }
+  .l3 .ll b { color: var(--accent); }
+  .l3 .ll.side { color: #9aa2ab; } .l3 .ll.side b { color: #0079ad; }
+  .l3 .ll.front { position: relative; }
+  /* part cards: a spinning cube and the part's name */
+  .cube { position: absolute; width: 300px; height: 300px; perspective: 1400px; }
+  .cube .c3 { position: absolute; inset: 0; transform-style: preserve-3d; }
+  .cube .f { position: absolute; inset: 0; border-radius: 36px; display: flex; align-items: center; justify-content: center; color: #fff;
+    font-weight: 900; font-size: 170px; background: linear-gradient(150deg, #33c3ff, #0090d0); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .35); backface-visibility: hidden; }
+  .cube .f.w { background: linear-gradient(150deg, #ffffff, #e6eaee); color: var(--ink); }
+  .cube .f.e { font-size: 130px; }
+  .act .kicker { position: absolute; left: 0; right: 0; top: 660px; text-align: center; font-weight: 800; font-size: 40px; letter-spacing: .3em; color: var(--accent); }
+  .act .name { position: absolute; left: 0; right: 0; top: 720px; text-align: center; font-weight: 900; font-size: 120px; letter-spacing: -.035em; }
+  .act .glow { position: absolute; left: 560px; top: 60px; width: 800px; height: 700px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(0, 168, 232, .22), transparent); }
 </style>
 </head>
 <body>
 <div id="stage">
+  <div id="world"><div class="cam" id="cam"></div></div>
   <div id="slides"></div>
   <div class="pill" id="bar"><span class="logo">WII-<b>UU</b></span><span class="sep"></span><span class="ch" id="chName"></span></div>
   <div class="pill" id="count"><span id="num"></span></div>
@@ -95,7 +142,7 @@
   const seg = (t, a, b) => clamp((t - a) / (b - a));
   const out3 = (v) => 1 - Math.pow(1 - clamp(v), 3);
   const inOut = (v) => { v = clamp(v); return v < .5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2; };
-  const FPS = 30, LEAD = 1.1, GAP = 0.6, TAIL = 1.4, SLIDE_MS = .7;
+  const FPS = 30, LEAD = 1.1, GAP = 0.6, TAIL = 1.4, SLIDE_MS = .9;
   let S = null, SL = [], DURATION = 0, VOICE = [], CAPTIONS = [];
   let PHONE_OFFSET = 5.0, TV_FIRST = 4.0;
 
@@ -105,30 +152,74 @@
     ["PS1", "#8C8C8C"], ["PS2", "#1C3F94"], ["PSP", "#2B2B2B"], ["PS3", "#111111"], ["PS4", "#003791"]];
   const r = (line, delay = 0, extra = "") => `class="r ${extra}" data-line="${line}" data-delay="${delay}"`;
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const ACT = 3.0;                     // part cards
+  const stack = (n, gap, fn) => Array.from({ length: n }, (_, k) => fn(k, -k * gap)).join("");
+
+  // a Wii U-style GamePad, solid: the body is 22 layers deep, sticks and buttons stand out of it
+  function gamepad() {
+    const body = stack(22, 2.2, (k, z) => k === 0 ? "" : `<div class="ly" style="transform: translateZ(${z}px); background: ${k === 21 ? "linear-gradient(190deg, #f1f3f5, #d7dce1)" : `hsl(210 10% ${86 - k * .9}%)`}">${k === 21
+      ? `<div class="back">${["left: 40px", "right: 40px"].map((x) => `<div class="grip" style="${x}"></div>`).join("")}<div class="mark">WII-<b>UU</b></div></div>` : ""}</div>`);
+    const stick = (x, y) => `<div class="part" style="left:${x - 42}px; top:${y - 42}px; width: 84px; height: 84px">
+      ${stack(3, -1.2, (k, z) => `<div class="disc" style="transform: translateZ(${-z}px); background: #2a2e33"></div>`)}
+      ${stack(8, -2.4, (k, z) => `<div class="disc" style="inset: 12px; transform: translateZ(${4 - z}px); background: ${k === 7 ? "radial-gradient(circle at 40% 35%, #6d747d, #3b4046)" : "#30353a"}"></div>`)}</div>`;
+    const btns = [["X", 0, -46], ["A", 46, 0], ["B", 0, 46], ["Y", -46, 0]].map(([l, dx, dy]) =>
+      stack(3, -1.6, (k, z) => `<div class="btn" style="left:${628 + dx - 20}px; top:${250 + dy - 20}px; transform: translateZ(${-z}px); ${k < 2 ? "background:#2c3136; color: transparent" : ""}">${l}</div>`)).join("");
+    const dpad = stack(3, -1.6, (k, z) => `<div class="dp" style="left: 58px; top: 236px; width: 88px; height: 28px; transform: translateZ(${-z}px); ${k < 2 ? "background:#2c3136" : ""}"></div>
+      <div class="dp" style="left: 88px; top: 206px; width: 28px; height: 88px; transform: translateZ(${-z}px); ${k < 2 ? "background:#2c3136" : ""}"></div>`);
+    const small = [[300, "−"], [360, "⌂"], [420, "+"]].map(([x, l]) => `<div class="btn" style="left:${x - 16}px; top: 334px; width: 32px; height: 32px; font-size: 16px; transform: translateZ(2px)">${l}</div>`).join("");
+    return `<div class="gp"><div class="shadow"></div><div class="rig">${body}
+      <div class="ly front"><div class="bezel"><div class="scr"><img src="../trailer/build/menu-light.png"><div class="shine"></div></div></div><div class="glint"></div></div>
+      ${stick(96, 120)}${stick(624, 120)}${dpad}${btns}${small}</div></div>`;
+  }
+  function poseGamepad(el, rx, ry, rz, lift) {
+    if (!el) return;
+    el.querySelector(".rig").style.transform = `translateY(${lift}px) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg)`;
+    // the light: a glint slides across the body as it turns
+    const a = ((ry % 360) + 540) % 360 - 180;                   // -180..180, 0 = facing us
+    el.querySelector(".glint").style.left = `${37 - a * 2.4}%`;
+    const sh = el.querySelector(".shadow");
+    sh.style.opacity = Math.max(0, 1 - Math.abs(lift) / 260);
+    sh.style.transform = `scaleX(${Math.abs(Math.cos(ry * Math.PI / 180)) * .75 + .25})`;
+  }
+  const logo3d = (size, align = "left") => `<div class="in" style="font-size:${size}px; text-align:${align}">
+    ${stack(16, 2.4, (k, z) => k === 0 ? "" : `<div class="ll side" style="transform: translateZ(${z}px); filter: brightness(${1 - k * .025})">WII-<b>UU</b></div>`)}
+    <div class="ll front" style="transform: translateZ(1px)">WII-<b>UU</b></div></div>`;
+  const cube = (n, icon) => `<div class="c3">
+    <div class="f" style="transform: translateZ(150px)">${n}</div>
+    <div class="f w" style="transform: rotateY(90deg) translateZ(150px); color: var(--accent)">${n}</div>
+    <div class="f" style="transform: rotateY(180deg) translateZ(150px); font-size: 64px">WII-UU</div>
+    <div class="f w" style="transform: rotateY(-90deg) translateZ(150px); color: var(--accent)">${n}</div>
+    <div class="f w" style="transform: rotateX(90deg) translateZ(150px)"></div>
+    <div class="f w" style="transform: rotateX(-90deg) translateZ(150px)"></div></div>`;
 
   // ---- the layouts ------------------------------------------------------------------------------
   const LAYOUTS = {
     title: () => `
-      <div class="big logo" style="top: 330px; font-size: 230px">WII-<b>UU</b></div>
-      <div class="big" ${r(0, 1.2)} style="top: 610px; font-size: 54px; font-weight: 800; color: var(--dim); letter-spacing: -.02em">A Wii U–style console for every computer</div>
-      <div class="big" ${r(1, .3)} style="top: 760px"><span class="chip">What it does</span><span class="chip">How it works</span><span class="chip blue">How to set it up</span></div>`,
+      <div class="l3" data-logo style="left: 120px; top: 250px; width: 900px">${logo3d(200)}</div>
+      <div ${r(0, 1.2)} style="position:absolute; left: 128px; top: 530px; width: 960px; font-size: 46px; font-weight: 800; color: var(--dim); letter-spacing: -.02em; line-height: 1.2">A Wii U–style console for every computer</div>
+      <div ${r(1, .3)} style="position:absolute; left: 120px; top: 720px; width: 900px"><span class="chip">What it does</span><span class="chip">How it works</span><span class="chip blue">How to set it up</span></div>
+      <div data-gp style="position:absolute; left: 1080px; top: 330px">${gamepad()}</div>`,
+
+    act: (s) => `<div class="act"><div class="glow"></div>
+      <div class="cube" style="left: 810px; top: 250px">${cube(s.act.n, s.act.icon)}</div>
+      <div class="kicker">PART ${s.act.n}</div><div class="name">${s.act.title}</div></div>`,
 
     cards: (s) => `<div class="h">${s.heading}</div>
       <div class="cards">${s.cards.map((c) => `<div ${r(c.line, c.delay || 0, "card")}><div class="ico">${c.icon}</div><h3>${c.title}</h3><p>${c.text}</p></div>`).join("")}</div>`,
 
     idea: () => `<div class="h">The <em>idea</em></div>
       <div ${r(0, .4)} style="position:absolute; left: 120px; top: 360px; width: 800px">
-        <div class="tv" style="position:relative"><div class="scr"><img src="../trailer/build/menu-light.png"></div></div>
+        <div class="tv" data-tilt="9,2,0" style="position:relative"><div class="scr"><img src="../trailer/build/menu-light.png"></div></div>
         <div style="margin-top: 34px; font-size: 40px; font-weight: 800">The Wii U menu, for all your games</div></div>
       <div ${r(1, 0)} style="position:absolute; left: 960px; top: 470px; font-size: 120px; font-weight: 900; color: var(--accent)">+</div>
       <div ${r(1, .6)} style="position:absolute; left: 1090px; top: 400px; width: 710px">
-        <div class="phone" style="position:relative"><img src="../docs/gamepad.png"></div>
+        <div class="phone" data-tilt="-10,3,1.5" style="position:relative"><img src="../docs/gamepad.png"></div>
         <div style="margin-top: 44px; font-size: 40px; font-weight: 800">Your phone as the GamePad</div></div>`,
 
     media: (s) => `<div class="h" style="width: 700px; font-size: 76px">${s.heading}</div>
       <div class="points">${s.points.map((p) => `<div ${r(p.line, p.delay || 0, "pt")}><i></i><span>${p.text}</span></div>`).join("")}</div>
-      <div class="tv" style="left: 760px; top: 170px; width: 1060px"><div class="scr"><img class="mtv"><img class="mimg" style="opacity:0"></div></div>
-      ${s.media.phone ? `<div class="phone mphone" style="left: 1320px; top: 600px; width: 540px"><img class="mph"></div>` : ""}`,
+      <div class="tv" data-tilt="-6,1.5,0" style="left: 760px; top: 170px; width: 1060px"><div class="scr"><img class="mtv"><img class="mimg" style="opacity:0"></div></div>
+      ${s.media.phone ? `<div class="mphone" style="position:absolute; left: 1320px; top: 600px; width: 540px"><div class="phone" data-tilt="-14,4,2" style="position:relative"><img class="mph"></div></div>` : ""}`,
 
     consoles: () => `<div class="h">Twenty <em>consoles</em></div>
       <div class="tilesbox">${SYSTEMS.map(([n, c], i) => `<div class="tile" data-tile="${i}" style="left:${120 + (i % 10) * 170}px; top:${320 + Math.floor(i / 10) * 175}px;
@@ -195,7 +286,7 @@
       <div ${r(1, .4, "card")} style="position:absolute; left: 120px; top: 700px; width: 820px; padding: 36px 44px"><div style="font-size: 36px; font-weight: 900">Great on a Pi</div><div style="font-size: 30px; color: var(--dim); margin-top: 10px">NES to N64, GBA, DS, PS1, PSP …</div></div>
       <div ${r(1, 2.8, "card")} style="position:absolute; left: 980px; top: 700px; width: 820px; padding: 36px 44px"><div style="font-size: 36px; font-weight: 900">Want a real PC</div><div style="font-size: 30px; color: var(--dim); margin-top: 10px">GameCube, Wii U, Switch, PS3</div></div>`,
 
-    end: () => `<div class="big logo" style="top: 280px; font-size: 200px">WII-<b>UU</b></div>
+    end: () => `<div class="l3" data-logo="end" style="left: 0; right: 0; top: 250px">${logo3d(200, "center")}</div>
       <div class="big" ${r(0, 1.2)} style="top: 540px"><span class="chip blue" style="font-size: 44px; padding: 22px 48px">wiiuu.stoppedwumm.net</span></div>
       <div class="big" ${r(0, 3)} style="top: 690px; font-family: 'DejaVu Sans Mono', monospace; font-size: 32px; font-weight: 400; color: var(--dim); letter-spacing: 0">curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash</div>
       <div class="big" ${r(1, .2)} style="top: 820px; font-size: 64px">Thanks for watching!</div>`,
@@ -217,11 +308,24 @@
   }
 
   // ---- timeline -----------------------------------------------------------------------------------
+  let PARTS = [], CUES = [];
   function build(voiceLen) {
     const box = $("slides");
-    let t = 0, n = 0;
-    SL = []; VOICE = []; CAPTIONS = [];
+    let t = 0, n = 0, real = 0, theme = null;
+    SL = []; VOICE = []; CAPTIONS = []; PARTS = []; CUES = [];
     S.sections.forEach((s, i) => {
+      if (s.act) {
+        // a part card before the part's first slide: its own theme starts with it
+        const el = document.createElement("div");
+        el.className = "slide";
+        el.innerHTML = LAYOUTS.act(s);
+        box.appendChild(el);
+        SL.push({ s: { layout: "act", chapter: `Part ${s.act.n}`, act: s.act }, el, a: t, z: t + ACT, lineAt: [], reveals: [], tilts: [], isAct: true });
+        PARTS.push([t, s.theme]); CUES.push([t, "act", s.act.n]);
+        theme = s.theme;
+        t += ACT;
+      }
+      if (s.theme !== theme) { PARTS.push([t, s.theme]); theme = s.theme; }
       const el = document.createElement("div");
       el.className = "slide";
       el.innerHTML = LAYOUTS[s.layout](s);
@@ -234,10 +338,61 @@
         at += len + GAP;
       });
       const end = at - GAP + TAIL;
-      SL.push({ s, el, a: start, z: end, lineAt, reveals: [...el.querySelectorAll("[data-line]")] });
+      const sl = { s, el, a: start, z: end, lineAt, reveals: [...el.querySelectorAll("[data-line]")], no: ++real,
+        tilts: [...el.querySelectorAll("[data-tilt]")], chapterAt: s.act ? start - ACT : start };
+      SL.push(sl);
+      // sounds: the page turn, then a soft chime for every point (not two at once)
+      if (i === 0) CUES.push([.3, "spin", 0]);
+      else if (!s.act) CUES.push([start, "slide", i]);
+      if (s.layout === "end") CUES.push([start + .2, "spin", 0]);
+      let last = -1;
+      sl.reveals.map((x) => revealAt(sl, x)).sort((a, b) => a - b).forEach((at) => {
+        if (i > 0 && at - last > .3 && at > start + .5) { CUES.push([at, "reveal", 0]); last = at; }
+      });
+      if (s.layout === "consoles") SYSTEMS.forEach((_, k) => CUES.push([lineAt[0] + .3 + k * .12, "tile", k]));
       t = end;
     });
     DURATION = Math.round(t * FPS) / FPS;
+    CUES.sort((a, b) => a[0] - b[0]);
+  }
+  const revealAt = (sl, x) => (sl.lineAt[Number(x.dataset.line)] ?? sl.lineAt[sl.lineAt.length - 1] ?? sl.a) + Number(x.dataset.delay || 0);
+
+  // the background: soft tiles floating in depth, drifting slowly (seeded, so every render is the same)
+  const SLABS = [];
+  function buildWorld() {
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const cam = $("cam");
+    for (let k = 0; k < 16; k++) {
+      const size = 90 + rnd() * 150, z = -300 - rnd() * 1500;
+      const side = k % 2 ? 1 : -1;
+      const x = side * (700 + rnd() * 900) * (1 - z / 3000), y = (rnd() * 2 - 1) * 700 * (1 - z / 3000);
+      const blue = rnd() < .35;
+      const d = document.createElement("div");
+      d.className = "slab";
+      d.style.width = d.style.height = size + "px";
+      d.innerHTML = stack(7, 3, (i, zz) => `<i style="transform: translateZ(${zz}px); background: ${i === 0
+        ? (blue ? "linear-gradient(150deg, rgba(90,205,255,.55), rgba(0,150,215,.45))" : "linear-gradient(150deg, rgba(255,255,255,.95), rgba(225,231,237,.8))")
+        : (blue ? "rgba(0,120,180,.28)" : "rgba(170,180,192,.35)")}"></i>`);
+      cam.appendChild(d);
+      SLABS.push({ d, x, y, z, size, rx: rnd() * 360, ry: rnd() * 360, wx: (rnd() - .5) * 14, wy: (rnd() - .5) * 18, bob: rnd() * 6.28, op: .25 + .35 * (1 + z / 1800) });
+    }
+  }
+  function drawWorld(t, pos) {
+    $("cam").style.transform = `translateX(${-pos * 150}px) rotateY(${pos * 1.2}deg)`;
+    for (const b of SLABS) {
+      b.d.style.opacity = Math.max(.15, Math.min(.85, b.op));
+      b.d.style.transform = `translate3d(${b.x - b.size / 2}px, ${b.y - b.size / 2 + Math.sin(t * .35 + b.bob) * 26}px, ${b.z}px)`
+        + ` rotateX(${b.rx + t * b.wx}deg) rotateY(${b.ry + t * b.wy}deg)`;
+    }
+  }
+
+  // gentle, never-still 3D tilt for TVs and phones
+  function drawTilts(sl, lt) {
+    sl.tilts.forEach((x, k) => {
+      const [ry, rx, z] = x.dataset.tilt.split(",").map(Number);
+      x.style.transform = `perspective(1800px) translateZ(${z * 20}px) rotateY(${ry + 2.2 * Math.sin(lt * .45 + k)}deg) rotateX(${rx + 1.2 * Math.cos(lt * .37 + k)}deg)`;
+    });
   }
 
   const frameUrl = (dir, i) => `../trailer/build2/${dir}/${String(Math.max(1, i)).padStart(5, "0")}.jpg`;
@@ -250,10 +405,35 @@
   async function drawSlide(sl, t) {
     const lt = t - sl.a, s = sl.s, el = sl.el;
     for (const x of sl.reveals) {
-      const k = Number(x.dataset.line), at = (sl.lineAt[k] ?? sl.lineAt[sl.lineAt.length - 1]) + Number(x.dataset.delay || 0);
-      const v = out3(seg(t, at, at + .6));
-      x.style.opacity = v;
-      x.style.transform = `translateY(${(1 - v) * 40}px)`;
+      const at = revealAt(sl, x);
+      const v = out3(seg(t, at, at + .7)), o = clamp(seg(t, at, at + .35));
+      x.style.opacity = o;
+      // points flip up into place, like cards set down on a table
+      x.style.transform = v >= 1 ? "none" : `perspective(1400px) translateY(${(1 - v) * 34}px) rotateX(${(1 - v) * -62}deg)`;
+    }
+    drawTilts(sl, lt);
+    if (s.layout === "title" || s.layout === "end") {
+      const lg = el.querySelector("[data-logo] .in");
+      const end = s.layout === "end", u = out3(seg(lt, end ? .2 : .1, end ? 1.9 : 1.6));
+      // the logo turns in from the side, then sways as if hanging in the air
+      lg.style.transform = `translateZ(${(1 - u) * -500}px) rotateY(${(1 - u) * (end ? 360 : -75) + 9 * Math.sin(lt * .5)}deg) rotateX(${7 * Math.sin(lt * .4 + 1)}deg)`;
+      el.querySelector("[data-logo]").style.opacity = clamp(seg(lt, end ? .2 : .1, end ? .7 : .6));
+      const gp = el.querySelector("[data-gp] .gp");
+      if (gp) {
+        const g = out3(seg(lt, .3, 2.4));
+        poseGamepad(gp, 12 + 5 * Math.sin(lt * .55) - (1 - g) * 30, -22 + 8 * Math.sin(lt * .42) + (1 - g) * 560, -3 + 2 * Math.sin(lt * .6), (1 - g) * 320 + 12 * Math.sin(lt * 1.1));
+        el.querySelector("[data-gp]").style.opacity = clamp(seg(lt, .3, .8));
+      }
+    } else if (s.layout === "act") {
+      const u = out3(seg(lt, 0, 1.3)), h = out3(seg(lt, .5, 1.2));
+      el.querySelector(".c3").style.transform = `translateY(${(1 - u) * 200 + 10 * Math.sin(lt * 1.3)}px) rotateX(${-18 + (1 - u) * 160 + 6 * Math.sin(lt)}deg) rotateY(${-28 + (1 - u) * 300 + 12 * Math.sin(lt * .8)}deg)`;
+      el.querySelector(".cube").style.opacity = clamp(seg(lt, 0, .3));
+      for (const [sel, d] of [[".kicker", 0], [".name", .12]]) {
+        const v = out3(seg(lt, .5 + d, 1.2 + d)), x = el.querySelector(sel);
+        x.style.opacity = clamp(seg(lt, .5 + d, .8 + d));
+        x.style.transform = `perspective(1200px) translateY(${(1 - v) * 40}px) rotateX(${(1 - v) * -80}deg)`;
+      }
+      el.querySelector(".glow").style.opacity = .6 + .4 * Math.sin(lt * 2);
     }
     if (s.layout === "media") {
       const m = s.media;
@@ -264,7 +444,7 @@
         if (ph) {
           const on = out3(seg(st, PHONE_OFFSET + .3, PHONE_OFFSET + 1));
           ph.style.opacity = on;
-          ph.style.transform = `translateY(${(1 - on) * 80}px)`;
+          ph.style.transform = `translateY(${(1 - on) * 80}px)`;   // (the phone inside tilts in 3D)
           if (on > 0) await load(el.querySelector(".mph"), frameUrl("phone", Math.round((st - PHONE_OFFSET) * FPS) + 1));
         }
         if (m.then) {
@@ -285,9 +465,10 @@
     } else if (s.layout === "consoles") {
       el.querySelectorAll("[data-tile]").forEach((d) => {
         const i = Number(d.dataset.tile), a = sl.lineAt[0] + .3 + i * .12;
-        const v = out3(seg(t, a, a + .5));
+        const v = out3(seg(t, a, a + .6)), wave = clamp(seg(t, a + .6, a + 1.4));
         d.style.opacity = clamp(seg(t, a, a + .2));
-        d.style.transform = `translateY(${(1 - v) * 60}px) scale(${.7 + .3 * v})`;
+        d.style.transform = `perspective(1000px) translateZ(${(1 - v) * -400}px) rotateY(${(1 - v) * -110}deg)`
+          + ` rotateX(${wave * 9 * Math.sin(t * 1.7 - i * .45)}deg) rotateY(${wave * 7 * Math.cos(t * 1.3 - i * .3)}deg)`;
       });
     } else if (s.layout === "install") {
       drawInstall(el.querySelector(".t1"), t - sl.lineAt[0]);
@@ -310,18 +491,21 @@
   async function seek(t) {
     const i = SL.findIndex((x) => t >= x.a && t < x.z), idx = i < 0 ? (t < 0 ? 0 : SL.length - 1) : i;
     const cur = SL[idx];
-    // pages glide sideways like the Wii U menu when a new slide starts
+    // pages turn in 3D: the old one swings back and away, the new one swings in from the side
     const g = idx > 0 ? inOut(seg(t, cur.a, cur.a + SLIDE_MS)) : 1;
     const pos = idx - 1 + g;
     for (let k = 0; k < SL.length; k++) {
-      const vis = Math.abs(k - pos) < 1;
+      const d = k - pos, vis = Math.abs(d) < 1;
       SL[k].el.style.display = vis ? "block" : "none";
-      if (vis) SL[k].el.style.transform = `translateX(${(k - pos) * 1920}px)`;
+      if (vis) SL[k].el.style.transform = Math.abs(d) < 1e-4 ? "none"
+        : `translateX(${d * 2350}px) translateZ(${-Math.sin(Math.abs(d) * Math.PI) * 420 - Math.abs(d) * 200}px) rotateY(${-d * 42}deg)`;
     }
+    drawWorld(t, pos);
     if (idx > 0 && g < 1) await drawSlide(SL[idx - 1], t);
     await drawSlide(cur, t);
-    $("chName").textContent = cur.s.chapter;
-    $("num").innerHTML = `${String(idx + 1).padStart(2, "0")} <span>/ ${SL.length}</span>`;
+    const shown = cur.isAct ? SL[idx + 1] : cur, total = SL.filter((x) => !x.isAct).length;
+    $("chName").textContent = cur.isAct ? `Part ${cur.s.act.n} · ${cur.s.act.title}` : cur.s.chapter;
+    $("num").innerHTML = `${String(shown.no).padStart(2, "0")} <span>/ ${total}</span>`;
     $("progress").style.width = (t / DURATION * 1920) + "px";
     $("fade").style.opacity = Math.max(1 - seg(t, 0, .5), seg(t, DURATION - 1.2, DURATION));
   }
@@ -330,9 +514,11 @@
   window.setup = async (cfg) => {
     S = await (await fetch("talk.json")).json();
     PHONE_OFFSET = cfg.phoneOffset; TV_FIRST = cfg.tvFirst;
+    buildWorld();
     build(cfg.voiceLen);
     window.DURATION = DURATION; window.VOICE = VOICE; window.CAPTIONS = CAPTIONS;
-    window.CHAPTERS = SL.map((x) => [x.a, x.s.chapter]);
+    window.PARTS = PARTS; window.CUES = CUES;
+    window.CHAPTERS = SL.filter((x) => !x.isAct).map((x) => [x.chapterAt, x.s.chapter]);
   };
 </script>
 </body>
