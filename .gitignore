@@ -3,3 +3,4 @@ dist/*/
 trailer/build/
 dist/*.mp4
 trailer/build2/
+dist/*.wav

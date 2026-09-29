@@ -47,7 +47,7 @@ const duration = await page.evaluate(() => window.DURATION);
 const voice = await page.evaluate(() => window.VOICE);
 
 // sound: the music bed ducks under the narration, then everything is levelled for the web
-const audio = path.join(path.dirname(out), "trailer2-audio.wav");
+const audio = path.join(path.dirname(cfgFile), "audio.wav");   // next to config.json, in the build folder
 const inputs = ["-i", music], parts = [], labels = [];
 voice.forEach(([id, start], i) => {
   inputs.push("-i", path.join(voiceDir, id + ".wav"));
