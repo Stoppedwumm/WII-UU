@@ -135,11 +135,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     // boot animation (seconds): logo, then the menu fades in at REVEAL and pops its tiles in
     private static final double BOOT_REVEAL = 2.9, BOOT_END = 3.7;
     private boolean booting;
-    private long bootStart;              // ms, set on the first frame that is actually shown
+    private long bootStart;              // System.nanoTime() of t = 0, set once the window is shown
     private long revealAt;               // ms, tiles pop in one after another from here
     private boolean chimed, revealed;
-    private Shape bootLogo;
-    private String bootLogoKey;
+    private static final double BOOT_DELAY = 0.3;
+    private BufferedImage bootBg, bootLogoImg, bootSheenImg, bootTagImg;
+    private String bootCacheKey;
     private boolean musicEnabled;
     private Thread musicRender;
 
@@ -191,6 +192,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         setOpaque(true);
         Sfx.setEnabled(config.getBool("ui.sounds", true));
         booting = config.getBool("ui.bootAnimation", true);
+        if (booting) Sfx.prepareBoot();
         revealed = !booting;
         MenuAudio.get().setMusicVolume(config.getInt("ui.musicVolume", 45) / 100f);
         setMusicEnabled(config.getBool("ui.music", true));
@@ -263,7 +265,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     /** Background music on the menu; it fades out while a game runs. */
     public void setMusicEnabled(boolean on) {
         musicEnabled = on;
-        if (on && musicRender == null && !MenuAudio.get().hasMusic()) {
+        if (on && musicRender == null && !MenuAudio.get().hasMusic() && !booting) {
             // about a second of synthesis (longer on a Pi), off the Swing thread
             musicRender = new Thread(() -> {
                 MenuAudio.get().setMusic(MenuMusic.render());
@@ -577,13 +579,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     } else hl[i] = goal[i];
                 }
             }
-            long now = System.currentTimeMillis();
+            if (revealAt > 0) {
+                if (System.currentTimeMillis() - revealAt < TILE_IN_DELAY_MS * PER_PAGE + TILE_IN_MS) dirty = true;
+                else revealAt = 0;                   // every tile has arrived
+            }
             for (int i = 0; i < tiles.size(); i++) {
                 Tile tile = tiles.get(i);
-                if (!revealed || (revealAt > 0 && now < revealAt + (i % PER_PAGE) * 45L)) {
-                    dirty = true;                // waits for its turn to pop in
-                    continue;
-                }
                 float goal = (!inDock && i == sel && !modal()) ? 1.06f : 1f;
                 if (Math.abs(tile.scale - goal) > 0.001f) {
                     tile.scale += (goal - tile.scale) * 0.25f;
@@ -617,7 +618,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     // ---- boot animation -----------------------------------------------------------------
 
     private double bootSeconds() {
-        return bootStart == 0 ? 0 : (System.currentTimeMillis() - bootStart) / 1000.0;
+        return bootStart == 0 ? 0 : (System.nanoTime() - bootStart) / 1e9;
     }
 
     /** Advances the start-up sequence; true while it needs frames. */
@@ -625,29 +626,84 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (!booting) return false;
         if (bootStart == 0) {
             if (!isShowing() || getWidth() <= 0) return false;
-            bootStart = System.currentTimeMillis();
+            // start a moment after the window appears (macOS animates into full screen first)
+            bootStart = System.nanoTime() + (long) (BOOT_DELAY * 1e9);
         }
         double t = bootSeconds();
         if (!chimed && t >= 0.75) {
             chimed = true;
             Sfx.boot();
         }
+        if (!warmed && t >= 1.8) warmMenu();
         if (!revealed && t >= BOOT_REVEAL) reveal();
-        if (t >= BOOT_END) booting = false;
+        if (t >= BOOT_END) {
+            booting = false;
+            bootBg = bootLogoImg = bootSheenImg = bootTagImg = null;     // free the caches
+            bootCacheKey = null;
+            setMusicEnabled(musicEnabled);                  // now synthesize the music, off the animation
+        }
         return true;
+    }
+
+    // tiles rise into place and fade in one after another; drawn 1:1, so it stays cheap
+    private static final long TILE_IN_MS = 380, TILE_IN_DELAY_MS = 40;
+
+    /** 0..1: how far tile i has arrived after the boot screen (1 = in place). */
+    private float tileAppear(int i) {
+        if (!revealed) return 0f;
+        if (revealAt == 0) return 1f;
+        long since = System.currentTimeMillis() - revealAt - (i % PER_PAGE) * TILE_IN_DELAY_MS;
+        return (float) easeOut(since / (double) TILE_IN_MS);
+    }
+
+    private boolean warmed;
+
+    /**
+     * While the logo shows, get the menu ready: queue the first page's tile pictures for the
+     * background renderer and build the top bar and dock, so the first menu frames are cheap.
+     */
+    private void warmMenu() {
+        warmed = true;
+        if (getWidth() <= 0) return;
+        Layout L = geom();
+        int first = page() * PER_PAGE;
+        for (int i = first; i < Math.min(tiles.size(), first + PER_PAGE); i++) {
+            sprite(tiles.get(i), L, 1f);
+            if (i == sel) sprite(tiles.get(i), L, SPRITE_SCALE);
+        }
+        gc = getGraphicsConfiguration();
+        // the background, top bar and dock take a few hundred ms to draw the first time: do it on a
+        // worker thread and hand the pictures over, so the spinner keeps turning meanwhile
+        int w = getWidth(), h = getHeight();
+        Thread t = new Thread(() -> {
+            String top = topKeyFor(L), dock = dockKeyFor(L);
+            BufferedImage b = renderBackground(w, h), tb = renderTopBar(L), d = renderDock(L);
+            SwingUtilities.invokeLater(() -> {
+                if (bg == null && getWidth() == w && getHeight() == h) bg = b;
+                if (topKey == null && top.equals(topKeyFor(geom()))) {
+                    topCache = tb;
+                    topKey = top;
+                }
+                if (dockKey == null && dock.equals(dockKeyFor(geom()))) {
+                    dockCache = d;
+                    dockKey = dock;
+                }
+            });
+        }, "menu-warmup");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void reveal() {
         revealed = true;
         revealAt = System.currentTimeMillis();
-        for (Tile tile : tiles) tile.scale = 0.72f;         // they grow back one by one
         updateMusic();
     }
 
     /** Any key, click or GamePad button skips ahead to the menu. */
     private boolean skipBoot() {
         if (!booting || revealed || bootStart == 0) return false;     // not on screen yet
-        bootStart -= (long) ((BOOT_REVEAL - bootSeconds()) * 1000);
+        bootStart -= (long) ((BOOT_REVEAL - bootSeconds()) * 1e9);
         chimed = true;                                      // skipping means no chime
         reveal();
         repaint();
@@ -664,6 +720,59 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     /**
+     * Everything the boot screen draws is rendered once into images at the window's size, so each
+     * frame only blits a few pictures (text outlines and gradients are far too slow to redo 60
+     * times a second, especially on a Retina screen).
+     */
+    private void prepareBoot(Layout L) {
+        String key = (int) L.w + "x" + (int) L.h;
+        if (key.equals(bootCacheKey)) return;
+        int w = (int) L.w + 1, h = (int) L.h + 1;
+        GraphicsConfiguration gc = this.gc;
+        bootBg = gc != null ? gc.createCompatibleImage(w, h, Transparency.OPAQUE) : new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        Graphics2D b = bootBg.createGraphics();
+        b.setPaint(new GradientPaint(0, 0, Color.WHITE, 0, h, new Color(0xEEF2F5)));
+        b.fillRect(0, 0, w, h);
+        b.dispose();
+
+        // the logo: "WII-" in text grey, "UU" in the accent blue; plus a white copy for the sheen
+        float size = L.h * 0.12f;
+        Font f = font(Font.BOLD, size);
+        java.awt.font.FontRenderContext frc = new java.awt.font.FontRenderContext(null, true, true);
+        java.awt.font.GlyphVector a = f.createGlyphVector(frc, "WII-"), u = f.createGlyphVector(frc, "UU");
+        float splitX = (float) a.getLogicalBounds().getWidth();
+        Shape left = a.getOutline(), right = u.getOutline(splitX, 0);
+        Rectangle2D bb = left.getBounds2D().createUnion(right.getBounds2D());
+        int pad = (int) (size * 0.08f);
+        int lw = (int) Math.ceil(bb.getWidth()) + pad * 2, lh = (int) Math.ceil(bb.getHeight()) + pad * 2;
+        bootLogoImg = layer(lw, lh);
+        bootSheenImg = layer(lw, lh);
+        for (BufferedImage img : new BufferedImage[]{bootLogoImg, bootSheenImg}) {
+            Graphics2D lg = img.createGraphics();
+            quality(lg);
+            lg.translate(pad - bb.getX(), pad - bb.getY());
+            boolean sheen = img == bootSheenImg;
+            lg.setColor(sheen ? Color.WHITE : TEXT);
+            lg.fill(left);
+            lg.setColor(sheen ? Color.WHITE : ACCENT);
+            lg.fill(right);
+            lg.dispose();
+        }
+
+        Font tf = font(Font.PLAIN, L.h * 0.028f);
+        String line = "Your games, the Wii U way";
+        FontMetrics fm = getFontMetrics(tf);
+        bootTagImg = layer(fm.stringWidth(line) + 4, fm.getHeight() + 4);
+        Graphics2D tg = bootTagImg.createGraphics();
+        quality(tg);
+        tg.setFont(tf);
+        tg.setColor(TEXT_DIM);
+        tg.drawString(line, 2, 2 + fm.getAscent());
+        tg.dispose();
+        bootCacheKey = key;
+    }
+
+    /**
      * White start screen: a soft ring of light spreads, the WII-UU logo rises into place and a sheen
      * crosses it, a tagline and a spinner appear, then everything fades into the menu.
      */
@@ -671,11 +780,21 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         double t = bootSeconds();
         float fade = (float) (1 - easeOut((t - BOOT_REVEAL) / (BOOT_END - BOOT_REVEAL)));
         if (fade <= 0) return;
+        prepareBoot(L);
         Graphics2D g = (Graphics2D) g0.create();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fade));
         float w = L.w, h = L.h, cx = w / 2, cy = h * 0.46f;
-        g.setPaint(new GradientPaint(0, 0, Color.WHITE, 0, h, new Color(0xEEF2F5)));
-        g.fillRect(0, 0, (int) w + 1, (int) h + 1);
+        if (fade >= 1f) {
+            g.drawImage(bootBg, 0, 0, null);
+        } else {
+            // fading out: a flat fill blends far faster than a full-screen picture
+            g.setComposite(AlphaComposite.Src);
+            g.setColor(new Color(0xF6, 0xF8, 0xFA, Math.round(fade * 255)));
+            g.setComposite(AlphaComposite.SrcOver);
+            g.fillRect(0, 0, (int) w + 1, (int) h + 1);
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fade));
+        }
 
         // a ring of light spreading from the centre
         double ring = clamp01((t - 0.25) / 1.6);
@@ -691,71 +810,52 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         // the logo rises and settles; while fading out it zooms gently towards the viewer
         double in = easeOut((t - 0.35) / 0.7);
         if (in > 0) {
-            float size = h * 0.12f;
-            String key = (int) size + "";
-            if (!key.equals(bootLogoKey)) {
-                Font f = font(Font.BOLD, size);
-                java.awt.font.FontRenderContext frc = g.getFontRenderContext();
-                java.awt.font.GlyphVector a = f.createGlyphVector(frc, "WII-"), b = f.createGlyphVector(frc, "UU");
-                Path2D both = new Path2D.Float(a.getOutline());
-                both.append(b.getOutline((float) a.getLogicalBounds().getWidth(), 0), false);
-                bootLogo = both;
-                bootLogoKey = key;
-            }
-            Rectangle2D bb = bootLogo.getBounds2D();
-            double zoom = (0.92 + 0.08 * in) * (1 + 0.06 * (1 - fade));
-            Graphics2D lg = (Graphics2D) g.create();
-            lg.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) (fade * in)));
-            lg.translate(cx, cy + (1 - in) * h * 0.03);
-            lg.scale(zoom, zoom);
-            lg.translate(-bb.getCenterX(), -bb.getCenterY());
-            Font f = font(Font.BOLD, size);
-            float splitX = (float) f.createGlyphVector(lg.getFontRenderContext(), "WII-").getLogicalBounds().getWidth();
-            // "WII-" in text grey, "UU" in the accent blue
-            Shape old = lg.getClip();
-            lg.clip(new Rectangle2D.Double(bb.getX() - 10, bb.getY() - 10, splitX - bb.getX() + 10, bb.getHeight() + 20));
-            lg.setColor(TEXT);
-            lg.fill(bootLogo);
-            lg.setClip(old);
-            lg.clip(new Rectangle2D.Double(splitX, bb.getY() - 10, bb.getMaxX() - splitX + 10, bb.getHeight() + 20));
-            lg.setColor(ACCENT);
-            lg.fill(bootLogo);
-            lg.setClip(old);
-            // a sheen sweeps across the letters
+            int lw = bootLogoImg.getWidth(), lh = bootLogoImg.getHeight();
+            double zoom = (0.94 + 0.06 * in) * (1 + 0.06 * (1 - fade));
+            java.awt.geom.AffineTransform at = new java.awt.geom.AffineTransform();
+            at.translate(cx, cy + (1 - in) * h * 0.03);
+            at.scale(zoom, zoom);
+            at.translate(-lw / 2.0, -lh / 2.0);
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) (fade * in)));
+            g.drawImage(bootLogoImg, at, null);
+            // a sheen sweeps across the letters: the white copy, shown through a few soft strips
             double sweep = (t - 1.05) / 0.8;
             if (sweep > 0 && sweep < 1) {
-                float sx = (float) (bb.getX() - bb.getWidth() * 0.3 + sweep * bb.getWidth() * 1.6);
-                float band = (float) bb.getWidth() * 0.18f;
-                lg.clip(bootLogo);
-                lg.setPaint(new java.awt.LinearGradientPaint(sx - band, 0, sx + band, (float) bb.getHeight() * 0.4f,
-                        new float[]{0f, 0.5f, 1f},
-                        new Color[]{new Color(255, 255, 255, 0), new Color(255, 255, 255, 190), new Color(255, 255, 255, 0)}));
-                lg.fill(bb);
+                double centre = -lw * 0.2 + sweep * lw * 1.4, band = lw * 0.16;
+                Graphics2D sg = (Graphics2D) g.create();
+                sg.transform(at);
+                Shape base = sg.getClip();
+                int strips = 7;
+                for (int k = 0; k < strips; k++) {
+                    double x0 = centre - band / 2 + k * band / strips;
+                    double edge = Math.abs(k - (strips - 1) / 2.0) / ((strips - 1) / 2.0);  // 0 middle .. 1 edge
+                    sg.setClip(base);
+                    sg.clip(new Rectangle2D.Double(x0, 0, band / strips + 0.5, lh));
+                    sg.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) (fade * 0.7 * (1 - edge * edge))));
+                    sg.drawImage(bootSheenImg, 0, 0, null);
+                }
+                sg.dispose();
             }
-            lg.dispose();
         }
 
         // tagline
         double tag = clamp01((t - 1.45) / 0.5);
         if (tag > 0) {
             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) (fade * tag)));
-            g.setFont(font(Font.PLAIN, h * 0.028f));
-            FontMetrics fm = g.getFontMetrics();
-            String line = "Your games, the Wii U way";
-            g.setColor(TEXT_DIM);
-            g.drawString(line, cx - fm.stringWidth(line) / 2f, (float) (cy + h * 0.1f + (1 - tag) * h * 0.01f));
+            g.drawImage(bootTagImg, Math.round(cx - bootTagImg.getWidth() / 2f),
+                    Math.round((float) (cy + h * 0.1f - bootTagImg.getHeight() * 0.75f + (1 - tag) * h * 0.01f)), null);
         }
 
         // spinner, bottom right: twelve dots, a bright one chasing round
         double spin = clamp01((t - 1.7) / 0.4);
         if (spin > 0) {
             float r = h * 0.028f, sx = w - h * 0.09f, sy = h - h * 0.09f, dot = h * 0.0065f;
+            g.setColor(ACCENT);
             for (int i = 0; i < 12; i++) {
                 double ang = i * Math.PI / 6 - Math.PI / 2;
                 double lead = ((t * 12) % 12 - i + 12) % 12;          // 0 = brightest
                 float a = (float) (fade * spin * (0.18 + 0.82 * Math.max(0, 1 - lead / 6)));
                 g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, a));
-                g.setColor(ACCENT);
                 g.fill(new Ellipse2D.Double(sx + Math.cos(ang) * r - dot, sy + Math.sin(ang) * r - dot, dot * 2, dot * 2));
             }
         }
@@ -815,6 +915,13 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
         Layout L = geom();
         gc = getGraphicsConfiguration();
+        if (booting && !revealed) {
+            // the boot screen covers the menu completely: don't spend time drawing the menu too
+            paintBoot(g, L);
+            g.dispose();
+            Toolkit.getDefaultToolkit().sync();
+            return;
+        }
         paintBackground(g);
         paintTopBarCached(g, L);
         if (tiles.isEmpty()) paintEmpty(g, L);
@@ -846,38 +953,62 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 : new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
     }
 
-    private void paintTopBarCached(Graphics2D g, Layout L) {
-        String key = (int) L.w + "x" + (int) L.h + "|" + (screen == Screen.GAMES && openSystem != null ? openSystem.id() : "")
+    private String topKeyFor(Layout L) {
+        return (int) L.w + "x" + (int) L.h + "|" + (screen == Screen.GAMES && openSystem != null ? openSystem.id() : "")
                 + "|" + pads + "|" + serverOn + "|" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"));
+    }
+
+    private String dockKeyFor(Layout L) {
+        return (int) L.w + "x" + (int) L.h + "|" + screen + "|" + inDock + "|" + dockSel;
+    }
+
+    private BufferedImage renderTopBar(Layout L) {
+        BufferedImage img = layer((int) L.w, (int) (L.topH * 1.2f));
+        Graphics2D c = img.createGraphics();
+        quality(c);
+        paintTopBar(c, L);
+        c.dispose();
+        return img;
+    }
+
+    private BufferedImage renderDock(Layout L) {
+        int top = (int) L.dockY - 8;
+        BufferedImage img = layer((int) L.w, (int) L.h - top);
+        Graphics2D c = img.createGraphics();
+        quality(c);
+        c.translate(0, -top);
+        paintDock(c, L);
+        c.dispose();
+        return img;
+    }
+
+    private void paintTopBarCached(Graphics2D g, Layout L) {
+        String key = topKeyFor(L);
         if (!key.equals(topKey)) {
-            topCache = layer((int) L.w, (int) (L.topH * 1.2f));
-            Graphics2D c = topCache.createGraphics();
-            quality(c);
-            paintTopBar(c, L);
-            c.dispose();
+            topCache = renderTopBar(L);
             topKey = key;
         }
         g.drawImage(topCache, 0, 0, null);
     }
 
     private void paintDockCached(Graphics2D g, Layout L) {
-        int top = (int) L.dockY - 8;
-        String key = (int) L.w + "x" + (int) L.h + "|" + screen + "|" + inDock + "|" + dockSel;
+        String key = dockKeyFor(L);
         if (!key.equals(dockKey)) {
-            dockCache = layer((int) L.w, (int) L.h - top);
-            Graphics2D c = dockCache.createGraphics();
-            quality(c);
-            c.translate(0, -top);
-            paintDock(c, L);
-            c.dispose();
+            dockCache = renderDock(L);
             dockKey = key;
         }
-        g.drawImage(dockCache, 0, top, null);
+        g.drawImage(dockCache, 0, (int) L.dockY - 8, null);
     }
+
     private void paintBackground(Graphics2D g) {
         int w = getWidth(), h = getHeight();
-        if (bg == null || bg.getWidth() != w || bg.getHeight() != h) {
-            bg = new BufferedImage(Math.max(1, w), Math.max(1, h), BufferedImage.TYPE_INT_RGB);
+        if (bg == null || bg.getWidth() != w || bg.getHeight() != h) bg = renderBackground(w, h);
+        g.drawImage(bg, 0, 0, null);
+    }
+
+    private static BufferedImage renderBackground(int w, int h) {
+        {
+            BufferedImage bg = new BufferedImage(Math.max(1, w), Math.max(1, h), BufferedImage.TYPE_INT_RGB);
             Graphics2D b = bg.createGraphics();
             b.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             b.setPaint(new GradientPaint(0, 0, new Color(0xF7F8FA), 0, h, new Color(0xE2E6EA)));
@@ -893,8 +1024,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     new float[]{0, 1}, new Color[]{new Color(0, 168, 232, 26), new Color(0, 168, 232, 0)}));
             b.fillRect(0, 0, w, h);
             b.dispose();
+            return bg;
         }
-        g.drawImage(bg, 0, 0, null);
     }
 
     private void paintTopBar(Graphics2D g, Layout L) {
@@ -1007,6 +1138,20 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         Tile t = tiles.get(i);
         Rectangle2D base = tileRect(L, i, scrollPage);
         if (base.getMaxX() < -40 || base.getX() > L.w + 40) return;
+        float appear = tileAppear(i);
+        if (appear <= 0f) return;
+        if (appear < 1f) {
+            Graphics2D ag = (Graphics2D) g.create();
+            ag.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, appear));
+            ag.translate(0, Math.round((1 - appear) * L.h * 0.04f));
+            paintTileNow(ag, L, i, t, base);
+            ag.dispose();
+            return;
+        }
+        paintTileNow(g, L, i, t, base);
+    }
+
+    private void paintTileNow(Graphics2D g, Layout L, int i, Tile t, Rectangle2D base) {
         boolean zoomed = Math.abs(t.scale - 1f) >= 0.002f;
         BufferedImage rest = sprite(t, L, 1f);
         BufferedImage sprite = zoomed ? sprite(t, L, SPRITE_SCALE) : null;

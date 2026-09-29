@@ -31,11 +31,29 @@ final class Sfx {
         play(new double[]{1047, 1319, 1568}, 0.09, 0.12);
     }
 
-    /** The start-up chime: a rising Fmaj9 of soft bells over a warm pad (about 3 s). */
-    static void boot() {
-        if (enabled) MenuAudio.get().play(bootPcm(), 1f);
+    private static volatile short[] bootCache;
+
+    /** Synthesizes the chime in the background ahead of time, so playing it never stalls a frame. */
+    static void prepareBoot() {
+        if (bootCache != null) return;
+        Thread t = new Thread(() -> bootCache = bootPcm(), "boot-chime");
+        t.setDaemon(true);
+        t.start();
     }
 
+    static void boot() {
+        if (!enabled) return;
+        short[] pcm = bootCache;
+        if (pcm != null) {
+            MenuAudio.get().play(pcm, 1f);
+            return;
+        }
+        Thread t = new Thread(() -> MenuAudio.get().play(bootCache = bootPcm(), 1f), "boot-chime");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** The start-up chime: a rising Fmaj9 of soft bells over a warm pad (about 3 s). */
     static short[] bootPcm() {
         double[] bells = {698.46, 880.00, 1046.50, 1318.51, 1567.98};       // F5 A5 C6 E6 G6
         double[] pad = {174.61, 261.63, 329.63, 440.00};                     // F3 C4 E4 A4
