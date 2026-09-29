@@ -1,0 +1,96 @@
+{
+  "title": "WII-UU: Turn any PC into a Wii U–style console (and your phone into the GamePad)",
+  "sections": [
+    {
+      "chapter": "Intro",
+      "visuals": [["t1", 0, 4.8], ["t1", 4.8, 9.6]],
+      "lines": [
+        {"say": "This is Wii U U. It turns any computer, even a Raspberry Pi, into a console that looks and feels like the Wii U menu.",
+         "text": "This is WII-UU. It turns any computer, even a Raspberry Pi, into a console that looks and feels like the Wii U menu."},
+        {"say": "And your phone becomes the GamePad.", "text": "And your phone becomes the GamePad."}
+      ]
+    },
+    {
+      "chapter": "What it is",
+      "visuals": [["t1", 9.6, 16.8], ["t1", 16.8, 24.0]],
+      "lines": [
+        {"say": "Wii U U is a launcher. You drop your own games into a folder for each system, and they show up as tiles. Twenty consoles, from the NES to the Wii U and Switch, and from the PlayStation 1 to the PlayStation 4.",
+         "text": "WII-UU is a launcher. You drop your own games into a folder for each system, and they show up as tiles. Twenty consoles, from the NES to the Wii U and Switch, and from the PlayStation 1 to the PlayStation 4."},
+        {"say": "It starts the right emulator for every game. And it has a dark mode, a start-up animation, and its own relaxed menu music.",
+         "text": "It starts the right emulator for every game. And it has a dark mode, a start-up animation, and its own relaxed menu music."}
+      ]
+    },
+    {
+      "chapter": "Installing",
+      "visuals": [["slide", "install", 0, 30]],
+      "lines": [
+        {"say": "Installing takes one line in a terminal, on Linux, macOS, or a Raspberry Pi. Windows gets a simple installer.",
+         "text": "Installing takes one line in a terminal, on Linux, macOS, or a Raspberry Pi. Windows gets a simple installer."},
+        {"say": "On Linux, it can even download and set up the emulators for you.",
+         "text": "On Linux, it can even download and set up the emulators for you."}
+      ]
+    },
+    {
+      "chapter": "Pair your phone",
+      "visuals": [["demo", 4.6, 14.0]],
+      "lines": [
+        {"say": "To connect, press plus on the TV and scan the code with your phone. There's no app to install. The GamePad is a web page, and phones stay paired.",
+         "text": "To connect, press + on the TV and scan the code with your phone. There's no app to install: the GamePad is a web page, and phones stay paired."},
+        {"say": "Now the D-pad and the buttons on your phone move around the menu on the TV.",
+         "text": "Now the D-pad and the buttons on your phone move around the menu on the TV."}
+      ]
+    },
+    {
+      "chapter": "Play",
+      "visuals": [["demo", 14.6, 23.2]],
+      "lines": [
+        {"say": "Tap a game on your phone, and it starts on the TV. Press HOME, and close it, just like on a Wii U.",
+         "text": "Tap a game on your phone, and it starts on the TV. Press HOME and close it, just like on a Wii U."}
+      ]
+    },
+    {
+      "chapter": "A second screen",
+      "visuals": [["demo", 23.2, 31.0], ["t1", 31.2, 38.4], ["t1", 38.4, 43.2]],
+      "lines": [
+        {"say": "The phone's screen isn't just a remote. It can mirror the TV, live.",
+         "text": "The phone's screen isn't just a remote. It can mirror the TV, live."},
+        {"say": "With Wii U games, the GamePad view moves to your phone. For DS and 3DS games, you get the touch screen. And gyro and the PC's sound work too.",
+         "text": "With Wii U games, the GamePad view moves to your phone. For DS and 3DS games, you get the touch screen. And gyro and the PC's sound work too."}
+      ]
+    },
+    {
+      "chapter": "Controllers that just work",
+      "visuals": [["slide", "controllers", 0, 30]],
+      "lines": [
+        {"say": "On Linux, every phone becomes a real virtual controller that emulators detect on their own.",
+         "text": "On Linux, every phone becomes a real virtual controller that emulators detect on their own."},
+        {"say": "On Mac and Windows, Wii U U types keys instead. And for Dolphin, PCSX2 and DuckStation, it writes a temporary controller mapping while a game runs, then puts your own settings back. So the buttons just work.",
+         "text": "On Mac and Windows, WII-UU types keys instead. And for Dolphin, PCSX2 and DuckStation, it writes a temporary controller mapping while a game runs, then puts your own settings back. So the buttons just work."}
+      ]
+    },
+    {
+      "chapter": "RetroArch mode",
+      "visuals": [["t1", 43.2, 48.0]],
+      "lines": [
+        {"say": "Prefer RetroArch? Turn on RetroArch mode, and every system with a core runs there. Missing cores download by themselves.",
+         "text": "Prefer RetroArch? Turn on RetroArch mode, and every system with a core runs there. Missing cores download by themselves."}
+      ]
+    },
+    {
+      "chapter": "Console Mode",
+      "visuals": [["t1", 48.0, 55.2]],
+      "lines": [
+        {"say": "And with Console Mode, a PC or a Raspberry Pi boots straight into Wii U U, like a Steam Deck. Desktop mode is always one button away.",
+         "text": "And with Console Mode, a PC or a Raspberry Pi boots straight into WII-UU, like a Steam Deck. Desktop Mode is always one button away."}
+      ]
+    },
+    {
+      "chapter": "Get it",
+      "visuals": [["t1", 60.0, 67.2]],
+      "lines": [
+        {"say": "Wii U U is free. The link is in the description. Have fun!",
+         "text": "WII-UU is free. The link is in the description. Have fun!"}
+      ]
+    }
+  ]
+}

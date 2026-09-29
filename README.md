@@ -441,6 +441,14 @@ and menu music. `trailer/render.sh` takes fresh screenshots, renders the soundtr
   which sherpa-onnx runs offline. The script downloads the model the first time.
 * `trailer2.html` puts the demo, the phone and subtitles together with scenes from the first trailer.
 
+`trailer/render-youtube.sh` makes the YouTube video: a narrated overview with chapters, about 2½
+minutes (`dist/WII-UU-youtube.mp4`). The script is in `youtube.json`, and each section is as long
+as its narration. It also writes captions (`.srt`), the chapter timestamps, a thumbnail
+(`thumbnail.html`) and a description ready to paste.
+* The default voice is the offline Kokoro one.
+* `VOICE_ENGINE=elevenlabs ELEVENLABS=<key> ./trailer/render-youtube.sh` uses ElevenLabs instead.
+  `VOICE_ID` picks the voice.
+
 ## Build from source
 
 ```sh

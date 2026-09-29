@@ -32,7 +32,8 @@ const port = server.address().port;
 const browser = await playwright.chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 page.on("pageerror", (e) => console.error("page error:", e.message));
-await page.goto(`http://127.0.0.1:${port}/trailer/trailer2.html`);
+const PAGE = process.env.PAGE || "trailer2.html";           // or youtube.html
+await page.goto(`http://127.0.0.1:${port}/trailer/${PAGE}`);
 await page.waitForFunction(() => document.getElementById("t1").contentWindow?.seek);
 await page.evaluate(() => document.fonts.ready);
 await page.evaluate(() => document.getElementById("t1").contentWindow.document.fonts.ready);
@@ -46,6 +47,18 @@ await page.evaluate(() => {
 const duration = await page.evaluate(() => window.DURATION);
 const voice = await page.evaluate(() => window.VOICE);
 
+// YouTube extras: captions (.srt) and chapter timestamps for the description
+const extras = await page.evaluate(() => ({ captions: window.CAPTIONS || null, chapters: window.CHAPTERS || null }));
+const stamp = (t, sep) => { const ms = Math.round(t * 1000), h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, sec = Math.floor(ms / 1000) % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}${sep}${String(ms % 1000).padStart(3, "0")}`; };
+if (extras.captions) {
+  fs.writeFileSync(out.replace(/\.mp4$/, ".srt"), extras.captions.map(([a, z, text], i) => `${i + 1}\n${stamp(a, ",")} --> ${stamp(z, ",")}\n${text}\n`).join("\n"));
+}
+if (extras.chapters) {
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  fs.writeFileSync(out.replace(/\.mp4$/, "-chapters.txt"), extras.chapters.map(([t, name]) => `${mmss(t)} ${name}`).join("\n") + "\n");
+}
+
 // sound: the music bed ducks under the narration, then everything is levelled for the web
 const audio = path.join(path.dirname(cfgFile), "audio.wav");   // next to config.json, in the build folder
 const inputs = ["-i", music], parts = [], labels = [];
@@ -58,7 +71,7 @@ voice.forEach(([id, start], i) => {
 const filter = parts.join(";") + `;${labels.join("")}amix=inputs=${labels.length}:normalize=0:duration=longest,atrim=0:${duration}[vo];`
   + `[vo]asplit[vo1][vo2];[0]aformat=sample_rates=48000:channel_layouts=stereo,volume=0.55[m];`
   + `[m][vo1]sidechaincompress=threshold=0.02:ratio=8:attack=30:release=500[duck];`
-  + `[duck][vo2]amix=inputs=2:normalize=0,atrim=0:${duration},loudnorm=I=-16:TP=-1.5:LRA=11[a]`;
+  + `[duck][vo2]amix=inputs=2:normalize=0,atrim=0:${duration},afade=t=out:st=${Math.max(0, duration - 3)}:d=3,loudnorm=I=-16:TP=-1.5:LRA=11[a]`;
 await new Promise((ok, bad) => spawn("ffmpeg", ["-y", "-loglevel", "error", ...inputs, "-filter_complex", filter, "-map", "[a]", "-ar", "48000", audio],
   { stdio: "inherit" }).on("close", (c) => (c === 0 ? ok() : bad(new Error("audio mix failed")))));
 

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WII-UU YouTube video</title>
+<!--
+  The WII-UU YouTube video: a narrated overview with chapters (script: youtube.json).
+  Each section's length follows its narration (lengths come from the voice files), so the video
+  can be re-voiced with any voice. Visuals: the live demo recorded by demo.mjs (build2/), scenes of
+  trailer.html driven in an iframe, and two slides drawn here. Rendered by render-youtube.sh.
+-->
+<style>
+  @font-face { font-family: Inter; font-weight: 400; src: url(fonts/inter-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 600; src: url(fonts/inter-latin-600-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 800; src: url(fonts/inter-latin-800-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 900; src: url(fonts/inter-latin-900-normal.woff2) format("woff2"); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0a0b0d; font-family: Inter, sans-serif; color: #f4f6f8; }
+  .full { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; }
+  .glow { position: absolute; inset: -20%; background: radial-gradient(closest-side at 50% 60%, rgba(0, 168, 232, .2), transparent 70%); }
+  .accent { background: linear-gradient(100deg, #00c6ff, #0090e0 60%, #33d1ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .abs { position: absolute; }
+  .h2 { font-weight: 800; font-size: 80px; letter-spacing: -0.03em; }
+  .sub { font-weight: 600; font-size: 34px; color: #8c95a0; }
+  /* phone inset during the demo */
+  #phone { position: absolute; left: 1060px; top: 610px; width: 820px; padding: 18px; border-radius: 64px;
+    background: linear-gradient(160deg, #2a2e34, #111316); box-shadow: 0 40px 100px rgba(0, 0, 0, .6), 0 0 0 2px rgba(255, 255, 255, .08); }
+  #phone img { display: block; width: 100%; height: auto; border-radius: 46px; }
+  /* chapter label */
+  #chapter { position: absolute; left: 56px; top: 48px; padding: 14px 28px 14px 22px; border-radius: 999px; background: rgba(10, 12, 14, .78);
+    border: 1px solid rgba(255, 255, 255, .12); font-weight: 800; font-size: 30px; color: #fff; display: flex; gap: 16px; align-items: center; }
+  #chapter b { color: #33c3f5; font-weight: 900; }
+  /* install slide */
+  .term { position: absolute; left: 260px; top: 250px; width: 1400px; border-radius: 22px; overflow: hidden; background: #111418;
+    box-shadow: 0 40px 120px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .08); }
+  .term .bar { height: 54px; background: #1c2026; display: flex; align-items: center; gap: 12px; padding: 0 22px; }
+  .term .bar i { width: 16px; height: 16px; border-radius: 50%; display: block; }
+  .term pre { margin: 0; padding: 30px 38px 36px; font-family: "DejaVu Sans Mono", monospace; font-size: 27px; line-height: 1.6; color: #d9dee4;
+    height: 560px; white-space: pre-wrap; }
+  .term .c { color: #33c3f5; } .term .g { color: #3ddc84; } .term .p { color: #8c95a0; }
+  .plat { position: absolute; top: 880px; left: 0; right: 0; text-align: center; }
+  .chip { display: inline-block; padding: 14px 28px; margin: 0 10px; border-radius: 999px; background: rgba(255, 255, 255, .08);
+    border: 1px solid rgba(255, 255, 255, .12); font-weight: 600; font-size: 28px; }
+  /* controllers slide */
+  .col { position: absolute; top: 300px; width: 520px; height: 520px; border-radius: 28px; padding: 40px; background: rgba(255, 255, 255, .05);
+    border: 1px solid rgba(255, 255, 255, .1); }
+  .col h3 { font-size: 40px; font-weight: 800; margin-bottom: 12px; }
+  .col p { font-size: 28px; color: #aab2bb; line-height: 1.4; }
+  .col .big { font-size: 64px; margin-bottom: 20px; }
+  .map { margin-top: 22px; font-family: "DejaVu Sans Mono", monospace; font-size: 26px; line-height: 1.7; }
+  .map span { display: block; }
+  .ok { color: #3ddc84; font-weight: 800; font-family: Inter, sans-serif; font-size: 28px; margin-top: 14px; }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <iframe id="t1" class="full" src="trailer.html?render=1"></iframe>
+  <img id="tv" class="full" alt="" style="object-fit: cover">
+  <div id="phone"><img id="phoneImg" alt=""></div>
+
+  <div id="install" class="full" style="display:none"><div class="glow"></div>
+    <div class="abs h2" style="top: 90px; left: 0; right: 0; text-align: center">One line to <span class="accent">install.</span></div>
+    <div class="term"><div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><pre id="termText"></pre></div>
+    <div class="plat" id="plat"><span class="chip">Linux</span><span class="chip">macOS</span><span class="chip">Raspberry Pi</span><span class="chip">Windows: install.bat</span></div>
+  </div>
+
+  <div id="controllers" class="full" style="display:none"><div class="glow"></div>
+    <div class="abs h2" style="top: 90px; left: 0; right: 0; text-align: center">Controllers that <span class="accent">just work.</span></div>
+    <div class="col" id="k1" style="left: 130px"><div class="big">🎮</div><h3>Linux</h3><p>Every phone is a virtual Xbox&nbsp;360 controller. Emulators find it on their own.</p></div>
+    <div class="col" id="k2" style="left: 700px"><div class="big">⌨️</div><h3>Mac &amp; Windows</h3><p>WII-UU types each emulator's own default keys.</p></div>
+    <div class="col" id="k3" style="left: 1270px"><div class="big">🔁</div><h3>Dolphin · PCSX2 · DuckStation</h3>
+      <div class="map" id="map"><span>Cross&nbsp;&nbsp;→ Z</span><span>Circle → X</span><span>Start&nbsp;&nbsp;→ Return</span></div>
+      <div class="ok" id="okLine">✓ Your settings come back afterwards</div></div>
+  </div>
+
+  <div id="chapter"><b id="chapNum">01</b><span id="chapName"></span></div>
+  <div id="fade"></div>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const seg = (t, a, b) => clamp((t - a) / (b - a));
+  const out3 = (v) => 1 - Math.pow(1 - clamp(v), 3);
+  const FPS = 30;
+  const LEAD = 0.7, GAP = 0.45, TAIL = 0.9;           // seconds before the first line, between lines, after the last
+
+  let SCRIPT = null, TL = [], DURATION = 0, VOICE = [], CAPTIONS = [];
+  let PHONE_OFFSET = 5.0, TV_FIRST = 4.0;
+
+  /** Lays the sections out on the timeline from the narration lengths. */
+  function build(voiceLen) {
+    let t = 0, n = 0;
+    TL = []; VOICE = []; CAPTIONS = [];
+    SCRIPT.sections.forEach((s, si) => {
+      const start = t;
+      let at = start + LEAD;
+      s.lines.forEach((l) => {
+        const id = "y" + (++n), len = voiceLen[id] || 3;
+        VOICE.push([id, at]);
+        CAPTIONS.push([at, at + len, l.text]);
+        at += len + GAP;
+      });
+      const end = at - GAP + TAIL;
+      // visuals play one after another; the last one holds until the section ends
+      const vis = [];
+      let vt = start;
+      s.visuals.forEach((v, vi) => {
+        const natural = v[0] === "slide" ? 999 : v[2] - v[1];
+        const last = vi === s.visuals.length - 1;
+        const vEnd = last ? end : Math.min(end, vt + natural);
+        if (vEnd > vt) vis.push({ src: v[0], from: v[1], to: v[2], a: vt, z: vEnd, slide: v[0] === "slide" ? v[1] : null });
+        vt = vEnd;
+      });
+      TL.push({ index: si + 1, chapter: s.chapter, a: start, z: end, vis });
+      t = end;
+    });
+    DURATION = Math.round(t * FPS) / FPS;
+  }
+
+  const frameUrl = (dir, i) => `build2/${dir}/${String(Math.max(1, i)).padStart(5, "0")}.jpg`;
+  async function load(img, src) {
+    if (img.getAttribute("src") === src) return;
+    img.src = src;
+    try { await img.decode(); } catch (e) { /* past the last frame: keep the previous one */ }
+  }
+
+  const INSTALL = [
+    ["$ ", "p"], ["curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash\n", ""],
+    ["==> ", "c"], ["Checking Java\n", ""], ["  ✓ ", "g"], ["Java 21\n", ""],
+    ["==> ", "c"], ["Installing to ~/.local/share/wiiuu\n", ""], ["  ✓ ", "g"], ["Launcher: ~/.local/bin/wiiuu\n", ""],
+    ["==> ", "c"], ["Creating ROM folders in ~/WiiUU/roms\n", ""],
+    ["  ✓ ", "g"], ["Drop games into ~/WiiUU/roms/<system> (nes, snes, n64, gc, wii, wiiu, switch, ps1 ... ps4)\n", ""],
+    ["  ✓ ", "g"], ["Menu entry: WII-UU\n\n", ""], ["Done! ", "g"], ["Start WII-UU with ", ""], ["wiiuu", "c"], [" (or from your app menu).\n", ""],
+  ];
+  function drawInstall(lt) {
+    // the command types itself, then the installer's output appears line by line
+    const typed = Math.floor(clamp((lt - .6) / 2.2) * INSTALL[1][0].length);
+    let html = "", budget = 0;
+    const outLines = Math.floor(Math.max(0, lt - 3.3) / .45);
+    let lineNo = 0;
+    INSTALL.forEach(([text, cls], i) => {
+      if (i === 0) { html += `<span class="${cls}">${text}</span>`; return; }
+      if (i === 1) { html += esc(text.slice(0, typed)) + (typed < text.length ? "<span style='opacity:.8'>▌</span>" : "\n"); return; }
+      if (typed < INSTALL[1][0].length) return;
+      if (lineNo < outLines) html += cls ? `<span class="${cls}">${esc(text)}</span>` : esc(text);
+      if (text.endsWith("\n")) lineNo++;
+    });
+    $("termText").innerHTML = html;
+    $("plat").style.opacity = out3(seg(lt, 6.5, 7.2));
+  }
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+  function drawControllers(lt) {
+    ["k1", "k2", "k3"].forEach((k, i) => {
+      const v = out3(seg(lt, .5 + i * .5, 1.1 + i * .5));
+      $(k).style.opacity = v;
+      $(k).style.transform = `translateY(${(1 - v) * 60}px)`;
+    });
+    [...$("map").children].forEach((s, i) => { s.style.opacity = out3(seg(lt, 8 + i * .5, 8.4 + i * .5)); });
+    $("okLine").style.opacity = out3(seg(lt, 10.5, 11));
+  }
+
+  async function seek(t) {
+    const sec = TL.find((s) => t >= s.a && t < s.z) || TL[TL.length - 1];
+    const v = sec.vis.find((x) => t >= x.a && t < x.z) || sec.vis[sec.vis.length - 1];
+    const lt = t - v.a;
+    const show = (id, on) => { $(id).style.display = on ? "block" : "none"; };
+    show("t1", v.src === "t1"); show("tv", v.src === "demo"); show("install", v.slide === "install"); show("controllers", v.slide === "controllers");
+    let phoneShow = 0;
+    if (v.src === "t1") {
+      // trailer scenes fade out at their end: hold just before that
+      $("t1").contentWindow.seek(Math.min(v.from + lt, v.to - .6));
+    } else if (v.src === "demo") {
+      const st = Math.min(v.from + lt, v.to);
+      await load($("tv"), frameUrl("tv", Math.round((st - TV_FIRST) * FPS) + 1));
+      phoneShow = st >= PHONE_OFFSET + .4 ? 1 : 0;
+      if (phoneShow) await load($("phoneImg"), frameUrl("phone", Math.round((st - PHONE_OFFSET) * FPS) + 1));
+      const inP = out3(seg(st, PHONE_OFFSET + .4, PHONE_OFFSET + 1.2));
+      phoneShow = inP;
+      $("phone").style.transform = `translateY(${(1 - inP) * 120}px)`;
+    } else if (v.slide === "install") {
+      drawInstall(lt);
+    } else if (v.slide === "controllers") {
+      drawControllers(lt);
+    }
+    $("phone").style.display = phoneShow > 0 ? "block" : "none";
+    $("phone").style.opacity = phoneShow;
+    // chapter label for the first seconds of each section (not on the intro and the end card)
+    const showChap = sec.index > 1 && sec.index < TL.length;
+    const c = showChap ? out3(seg(t, sec.a + .2, sec.a + .6)) * (1 - seg(t, sec.a + 3.6, sec.a + 4.0)) : 0;
+    $("chapter").style.opacity = c;
+    $("chapNum").textContent = String(sec.index).padStart(2, "0");
+    $("chapName").textContent = sec.chapter;
+    // short dips to black between sections
+    const dip = Math.max(...TL.slice(1).map((s) => Math.max(0, 1 - Math.abs(t - s.a) / .25)));
+    $("fade").style.opacity = dip;
+  }
+
+  window.seek = seek;
+  window.setup = async (cfg) => {
+    SCRIPT = await (await fetch("youtube.json")).json();
+    PHONE_OFFSET = cfg.phoneOffset; TV_FIRST = cfg.tvFirst;
+    build(cfg.voiceLen);
+    window.DURATION = DURATION; window.VOICE = VOICE; window.CAPTIONS = CAPTIONS;
+    window.CHAPTERS = TL.map((s) => [s.a, s.chapter]);
+  };
+</script>
+</body>
+</html>

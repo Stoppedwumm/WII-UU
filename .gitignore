@@ -4,3 +4,5 @@ trailer/build/
 dist/*.mp4
 trailer/build2/
 dist/*.wav
+trailer/build-yt/
+dist/WII-UU-youtube*

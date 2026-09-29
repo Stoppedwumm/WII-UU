@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WII-UU thumbnail</title>
+<!-- The YouTube thumbnail, 1280x720. render-youtube.sh screenshots it to dist/WII-UU-youtube-thumbnail.jpg. -->
+<style>
+  @font-face { font-family: Inter; font-weight: 900; src: url(fonts/inter-latin-900-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 800; src: url(fonts/inter-latin-800-normal.woff2) format("woff2"); }
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1280px; height: 720px; overflow: hidden; font-family: Inter, sans-serif; color: #fff;
+    background: radial-gradient(circle at 72% 55%, #0a4f73 0%, #07121b 55%, #05080c 100%); position: relative; }
+  .logo { position: absolute; left: 56px; top: 44px; font-weight: 900; font-size: 58px; letter-spacing: -.02em; }
+  .logo .u { color: #22b8f0; }
+  .head { position: absolute; left: 56px; top: 170px; width: 560px; font-weight: 900; font-size: 92px; line-height: .98; letter-spacing: -.035em;
+    text-shadow: 0 6px 30px rgba(0, 0, 0, .5); }
+  .head .b { color: #22b8f0; }
+  .tag { position: absolute; left: 56px; bottom: 56px; font-weight: 800; font-size: 30px; color: #cfe8f5; }
+  .tv { position: absolute; right: 40px; top: 70px; width: 640px; border-radius: 18px; overflow: hidden; border: 10px solid #15191e;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .6); transform: rotate(2deg); }
+  .tv img, .pad img { display: block; width: 100%; }
+  .pad { position: absolute; right: 36px; bottom: 30px; width: 540px; border-radius: 44px; overflow: hidden; padding: 0;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .7), 0 0 0 3px rgba(255, 255, 255, .12); transform: rotate(-4deg); }
+</style>
+</head>
+<body>
+  <div class="logo">WII-<span class="u">UU</span></div>
+  <div class="head">Your phone <span class="b">is the GamePad</span></div>
+  <div class="tag">Any PC · Raspberry Pi · 20 consoles</div>
+  <div class="tv"><img src="build/menu-light.png" alt=""></div>
+  <div class="pad"><img src="../docs/gamepad.png" alt=""></div>
+</body>
+</html>
