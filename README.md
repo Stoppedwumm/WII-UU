@@ -375,9 +375,9 @@ same goes for the buttons: when a game starts, WII-UU checks the Accessibility p
 without it the TV and the phone say what to do (macOS also shows its own dialog once).
 
 **Updates keep the permissions.** macOS ties them to the app's code signature, so an app rebuilt on
-every update silently loses them while System Settings still shows them as on. Since 1.8.1 the app
+every update silently loses them while System Settings still shows them as on. Since 1.8.2 the app
 only contains a small start-up program that loads `wiiuu.jar`, and updates leave the app alone. If
-you update from an older version, turn WII-UU **off and on again** under both permissions once.
+you update from an older version (1.8.1 included), turn WII-UU **off and on again** under both permissions once.
 
 **Dolphin:** there are no virtual controllers on macOS. So while a GameCube or Wii game runs,
 WII-UU temporarily gives Dolphin a keyboard mapping that matches exactly what the phone sends:
@@ -428,6 +428,14 @@ emulators, run `wiiuu-emulators --update`.
   * **Linux/Windows:** install `ffmpeg`. The phone mentions it when it isn't installed.
   * **macOS:** make sure the terminal shows `GamePad streaming via ScreenCaptureKit`. If it
     doesn't, install the Command Line Tools and check `capture-build.log`.
+* **macOS helper doesn't build** (`failed to build module 'ScreenCaptureKit'`, or an error inside a
+  `.swiftinterface` file): after a macOS update the Command Line Tools' Swift compiler can be older
+  than their SDK. WII-UU then tries the older SDKs the tools include. If none fits, reinstall the
+  tools, and WII-UU builds the helpers again on the next start:
+  `sudo rm -rf /Library/Developer/CommandLineTools && xcode-select --install`.
+* **Memory:** the launchers cap Java's heap at 384 MB (`-Xmx384m`), so WII-UU stays at about
+  350–400 MB even while streaming. Without the cap Java keeps whatever it once needed and can
+  sit at 1 GB. On Linux, `WIIUU_JAVA_OPTS` adds your own Java options.
   * **Slow Wi-Fi:** lower `stream.maxWidth` or `stream.quality`.
 * **Delayed GamePad screen:** the phone fetches one picture at a time, so delay can't build up in the
   network. What's left comes from Wi-Fi and the frame rate:

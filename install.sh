@@ -117,7 +117,7 @@ cp "$JAR" "$PREFIX/wiiuu.jar"
 java -jar "$PREFIX/wiiuu.jar" --write-icon "$PREFIX/wiiuu.png" 2>/dev/null || true
 cat > "$BIN/wiiuu" <<EOF
 #!/usr/bin/env bash
-exec java -jar "$PREFIX/wiiuu.jar" "\$@"
+exec java -Xmx384m \$WIIUU_JAVA_OPTS -jar "$PREFIX/wiiuu.jar" "\$@"
 EOF
 chmod +x "$BIN/wiiuu"
 ok "Launcher: $BIN/wiiuu"
@@ -161,7 +161,7 @@ if [ "$SHORTCUT" = 1 ]; then
     # leave it untouched: a rebuilt app gets a new code signature, and macOS then silently ignores the
     # Accessibility and Screen Recording permissions it shows as on. BOOT names the start-up jar's
     # version; the app is only built again when it changes.
-    BOOT="wiiuu-boot-1.jar"
+    BOOT="wiiuu-boot-2.jar"
     if [ -f "$APP/Contents/app/$BOOT" ]; then
       built=1; kept=1
       ok "App: ~/Applications/WII-UU.app (kept, so its macOS permissions stay on)"
@@ -181,7 +181,7 @@ if [ "$SHORTCUT" = 1 ]; then
          && "$(dirname "$JPACKAGE")/jar" --create --file "$stage/in/$BOOT" -C "$stage/cls" wiiuu/Boot.class; then
         rm -rf "$APP"
         if "$JPACKAGE" --type app-image --name WII-UU --app-version 1.0 --input "$stage/in" \
-             --main-jar "$BOOT" --main-class wiiuu.Boot --dest "$HOME/Applications" \
+             --main-jar "$BOOT" --main-class wiiuu.Boot --java-options -Xmx384m --dest "$HOME/Applications" \
              --mac-package-identifier io.github.wiiuu ${icon[@]+"${icon[@]}"} >/dev/null 2>&1; then
           built=1
           ok "App: ~/Applications/WII-UU.app"
@@ -193,7 +193,7 @@ if [ "$SHORTCUT" = 1 ]; then
     if [ "$built" = 0 ]; then
       APPDIR="$APP/Contents"
       mkdir -p "$APPDIR/MacOS" "$APPDIR/Resources"
-      printf '#!/bin/bash\nexport PATH="/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH"\nexec java -Xdock:name=WII-UU -jar "%s/wiiuu.jar"\n' "$PREFIX" > "$APPDIR/MacOS/wiiuu"
+      printf '#!/bin/bash\nexport PATH="/opt/homebrew/opt/openjdk@21/bin:/usr/local/opt/openjdk@21/bin:$PATH"\nexec java -Xdock:name=WII-UU -Xmx384m -jar "%s/wiiuu.jar"\n' "$PREFIX" > "$APPDIR/MacOS/wiiuu"
       chmod +x "$APPDIR/MacOS/wiiuu"
       printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
         '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \

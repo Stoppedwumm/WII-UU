@@ -635,10 +635,18 @@ public final class ScreenStreamer {
         macAudioHelper = buildSwift("wiiuu-audio", "audio");
     }
 
-    /** Compiles resources/mac/{source}.swift to ~/.wiiuu/bin/{exeName} unless already up to date. */
+    /**
+     * Compiles resources/mac/{source}.swift to ~/.wiiuu/bin/{exeName} unless already up to date.
+     *
+     * <p>After a macOS or Command Line Tools update, the default SDK can be newer than the Swift
+     * compiler ("failed to build module 'ScreenCaptureKit'; this SDK is not supported by the
+     * compiler"). The Command Line Tools usually ship older SDKs too, so those are tried next. A
+     * build that failed is only tried again once the source or the compiler changes.
+     */
     private java.nio.file.Path buildSwift(String exeName, String source) {
         java.nio.file.Path dir = config.home().resolve("bin");
         java.nio.file.Path exe = dir.resolve(exeName), stamp = dir.resolve(exeName + ".sha256");
+        java.nio.file.Path failed = dir.resolve(exeName + ".failed");
         java.nio.file.Path buildLog = config.logDir().resolve(source + "-build.log");
         try (InputStream res = ScreenStreamer.class.getResourceAsStream("/mac/" + source + ".swift")) {
             if (res == null) return null;
@@ -648,24 +656,95 @@ public final class ScreenStreamer {
                     && java.nio.file.Files.readString(stamp).trim().equals(hash)) {
                 return exe;
             }
+            String compiler = swiftVersion();
+            String attempt = hash + " " + compiler;
+            if (java.nio.file.Files.exists(failed) && java.nio.file.Files.readString(failed).trim().equals(attempt)) {
+                System.err.println("[screen] the " + source + " helper did not build with this Swift compiler (see " + buildLog
+                        + "). Reinstall the Command Line Tools to fix it: sudo rm -rf /Library/Developer/CommandLineTools && xcode-select --install");
+                return null;
+            }
             java.nio.file.Files.createDirectories(dir);
             java.nio.file.Files.createDirectories(buildLog.getParent());
             java.nio.file.Path swift = dir.resolve(source + ".swift");
             java.nio.file.Files.write(swift, src);
             System.out.println("[screen] building the macOS " + (source.equals("audio") ? "sound" : source.equals("trust") ? "permission" : "capture")
                     + " helper (first start only, about a minute)...");
-            Process p = new ProcessBuilder("xcrun", "swiftc", "-O", "-swift-version", "5", "-o", exe.toString(), swift.toString())
-                    .redirectErrorStream(true).redirectOutput(buildLog.toFile()).start();
-            if (p.waitFor(300, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0 && java.nio.file.Files.isExecutable(exe)) {
-                java.nio.file.Files.writeString(stamp, hash);
-                return exe;
+            StringBuilder log = new StringBuilder();
+            for (String sdk : sdks()) {
+                List<String> cmd = new java.util.ArrayList<>(List.of("xcrun", "swiftc", "-O", "-swift-version", "5"));
+                if (sdk != null) cmd.addAll(List.of("-sdk", sdk));
+                cmd.addAll(List.of("-o", exe.toString(), swift.toString()));
+                Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+                String out = new String(p.getInputStream().readAllBytes());
+                boolean ok = p.waitFor(300, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0 && java.nio.file.Files.isExecutable(exe);
+                log.append("$ ").append(String.join(" ", cmd)).append('\n').append(out).append('\n');
+                java.nio.file.Files.writeString(buildLog, log);
+                if (ok) {
+                    java.nio.file.Files.writeString(stamp, hash);
+                    java.nio.file.Files.deleteIfExists(failed);
+                    if (sdk != null) System.out.println("[screen] built the " + source + " helper with " + sdk);
+                    return exe;
+                }
+                p.destroyForcibly();
+                if (!out.contains("SDK is not supported") && !out.contains(".swiftinterface")) break;   // a real error, not the SDK
             }
-            p.destroyForcibly();
-            System.err.println("[screen] could not build the " + source + " helper (see " + buildLog + "): " + lastLine(buildLog));
+            java.nio.file.Files.writeString(failed, attempt);
+            System.err.println("[screen] could not build the " + source + " helper (see " + buildLog + "): " + firstError(buildLog));
+            System.err.println("[screen] the Xcode Command Line Tools look out of date or damaged. Reinstall them:"
+                    + " sudo rm -rf /Library/Developer/CommandLineTools && xcode-select --install");
         } catch (Exception e) {
             System.err.println("[screen] " + source + " helper unavailable: " + e.getMessage());
         }
         return null;
+    }
+
+    /** The default SDK (null), then the other macOS SDKs of the Command Line Tools / Xcode, newest first. */
+    private static List<String> sdks() {
+        List<String> out = new java.util.ArrayList<>();
+        out.add(null);
+        List<File> found = new java.util.ArrayList<>();
+        for (String d : new String[]{"/Library/Developer/CommandLineTools/SDKs",
+                "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs"}) {
+            File[] list = new File(d).listFiles((f, n) -> n.matches("MacOSX\\d+(\\.\\d+)*\\.sdk"));
+            if (list != null) found.addAll(List.of(list));
+        }
+        found.sort((a, b) -> compareVersions(b.getName(), a.getName()));
+        for (File f : found) out.add(f.getAbsolutePath());
+        return out;
+    }
+
+    static int compareVersions(String a, String b) {
+        String[] x = a.replaceAll("[^0-9.]", "").split("\\."), y = b.replaceAll("[^0-9.]", "").split("\\.");
+        for (int i = 0; i < Math.max(x.length, y.length); i++) {
+            int u = i < x.length && !x[i].isEmpty() ? Integer.parseInt(x[i]) : 0;
+            int v = i < y.length && !y[i].isEmpty() ? Integer.parseInt(y[i]) : 0;
+            if (u != v) return Integer.compare(u, v);
+        }
+        return 0;
+    }
+
+    private static String swiftVersion() {
+        try {
+            Process p = new ProcessBuilder("xcrun", "swiftc", "--version").redirectErrorStream(true).start();
+            String v = new String(p.getInputStream().readAllBytes()).trim().replaceAll("\\s+", " ");
+            p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS);
+            return v;
+        } catch (IOException | InterruptedException e) {
+            return "?";
+        }
+    }
+
+    /** The first compiler error in a build log (more telling than the last line). */
+    private static String firstError(java.nio.file.Path log) {
+        try {
+            for (String l : java.nio.file.Files.readAllLines(log)) {
+                int i = l.indexOf("error:");
+                if (i >= 0) return l.substring(i).trim();
+            }
+        } catch (IOException | RuntimeException ignored) {
+            // no log
+        }
+        return lastLine(log);
     }
 
     private static long even(double v) {

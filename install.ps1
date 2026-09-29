@@ -66,7 +66,7 @@ Copy-Item -Force $jar (Join-Path $Prefix "wiiuu.jar")
 $ErrorActionPreference = "Continue"
 & java -jar (Join-Path $Prefix "wiiuu.jar") --write-icon (Join-Path $Prefix "wiiuu.png") 2>&1 | Out-Null
 $ErrorActionPreference = "Stop"
-Set-Content -Encoding ASCII -Path (Join-Path $Prefix "wiiuu.cmd") -Value "@echo off`r`nstart `"`" `"$javaw`" -jar `"$Prefix\wiiuu.jar`" %*"
+Set-Content -Encoding ASCII -Path (Join-Path $Prefix "wiiuu.cmd") -Value "@echo off`r`nstart `"`" `"$javaw`" -Xmx384m -jar `"$Prefix\wiiuu.jar`" %*"
 Ok "Launcher: $Prefix\wiiuu.cmd"
 
 Say "Creating ROM folders in $Roms"
@@ -93,7 +93,7 @@ $shell = New-Object -ComObject WScript.Shell
 foreach ($lnkPath in @($StartMenu, $DesktopLnk)) {
     $lnk = $shell.CreateShortcut($lnkPath)
     $lnk.TargetPath = $javaw
-    $lnk.Arguments = "-jar `"$Prefix\wiiuu.jar`""
+    $lnk.Arguments = "-Xmx384m -jar `"$Prefix\wiiuu.jar`""
     $lnk.WorkingDirectory = $Prefix
     $lnk.Description = "WII-UU emulator launcher"
     $lnk.Save()

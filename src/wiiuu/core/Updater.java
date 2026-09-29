@@ -109,11 +109,11 @@ public final class Updater {
         if (OS.contains("win")) {
             String ps = "Wait-Process -Id " + pid + " -ErrorAction SilentlyContinue; "
                     + "& '" + release.resolve("install.ps1") + "' -Yes *> '" + log + "'; "
-                    + "Start-Process '" + java + "' -ArgumentList '-jar','\"" + (jar != null ? jar
+                    + "Start-Process '" + java + "' -ArgumentList '-Xmx384m','-jar','\"" + (jar != null ? jar
                     : System.getenv("LOCALAPPDATA") + "\\WII-UU\\wiiuu.jar") + "\"'";
             cmd = List.of("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", ps);
         } else {
-            String relaunch = jar != null ? "\"" + java + "\" -jar \"" + jar + "\"" : "\"$HOME/.local/bin/wiiuu\"";
+            String relaunch = jar != null ? "\"" + java + "\" -Xmx384m -jar \"" + jar + "\"" : "\"$HOME/.local/bin/wiiuu\"";
             String home = System.getProperty("java.home", "");
             int app = home.indexOf(".app/Contents/");
             if (OS.contains("mac") && app > 0) {
