@@ -1,2 +1,4 @@
 build/
 dist/*/
+trailer/build/
+dist/*.mp4

@@ -415,6 +415,13 @@ retroarch.enabled=false     # RetroArch mode; retroarch.path, retroarch.core.<id
 
 Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home DIR] [--check-update|--upgrade]`
 
+## Trailer
+
+`trailer/` holds the trailer shown on the website: a keynote-style page (`trailer.html`, which
+also plays live in a browser), rendered frame by frame. The soundtrack is WII-UU's own boot chime
+and menu music. `trailer/render.sh` takes fresh screenshots, renders the soundtrack and writes
+`dist/WII-UU-trailer.mp4` and `docs/trailer.mp4`. It needs Node with Playwright, and ffmpeg.
+
 ## Build from source
 
 ```sh

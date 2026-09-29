@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WII-UU Trailer</title>
+<!--
+  The WII-UU trailer: a keynote-style reel, 1920x1080, rendered frame by frame by render.mjs.
+  window.seek(t) lays out every element for time t (seconds), so each frame is exact.
+  Scene changes sit on the bar lines of the menu music (100 BPM: a bar is 2.4 s; music starts at 2.4 s).
+  Open it in a browser to preview: it plays in real time; click to restart.
+-->
+<style>
+  @font-face { font-family: Inter; font-weight: 400; src: url(fonts/inter-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 600; src: url(fonts/inter-latin-600-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 800; src: url(fonts/inter-latin-800-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 900; src: url(fonts/inter-latin-900-normal.woff2) format("woff2"); }
+  :root { --accent: #00a8e8; --accent2: #26b9f2; --ink: #f4f6f8; --dim: #8c95a0; --bg: #0a0b0d; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg);
+    font-family: Inter, "Liberation Sans", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  .layer { position: absolute; inset: 0; opacity: 0; will-change: opacity, transform; }
+  .abs { position: absolute; will-change: opacity, transform; }
+  .center { left: 0; right: 0; text-align: center; }
+  .h1 { font-weight: 900; font-size: 132px; letter-spacing: -0.035em; line-height: 1.02; }
+  .h2 { font-weight: 800; font-size: 84px; letter-spacing: -0.03em; line-height: 1.05; }
+  .sub { font-weight: 600; font-size: 38px; color: var(--dim); letter-spacing: -0.01em; }
+  .accent { background: linear-gradient(100deg, #00c6ff, #0090e0 60%, #33d1ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .frame { border-radius: 26px; overflow: hidden; box-shadow: 0 40px 120px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .08); }
+  .frame img { display: block; width: 100%; height: auto; }
+  .glow { position: absolute; inset: -20%; background: radial-gradient(closest-side at 50% 60%, rgba(0, 168, 232, .22), transparent 70%); }
+  .chip { display: inline-block; padding: 16px 30px; margin: 0 10px; border-radius: 999px; background: rgba(255, 255, 255, .08);
+    border: 1px solid rgba(255, 255, 255, .12); font-weight: 600; font-size: 30px; color: var(--ink); }
+  .pill { display: inline-block; padding: 14px 30px; margin: 10px; border-radius: 999px; font-weight: 800; font-size: 34px;
+    background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .1); white-space: nowrap; }
+  .tile { position: absolute; width: 150px; height: 150px; border-radius: 22px; color: #fff; font-weight: 900; font-size: 34px;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 16px 40px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .25); }
+  .tile small { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-size: 15px; font-weight: 600; opacity: .85; }
+
+  /* the white boot and end screens, like the app */
+  .white { background: linear-gradient(180deg, #fff, #eef2f5); color: #3c4043; }
+  .logo { font-weight: 900; font-size: 190px; letter-spacing: -0.02em; line-height: 1; }
+  .logo .w { color: #3c4043; }
+  .logo .u { color: var(--accent); }
+  .ring { position: absolute; left: 50%; top: 46%; width: 1600px; height: 1600px; margin: -800px 0 0 -800px; border-radius: 50%;
+    border: 7px solid var(--accent); }
+  /* the boot logo's letters are painted through a moving sheen band, like the app and the website */
+  .shine span { color: transparent; -webkit-background-clip: text; background-clip: text; background-repeat: no-repeat;
+    background-size: 300% 100%, 100% 100%; background-position: 130% 0, 0 0; }
+  .shine .w { background-image: linear-gradient(100deg, transparent 42%, rgba(255, 255, 255, .9) 50%, transparent 58%), linear-gradient(#3c4043, #3c4043); }
+  .shine .u { background-image: linear-gradient(100deg, transparent 42%, rgba(255, 255, 255, .9) 50%, transparent 58%), linear-gradient(#00a8e8, #00a8e8); }
+  .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 30px; color: #6b7178; }
+  .bars { display: flex; align-items: center; justify-content: center; gap: 12px; height: 160px; }
+  .bars i { display: block; width: 16px; border-radius: 8px; background: linear-gradient(180deg, #33d1ff, #0090e0); }
+  #fadeBlack { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- 0: boot -->
+  <div class="layer white" id="s0">
+    <div class="ring" id="s0ring"></div>
+    <div class="abs center" id="s0logo" style="top: 400px"><div class="logo shine" style="display:inline-block"><span class="w" id="s0w">WII-</span><span class="u" id="s0u">UU</span></div></div>
+  </div>
+
+  <!-- 1: statement -->
+  <div class="layer" id="s1"><div class="glow"></div>
+    <div class="abs center h1" id="s1a" style="top: 340px">Your games.</div>
+    <div class="abs center h1" id="s1b" style="top: 490px">The <span class="accent">Wii U</span> way.</div>
+  </div>
+
+  <!-- 2: the menu, light and dark -->
+  <div class="layer" id="s2"><div class="glow"></div>
+    <div class="abs center h2" id="s2t1" style="top: 70px">A menu you already know.</div>
+    <div class="abs center h2" id="s2t2" style="top: 70px">Light. <span class="accent">Or dark.</span></div>
+    <div class="abs" id="s2frame" style="left: 300px; top: 230px; width: 1320px; perspective: 2400px">
+      <div id="s2tilt" style="position: relative">
+        <div class="frame"><img src="build/menu-light.png" alt=""></div>
+        <div class="frame abs" id="s2dark" style="inset: 0"><img src="build/menu-dark.png" alt=""></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3: twenty consoles -->
+  <div class="layer" id="s3"><div class="glow"></div>
+    <div class="abs center h1" id="s3a" style="top: 120px">20 consoles.</div>
+    <div class="abs center h1 accent" id="s3b" style="top: 260px">One menu.</div>
+    <div id="tiles"></div>
+    <div class="abs center sub" id="s3c" style="top: 900px">NES to Wii U and Switch. PS1 to PS4.</div>
+  </div>
+
+  <!-- 4: phone as GamePad -->
+  <div class="layer" id="s4"><div class="glow"></div>
+    <div class="abs center h2" id="s4t" style="top: 60px">Your phone is the <span class="accent">GamePad.</span></div>
+    <div class="abs" id="s4phone" style="left: 330px; top: 215px; width: 1260px"><div class="frame" style="border-radius: 60px"><img src="../docs/gamepad.png" alt=""></div></div>
+    <div class="abs center" style="top: 855px">
+      <span class="chip" id="c1">No app to install</span><span class="chip" id="c2">Scan the code on the TV</span>
+      <span class="chip" id="c3">Up to 4 players</span><span class="chip" id="c4">Stays paired</span>
+    </div>
+  </div>
+
+  <!-- 5: second screen -->
+  <div class="layer" id="s5"><div class="glow"></div>
+    <div class="abs center h2" id="s5t" style="top: 55px">A real <span class="accent">second screen.</span></div>
+    <div class="abs" id="s5img" style="left: 385px; top: 200px; width: 1150px"><div class="frame"><img src="../docs/tv-and-gamepad.jpg" alt=""></div></div>
+    <div class="abs center sub" id="s5c1" style="top: 960px; color: var(--ink)">The Wii U GamePad view, on your phone.</div>
+    <div class="abs center sub" id="s5c2" style="top: 960px; color: var(--ink)">DS &amp; 3DS touch screens you can draw on.</div>
+    <div class="abs center sub" id="s5c3" style="top: 960px; color: var(--ink)">Off-TV play: the whole TV, in your hands.</div>
+  </div>
+
+  <!-- 6: gyro, touch, sound -->
+  <div class="layer" id="s6"><div class="glow"></div>
+    <div class="abs center" style="top: 300px">
+      <span class="h1 abs-word" id="w1" style="display:inline-block">Gyro.</span>
+      <span class="h1 abs-word" id="w2" style="display:inline-block; margin-left: 40px">Touch.</span>
+      <span class="h1 abs-word accent" id="w3" style="display:inline-block; margin-left: 40px">Sound.</span>
+    </div>
+    <div class="abs center" id="s6bars" style="top: 520px"><div class="bars" id="bars"></div></div>
+    <div class="abs center sub" id="s6s" style="top: 760px">Straight from the browser. Nothing to install.</div>
+  </div>
+
+  <!-- 7: RetroArch -->
+  <div class="layer" id="s7"><div class="glow"></div>
+    <div class="abs center h2" id="s7t" style="top: 150px">Or run it all in <span class="accent">RetroArch.</span></div>
+    <div class="abs" id="row1" style="top: 400px; left: 0; white-space: nowrap"></div>
+    <div class="abs" id="row2" style="top: 520px; left: 0; white-space: nowrap"></div>
+    <div class="abs center sub" id="s7s" style="top: 760px">The best core for every system. Downloaded when missing.</div>
+  </div>
+
+  <!-- 8: Console Mode -->
+  <div class="layer" id="s8"><div class="glow"></div>
+    <div class="abs center h1" id="s8t" style="top: 70px">Console <span class="accent">Mode.</span></div>
+    <div class="abs center sub" id="s8s" style="top: 235px">Boots straight into WII-UU. Desktop Mode, anytime.</div>
+    <div class="abs" id="s8img" style="left: 460px; top: 330px; width: 1000px; perspective: 2400px"><div id="s8tilt" class="frame"><img src="build/power-console.png" alt=""></div></div>
+  </div>
+
+  <!-- 9: platforms -->
+  <div class="layer" id="s9"><div class="glow"></div>
+    <div class="abs center h2" id="p1" style="top: 240px">Linux.</div>
+    <div class="abs center h2" id="p2" style="top: 350px">Windows.</div>
+    <div class="abs center h2" id="p3" style="top: 460px">macOS.</div>
+    <div class="abs center h2" id="p4" style="top: 570px">Raspberry Pi.</div>
+    <div class="abs center h1 accent" id="p5" style="top: 740px">Free.</div>
+  </div>
+
+  <!-- 10: end card -->
+  <div class="layer white" id="s10">
+    <div class="abs center" id="e1" style="top: 330px"><div class="logo"><span class="w">WII-</span><span class="u">UU</span></div></div>
+    <div class="abs center" id="e2" style="top: 560px; font-weight: 600; font-size: 44px; color: #8a9099">Your games, the Wii U way.</div>
+    <div class="abs center" id="e3" style="top: 680px"><span style="display:inline-block; padding: 20px 44px; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 800; font-size: 44px">wiiuu.stoppedwumm.net</span></div>
+    <div class="abs center mono" id="e4" style="top: 820px">curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash</div>
+  </div>
+
+  <div id="fadeBlack"></div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const seg = (t, a, b) => clamp((t - a) / (b - a));
+  const out3 = (v) => 1 - Math.pow(1 - clamp(v), 3);
+  const inOut = (v) => { v = clamp(v); return v < .5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2; };
+  const back = (v) => { v = clamp(v); const c = 1.4; return 1 + (c + 1) * Math.pow(v - 1, 3) + c * Math.pow(v - 1, 2); };
+
+  /** fades an element in at `a` (rising `rise` px), and out at `z` */
+  function pop(el, t, a, z, rise = 40, dur = .6) {
+    const i = out3(seg(t, a, a + dur)), o = z == null ? 1 : 1 - seg(t, z, z + .45);
+    el.style.opacity = i * o;
+    el.style.transform = `translateY(${(1 - i) * rise}px)`;
+  }
+
+  // scenes: [id, start, end]; each fades in over .35 s and out over .5 s at its edges
+  const SCENES = [["s0", 0, 4.8], ["s1", 4.8, 9.6], ["s2", 9.6, 16.8], ["s3", 16.8, 24.0], ["s4", 24.0, 31.2],
+    ["s5", 31.2, 38.4], ["s6", 38.4, 43.2], ["s7", 43.2, 48.0], ["s8", 48.0, 55.2], ["s9", 55.2, 60.0], ["s10", 60.0, 67.2]];
+  const DURATION = 67.2;
+
+  // 20 system tiles, same colours as the app
+  const SYSTEMS = [["NES", "#E60012"], ["SNES", "#5C4B9E"], ["GB", "#8B9A3B"], ["N64", "#1A9E3F"], ["GBA", "#4B3FA0"],
+    ["GCN", "#6A5ACD"], ["DS", "#7A7A7A"], ["Wii", "#33B5E5"], ["3DS", "#CE181E"], ["Wii U", "#009AC7"],
+    ["Switch", "#E60012"], ["SMS", "#1F4E9E"], ["MD", "#2a2a2a"], ["SAT", "#3A3A6A"], ["DC", "#F28C28"],
+    ["PS1", "#8C8C8C"], ["PS2", "#1C3F94"], ["PSP", "#2B2B2B"], ["PS3", "#111111"], ["PS4", "#003791"]];
+  const YEARS = [1983, 1990, 1989, 1996, 2001, 2001, 2004, 2006, 2011, 2012, 2017, 1985, 1988, 1994, 1998, 1994, 2000, 2004, 2006, 2013];
+  const tilesEl = $("tiles"), tileEls = [];
+  SYSTEMS.forEach(([name, color], i) => {
+    const d = document.createElement("div");
+    d.className = "tile";
+    d.style.background = `linear-gradient(160deg, ${color}, color-mix(in srgb, ${color} 70%, black))`;
+    d.innerHTML = `${name}<small>${YEARS[i]}</small>`;
+    const col = i % 10, row = Math.floor(i / 10);
+    d.style.left = (140 + col * 170) + "px";
+    d.style.top = (470 + row * 180) + "px";
+    tilesEl.appendChild(d);
+    tileEls.push(d);
+  });
+
+  const bars = [];
+  for (let i = 0; i < 36; i++) { const b = document.createElement("i"); $("bars").appendChild(b); bars.push(b); }
+
+  const CORES1 = ["Mesen", "Snes9x", "mGBA", "SameBoy", "Mupen64Plus-Next", "Dolphin", "melonDS", "Citra", "Genesis Plus GX"];
+  const CORES2 = ["Beetle Saturn", "Flycast", "SwanStation", "PCSX2", "PPSSPP", "Nestopia", "bsnes", "Gambatte", "PicoDrive"];
+  for (const [row, list] of [["row1", CORES1], ["row2", CORES2]]) {
+    $(row).innerHTML = [...list, ...list, ...list].map((n) => `<span class="pill">${n}</span>`).join("");
+  }
+
+  function seek(t) {
+    // scene visibility
+    for (const [id, a, z] of SCENES) {
+      const el = $(id);
+      const v = z === DURATION ? seg(t, a, a + .35) : Math.min(seg(t, a, a + .35), 1 - seg(t, z - .5, z));
+      el.style.opacity = v;
+      el.style.display = v > 0 ? "block" : "none";
+      // a slow push-in keeps even the quiet moments alive
+      el.style.transform = `scale(${1 + .035 * seg(t, a, z)})`;
+    }
+
+    // 0: boot — ring spreads, logo rises, sheen crosses, then the logo zooms into the next scene
+    {
+      const r = seg(t, .2, 1.9);
+      $("s0ring").style.opacity = r > 0 && r < 1 ? (1 - r) * .4 : 0;
+      $("s0ring").style.transform = `scale(${out3(r)})`;
+      const i = out3(seg(t, .3, 1.1)), zoom = inOut(seg(t, 3.9, 4.8));
+      const logo = $("s0logo");
+      logo.style.opacity = i;
+      logo.style.transform = `translateY(${(1 - i) * 40}px) scale(${(.94 + .06 * i) * (1 + zoom * .5)})`;
+      // the sheen crosses "WII-" and then "UU"
+      $("s0w").style.backgroundPosition = `${130 - 160 * inOut(seg(t, 1.1, 1.8))}% 0, 0 0`;
+      $("s0u").style.backgroundPosition = `${130 - 160 * inOut(seg(t, 1.35, 2.05))}% 0, 0 0`;
+    }
+
+    // 1: statement
+    pop($("s1a"), t, 5.0, null, 50, .7);
+    pop($("s1b"), t, 6.0, null, 50, .7);
+
+    // 2: menu screenshot tilts up into place, pushes in slowly; then the dark theme fades over it
+    {
+      pop($("s2t1"), t, 9.7, 13.6);
+      pop($("s2t2"), t, 14.2, null);
+      const i = out3(seg(t, 9.9, 11.4)), push = seg(t, 9.9, 16.8);
+      $("s2frame").style.opacity = i;
+      $("s2tilt").style.transform = `rotateX(${(1 - i) * 24}deg) translateY(${(1 - i) * 120}px) scale(${.9 + .1 * i + push * .04})`;
+      $("s2dark").style.opacity = inOut(seg(t, 13.8, 14.6));
+    }
+
+    // 3: twenty consoles cascade in on the beat
+    {
+      pop($("s3a"), t, 16.9, null);
+      pop($("s3b"), t, 17.5, null);
+      tileEls.forEach((el, i) => {
+        const v = back(seg(t, 18.0 + i * .075, 18.0 + i * .075 + .5));
+        el.style.opacity = clamp(seg(t, 18.0 + i * .075, 18.0 + i * .075 + .25));
+        el.style.transform = `translateY(${(1 - v) * 80}px) scale(${.6 + .4 * v})`;
+      });
+      pop($("s3c"), t, 21.6, null);
+    }
+
+    // 4: phone slides up; feature chips land on the beat
+    {
+      pop($("s4t"), t, 24.1, null);
+      const i = out3(seg(t, 24.4, 25.6)), drift = seg(t, 24.4, 31.2);
+      $("s4phone").style.opacity = i;
+      $("s4phone").style.transform = `translateY(${(1 - i) * 200 - drift * 20}px) rotate(${(1 - i) * -4}deg) scale(${.96 + drift * .04})`;
+      ["c1", "c2", "c3", "c4"].forEach((c, k) => pop($(c), t, 25.8 + k * .6, null, 24, .45));
+    }
+
+    // 5: second screen, slow push-in, captions cycle
+    {
+      pop($("s5t"), t, 31.3, null);
+      const i = out3(seg(t, 31.5, 32.6));
+      $("s5img").style.opacity = i;
+      $("s5img").style.transform = `translateY(${(1 - i) * 80}px) scale(${1 + seg(t, 31.5, 38.4) * .06})`;
+      pop($("s5c1"), t, 32.4, 34.0, 20, .45);
+      pop($("s5c2"), t, 34.4, 36.0, 20, .45);
+      pop($("s5c3"), t, 36.4, null, 20, .45);
+    }
+
+    // 6: three words on three beats, then the sound bars dance
+    {
+      ["w1", "w2", "w3"].forEach((w, k) => {
+        const v = back(seg(t, 38.5 + k * .6, 38.5 + k * .6 + .45));
+        $(w).style.opacity = clamp(seg(t, 38.5 + k * .6, 38.5 + k * .6 + .2));
+        $(w).style.transform = `scale(${.7 + .3 * v})`;
+      });
+      const on = seg(t, 40.1, 40.6);
+      bars.forEach((b, i) => {
+        const h = 18 + on * (60 + 55 * Math.sin(t * 9 + i * .7) * Math.sin(t * 3.1 + i * .23) + 30 * Math.sin(i * .5 + t * 5));
+        b.style.height = Math.max(14, h) + "px";
+      });
+      $("s6bars").style.opacity = on;
+      pop($("s6s"), t, 40.9, null);
+    }
+
+    // 7: RetroArch cores drift past in two rows
+    {
+      pop($("s7t"), t, 43.3, null);
+      const i = out3(seg(t, 43.6, 44.4));
+      $("row1").style.opacity = i;
+      $("row2").style.opacity = i;
+      $("row1").style.transform = `translateX(${-200 - (t - 43.2) * 140}px)`;
+      $("row2").style.transform = `translateX(${-1400 + (t - 43.2) * 140}px)`;
+      pop($("s7s"), t, 45.0, null);
+    }
+
+    // 8: Console Mode, the Power menu rises
+    {
+      pop($("s8t"), t, 48.1, null);
+      pop($("s8s"), t, 48.7, null);
+      const i = out3(seg(t, 49.2, 50.6));
+      $("s8img").style.opacity = i;
+      $("s8tilt").style.transform = `rotateX(${(1 - i) * 20}deg) translateY(${(1 - i) * 140}px) scale(${.92 + .08 * i + seg(t, 49.2, 55.2) * .03})`;
+    }
+
+    // 9: platforms, one per beat, then Free.
+    {
+      ["p1", "p2", "p3", "p4"].forEach((p, k) => pop($(p), t, 55.3 + k * .6, null, 30, .45));
+      const v = back(seg(t, 57.7, 58.2));
+      $("p5").style.opacity = clamp(seg(t, 57.7, 57.9));
+      $("p5").style.transform = `scale(${.6 + .4 * v})`;
+    }
+
+    // 10: end card
+    {
+      const i = out3(seg(t, 60.3, 61.1));
+      $("e1").style.opacity = i;
+      $("e1").style.transform = `translateY(${(1 - i) * 40}px) scale(${.94 + .06 * i})`;
+      pop($("e2"), t, 61.0, null);
+      pop($("e3"), t, 61.7, null);
+      pop($("e4"), t, 62.4, null);
+      $("fadeBlack").style.opacity = seg(t, 66.2, 67.2);
+    }
+  }
+
+  window.seek = seek;
+  window.DURATION = DURATION;
+  // preview in a browser: play in real time (the renderer calls seek itself)
+  if (!/render/.test(location.search)) {
+    let t0 = performance.now();
+    document.addEventListener("click", () => { t0 = performance.now(); });
+    const loop = () => { seek(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  } else {
+    seek(0);
+  }
+</script>
+</body>
+</html>
