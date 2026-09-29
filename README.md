@@ -217,6 +217,8 @@ own. To unpair all phones, change the code under *Settings → General*.
 
 ### 8 players and Buzz! mode
 
+![A Buzz! quiz game on the TV, with four phones in Buzz! mode](docs/buzz.jpg)
+
 * **8-player mode:** *Settings → General → 8-player mode* (`server.maxPlayers=8`) lets up to 8 phones
   play at once, as players 1–8.
   * On Linux, each phone is its own virtual controller.
@@ -233,6 +235,8 @@ own. To unpair all phones, change the code under *Settings → General*.
     buzzer can't press a pad button.
   * Your own PCSX2 settings come back afterwards, line by line, as with the pad mapping.
   * HOME or *GamePad* on the phone shows the normal GamePad again.
+
+![The phone in Buzz! mode](docs/buzz-phone.png)
 
 | Player | Red | Blue | Orange | Green | Yellow |
 |---|---|---|---|---|---|
