@@ -372,6 +372,9 @@ async function poll() {
     S.player = j.player;
     $("player").textContent = j.player > 0 ? "P" + j.player : "Viewer";
     $("keysWarn").classList.toggle("hidden", j.keys !== false);
+    if (j.keysWhy) $("keysWarn").textContent = j.keysWhy;
+    if (j.keys === false && j.keysWhy && !S.keysToast) { S.keysToast = true; toast(j.keysWhy); }
+    if (j.keys !== false) S.keysToast = false;
     if (j.library !== S.libVersion) loadLibrary();
     S.https = j.https; S.tv = j.tv; S.stream = j.stream;
     if (!j.buzz) S.buzzHidden = false;          // the next Buzz! game shows the buzzer again

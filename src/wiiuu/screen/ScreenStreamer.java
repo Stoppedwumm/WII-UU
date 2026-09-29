@@ -62,6 +62,7 @@ public final class ScreenStreamer {
     private volatile java.nio.file.Path macHelper;
     /** macOS sound helper (resources/mac/audio.swift), once compiled */
     private volatile java.nio.file.Path macAudioHelper;
+    private volatile java.nio.file.Path macTrustHelper;
     private volatile java.util.function.Consumer<String> onBlocked = m -> { };
 
     public ScreenStreamer(Config config, Supplier<Game> currentGame) {
@@ -98,6 +99,11 @@ public final class ScreenStreamer {
     /** The compiled macOS sound helper, or null (not macOS, not built yet, or failed). */
     public java.nio.file.Path macAudioHelper() {
         return macAudioHelper;
+    }
+
+    /** The compiled macOS Accessibility check (may WII-UU press keys?), or null. */
+    public java.nio.file.Path macTrustHelper() {
+        return macTrustHelper;
     }
 
     /** True while the OS hands us only black pictures (macOS without Screen Recording permission). */
@@ -625,6 +631,7 @@ public final class ScreenStreamer {
         }
         macHelper = buildSwift("wiiuu-capture", "capture");
         if (macHelper != null) System.out.println("[screen] GamePad streaming via ScreenCaptureKit");
+        macTrustHelper = buildSwift("wiiuu-trust", "trust");
         macAudioHelper = buildSwift("wiiuu-audio", "audio");
     }
 
@@ -645,7 +652,7 @@ public final class ScreenStreamer {
             java.nio.file.Files.createDirectories(buildLog.getParent());
             java.nio.file.Path swift = dir.resolve(source + ".swift");
             java.nio.file.Files.write(swift, src);
-            System.out.println("[screen] building the macOS " + (source.equals("audio") ? "sound" : "capture")
+            System.out.println("[screen] building the macOS " + (source.equals("audio") ? "sound" : source.equals("trust") ? "permission" : "capture")
                     + " helper (first start only, about a minute)...");
             Process p = new ProcessBuilder("xcrun", "swiftc", "-O", "-swift-version", "5", "-o", exe.toString(), swift.toString())
                     .redirectErrorStream(true).redirectOutput(buildLog.toFile()).start();

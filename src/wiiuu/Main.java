@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.8.0";
+    public static final String VERSION = "1.8.1";
 
     private final Config config;
     private final Library library;
@@ -50,6 +50,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     private GamepadServer server;
     private DsuServer dsuServer;
     private volatile VirtualPads vpads;
+    private volatile ScreenStreamer screen;
+    /** macOS: whether WII-UU may press keys (Accessibility); null = not checked yet */
+    private volatile Boolean macKeysAllowed;
+    private boolean macKeysPrompted;
     private JFrame frame;
     private MenuView view;
 
@@ -164,6 +168,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         dsuServer = dsu;
         ScreenStreamer screen = config.getBool("stream.enabled", true) ? new ScreenStreamer(config, launcher::current) : null;
+        this.screen = screen;
+        router.setKeysPermitted(() -> !Boolean.FALSE.equals(macKeysAllowed));
         if (screen != null) {
             screen.setOnBlocked(msg -> SwingUtilities.invokeLater(() -> view.showToast(
                     System.getProperty("os.name", "").toLowerCase().contains("mac")
@@ -341,7 +347,45 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             view.setPlaying(game);
             if (config.getBool("ui.minimizeOnLaunch", true)) frame.setState(Frame.ICONIFIED);
         });
+        if (typesKeysFor(game)) checkMacKeys();
     }
+
+    /**
+     * macOS: the phone's buttons are typed as keys, which macOS only lets through with the
+     * Accessibility permission. Without it the keys vanish without any error, so ask a small helper
+     * (judged by macOS as WII-UU) and say what to do. The first time, macOS also shows its own dialog.
+     */
+    private void checkMacKeys() {
+        ScreenStreamer s = screen;
+        java.nio.file.Path helper = s == null ? null : s.macTrustHelper();
+        if (helper == null) return;
+        Thread t = new Thread(() -> {
+            boolean prompt;
+            synchronized (this) {
+                prompt = !macKeysPrompted;
+                macKeysPrompted = true;
+            }
+            try {
+                Process p = new ProcessBuilder(prompt ? java.util.List.of(helper.toString(), "--prompt") : java.util.List.of(helper.toString()))
+                        .redirectErrorStream(true).start();
+                String out = new String(p.getInputStream().readAllBytes()).trim();
+                if (!p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) return;
+                boolean allowed = !out.endsWith("no");
+                macKeysAllowed = allowed;
+                if (!allowed) {
+                    System.out.println("[input] macOS blocks WII-UU's keys: Accessibility permission missing");
+                    SwingUtilities.invokeLater(() -> view.showToast(MAC_KEYS_HELP));
+                }
+            } catch (IOException | InterruptedException e) {
+                System.err.println("[input] could not check the Accessibility permission: " + e.getMessage());
+            }
+        }, "mac-keys-check");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    public static final String MAC_KEYS_HELP = "GamePad buttons are blocked: turn on WII-UU under System Settings > Privacy & Security"
+            + " > Accessibility (if it is already on, turn it off and on again)";
 
     @Override
     public void message(String text) {

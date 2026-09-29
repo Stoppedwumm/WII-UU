@@ -496,6 +496,9 @@ public final class GamepadServer {
                 .kv("pads", connectedPads())
                 .kv("library", library.snapshot().version())
                 .kv("keys", router.canInjectKeys())
+                .kv("keysWhy", router.canInjectKeys() ? null
+                        : System.getProperty("os.name", "").toLowerCase().contains("mac") ? wiiuu.Main.MAC_KEYS_HELP
+                        : "Key injection unavailable on the PC (headless or Wayland-only session).")
                 .kv("tv", screen != null && screen.available())
                 .kv("dsu", dsu != null)
                 .kv("pad", pads != null && pads.usable())

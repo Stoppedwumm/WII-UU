@@ -90,8 +90,15 @@ public final class InputRouter {
         this.menu = menu;
     }
 
+    /** Whether typed keys reach other apps (macOS: only with the Accessibility permission). */
+    private volatile BooleanSupplier keysPermitted = () -> true;
+
+    public void setKeysPermitted(BooleanSupplier permitted) {
+        this.keysPermitted = permitted;
+    }
+
     public boolean canInjectKeys() {
-        return robot != null;
+        return robot != null && keysPermitted.getAsBoolean();
     }
 
     public void button(int player, PadButton b, boolean down) {

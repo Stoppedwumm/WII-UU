@@ -370,7 +370,14 @@ and the GamePad buttons don't reach emulators. `install.sh` builds a native `WII
    **Accessibility**. *Settings (F1) → General → macOS permissions* opens both pages.
 3. Restart WII-UU.
 
-If the picture is black, the phone and the TV now say so instead of showing a black screen.
+If the picture is black, the phone and the TV now say so instead of showing a black screen. The
+same goes for the buttons: when a game starts, WII-UU checks the Accessibility permission, and
+without it the TV and the phone say what to do (macOS also shows its own dialog once).
+
+**Updates keep the permissions.** macOS ties them to the app's code signature, so an app rebuilt on
+every update silently loses them while System Settings still shows them as on. Since 1.8.1 the app
+only contains a small start-up program that loads `wiiuu.jar`, and updates leave the app alone. If
+you update from an older version, turn WII-UU **off and on again** under both permissions once.
 
 **Dolphin:** there are no virtual controllers on macOS. So while a GameCube or Wii game runs,
 WII-UU temporarily gives Dolphin a keyboard mapping that matches exactly what the phone sends:

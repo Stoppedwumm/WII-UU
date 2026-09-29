@@ -156,10 +156,18 @@ if [ "$SHORTCUT" = 1 ]; then
       if [ -z "$JPACKAGE" ] && [ -x "$jp" ]; then JPACKAGE="$jp"; fi
     done
     mkdir -p "$HOME/Applications"
-    built=0
-    if [ -n "$JPACKAGE" ]; then
+    built=0; kept=0
+    # The app only holds a small start-up jar (wiiuu.Boot) that loads $PREFIX/wiiuu.jar, so updates
+    # leave it untouched: a rebuilt app gets a new code signature, and macOS then silently ignores the
+    # Accessibility and Screen Recording permissions it shows as on. BOOT names the start-up jar's
+    # version; the app is only built again when it changes.
+    BOOT="wiiuu-boot-1.jar"
+    if [ -f "$APP/Contents/app/$BOOT" ]; then
+      built=1; kept=1
+      ok "App: ~/Applications/WII-UU.app (kept, so its macOS permissions stay on)"
+    elif [ -n "$JPACKAGE" ]; then
       say "Building WII-UU.app (native macOS app, about a minute)"
-      stage="$(mktemp -d)"; cp "$PREFIX/wiiuu.jar" "$stage/"
+      stage="$(mktemp -d)"; mkdir -p "$stage/in" "$stage/cls"
       icon=()
       if [ -f "$PREFIX/wiiuu.png" ] && command -v iconutil >/dev/null 2>&1; then
         set_dir="$stage/WII-UU.iconset"; mkdir -p "$set_dir"
@@ -169,16 +177,17 @@ if [ "$SHORTCUT" = 1 ]; then
         done
         iconutil -c icns "$set_dir" -o "$stage/WII-UU.icns" 2>/dev/null && icon=(--icon "$stage/WII-UU.icns")
       fi
-      version="$(java -jar "$PREFIX/wiiuu.jar" --version 2>/dev/null | awk '{print $2}')"
-      rm -rf "$APP"
-      if "$JPACKAGE" --type app-image --name WII-UU --app-version "${version:-1.0.0}" --input "$stage" \
-           --main-jar wiiuu.jar --main-class wiiuu.Main --dest "$HOME/Applications" \
-           --mac-package-identifier io.github.wiiuu ${icon[@]+"${icon[@]}"} >/dev/null 2>&1; then
-        built=1
-        ok "App: ~/Applications/WII-UU.app"
-      else
-        warn "jpackage failed; using a simple launcher app instead"
+      if unzip -q -o "$PREFIX/wiiuu.jar" 'wiiuu/Boot.class' -d "$stage/cls" \
+         && "$(dirname "$JPACKAGE")/jar" --create --file "$stage/in/$BOOT" -C "$stage/cls" wiiuu/Boot.class; then
+        rm -rf "$APP"
+        if "$JPACKAGE" --type app-image --name WII-UU --app-version 1.0 --input "$stage/in" \
+             --main-jar "$BOOT" --main-class wiiuu.Boot --dest "$HOME/Applications" \
+             --mac-package-identifier io.github.wiiuu ${icon[@]+"${icon[@]}"} >/dev/null 2>&1; then
+          built=1
+          ok "App: ~/Applications/WII-UU.app"
+        fi
       fi
+      [ "$built" = 1 ] || warn "jpackage failed; using a simple launcher app instead"
       rm -rf "$stage"
     fi
     if [ "$built" = 0 ]; then
@@ -197,10 +206,13 @@ if [ "$SHORTCUT" = 1 ]; then
         '</dict></plist>' > "$APPDIR/Info.plist"
       ok "App: ~/Applications/WII-UU.app (simple launcher; install a JDK with jpackage for the native app)"
     fi
-    say "macOS permissions (needed for the GamePad screen and GamePad buttons)"
-    warn "In System Settings > Privacy & Security, turn on WII-UU under BOTH 'Screen Recording' and 'Accessibility'."
-    warn "Start WII-UU from ~/Applications/WII-UU.app (not the terminal) so the permissions belong to WII-UU."
-    open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || true
+    if [ "$kept" = 0 ]; then
+      say "macOS permissions (needed for the GamePad screen and GamePad buttons)"
+      warn "In System Settings > Privacy & Security, turn on WII-UU under BOTH 'Screen Recording' and 'Accessibility'."
+      warn "If WII-UU is already listed there, turn it off and on again: the new app needs to be allowed once more."
+      warn "Start WII-UU from ~/Applications/WII-UU.app (not the terminal) so the permissions belong to WII-UU."
+      open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || true
+    fi
   else
     mkdir -p "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/256x256/apps"
     [ -f "$PREFIX/wiiuu.png" ] && cp "$PREFIX/wiiuu.png" "$HOME/.local/share/icons/hicolor/256x256/apps/wiiuu.png"
