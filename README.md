@@ -347,6 +347,17 @@ WII-UU temporarily gives Dolphin a keyboard mapping that matches exactly what th
 Your own Dolphin controller settings are backed up and restored when the game ends, or at the
 next start if WII-UU was killed. Turn this off with `input.dolphinMapping=off`.
 
+**PCSX2 (PS2) and DuckStation (PS1):** the same idea, on every system where WII-UU types keys
+(macOS, Windows, and Linux without virtual controllers).
+* While a game runs, controller ports 1 and 2 are bound to exactly the keys the phones send.
+* Only those binding lines are changed. Their original values are kept in
+  `PCSX2.ini.wiiuu-keys` / `settings.ini.wiiuu-keys` and put back when the game ends, or at the next
+  start if WII-UU was killed. Settings you change in the emulator during the game stay.
+* The emulator's settings file is used once it exists, so start PCSX2 or DuckStation once on its own
+  first (for PCSX2's BIOS setup).
+* `input.emulatorMapping=off` turns this off. `input.pcsx2.settings` / `input.duckstation.settings`
+  point to a settings file in another place.
+
 ## Updating
 
 * **In the app:** *Settings (F1) → General → Check for updates*. WII-UU also checks once at each

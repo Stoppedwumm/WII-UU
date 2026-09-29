@@ -17,7 +17,7 @@ import java.util.Locale;
  * backed up next to the files ({@code *.wiiuu-backup}) and restored when the game ends, or on the
  * next start if WII-UU was killed mid-game.
  */
-public final class DolphinInput {
+public final class DolphinInput implements InputPatch {
     private static final String OS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
     private static final String BACKUP = ".wiiuu-backup";
     private static final String[] FILES = {"GCPadNew.ini", "WiimoteNew.ini"};
@@ -89,6 +89,7 @@ public final class DolphinInput {
     }
 
     /** Whether to patch for this launch: Dolphin, GameCube/Wii, on macOS (input.dolphinMapping=off disables it). */
+    @Override
     public boolean applies(Game game, List<String> cmd) {
         String id = game.system().id();
         if (!id.equals("gc") && !id.equals("wii")) return false;
@@ -98,6 +99,7 @@ public final class DolphinInput {
     }
 
     /** Backs up Dolphin's controller files, writes the WII-UU mapping, and returns the command to run. */
+    @Override
     public synchronized List<String> before(Game game, List<String> cmd) {
         Path dir = configDir();
         try {
@@ -128,12 +130,14 @@ public final class DolphinInput {
     }
 
     /** Puts the user's own controller settings back. */
+    @Override
     public synchronized void after() {
         if (patchedDir != null) restore(patchedDir);
         patchedDir = null;
     }
 
     /** At start: undo a mapping left behind if WII-UU was killed while a game ran. */
+    @Override
     public void recover() {
         Path dir = configDir();
         if (Files.exists(dir.resolve(FILES[0] + BACKUP)) || Files.exists(dir.resolve(FILES[1] + BACKUP))) {

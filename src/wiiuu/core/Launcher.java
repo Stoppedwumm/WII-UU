@@ -31,7 +31,10 @@ public final class Launcher {
     }
 
     private final Config config;
-    private final DolphinInput dolphin;
+    /** temporary controller mappings for emulators (Dolphin, PCSX2, DuckStation), see InputPatch */
+    private final List<InputPatch> inputPatches;
+    /** whether WII-UU types keys for this game (the mappings only matter then) */
+    private volatile java.util.function.Predicate<Game> typesKeys = g -> true;
     private final RetroArch retroArch;
     /** the running game was started in RetroArch (so it reads RetroArch's key layout) */
     private volatile boolean inRetroArch;
@@ -44,9 +47,15 @@ public final class Launcher {
 
     public Launcher(Config config) {
         this.config = config;
-        this.dolphin = new DolphinInput(config);
+        this.inputPatches = List.of(new DolphinInput(config), new PadIniInput(config, PadIniInput.pcsx2()),
+                new PadIniInput(config, PadIniInput.duckstation()));
         this.retroArch = new RetroArch(config);
-        dolphin.recover();
+        for (InputPatch p : inputPatches) p.recover();
+    }
+
+    /** Tells the launcher when WII-UU types keys for a game (see Main: input.keys, virtual pads). */
+    public void setTypesKeys(java.util.function.Predicate<Game> typesKeys) {
+        this.typesKeys = typesKeys;
     }
 
     public void addListener(Listener l) {
@@ -90,8 +99,17 @@ public final class Launcher {
             if (cmd.isEmpty()) throw new LaunchException("No emulator command set for " + game.system().name());
             cmd = resolve(cmd, game.system());
         }
-        boolean dolphinPatched = !viaRetroArch && dolphin.applies(game, cmd);
-        if (dolphinPatched) cmd = dolphin.before(game, cmd);
+        InputPatch patch = null;
+        if (!viaRetroArch && typesKeys.test(game)) {
+            for (InputPatch ip : inputPatches) {
+                if (ip.applies(game, cmd)) {
+                    patch = ip;
+                    cmd = ip.before(game, cmd);
+                    break;
+                }
+            }
+        }
+        final InputPatch applied = patch;
         cmd = new ArrayList<>(cmd);
         flatpakApp = flatpakId(cmd);
         macApp = macAppName(cmd);
@@ -113,7 +131,7 @@ public final class Launcher {
         try {
             p = pb.start();
         } catch (IOException e) {
-            if (dolphinPatched) dolphin.after();
+            if (applied != null) applied.after();
             throw new LaunchException(game.system().emulator() + " is not installed (\"" + cmd.get(LINUX && cmd.get(0).equals("setsid") ? 1 : 0)
                     + "\"). " + (LINUX ? "Run: wiiuu-emulators --only " + EMU_DIRS.getOrDefault(game.system().emulator(), "?") + "  or set" : "Set")
                     + " the emulator in Settings (F1).");
@@ -131,7 +149,7 @@ public final class Launcher {
                     current = null;
                 }
             }
-            if (dolphinPatched) dolphin.after();         // give the user's own controller settings back
+            if (applied != null) applied.after();        // give the user's own controller settings back
             int code = done.exitValue();
             boolean quick = code != 0 && System.currentTimeMillis() - startedAt < 4000;
             for (Listener l : listeners) l.exited(game, code, quick, log);

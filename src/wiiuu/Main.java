@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.6.1";
+    public static final String VERSION = "1.7.0";
 
     private final Config config;
     private final Library library;
@@ -66,18 +66,21 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         });
         // Typing keys into emulators is the fallback for when real virtual controllers aren't available:
         // input.keys = auto (default: only without virtual pads) | on | off; system.<id>.keys overrides.
-        router.setKeysEnabled(() -> {
-            Game g = launcher.current();
-            if (g == null) return true;
-            String perSystem = config.get("system." + g.system().id() + ".keys", null);
-            if (perSystem != null) return Boolean.parseBoolean(perSystem.trim());
-            return switch (config.get("input.keys", "auto").trim().toLowerCase()) {
-                case "on", "true" -> true;
-                case "off", "false" -> false;
-                default -> vpads == null || !vpads.usable();
-            };
-        });
+        router.setKeysEnabled(() -> typesKeysFor(launcher.current()));
+        launcher.setTypesKeys(this::typesKeysFor);
         launcher.addListener(this);
+    }
+
+    /** Whether WII-UU types keys into this game's emulator (else the phone is a virtual controller or DSU). */
+    private boolean typesKeysFor(Game g) {
+        if (g == null) return true;
+        String perSystem = config.get("system." + g.system().id() + ".keys", null);
+        if (perSystem != null) return Boolean.parseBoolean(perSystem.trim());
+        return switch (config.get("input.keys", "auto").trim().toLowerCase()) {
+            case "on", "true" -> true;
+            case "off", "false" -> false;
+            default -> vpads == null || !vpads.usable();
+        };
     }
 
     public static void main(String[] args) throws Exception {
