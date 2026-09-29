@@ -147,9 +147,71 @@
     .hero { padding-top: 24px; }
     nav a.hide-sm { display: none; }
   }
+  /* ---- intro: the app's start-up animation, once per visit -------------------------------- */
+  #intro { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden;
+    background: linear-gradient(180deg, #fff, #eef2f5); --logo: #3c4043; --blue: #00a8e8; --tag: #8a9099;
+    animation: introOut .7s cubic-bezier(.4, 0, .2, 1) 2.55s forwards; }
+  :root[data-theme="dark"] #intro { background: linear-gradient(180deg, #1b1f24, #0f1113); --logo: #e6e9ec; --blue: #26b9f2; --tag: #9aa3ad; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) #intro { background: linear-gradient(180deg, #1b1f24, #0f1113); --logo: #e6e9ec; --blue: #26b9f2; --tag: #9aa3ad; }
+  }
+  #intro .ring { position: absolute; left: 50%; top: 46%; width: 84vmax; height: 84vmax; margin: -42vmax 0 0 -42vmax;
+    border-radius: 50%; border: max(2px, .55vmin) solid var(--blue); opacity: 0; transform: scale(0);
+    animation: introRing 1.6s cubic-bezier(.2, .7, .3, 1) .25s forwards; }
+  #intro .center { position: absolute; left: 0; right: 0; top: 46%; transform: translateY(-50%); text-align: center; }
+  #intro .word { display: inline-block; font-weight: 800; letter-spacing: .01em; line-height: 1;
+    font-size: clamp(56px, 12vh, 150px); opacity: 0;
+    animation: introLogo .7s cubic-bezier(.2, .7, .3, 1) .35s forwards, introZoom .7s cubic-bezier(.4, 0, .2, 1) 2.55s forwards; }
+  /* each part is painted through its text, with a white sheen band sweeping across once */
+  #intro .word span { color: transparent; -webkit-background-clip: text; background-clip: text;
+    background-repeat: no-repeat; background-size: 300% 100%, 100% 100%; background-position: 130% 0, 0 0;
+    animation: introSheen .8s ease-in-out 1.05s forwards; }
+  #intro .word .w { background-image: linear-gradient(100deg, transparent 42%, rgba(255, 255, 255, .85) 50%, transparent 58%), linear-gradient(var(--logo), var(--logo)); }
+  #intro .word .u { background-image: linear-gradient(100deg, transparent 42%, rgba(255, 255, 255, .85) 50%, transparent 58%), linear-gradient(var(--blue), var(--blue));
+    animation-delay: 1.3s; }
+  #intro .tagline { margin-top: 2.2vh; color: var(--tag); font-size: clamp(15px, 2.8vh, 30px); opacity: 0;
+    animation: introTag .5s ease-out 1.45s forwards; }
+  #intro .spin { position: absolute; right: 9vh; bottom: 9vh; width: 5.6vh; height: 5.6vh; opacity: 0;
+    animation: introFade .4s ease-out 1.7s forwards; }
+  #intro .spin i { position: absolute; left: 50%; top: 50%; width: 1.3vh; height: 1.3vh; margin: -.65vh 0 0 -.65vh;
+    border-radius: 50%; background: var(--blue); opacity: .18;
+    transform: rotate(calc(var(--i) * 30deg)) translateY(-2.8vh);
+    animation: introDot 1s linear infinite; animation-delay: calc(var(--i) * 1s / 12 - 1s); }
+  #intro.skip { animation: introOut .3s ease-out forwards; }
+  #intro.skip * { animation-play-state: paused; }
+  @keyframes introRing { 0% { opacity: .35; transform: scale(0); } 100% { opacity: 0; transform: scale(1); } }
+  @keyframes introLogo { from { opacity: 0; transform: translateY(3vh) scale(.94); } to { opacity: 1; transform: none; } }
+  @keyframes introZoom { from { transform: none; } to { transform: scale(1.06); } }
+  @keyframes introSheen { from { background-position: 130% 0, 0 0; } to { background-position: -30% 0, 0 0; } }
+  @keyframes introTag { from { opacity: 0; transform: translateY(1vh); } to { opacity: 1; transform: none; } }
+  @keyframes introFade { to { opacity: 1; } }
+  @keyframes introDot { 0% { opacity: 1; } 50%, 100% { opacity: .18; } }
+  @keyframes introOut { to { opacity: 0; visibility: hidden; } }
+  @media (prefers-reduced-motion: reduce) { #intro { display: none; } }
 </style>
 </head>
 <body>
+<div id="intro" aria-hidden="true">
+  <div class="ring"></div>
+  <div class="center">
+    <div class="word"><span class="w">WII-</span><span class="u">UU</span></div>
+    <div class="tagline">Your games, the Wii U way</div>
+  </div>
+  <div class="spin"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><i style="--i:7"></i><i style="--i:8"></i><i style="--i:9"></i><i style="--i:10"></i><i style="--i:11"></i></div>
+</div>
+<script>
+  // the intro plays once per visit; a link straight to a section skips it; any input skips ahead
+  (() => {
+    const intro = document.getElementById("intro");
+    let seen = false;
+    try { seen = sessionStorage.getItem("wiiuu-intro") === "1"; sessionStorage.setItem("wiiuu-intro", "1"); } catch (e) {}
+    if (seen || location.hash) { intro.remove(); return; }
+    const done = () => { intro.remove(); ["pointerdown", "keydown", "wheel", "touchstart"].forEach(t => removeEventListener(t, skip)); };
+    const skip = () => { intro.classList.add("skip"); setTimeout(done, 320); };
+    ["pointerdown", "keydown", "wheel", "touchstart"].forEach(t => addEventListener(t, skip, { passive: true, once: true }));
+    intro.addEventListener("animationend", (e) => { if (e.target === intro) done(); });
+  })();
+</script>
 
 <header>
   <div class="wrap">
