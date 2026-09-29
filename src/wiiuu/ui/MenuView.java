@@ -69,6 +69,14 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
         void quit();
 
+        /**
+         * Console mode (WII-UU started as the whole session by wiiuu-console): "desktop" switches to
+         * the desktop session, "restart" and "shutdown" restart or power off the computer.
+         */
+        default void power(String action) {
+            quit();
+        }
+
         void refresh();
 
         void closeGame();
@@ -256,7 +264,37 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     // overlays / status
     private boolean showPad;
-    private boolean confirmQuit;
+    private boolean confirmQuit;            // the Power menu is open
+    private int powerSel;
+    /** started by wiiuu-console as the whole session (SteamOS-style console mode) */
+    static final boolean CONSOLE = "1".equals(System.getenv("WIIUU_CONSOLE"));
+
+    private record PowerItem(String label, String action) {}
+
+    private static List<PowerItem> powerItems() {
+        return CONSOLE
+                ? List.of(new PowerItem("Desktop Mode", "desktop"), new PowerItem("Restart", "restart"),
+                        new PowerItem("Shut Down", "shutdown"), new PowerItem("Cancel", null))
+                : List.of(new PowerItem("Quit WII-UU", "quit"), new PowerItem("Cancel", null));
+    }
+
+    /** Opens the Power menu (the dock's Power button). */
+    public void showPowerMenu() {
+        confirmQuit = true;
+        powerSel = 0;
+        repaint();
+    }
+
+    private void choosePower(int i) {
+        PowerItem item = powerItems().get(i);
+        if (item.action() == null) {
+            back();
+            return;
+        }
+        Sfx.select();
+        if (item.action().equals("quit")) actions.quit();
+        else actions.power(item.action());
+    }
     private String toast;
     private long toastUntil;
     private Game playing;
@@ -418,6 +456,17 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void navigate(int dx, int dy) {
         if (skipBoot()) return;
+        if (confirmQuit) {
+            int n = powerItems().size(), step = dy != 0 ? dy : dx;
+            int next = Math.max(0, Math.min(n - 1, powerSel + step));
+            if (next == powerSel) Sfx.bump();
+            else {
+                powerSel = next;
+                Sfx.move();
+            }
+            repaint();
+            return;
+        }
         if (modal()) return;
         if (inDock) {
             if (dy < 0 && !tiles.isEmpty()) {
@@ -474,7 +523,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void activate() {
         if (skipBoot()) return;
         if (confirmQuit) {
-            actions.quit();
+            choosePower(powerSel);
             return;
         }
         if (showPad) {
@@ -490,7 +539,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 case GAMEPAD -> showPad = true;
                 case SETTINGS -> SwingUtilities.invokeLater(actions::openSettings);
                 case REFRESH -> refresh();
-                case POWER -> confirmQuit = true;
+                case POWER -> {
+                    confirmQuit = true;
+                    powerSel = 0;
+                }
             }
             repaint();
             return;
@@ -616,8 +668,17 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 if (skipBoot()) return;
                 if (playing != null) return;
                 if (showPad || confirmQuit) {
-                    if (confirmQuit && confirmYesRect().contains(e.getPoint())) actions.quit();
-                    else back();
+                    if (confirmQuit) {
+                        List<Rectangle2D> rs = powerRects();
+                        for (int i = 0; i < rs.size(); i++) {
+                            if (rs.get(i).contains(e.getPoint())) {
+                                powerSel = i;
+                                choosePower(i);
+                                return;
+                            }
+                        }
+                    }
+                    back();
                     return;
                 }
                 Layout L = geom();
@@ -1007,11 +1068,24 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         return new Rectangle2D.Float(x, y, size, size);
     }
 
-    private Rectangle2D confirmYesRect() {
-        float w = getWidth(), h = getHeight();
-        float cw = Math.min(w * 0.44f, 560), ch = h * 0.3f;
-        float cx = (w - cw) / 2, cy = (h - ch) / 2;
-        return new Rectangle2D.Float(cx + cw / 2 - cw * 0.35f - 10, cy + ch * 0.6f, cw * 0.35f, ch * 0.24f);
+    /** The Power menu card: a title, then one full-width button per choice. */
+    private Rectangle2D powerCard() {
+        float w = Math.max(getWidth(), 640), h = Math.max(getHeight(), 400);
+        int n = powerItems().size();
+        float bh = h * 0.075f, gap = h * 0.018f;
+        float cw = Math.min(w * 0.4f, 520), ch = h * 0.16f + n * (bh + gap) + h * 0.03f;
+        return new Rectangle2D.Float((w - cw) / 2, (h - ch) / 2, cw, ch);
+    }
+
+    private List<Rectangle2D> powerRects() {
+        Rectangle2D card = powerCard();
+        float h = Math.max(getHeight(), 400), bh = h * 0.075f, gap = h * 0.018f;
+        float x = (float) card.getX() + (float) card.getWidth() * 0.1f, bw = (float) card.getWidth() * 0.8f;
+        List<Rectangle2D> out = new ArrayList<>();
+        for (int i = 0; i < powerItems().size(); i++) {
+            out.add(new Rectangle2D.Float(x, (float) card.getY() + h * 0.16f + i * (bh + gap), bw, bh));
+        }
+        return out;
     }
 
     // ---- painting -----------------------------------------------------------------------
@@ -1670,25 +1744,25 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void paintConfirm(Graphics2D g) {
         Layout L = geom();
         dim(g, L);
-        float cw = Math.min(L.w * 0.44f, 560), ch = L.h * 0.3f;
-        float cx = (L.w - cw) / 2, cy = (L.h - ch) / 2;
-        RoundRectangle2D card = new RoundRectangle2D.Float(cx, cy, cw, ch, 36, 36);
+        Rectangle2D c = powerCard();
+        RoundRectangle2D card = new RoundRectangle2D.Double(c.getX(), c.getY(), c.getWidth(), c.getHeight(), 36, 36);
         shadow(g, card, 10);
         g.setColor(CARD);
         g.fill(card);
         g.setColor(TEXT);
-        g.setFont(font(Font.BOLD, ch * 0.13f));
-        drawCentered(g, "Quit WII-UU?", L.w / 2, cy + ch * 0.35f);
-        Rectangle2D yes = confirmYesRect();
-        Rectangle2D no = new Rectangle2D.Double(cx + cw / 2 + 10, yes.getY(), yes.getWidth(), yes.getHeight());
-        for (Rectangle2D r : new Rectangle2D[]{yes, no}) {
-            boolean isYes = r == yes;
+        g.setFont(font(Font.BOLD, L.h * 0.045f));
+        drawCentered(g, CONSOLE ? "Power" : "Quit WII-UU?", (float) c.getCenterX(), (float) c.getY() + L.h * 0.095f);
+        List<PowerItem> items = powerItems();
+        List<Rectangle2D> rs = powerRects();
+        for (int i = 0; i < items.size(); i++) {
+            Rectangle2D r = rs.get(i);
+            boolean on = i == powerSel;
             RoundRectangle2D b = new RoundRectangle2D.Double(r.getX(), r.getY(), r.getWidth(), r.getHeight(), r.getHeight(), r.getHeight());
-            g.setColor(isYes ? ACCENT : BUTTON);
+            g.setColor(on ? ACCENT : BUTTON);
             g.fill(b);
-            g.setColor(isYes ? Color.WHITE : TEXT);
-            g.setFont(font(Font.BOLD, ch * 0.08f));
-            drawCentered(g, isYes ? "A: Quit" : "B: Cancel", (float) r.getCenterX(),
+            g.setColor(on ? Color.WHITE : TEXT);
+            g.setFont(font(Font.BOLD, L.h * 0.03f));
+            drawCentered(g, items.get(i).label(), (float) r.getCenterX(),
                     (float) (r.getCenterY() + g.getFontMetrics().getAscent() * 0.36f));
         }
     }

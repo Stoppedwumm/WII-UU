@@ -5,6 +5,8 @@
 #   ./install.sh --with-emulators also install emulators (Linux, incl. Raspberry Pi): official prebuilt
 #                                 releases for this CPU, built from source where none exist;
 #                                 --with-all-emulators also builds heavy ones that have no release
+#   ./install.sh --console-mode   Linux: also make this computer a WII-UU console (boots into WII-UU,
+#                                 SteamOS style; Power → Desktop Mode switches to the desktop)
 #   ./install.sh --uninstall      remove WII-UU (keeps your ROMs and settings)
 #
 # Options: --prefix DIR  --bin DIR  --roms DIR  --port N  --yes  --no-shortcut
@@ -22,6 +24,7 @@ YES=0
 EMULATORS=0
 SHORTCUT=1
 UNINSTALL=0
+CONSOLE=0
 [ "$OS" = "Darwin" ] && PREFIX="$HOME/Library/Application Support/WII-UU"
 
 SYSTEMS="nes snes gb n64 gba gc nds wii 3ds wiiu switch sms genesis saturn dc ps1 ps2 psp ps3 ps4"
@@ -45,7 +48,8 @@ while [ $# -gt 0 ]; do
     --with-all-emulators) EMULATORS=all ;;
     --no-shortcut) SHORTCUT=0 ;;
     --uninstall) UNINSTALL=1 ;;
-    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --console-mode) CONSOLE=1 ;;
+    -h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option $1 (see --help)" ;;
   esac
   shift
@@ -54,7 +58,7 @@ done
 # ---------------------------------------------------------------------------- uninstall
 if [ "$UNINSTALL" = 1 ]; then
   say "Removing $APP"
-  rm -rf "$PREFIX" "$BIN/wiiuu" "$BIN/wiiuu-emulators" \
+  rm -rf "$PREFIX" "$BIN/wiiuu" "$BIN/wiiuu-emulators" "$BIN/wiiuu-console" \
          "$HOME/.local/share/applications/wiiuu.desktop" \
          "$HOME/.local/share/icons/hicolor/256x256/apps/wiiuu.png" \
          "$HOME/Applications/WII-UU.app"
@@ -215,6 +219,13 @@ EOF
   fi
 fi
 
+# ---------------------------------------------------------------------------- console mode tool (Linux)
+if [ "$OS" = "Linux" ] && [ -f "$HERE/console/wiiuu-console" ]; then
+  cp "$HERE/console/wiiuu-console" "$PREFIX/wiiuu-console"; chmod +x "$PREFIX/wiiuu-console"
+  printf '#!/usr/bin/env bash\nexec "%s/wiiuu-console" "$@"\n' "$PREFIX" > "$BIN/wiiuu-console"
+  chmod +x "$BIN/wiiuu-console"
+fi
+
 # ---------------------------------------------------------------------------- emulators (optional)
 # Always install the builder so `wiiuu-emulators --update` works later.
 if [ -f "$HERE/emulators.sh" ]; then
@@ -285,6 +296,19 @@ elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 
 fi
 if [ "$OS" = "Linux" ] && [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
   warn "Wayland session: GamePad keys, screen streaming and touch work with X11/XWayland windows. If an emulator ignores it, run it with QT_QPA_PLATFORM=xcb or log into an X11 session."
+fi
+
+# ---------------------------------------------------------------------------- console mode (optional)
+if [ "$CONSOLE" = 1 ]; then
+  if [ "$OS" != "Linux" ]; then
+    warn "Console mode is for Linux (PCs and Raspberry Pi)."
+  else
+    say "Setting up console mode (needs sudo)"
+    cflags="--user $(id -un)"; [ "$YES" = 1 ] && cflags="$cflags --yes"
+    # shellcheck disable=SC2086
+    sudo env XDG_SESSION_DESKTOP="${XDG_SESSION_DESKTOP:-}" "$PREFIX/wiiuu-console" install --session-hint "${XDG_SESSION_DESKTOP:-${DESKTOP_SESSION:-}}" $cflags \
+      || warn "console mode was not set up; try again later with: sudo wiiuu-console install"
+  fi
 fi
 
 printf '\n%sDone!%s Start WII-UU with %swiiuu%s (or from your app menu).\n' "$c_green" "$c_off" "$c_blue" "$c_off"

@@ -8,8 +8,9 @@ NAME="WII-UU-$VERSION"
 rm -rf "dist/$NAME" "dist/$NAME.zip"
 mkdir -p "dist/$NAME/source"
 cp build/wiiuu.jar install.sh emulators.sh install.ps1 install.bat README.md "dist/$NAME/"
+cp -r console "dist/$NAME/"
 cp -r src resources build.sh package.sh "dist/$NAME/source/"
-chmod +x "dist/$NAME/install.sh" "dist/$NAME/emulators.sh" "dist/$NAME/source/build.sh" "dist/$NAME/source/package.sh"
+chmod +x "dist/$NAME/install.sh" "dist/$NAME/emulators.sh" "dist/$NAME/console/wiiuu-console" "dist/$NAME/source/build.sh" "dist/$NAME/source/package.sh"
 (cd dist && zip -qr -X "$NAME.zip" "$NAME")
 rm -rf "dist/$NAME"
 # the website (docs/, served at wiiuu.stoppedwumm.net) hosts the downloads too

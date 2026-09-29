@@ -122,9 +122,18 @@ public final class Updater {
             } else if (OS.contains("mac")) {
                 relaunch = "open \"$HOME/Applications/WII-UU.app\" || " + relaunch;
             }
+            String done = "";
+            if ("1".equals(System.getenv("WIIUU_CONSOLE"))) {
+                // console mode: the session starts WII-UU again itself, once this flag is gone
+                Path flag = Path.of(System.getProperty("user.home"), ".wiiuu", "updating");
+                Files.createDirectories(flag.getParent());
+                Files.writeString(flag, Long.toString(pid));
+                relaunch = "true";
+                done = "rm -f \"" + flag + "\"; ";
+            }
             String sh = "while kill -0 " + pid + " 2>/dev/null; do sleep 0.5; done; "
                     + "bash \"" + release.resolve("install.sh") + "\" --yes > \"" + log + "\" 2>&1 < /dev/null; "
-                    + "( " + relaunch + " ) >/dev/null 2>&1";
+                    + done + "( " + relaunch + " ) >/dev/null 2>&1";
             cmd = List.of("nohup", "bash", "-c", sh);
         }
         new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)

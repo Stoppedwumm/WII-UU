@@ -361,6 +361,26 @@ curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash -s -- --with-emulators</c
     </div>
   </section>
 
+  <section id="console">
+    <div class="wrap">
+      <h2>Console Mode</h2>
+      <p class="sub">Turn a PC or Raspberry Pi into a WII-UU console, like SteamOS on a Steam Deck. It boots straight into WII-UU, full screen, with no desktop in sight, and Power &rarr; <b>Desktop Mode</b> is there whenever you need the computer.</p>
+      <pre class="code"><code>curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash -s -- --console-mode
+
+<span class="c"># already installed? just the console part:</span>
+sudo wiiuu-console install</code></pre>
+      <div class="cards">
+        <div class="card"><div class="icon">⏻</div><h3>Boots into WII-UU</h3>
+          <p>No login screen and no desktop, just the menu on the TV. Every boot starts here, and the Power menu restarts or shuts down the computer.</p></div>
+        <div class="card"><div class="icon">▭</div><h3>Desktop Mode anytime</h3>
+          <p>Power &rarr; Desktop Mode opens your normal desktop. The <b>Return to WII-UU</b> icon there brings the console back.</p></div>
+        <div class="card"><div class="icon">✓</div><h3>Never stuck</h3>
+          <p>If WII-UU crashes it restarts. If it keeps failing, you land on the desktop. <code>sudo wiiuu-console uninstall</code> undoes everything.</p></div>
+      </div>
+      <p class="meta">Linux and Raspberry Pi OS with LightDM, SDDM or GDM. The installer adds whatever is missing.</p>
+    </div>
+  </section>
+
   <section id="emulators">
     <div class="wrap">
       <h2>Emulators</h2>

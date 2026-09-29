@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.5.0";
+    public static final String VERSION = "1.6.0";
 
     private final Config config;
     private final Library library;
@@ -277,6 +277,25 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         library.rescanAsync();
     }
 
+    /**
+     * Console mode: WII-UU exits with a code that tells wiiuu-session what to do next
+     * (see console/wiiuu-session): 10 = desktop mode, 11 = shut down, 12 = restart.
+     */
+    @Override
+    public void power(String action) {
+        int code = switch (action) {
+            case "desktop" -> 10;
+            case "shutdown" -> 11;
+            case "restart" -> 12;
+            default -> 0;
+        };
+        launcher.stop(true);
+        if (server != null) server.stop();
+        if (dsuServer != null) dsuServer.stop();
+        if (vpads != null) vpads.stop();
+        System.exit(code);
+    }
+
     @Override
     public void closeGame() {
         launcher.stop();
@@ -405,6 +424,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         switch (which) {
             case "games" -> v.activate();
             case "pad" -> v.toggleGamepadInfo();
+            case "power" -> v.showPowerMenu();
             case "playing" -> {
                 v.activate();
                 var s = library.snapshot();

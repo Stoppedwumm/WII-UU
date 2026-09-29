@@ -46,6 +46,43 @@ The installer:
 
 To uninstall, run `./install.sh --uninstall` or `install.ps1 -Uninstall`. Your ROMs and settings are kept.
 
+## Console Mode (Linux, Raspberry Pi)
+
+Console Mode turns a PC or Raspberry Pi into a WII-UU console, the way SteamOS does on a Steam
+Deck. The computer boots straight into WII-UU, full screen, with no desktop around it.
+
+```sh
+curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash -s -- --console-mode   # new install
+sudo wiiuu-console install                                                    # WII-UU already installed
+```
+
+* **Power → Desktop Mode** logs you into your normal desktop. The **Return to WII-UU** icon on the
+  desktop, or in the app menu, goes back.
+* **Power** also offers Restart and Shut Down, so a keyboard is never needed.
+* **Every boot** starts in console mode again, like on a Steam Deck.
+* **If WII-UU crashes,** it is started again. If it fails three times in a row, the computer switches
+  to the desktop, so you can never get locked out.
+* **Updates** from *Settings → Check for updates* install in place, and WII-UU comes back by itself.
+
+How it works:
+* A login session called *WII-UU (Console Mode)* runs `wiiuu-session`, which keeps WII-UU running
+  full screen under a minimal Openbox window manager. It also hides the mouse pointer and keeps the
+  TV from blanking.
+* The display manager logs you in automatically, to that session or to the desktop. LightDM (as on
+  Raspberry Pi OS), SDDM (KDE) and GDM (GNOME) are supported. The installer adds LightDM if none is
+  installed.
+* The installer adds Xorg, Openbox and unclutter if they are missing.
+* Switching uses a sudo rule that allows only `wiiuu-console switch desktop|console`.
+
+```sh
+wiiuu-console status                 # what's set up
+wiiuu-console switch desktop         # switch now (the current session ends)
+sudo wiiuu-console install --desktop plasma   # pick which desktop Desktop Mode opens
+sudo wiiuu-console uninstall         # back to a normal desktop login
+```
+
+The session's log is in `$XDG_RUNTIME_DIR/wiiuu-session.log`.
+
 ## Installing emulators (Linux, Raspberry Pi)
 
 `emulators.sh` (installed as `wiiuu-emulators`) sets up the emulators and points WII-UU's system

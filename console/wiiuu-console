@@ -1,0 +1,402 @@
+#!/usr/bin/env bash
+# WII-UU Console Mode: turn a Linux PC or Raspberry Pi into a WII-UU console, SteamOS style.
+#
+# The computer boots straight into WII-UU, full screen, with no desktop around it. Power → Desktop
+# Mode (in WII-UU) logs into your normal desktop; the "Return to WII-UU" icon there switches back.
+# Every boot starts in console mode again, just like a Steam Deck.
+#
+#   sudo wiiuu-console install [--user NAME] [--desktop SESSION] [--yes]
+#   sudo wiiuu-console uninstall             back to a normal desktop login
+#   wiiuu-console switch desktop|console     switch now (the current session ends)
+#   wiiuu-console status
+#
+# How it works: a login session called "WII-UU" (/usr/share/xsessions/wiiuu.desktop) runs
+# wiiuu-session, which keeps WII-UU running full screen. The display manager (LightDM, SDDM or
+# GDM) logs the user in automatically, into that session or the desktop, as `switch` sets it.
+# A boot service sets it back to the console each boot.
+set -euo pipefail
+
+SELF_DST=/usr/local/bin/wiiuu-console
+SESSION_BIN=/usr/local/bin/wiiuu-session
+SHARE=/usr/local/share/wiiuu-console
+CONF=/etc/wiiuu-console.conf
+XSESSION=/usr/share/xsessions/wiiuu.desktop
+SUDOERS=/etc/sudoers.d/wiiuu-console
+UNIT=/etc/systemd/system/wiiuu-console-boot.service
+RETURN_APP=/usr/share/applications/wiiuu-return.desktop
+LIGHTDM_CONF=/etc/lightdm/lightdm.conf.d/50-wiiuu-console.conf
+SDDM_CONF=/etc/sddm.conf.d/50-wiiuu-console.conf
+
+c_blue=$'\033[1;36m'; c_green=$'\033[1;32m'; c_yellow=$'\033[1;33m'; c_red=$'\033[1;31m'; c_off=$'\033[0m'
+[ -t 1 ] || { c_blue=; c_green=; c_yellow=; c_red=; c_off=; }
+say()  { printf '%s==>%s %s\n' "$c_blue" "$c_off" "$*"; }
+ok()   { printf '%s  ✓%s %s\n' "$c_green" "$c_off" "$*"; }
+warn() { printf '%s  !%s %s\n' "$c_yellow" "$c_off" "$*"; }
+die()  { printf '%sError:%s %s\n' "$c_red" "$c_off" "$*" >&2; exit 1; }
+YES=0
+ask()  { [ "$YES" = 1 ] && return 0; read -r -p "$1 [y/N] " a </dev/tty || return 1; [[ "$a" =~ ^[Yy] ]]; }
+
+need_root() {
+  [ "$(id -u)" = 0 ] && return 0
+  command -v sudo >/dev/null || die "run this as root"
+  exec sudo "$0" "$@"
+}
+
+load_conf() {
+  [ -f "$CONF" ] || die "console mode is not installed (sudo wiiuu-console install)"
+  # shellcheck disable=SC1090
+  . "$CONF"
+}
+
+# ---------------------------------------------------------------------------------------------
+# display managers
+
+detect_dm() {
+  local unit
+  unit="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
+  case "$unit" in
+    *lightdm*) echo lightdm; return ;;
+    *sddm*) echo sddm; return ;;
+    *gdm*) echo gdm; return ;;
+  esac
+  for dm in lightdm sddm gdm3 gdm; do
+    command -v "$dm" >/dev/null && { [ "$dm" = gdm3 ] && echo gdm || echo "$dm"; return; }
+  done
+  echo none
+}
+
+gdm_conf() {
+  for f in /etc/gdm3/custom.conf /etc/gdm/custom.conf /etc/gdm3/daemon.conf; do
+    [ -f "$f" ] && { echo "$f"; return; }
+  done
+  echo /etc/gdm/custom.conf
+}
+
+# set KEY=VALUE inside [SECTION] of an ini file (created if missing)
+ini_set() {
+  local file="$1" section="$2" key="$3" value="$4"
+  mkdir -p "$(dirname "$file")"; touch "$file"
+  awk -v s="[$section]" -v k="$key" -v v="$value" '
+    BEGIN { insec = 0; done = 0 }
+    $0 == s { print; insec = 1; next }
+    /^\[/ { if (insec && !done) { print k "=" v; done = 1 } insec = 0 }
+    insec && $0 ~ "^[#;]?[ \t]*" k "[ \t]*=" { if (!done) { print k "=" v; done = 1 } next }
+    { print }
+    END { if (!done) { if (!insec) print s; print k "=" v } }
+  ' "$file" > "$file.wiiuu-tmp" && cat "$file.wiiuu-tmp" > "$file" && rm -f "$file.wiiuu-tmp"
+}
+
+# log USER in automatically into SESSION (a .desktop name without extension)
+set_autologin() {
+  local session="$1"
+  case "$DM" in
+    lightdm)
+      mkdir -p "$(dirname "$LIGHTDM_CONF")"
+      printf '[Seat:*]\nautologin-user=%s\nautologin-user-timeout=0\nautologin-session=%s\nuser-session=%s\n' \
+        "$TARGET_USER" "$session" "$session" > "$LIGHTDM_CONF"
+      # lightdm.conf itself is read last and would win: move its own autologin lines out of the way once
+      if [ -f /etc/lightdm/lightdm.conf ] && grep -Eq '^(autologin-session|autologin-user|user-session)=' /etc/lightdm/lightdm.conf; then
+        [ -f /etc/lightdm/lightdm.conf.wiiuu-backup ] || cp /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.wiiuu-backup
+        sed -i -E 's/^(autologin-session|autologin-user|user-session)=/#wiiuu# &/' /etc/lightdm/lightdm.conf
+      fi
+      ;;
+    sddm)
+      mkdir -p "$(dirname "$SDDM_CONF")"
+      printf '[Autologin]\nUser=%s\nSession=%s.desktop\nRelogin=true\n' "$TARGET_USER" "$session" > "$SDDM_CONF"
+      ;;
+    gdm)
+      local f; f="$(gdm_conf)"
+      ini_set "$f" daemon AutomaticLoginEnable true
+      ini_set "$f" daemon AutomaticLogin "$TARGET_USER"
+      local acc="/var/lib/AccountsService/users/$TARGET_USER"
+      ini_set "$acc" User Session "$session"
+      ini_set "$acc" User XSession "$session"
+      ;;
+    *) die "no supported display manager (LightDM, SDDM or GDM)" ;;
+  esac
+}
+
+restart_dm() {
+  # ends the current graphical session; the display manager logs in again into the new choice
+  systemctl restart display-manager 2>/dev/null || systemctl restart "$DM" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------------------------
+# desktop sessions
+
+list_sessions() {
+  for d in /usr/share/xsessions /usr/share/wayland-sessions; do
+    [ -d "$d" ] || continue
+    for f in "$d"/*.desktop; do
+      [ -e "$f" ] || continue
+      n="$(basename "$f" .desktop)"
+      [ "$n" = wiiuu ] || echo "$n"
+    done
+  done | sort -u
+}
+
+pick_desktop() {
+  local user_env="$1" all
+  all="$(list_sessions)"
+  [ -n "$all" ] || { echo ""; return; }
+  # the desktop the installing user is sitting in, if we can tell
+  if [ -n "$user_env" ] && echo "$all" | grep -qx "$user_env"; then echo "$user_env"; return; fi
+  for want in plasma plasmax11 gnome gnome-xorg ubuntu ubuntu-xorg LXDE-pi-labwc rpd-labwc LXDE-pi-wayfire LXDE-pi-x rpd-x \
+              xfce cinnamon mate lxqt budgie-desktop LXDE lxde openbox; do
+    echo "$all" | grep -qx "$want" && { echo "$want"; return; }
+  done
+  echo "$all" | head -n1
+}
+
+# ---------------------------------------------------------------------------------------------
+# packages
+
+pkg_install() {
+  if command -v apt-get >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+  elif command -v dnf >/dev/null; then dnf install -y "$@"
+  elif command -v pacman >/dev/null; then pacman -S --needed --noconfirm "$@"
+  elif command -v zypper >/dev/null; then zypper --non-interactive install "$@"
+  else return 1; fi
+}
+
+install_packages() {
+  local want=()
+  if ! command -v Xorg >/dev/null && ! [ -x /usr/lib/xorg/Xorg ] && ! [ -x /usr/libexec/Xorg ]; then
+    if command -v apt-get >/dev/null; then want+=(xserver-xorg xserver-xorg-legacy); elif command -v pacman >/dev/null; then want+=(xorg-server); else want+=(xorg-x11-server-Xorg); fi
+  fi
+  command -v xset >/dev/null || { command -v apt-get >/dev/null && want+=(x11-xserver-utils) || want+=(xset); }
+  command -v openbox >/dev/null || want+=(openbox)
+  command -v unclutter >/dev/null || { command -v apt-get >/dev/null && want+=(unclutter) || want+=(unclutter); }
+  if [ "$DM" = none ]; then
+    want+=(lightdm)
+    command -v apt-get >/dev/null && want+=(lightdm-gtk-greeter) || true
+    command -v pacman >/dev/null && want+=(lightdm-gtk-greeter) || true
+  fi
+  [ ${#want[@]} -eq 0 ] && return 0
+  say "Installing: ${want[*]}"
+  command -v apt-get >/dev/null && apt-get update -qq || true
+  pkg_install "${want[@]}" || warn "could not install ${want[*]} - install them yourself"
+  if [ "$DM" = none ] && command -v lightdm >/dev/null; then
+    systemctl enable lightdm 2>/dev/null || true
+    systemctl set-default graphical.target 2>/dev/null || true
+    DM=lightdm
+  fi
+}
+
+# ---------------------------------------------------------------------------------------------
+# install
+
+write_files() {
+  install -d "$SHARE"
+  [ "$(readlink -f "$0")" = "$SELF_DST" ] || install -m 755 "$0" "$SELF_DST"
+
+  # the console session: WII-UU full screen, restarted if it closes, with power/desktop handling
+  cat > "$SESSION_BIN" <<'EOF'
+#!/usr/bin/env bash
+# WII-UU console session (started by the display manager; see wiiuu-console)
+export WIIUU_CONSOLE=1
+log="${XDG_RUNTIME_DIR:-/tmp}/wiiuu-session.log"
+exec >>"$log" 2>&1
+echo "== WII-UU console session $(date)"
+
+xset s off -dpms s noblank 2>/dev/null || true             # never blank the TV
+if command -v unclutter >/dev/null; then                    # hide the mouse pointer when idle
+  if unclutter --help 2>&1 | grep -q -- '--timeout'; then unclutter --timeout 3 & else unclutter -idle 3 & fi
+  disown
+fi
+if command -v openbox >/dev/null; then                       # window manager: emulators get focus and full screen
+  openbox --config-file /usr/local/share/wiiuu-console/openbox.xml & disown
+fi
+
+WIIUU="$HOME/.local/bin/wiiuu"; [ -x "$WIIUU" ] || WIIUU="$(command -v wiiuu || echo wiiuu)"
+to_desktop() { sudo -n /usr/local/bin/wiiuu-console switch desktop || exit 0; sleep 30; exit 0; }
+
+fails=0
+while true; do
+  # an update in progress: wait until its installer has finished before starting WII-UU again
+  for _ in $(seq 1 600); do [ -e "$HOME/.wiiuu/updating" ] || break; sleep 1; done
+  started=$(date +%s)
+  "$WIIUU" --fullscreen
+  code=$?
+  echo "WII-UU exited with $code"
+  case "$code" in
+    10) to_desktop ;;
+    11) systemctl poweroff; sleep 30 ;;
+    12) systemctl reboot; sleep 30 ;;
+  esac
+  # WII-UU closed or crashed: start it again; if it keeps failing, go to the desktop so nobody is stuck
+  if [ $(( $(date +%s) - started )) -lt 15 ]; then fails=$((fails + 1)); else fails=0; fi
+  [ "$fails" -ge 3 ] && { echo "WII-UU keeps failing; switching to the desktop"; to_desktop; }
+  sleep 1
+done
+EOF
+  chmod 755 "$SESSION_BIN"
+
+  mkdir -p "$(dirname "$XSESSION")"
+  cat > "$XSESSION" <<EOF
+[Desktop Entry]
+Name=WII-UU (Console Mode)
+Comment=Boots straight into WII-UU; Power → Desktop Mode switches to the desktop
+Exec=$SESSION_BIN
+Type=Application
+DesktopNames=WII-UU
+EOF
+
+  # openbox: no window decorations, everything maximised, no desktop menu
+  cat > "$SHARE/openbox.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <focus><focusNew>yes</focusNew><followMouse>no</followMouse></focus>
+  <desktops><number>1</number></desktops>
+  <applications>
+    <application class="*"><decor>no</decor><maximized>yes</maximized><focus>yes</focus></application>
+  </applications>
+  <mouse><context name="Root"></context></mouse>
+</openbox_config>
+EOF
+
+  # switching without a password prompt: only these exact commands
+  printf '%s ALL=(root) NOPASSWD: %s switch desktop, %s switch console\n' "$TARGET_USER" "$SELF_DST" "$SELF_DST" > "$SUDOERS.tmp"
+  chmod 440 "$SUDOERS.tmp"
+  if command -v visudo >/dev/null && ! visudo -cf "$SUDOERS.tmp" >/dev/null; then
+    rm -f "$SUDOERS.tmp"; die "could not write a valid sudoers rule"
+  fi
+  mv "$SUDOERS.tmp" "$SUDOERS"
+
+  # every boot starts in console mode (like SteamOS)
+  cat > "$UNIT" <<EOF
+[Unit]
+Description=WII-UU console mode: boot into WII-UU
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=$SELF_DST boot
+
+[Install]
+WantedBy=graphical.target
+EOF
+  systemctl daemon-reload
+  systemctl enable wiiuu-console-boot.service >/dev/null 2>&1 || warn "could not enable the boot service"
+
+  # "Return to WII-UU" on the desktop and in the app menu
+  cat > "$RETURN_APP" <<EOF
+[Desktop Entry]
+Name=Return to WII-UU
+Comment=Leave the desktop and go back to WII-UU console mode
+Exec=sudo -n $SELF_DST switch console
+Icon=applications-games
+Terminal=false
+Type=Application
+Categories=Game;
+EOF
+  local home desk
+  home="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+  desk="$(sudo -u "$TARGET_USER" xdg-user-dir DESKTOP 2>/dev/null || echo "$home/Desktop")"
+  if [ -d "$desk" ]; then
+    install -o "$TARGET_USER" -m 755 "$RETURN_APP" "$desk/Return to WII-UU.desktop"
+    sudo -u "$TARGET_USER" gio set "$desk/Return to WII-UU.desktop" metadata::trusted true 2>/dev/null || true
+  fi
+
+  # LightDM on some distributions only autologins members of the autologin group
+  if [ "$DM" = lightdm ]; then
+    getent group autologin >/dev/null || groupadd -r autologin 2>/dev/null || true
+    usermod -aG autologin "$TARGET_USER" 2>/dev/null || true
+  fi
+}
+
+cmd_install() {
+  # remember which desktop the user is sitting in (sudo drops that from the environment)
+  local user_session="${XDG_SESSION_DESKTOP:-${DESKTOP_SESSION:-}}"
+  if [ "$(id -u)" != 0 ] && [ -n "$user_session" ]; then need_root install --session-hint "$user_session" "$@"; fi
+  need_root install "$@"
+  TARGET_USER="${SUDO_USER:-}"
+  DESKTOP=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --session-hint) user_session="$2"; shift ;;
+      --user) TARGET_USER="$2"; shift ;;
+      --desktop) DESKTOP="$2"; shift ;;
+      --yes|-y) YES=1 ;;
+      *) die "unknown option $1" ;;
+    esac
+    shift
+  done
+  [ "$(uname -s)" = Linux ] || die "console mode is for Linux (PCs and Raspberry Pi)"
+  [ -n "$TARGET_USER" ] && [ "$TARGET_USER" != root ] || die "say which user plays: sudo wiiuu-console install --user NAME"
+  getent passwd "$TARGET_USER" >/dev/null || die "no user $TARGET_USER"
+  local home; home="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+  [ -x "$home/.local/bin/wiiuu" ] || die "install WII-UU for $TARGET_USER first (./install.sh as $TARGET_USER)"
+
+  DM="$(detect_dm)"
+  say "WII-UU Console Mode for $TARGET_USER (display manager: $DM)"
+  echo "  The computer will boot straight into WII-UU. Power → Desktop Mode in WII-UU opens your desktop,"
+  echo "  and \"Return to WII-UU\" on the desktop goes back. Every boot starts in WII-UU."
+  ask "Set up console mode?" || exit 0
+
+  install_packages
+  [ "$DM" != none ] || die "no display manager could be installed"
+  [ -n "$DESKTOP" ] || DESKTOP="$(pick_desktop "$user_session")"
+  [ -n "$DESKTOP" ] || warn "no desktop session found: Desktop Mode will log in to $TARGET_USER's default session"
+
+  write_files
+  printf 'TARGET_USER=%q\nDESKTOP=%q\nDM=%q\n' "$TARGET_USER" "$DESKTOP" "$DM" > "$CONF"
+  set_autologin wiiuu
+  ok "Console mode installed (desktop mode: ${DESKTOP:-default})"
+  echo "  Reboot to start WII-UU console mode, or run: wiiuu-console switch console"
+  echo "  To go back to a normal desktop login: sudo wiiuu-console uninstall"
+}
+
+cmd_uninstall() {
+  need_root uninstall "$@"
+  load_conf
+  systemctl disable wiiuu-console-boot.service >/dev/null 2>&1 || true
+  rm -f "$UNIT" "$SUDOERS" "$XSESSION" "$SESSION_BIN" "$RETURN_APP"
+  local home desk
+  home="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+  desk="$(sudo -u "$TARGET_USER" xdg-user-dir DESKTOP 2>/dev/null || echo "$home/Desktop")"
+  rm -f "$desk/Return to WII-UU.desktop"
+  # log in to the desktop from now on (autologin stays on, as the user had console mode automatic too)
+  if [ -n "${DESKTOP:-}" ]; then set_autologin "$DESKTOP"; else rm -f "$LIGHTDM_CONF" "$SDDM_CONF"; fi
+  [ -f /etc/lightdm/lightdm.conf.wiiuu-backup ] && [ -z "${DESKTOP:-}" ] && mv /etc/lightdm/lightdm.conf.wiiuu-backup /etc/lightdm/lightdm.conf
+  rm -rf "$SHARE" "$CONF"
+  systemctl daemon-reload
+  ok "Console mode removed; the computer logs in to the desktop (${DESKTOP:-default}) again"
+  rm -f "$SELF_DST"
+}
+
+cmd_switch() {
+  local to="${1:-}"
+  [ "$to" = desktop ] || [ "$to" = console ] || die "usage: wiiuu-console switch desktop|console"
+  need_root switch "$to"
+  load_conf
+  if [ "$to" = desktop ]; then set_autologin "${DESKTOP:-wiiuu}"; else set_autologin wiiuu; fi
+  restart_dm
+}
+
+cmd_boot() {
+  load_conf
+  set_autologin wiiuu
+}
+
+cmd_status() {
+  if [ ! -f "$CONF" ]; then echo "Console mode: not installed"; return; fi
+  # shellcheck disable=SC1090
+  . "$CONF"
+  echo "Console mode: installed for $TARGET_USER"
+  echo "Display manager: $DM"
+  echo "Desktop mode session: ${DESKTOP:-default}"
+  echo "Installed sessions: $(list_sessions | tr '\n' ' ')"
+}
+
+# tests load the functions above without running a command
+[ "${WIIUU_CONSOLE_LIB:-}" = 1 ] && return 0
+
+case "${1:-}" in
+  install) shift; cmd_install "$@" ;;
+  uninstall) shift; cmd_uninstall "$@" ;;
+  switch) shift; cmd_switch "$@" ;;
+  boot) cmd_boot ;;
+  status) cmd_status ;;
+  *) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac
