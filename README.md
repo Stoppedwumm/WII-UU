@@ -107,6 +107,12 @@ wiiuu-emulators --releases-only
 | F11 | – | Toggle fullscreen |
 | Ctrl+Q | HOME → Close game | Quit the running game |
 
+**Start-up and music.** WII-UU opens with a short start-up animation and chime. Any key, click or
+GamePad button skips it. The menu then plays relaxed background music, an original jazzy loop
+that WII-UU synthesizes itself, so no audio files ship. The music fades out while a game runs and
+comes back afterwards. Both can be turned off under *Settings → General* (`ui.bootAnimation`,
+`ui.music`), and `ui.musicVolume` (0–100, default 45) sets the level.
+
 ## Phone as GamePad
 
 Press **+** or **F2** on the TV and scan the QR code. You can also open the URL shown there on a phone
@@ -317,6 +323,8 @@ dsu.port=26760              # DSU controller server (dsu.enabled, dsu.motionSign
 keys.p1.A=X
 ui.fullscreen=true
 ui.minimizeOnLaunch=true
+ui.music=true               # background music in the menu; ui.musicVolume=45 (0-100)
+ui.bootAnimation=true       # start-up animation and chime
 ```
 
 Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home DIR] [--check-update|--upgrade]`

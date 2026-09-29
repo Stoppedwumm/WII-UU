@@ -196,7 +196,7 @@
       <p class="sub">A small Java app with no extra dependencies, drawn by hand to feel like the Wii U Menu.</p>
       <div class="cards">
         <div class="card"><div class="icon">▦</div><h3>Wii U style menu</h3>
-          <p>Paged tiles with a gliding cursor, a dock and soft menu sounds. It runs smoothly on a Raspberry Pi.</p></div>
+          <p>A start-up animation, paged tiles with a gliding cursor, a dock, soft menu sounds and relaxed background music. It runs smoothly on a Raspberry Pi.</p></div>
         <div class="card"><div class="icon">▣</div><h3>Phone as GamePad</h3>
           <p>Scan a QR code and your phone becomes the controller, with sticks, D-pad, ABXY, shoulder buttons, HOME, a live touch screen, gyro and sound. Up to 4 players.</p></div>
         <div class="card"><div class="icon">⤓</div><h3>Emulators installed for you</h3>
@@ -369,6 +369,8 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
         <p>The older consoles run well on a Pi 4/5. GameCube, Wii U, Switch, PS3 and PS4 are too demanding to play well on a Pi, and PS2 and PS4 emulators only run on x86-64.</p></details>
       <details><summary>The GamePad screen is black on my Mac.</summary>
         <p>macOS blocks screen capture until you allow it. Start WII-UU from ~/Applications/WII-UU.app, then turn on WII-UU under System Settings → Privacy &amp; Security → <b>Screen Recording</b> and <b>Accessibility</b> (Settings F1 → General → macOS permissions opens both), and restart WII-UU.</p></details>
+      <details><summary>Where does the menu music come from?</summary>
+        <p>It's an original jazzy loop written for WII-UU and synthesized when the app starts, so no audio files ship and nothing is copied from a console. It fades out while a game runs. Turn it or the start-up animation off under Settings (F1) → General.</p></details>
       <details><summary>Where are my settings?</summary>
         <p>In <code>~/.wiiuu/config.properties</code>. Games go in <code>~/WiiUU/roms/&lt;system&gt;</code> by default; you can change this in Settings.</p></details>
     </div>

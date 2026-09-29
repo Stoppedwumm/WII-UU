@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.2.0";
+    public static final String VERSION = "1.3.0";
 
     private final Config config;
     private final Library library;
@@ -254,6 +254,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     public void openSettings() {
         new SettingsDialog(frame, config, () -> {
             view.setSoundsEnabled(config.getBool("ui.sounds", true));
+            view.setMusicEnabled(config.getBool("ui.music", true));
             view.showToast("Settings saved");
             library.rescanAsync();
         }).withUpdater(new Updater(config, VERSION), this::quit).setVisible(true);

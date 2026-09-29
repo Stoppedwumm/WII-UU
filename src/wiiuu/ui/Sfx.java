@@ -1,22 +1,9 @@
 package wiiuu.ui;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.SourceDataLine;
-
 /** Soft synthesized menu blips, so no audio files need to ship. Fails silently without audio. */
 final class Sfx {
-    private static final float RATE = 44100f;
-    private static final ExecutorService AUDIO = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "sfx");
-        t.setDaemon(true);
-        return t;
-    });
+    private static final float RATE = MenuAudio.RATE;
     private static volatile boolean enabled = true;
-    private static volatile boolean broken;
 
     private Sfx() {}
 
@@ -44,33 +31,54 @@ final class Sfx {
         play(new double[]{1047, 1319, 1568}, 0.09, 0.12);
     }
 
-    private static void play(double[] notes, double noteSeconds, double volume) {
-        if (!enabled || broken) return;
-        AUDIO.execute(() -> {
-            try {
-                int perNote = (int) (RATE * noteSeconds);
-                byte[] buf = new byte[perNote * notes.length * 2];
-                int i = 0;
-                for (double f : notes) {
-                    for (int n = 0; n < perNote; n++) {
-                        double t = n / RATE;
-                        double env = Math.min(1, n / (RATE * 0.004)) * Math.exp(-t * 38);
-                        double s = (Math.sin(2 * Math.PI * f * t) + 0.25 * Math.sin(4 * Math.PI * f * t)) * env * volume;
-                        short v = (short) (Math.max(-1, Math.min(1, s)) * Short.MAX_VALUE);
-                        buf[i++] = (byte) v;
-                        buf[i++] = (byte) (v >> 8);
-                    }
-                }
-                AudioFormat fmt = new AudioFormat(RATE, 16, 1, true, false);
-                try (SourceDataLine line = AudioSystem.getSourceDataLine(fmt)) {
-                    line.open(fmt, 8192);
-                    line.start();
-                    line.write(buf, 0, buf.length);
-                    line.drain();
-                }
-            } catch (Exception | LinkageError e) {
-                broken = true; // no audio device; stay quiet from now on
+    /** The start-up chime: a rising Fmaj9 of soft bells over a warm pad (about 3 s). */
+    static void boot() {
+        if (enabled) MenuAudio.get().play(bootPcm(), 1f);
+    }
+
+    static short[] bootPcm() {
+        double[] bells = {698.46, 880.00, 1046.50, 1318.51, 1567.98};       // F5 A5 C6 E6 G6
+        double[] pad = {174.61, 261.63, 329.63, 440.00};                     // F3 C4 E4 A4
+        int total = (int) (RATE * 3.2);
+        float[] mix = new float[total];
+        for (int k = 0; k < bells.length; k++) {
+            int start = (int) (RATE * (0.09 * k));
+            double f = bells[k];
+            for (int n = 0; start + n < total; n++) {
+                double t = n / RATE;
+                double env = Math.min(1, t / 0.004) * Math.exp(-t * 2.2);
+                // bell: fundamental plus a quickly fading inharmonic shimmer
+                double s = Math.sin(2 * Math.PI * f * t) + 0.35 * Math.exp(-t * 7) * Math.sin(2 * Math.PI * f * 2.76 * t);
+                mix[start + n] += (float) (s * env * 0.11);
             }
-        });
+        }
+        for (double f : pad) {
+            for (int n = 0; n < total; n++) {
+                double t = n / RATE;
+                double env = Math.min(1, t / 0.5) * Math.min(1, (3.2 - t) / 1.4);
+                double s = Math.sin(2 * Math.PI * f * t + 0.6 * Math.sin(2 * Math.PI * 0.8 * t))
+                        + 0.2 * Math.sin(2 * Math.PI * 2 * f * t);
+                mix[n] += (float) (s * env * 0.025);
+            }
+        }
+        short[] pcm = new short[total];
+        for (int i = 0; i < total; i++) pcm[i] = (short) (Math.max(-1, Math.min(1, mix[i])) * Short.MAX_VALUE);
+        return pcm;
+    }
+
+    private static void play(double[] notes, double noteSeconds, double volume) {
+        if (!enabled) return;
+        int perNote = (int) (RATE * noteSeconds);
+        short[] pcm = new short[perNote * notes.length];
+        int i = 0;
+        for (double f : notes) {
+            for (int n = 0; n < perNote; n++) {
+                double t = n / RATE;
+                double env = Math.min(1, n / (RATE * 0.004)) * Math.exp(-t * 38);
+                double s = (Math.sin(2 * Math.PI * f * t) + 0.25 * Math.sin(4 * Math.PI * f * t)) * env * volume;
+                pcm[i++] = (short) (Math.max(-1, Math.min(1, s)) * Short.MAX_VALUE);
+            }
+        }
+        MenuAudio.get().play(pcm, 1f);
     }
 }

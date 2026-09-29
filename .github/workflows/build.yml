@@ -1,0 +1,53 @@
+name: Build
+
+# Builds the jar and the release zip on every push and pull request, and keeps the zip as a
+# downloadable artifact. Pushing a tag such as v1.3.0 also publishes a GitHub release with the zip.
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build jar and release zip
+        run: |
+          chmod +x build.sh package.sh
+          ./package.sh
+          echo "VERSION=$(grep -o 'VERSION = "[^"]*"' src/wiiuu/Main.java | cut -d'"' -f2)" >> "$GITHUB_ENV"
+
+      - name: Smoke test (render the menu headless)
+        run: |
+          java -Djava.awt.headless=true -jar build/wiiuu.jar --home "$RUNNER_TEMP/wiiuu" \
+            --snapshot "$RUNNER_TEMP/menu.png" --snapshot-view home
+          test -s "$RUNNER_TEMP/menu.png"
+
+      - name: Check shell scripts
+        run: bash -n install.sh emulators.sh build.sh package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WII-UU-${{ env.VERSION }}
+          path: dist/WII-UU-${{ env.VERSION }}.zip
+          if-no-files-found: error
+
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "dist/WII-UU-$VERSION.zip" \
+            --title "WII-UU $VERSION" --generate-notes

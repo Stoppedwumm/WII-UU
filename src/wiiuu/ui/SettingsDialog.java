@@ -68,6 +68,8 @@ public final class SettingsDialog extends JDialog {
     private final JTextField fixedCode = new JTextField(8);
     private final JCheckBox fullscreen = new JCheckBox("Start in fullscreen");
     private final JCheckBox sounds = new JCheckBox("Menu sounds");
+    private final JCheckBox music = new JCheckBox("Background music");
+    private final JCheckBox boot = new JCheckBox("Start-up animation");
     private final JCheckBox hideEmpty = new JCheckBox("Hide systems without games");
     private final JCheckBox minimize = new JCheckBox("Minimize menu while a game runs");
 
@@ -123,6 +125,8 @@ public final class SettingsDialog extends JDialog {
         fixedCode.setText(config.get("server.code", ""));
         fullscreen.setSelected(config.getBool("ui.fullscreen", false));
         sounds.setSelected(config.getBool("ui.sounds", true));
+        music.setSelected(config.getBool("ui.music", true));
+        boot.setSelected(config.getBool("ui.bootAnimation", true));
         hideEmpty.setSelected(config.getBool("ui.hideEmpty", false));
         minimize.setSelected(config.getBool("ui.minimizeOnLaunch", true));
     }
@@ -153,6 +157,8 @@ public final class SettingsDialog extends JDialog {
         config.set("server.code", code.isEmpty() ? null : code);
         config.set("ui.fullscreen", Boolean.toString(fullscreen.isSelected()));
         config.set("ui.sounds", Boolean.toString(sounds.isSelected()));
+        config.set("ui.music", Boolean.toString(music.isSelected()));
+        config.set("ui.bootAnimation", Boolean.toString(boot.isSelected()));
         config.set("ui.hideEmpty", Boolean.toString(hideEmpty.isSelected()));
         config.set("ui.minimizeOnLaunch", Boolean.toString(minimize.isSelected()));
         config.save();
@@ -343,7 +349,7 @@ public final class SettingsDialog extends JDialog {
             row = addRow(p, c, row, "macOS permissions", perms,
                     new JLabel("<html>Turn on <b>WII-UU</b> (or Java / Terminal) in both,<br>then restart WII-UU.</html>"));
         }
-        for (JCheckBox box : new JCheckBox[]{serverOn, requireCode, fullscreen, minimize, sounds, hideEmpty}) {
+        for (JCheckBox box : new JCheckBox[]{serverOn, requireCode, fullscreen, minimize, sounds, music, boot, hideEmpty}) {
             c.gridx = 1;
             c.gridy = row++;
             c.gridwidth = 2;

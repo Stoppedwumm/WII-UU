@@ -132,6 +132,17 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private boolean hlInit;
     private long lastSecond;
 
+    // boot animation (seconds): logo, then the menu fades in at REVEAL and pops its tiles in
+    private static final double BOOT_REVEAL = 2.9, BOOT_END = 3.7;
+    private boolean booting;
+    private long bootStart;              // ms, set on the first frame that is actually shown
+    private long revealAt;               // ms, tiles pop in one after another from here
+    private boolean chimed, revealed;
+    private Shape bootLogo;
+    private String bootLogoKey;
+    private boolean musicEnabled;
+    private Thread musicRender;
+
     // overlays / status
     private boolean showPad;
     private boolean confirmQuit;
@@ -179,6 +190,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         setFocusTraversalKeysEnabled(false);
         setOpaque(true);
         Sfx.setEnabled(config.getBool("ui.sounds", true));
+        booting = config.getBool("ui.bootAnimation", true);
+        revealed = !booting;
+        MenuAudio.get().setMusicVolume(config.getInt("ui.musicVolume", 45) / 100f);
+        setMusicEnabled(config.getBool("ui.music", true));
         installInput();
         Timer timer = new Timer(16, e -> tick());
         timer.start();
@@ -210,6 +225,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         playing = g;
         showPad = false;
         confirmQuit = false;
+        updateMusic();
         repaint();
     }
 
@@ -244,6 +260,26 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         Sfx.setEnabled(on);
     }
 
+    /** Background music on the menu; it fades out while a game runs. */
+    public void setMusicEnabled(boolean on) {
+        musicEnabled = on;
+        if (on && musicRender == null && !MenuAudio.get().hasMusic()) {
+            // about a second of synthesis (longer on a Pi), off the Swing thread
+            musicRender = new Thread(() -> {
+                MenuAudio.get().setMusic(MenuMusic.render());
+                SwingUtilities.invokeLater(this::updateMusic);
+            }, "menu-music");
+            musicRender.setDaemon(true);
+            musicRender.setPriority(Thread.MIN_PRIORITY);
+            musicRender.start();
+        }
+        updateMusic();
+    }
+
+    private void updateMusic() {
+        MenuAudio.get().musicOn(musicEnabled && revealed && playing == null);
+    }
+
     private void buildHomeTiles() {
         tiles.clear();
         boolean hideEmpty = config.getBool("ui.hideEmpty", false);
@@ -268,6 +304,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void navigate(int dx, int dy) {
+        if (skipBoot()) return;
         if (modal()) return;
         if (inDock) {
             if (dy < 0 && !tiles.isEmpty()) {
@@ -322,6 +359,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void activate() {
+        if (skipBoot()) return;
         if (confirmQuit) {
             actions.quit();
             return;
@@ -367,6 +405,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void back() {
+        if (skipBoot()) return;
         if (confirmQuit || showPad) {
             confirmQuit = false;
             showPad = false;
@@ -392,6 +431,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void page(int delta) {
+        if (skipBoot()) return;
         if (modal() || tiles.isEmpty()) return;
         int pages = pageCount();
         int p = page() + delta;
@@ -407,6 +447,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void toggleGamepadInfo() {
+        if (skipBoot()) return;
         if (playing != null || confirmQuit) return;
         showPad = !showPad;
         if (showPad) Sfx.select();
@@ -434,6 +475,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
+                if (skipBoot()) return;
                 if (e.isControlDown() && e.getKeyCode() == KeyEvent.VK_Q) {
                     if (playing != null) actions.closeGame();
                     return;
@@ -458,6 +500,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             @Override
             public void mousePressed(MouseEvent e) {
                 requestFocusInWindow();
+                if (skipBoot()) return;
                 if (playing != null) return;
                 if (showPad || confirmQuit) {
                     if (confirmQuit && confirmYesRect().contains(e.getPoint())) actions.quit();
@@ -499,7 +542,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     // ---- animation ----------------------------------------------------------------------
 
     private void tick() {
-        boolean dirty = false;
+        boolean dirty = tickBoot();
         long sec = System.currentTimeMillis() / 1000;
         if (sec != lastSecond) {
             lastSecond = sec;
@@ -534,8 +577,13 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     } else hl[i] = goal[i];
                 }
             }
+            long now = System.currentTimeMillis();
             for (int i = 0; i < tiles.size(); i++) {
                 Tile tile = tiles.get(i);
+                if (!revealed || (revealAt > 0 && now < revealAt + (i % PER_PAGE) * 45L)) {
+                    dirty = true;                // waits for its turn to pop in
+                    continue;
+                }
                 float goal = (!inDock && i == sel && !modal()) ? 1.06f : 1f;
                 if (Math.abs(tile.scale - goal) > 0.001f) {
                     tile.scale += (goal - tile.scale) * 0.25f;
@@ -549,6 +597,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     /** Runs the animations to completion (for offscreen snapshots). */
     public void settle() {
         syncSprites = true;
+        booting = false;
+        revealed = true;
+        revealAt = 0;
         for (int i = 0; i < 200; i++) tick();
     }
 
@@ -561,6 +612,154 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         Rectangle2D r = tileRect(L, sel, page());
         double grow = 1.06, gw = r.getWidth() * grow, gh = r.getHeight() * grow;
         return new Rectangle2D.Double(r.getCenterX() - gw / 2 - 5, r.getCenterY() - gh / 2 - 5, gw + 10, gh + 10);
+    }
+
+    // ---- boot animation -----------------------------------------------------------------
+
+    private double bootSeconds() {
+        return bootStart == 0 ? 0 : (System.currentTimeMillis() - bootStart) / 1000.0;
+    }
+
+    /** Advances the start-up sequence; true while it needs frames. */
+    private boolean tickBoot() {
+        if (!booting) return false;
+        if (bootStart == 0) {
+            if (!isShowing() || getWidth() <= 0) return false;
+            bootStart = System.currentTimeMillis();
+        }
+        double t = bootSeconds();
+        if (!chimed && t >= 0.75) {
+            chimed = true;
+            Sfx.boot();
+        }
+        if (!revealed && t >= BOOT_REVEAL) reveal();
+        if (t >= BOOT_END) booting = false;
+        return true;
+    }
+
+    private void reveal() {
+        revealed = true;
+        revealAt = System.currentTimeMillis();
+        for (Tile tile : tiles) tile.scale = 0.72f;         // they grow back one by one
+        updateMusic();
+    }
+
+    /** Any key, click or GamePad button skips ahead to the menu. */
+    private boolean skipBoot() {
+        if (!booting || revealed || bootStart == 0) return false;     // not on screen yet
+        bootStart -= (long) ((BOOT_REVEAL - bootSeconds()) * 1000);
+        chimed = true;                                      // skipping means no chime
+        reveal();
+        repaint();
+        return true;
+    }
+
+    private static double clamp01(double v) {
+        return Math.max(0, Math.min(1, v));
+    }
+
+    private static double easeOut(double v) {
+        v = clamp01(v);
+        return 1 - Math.pow(1 - v, 3);
+    }
+
+    /**
+     * White start screen: a soft ring of light spreads, the WII-UU logo rises into place and a sheen
+     * crosses it, a tagline and a spinner appear, then everything fades into the menu.
+     */
+    private void paintBoot(Graphics2D g0, Layout L) {
+        double t = bootSeconds();
+        float fade = (float) (1 - easeOut((t - BOOT_REVEAL) / (BOOT_END - BOOT_REVEAL)));
+        if (fade <= 0) return;
+        Graphics2D g = (Graphics2D) g0.create();
+        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fade));
+        float w = L.w, h = L.h, cx = w / 2, cy = h * 0.46f;
+        g.setPaint(new GradientPaint(0, 0, Color.WHITE, 0, h, new Color(0xEEF2F5)));
+        g.fillRect(0, 0, (int) w + 1, (int) h + 1);
+
+        // a ring of light spreading from the centre
+        double ring = clamp01((t - 0.25) / 1.6);
+        if (ring > 0 && ring < 1) {
+            float rad = (float) (easeOut(ring) * w * 0.42f);
+            float ra = (float) ((1 - ring) * 0.35);
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fade * ra));
+            g.setColor(ACCENT);
+            g.setStroke(new BasicStroke(h * 0.006f));
+            g.draw(new Ellipse2D.Float(cx - rad, cy - rad, rad * 2, rad * 2));
+        }
+
+        // the logo rises and settles; while fading out it zooms gently towards the viewer
+        double in = easeOut((t - 0.35) / 0.7);
+        if (in > 0) {
+            float size = h * 0.12f;
+            String key = (int) size + "";
+            if (!key.equals(bootLogoKey)) {
+                Font f = font(Font.BOLD, size);
+                java.awt.font.FontRenderContext frc = g.getFontRenderContext();
+                java.awt.font.GlyphVector a = f.createGlyphVector(frc, "WII-"), b = f.createGlyphVector(frc, "UU");
+                Path2D both = new Path2D.Float(a.getOutline());
+                both.append(b.getOutline((float) a.getLogicalBounds().getWidth(), 0), false);
+                bootLogo = both;
+                bootLogoKey = key;
+            }
+            Rectangle2D bb = bootLogo.getBounds2D();
+            double zoom = (0.92 + 0.08 * in) * (1 + 0.06 * (1 - fade));
+            Graphics2D lg = (Graphics2D) g.create();
+            lg.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) (fade * in)));
+            lg.translate(cx, cy + (1 - in) * h * 0.03);
+            lg.scale(zoom, zoom);
+            lg.translate(-bb.getCenterX(), -bb.getCenterY());
+            Font f = font(Font.BOLD, size);
+            float splitX = (float) f.createGlyphVector(lg.getFontRenderContext(), "WII-").getLogicalBounds().getWidth();
+            // "WII-" in text grey, "UU" in the accent blue
+            Shape old = lg.getClip();
+            lg.clip(new Rectangle2D.Double(bb.getX() - 10, bb.getY() - 10, splitX - bb.getX() + 10, bb.getHeight() + 20));
+            lg.setColor(TEXT);
+            lg.fill(bootLogo);
+            lg.setClip(old);
+            lg.clip(new Rectangle2D.Double(splitX, bb.getY() - 10, bb.getMaxX() - splitX + 10, bb.getHeight() + 20));
+            lg.setColor(ACCENT);
+            lg.fill(bootLogo);
+            lg.setClip(old);
+            // a sheen sweeps across the letters
+            double sweep = (t - 1.05) / 0.8;
+            if (sweep > 0 && sweep < 1) {
+                float sx = (float) (bb.getX() - bb.getWidth() * 0.3 + sweep * bb.getWidth() * 1.6);
+                float band = (float) bb.getWidth() * 0.18f;
+                lg.clip(bootLogo);
+                lg.setPaint(new java.awt.LinearGradientPaint(sx - band, 0, sx + band, (float) bb.getHeight() * 0.4f,
+                        new float[]{0f, 0.5f, 1f},
+                        new Color[]{new Color(255, 255, 255, 0), new Color(255, 255, 255, 190), new Color(255, 255, 255, 0)}));
+                lg.fill(bb);
+            }
+            lg.dispose();
+        }
+
+        // tagline
+        double tag = clamp01((t - 1.45) / 0.5);
+        if (tag > 0) {
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) (fade * tag)));
+            g.setFont(font(Font.PLAIN, h * 0.028f));
+            FontMetrics fm = g.getFontMetrics();
+            String line = "Your games, the Wii U way";
+            g.setColor(TEXT_DIM);
+            g.drawString(line, cx - fm.stringWidth(line) / 2f, (float) (cy + h * 0.1f + (1 - tag) * h * 0.01f));
+        }
+
+        // spinner, bottom right: twelve dots, a bright one chasing round
+        double spin = clamp01((t - 1.7) / 0.4);
+        if (spin > 0) {
+            float r = h * 0.028f, sx = w - h * 0.09f, sy = h - h * 0.09f, dot = h * 0.0065f;
+            for (int i = 0; i < 12; i++) {
+                double ang = i * Math.PI / 6 - Math.PI / 2;
+                double lead = ((t * 12) % 12 - i + 12) % 12;          // 0 = brightest
+                float a = (float) (fade * spin * (0.18 + 0.82 * Math.max(0, 1 - lead / 6)));
+                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, a));
+                g.setColor(ACCENT);
+                g.fill(new Ellipse2D.Double(sx + Math.cos(ang) * r - dot, sy + Math.sin(ang) * r - dot, dot * 2, dot * 2));
+            }
+        }
+        g.dispose();
     }
 
     // ---- layout -------------------------------------------------------------------------
@@ -626,6 +825,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (playing != null) paintNowPlaying(g, L);
         else if (showPad) paintPadOverlay(g, L);
         else if (confirmQuit) paintConfirm(g);
+        if (booting) paintBoot(g, L);
         g.dispose();
         Toolkit.getDefaultToolkit().sync(); // flush X11 so animation doesn't stutter on Linux
     }
