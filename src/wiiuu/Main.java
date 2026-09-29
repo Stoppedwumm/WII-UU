@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.6.0";
+    public static final String VERSION = "1.6.1";
 
     private final Config config;
     private final Library library;
@@ -230,8 +230,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         if (frame.isDisplayable() && frame.isUndecorated() == on) return;
         if (frame.isDisplayable()) frame.dispose();
         frame.setUndecorated(on);
-        if (on) frame.setExtendedState(Frame.MAXIMIZED_BOTH);
-        else {
+        if (on) {
+            // cover the screen ourselves too: without a window manager (a bare X session) "maximized" does nothing
+            java.awt.GraphicsConfiguration gc = frame.getGraphicsConfiguration();
+            if (gc != null) frame.setBounds(gc.getBounds());
+            frame.setExtendedState(Frame.MAXIMIZED_BOTH);
+        } else {
             frame.setExtendedState(Frame.NORMAL);
             frame.setSize(1280, 720);
             frame.setLocationRelativeTo(null);

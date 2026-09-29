@@ -422,6 +422,14 @@ also plays live in a browser), rendered frame by frame. The soundtrack is WII-UU
 and menu music. `trailer/render.sh` takes fresh screenshots, renders the soundtrack and writes
 `dist/WII-UU-trailer.mp4` and `docs/trailer.mp4`. It needs Node with Playwright, and ffmpeg.
 
+`trailer/render2.sh` makes the second trailer, a narrated demo (`dist/WII-UU-demo-trailer.mp4`,
+`docs/trailer-demo.mp4`):
+* `demo.mjs` records the real WII-UU on a virtual 1080p TV (Xvfb) while a phone-sized browser uses
+  its GamePad page.
+* `voice.py` speaks the narration from `trailer2.html` with the Kokoro voice model (Apache-2.0),
+  which sherpa-onnx runs offline. The script downloads the model the first time.
+* `trailer2.html` puts the demo, the phone and subtitles together with scenes from the first trailer.
+
 ## Build from source
 
 ```sh

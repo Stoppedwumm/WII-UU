@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WII-UU Trailer 2: Demo</title>
+<!--
+  The second WII-UU trailer: a narrated demo. The live demo is real footage (demo.mjs records
+  WII-UU on a virtual TV and its GamePad page in a phone-sized browser); the feature montage plays
+  scenes of trailer.html inside an iframe. window.seek(t) lays out frame t exactly; VOICE lists the
+  narration (spoken text, subtitle, start time) that render2.mjs turns into the voice track.
+  Rendered by render2.sh (served over http so the iframe can be driven).
+-->
+<style>
+  @font-face { font-family: Inter; font-weight: 600; src: url(fonts/inter-latin-600-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 800; src: url(fonts/inter-latin-800-normal.woff2) format("woff2"); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0a0b0d; font-family: Inter, sans-serif; }
+  .full { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; }
+  #tv { object-fit: cover; }
+  /* the phone: its recording inside a dark device frame */
+  #phone { position: absolute; left: 1060px; top: 610px; width: 820px; padding: 18px; border-radius: 64px;
+    background: linear-gradient(160deg, #2a2e34, #111316); box-shadow: 0 40px 100px rgba(0, 0, 0, .6), 0 0 0 2px rgba(255, 255, 255, .08); }
+  #phone img { display: block; width: 100%; height: auto; border-radius: 46px; }
+  #phoneLabel { position: absolute; left: 1060px; top: 560px; width: 820px; text-align: center; color: #fff; font-weight: 800; font-size: 28px;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, .6); }
+  /* subtitles */
+  #sub { position: absolute; left: 0; right: 0; bottom: 56px; text-align: center; pointer-events: none; }
+  #sub span { display: inline-block; max-width: 1500px; padding: 14px 30px; border-radius: 18px; background: rgba(10, 12, 14, .72);
+    color: #fff; font-weight: 600; font-size: 38px; line-height: 1.3; }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <iframe id="t1" class="full" src="trailer.html?render=1"></iframe>
+  <img id="tv" class="full" alt="">
+  <div id="phoneLabel">Your phone</div>
+  <div id="phone"><img id="phoneImg" alt=""></div>
+  <div id="fade"></div>
+  <div id="sub"><span id="subText"></span></div>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const seg = (t, a, b) => clamp((t - a) / (b - a));
+  const out3 = (v) => 1 - Math.pow(1 - clamp(v), 3);
+
+  const FPS = 30;
+  // the demo recording: TV time d = t + DEMO_OFFSET while the demo shows; the phone's recording
+  // starts PHONE_OFFSET seconds into the TV's (from demo.mjs's sync.json)
+  const DEMO_FROM = 5.4, DEMO_TO = 32.0, DEMO_OFFSET = -1.0;
+  let PHONE_OFFSET = 5.0, TV_FIRST = 4.0;   // set by render2.mjs
+
+  // what plays when: [start, end, source, sourceStart] (source time = sourceStart + t - start)
+  const CUTS = [
+    [0, DEMO_FROM, "t1", 0],             // the logo, from trailer 1
+    [DEMO_FROM, DEMO_TO, "demo", DEMO_FROM + DEMO_OFFSET],
+    [32.0, 37.2, "t1", 31.2],            // second screen
+    [37.2, 40.4, "t1", 38.4],            // gyro, touch, sound
+    [40.4, 45.2, "t1", 43.2],            // RetroArch
+    [45.2, 52.4, "t1", 48.0],            // Console Mode
+    [52.4, 59.6, "t1", 60.0],            // end card
+  ];
+  const DURATION = 59.6;
+
+  // narration: [id, start, spoken text (for the voice), subtitle]
+  const VOICE = [
+    ["v1", 1.2, "Meet Wii U U. A Wii U style home for all of your games.", "Meet WII-UU. A Wii U style home for all of your games."],
+    ["v2", 6.0, "Scan the code on the TV, and your phone becomes the GamePad. There's no app to install.", "Scan the code on the TV, and your phone becomes the GamePad. There's no app to install."],
+    ["v3", 11.9, "Move around the menu from the couch.", "Move around the menu from the couch."],
+    ["v4", 15.6, "Pick a game on your phone, and it starts on the TV.", "Pick a game on your phone, and it starts on the TV."],
+    ["v5", 20.6, "Press HOME to close it, just like on a Wii U.", "Press HOME to close it, just like on a Wii U."],
+    ["v6", 24.4, "And the TV comes with you. The whole screen, live, right on your GamePad.", "And the TV comes with you. The whole screen, live, right on your GamePad."],
+    ["v7", 32.4, "Wii U GamePad games, DS and 3DS touch screens, gyro, and sound, all on your phone.", "Wii U GamePad games, DS and 3DS touch screens, gyro and sound: all on your phone."],
+    ["v8", 40.9, "Run everything through RetroArch if you like.", "Run everything through RetroArch if you like."],
+    ["v9", 45.6, "Or turn a PC or a Raspberry Pi into a console that boots straight into Wii U U.", "Or turn a PC or a Raspberry Pi into a console that boots straight into WII-UU."],
+    ["v10", 53.0, "Wii U U. Free for Linux, Windows, Mac, and Raspberry Pi.", "WII-UU. Free for Linux, Windows, Mac and Raspberry Pi."],
+  ];
+  let VOICE_LEN = {};   // seconds per line, set by render2.mjs
+
+  const frameUrl = (dir, i) => `build2/${dir}/${String(Math.max(1, i)).padStart(5, "0")}.jpg`;
+
+  async function load(img, src) {
+    if (img.getAttribute("src") === src) return;
+    img.src = src;
+    try { await img.decode(); } catch (e) { /* past the last frame: keep the previous one */ }
+  }
+
+  async function seek(t) {
+    const cut = CUTS.find(([a, z]) => t >= a && t < z) || CUTS[CUTS.length - 1];
+    const [a, , src, from] = cut;
+    const st = from + (t - a);
+    const demo = src === "demo";
+    $("t1").style.visibility = demo ? "hidden" : "visible";
+    $("tv").style.visibility = demo ? "visible" : "hidden";
+    if (!demo) {
+      $("t1").contentWindow.seek(st);
+    } else {
+      await load($("tv"), frameUrl("tv", Math.round((st - TV_FIRST) * FPS) + 1));
+    }
+    // the phone slides in when it connects, and leaves with the demo
+    const inP = out3(seg(t, 6.0, 6.8)), outP = seg(t, DEMO_TO - .5, DEMO_TO);
+    const show = demo ? inP * (1 - outP) : 0;
+    $("phone").style.opacity = show;
+    $("phoneLabel").style.opacity = show * (1 - seg(t, 9.5, 10.2));
+    $("phone").style.transform = `translateY(${(1 - inP) * 120}px) scale(${.94 + .06 * inP})`;
+    if (show > 0) await load($("phoneImg"), frameUrl("phone", Math.round((st - PHONE_OFFSET) * FPS) + 1));
+    // dip to black between the demo and the montage
+    const dip = (c) => Math.max(0, 1 - Math.abs(t - c) / .3);
+    $("fade").style.opacity = Math.max(dip(DEMO_FROM), dip(DEMO_TO));
+    // subtitles follow the narration
+    const line = VOICE.find(([id, s]) => t >= s && t < s + (VOICE_LEN[id] || 3) + .3);
+    $("subText").textContent = line ? line[3] : "";
+    $("sub").style.opacity = line ? 1 : 0;
+  }
+
+  window.seek = seek;
+  window.DURATION = DURATION;
+  window.VOICE = VOICE;
+  window.setup = (cfg) => { PHONE_OFFSET = cfg.phoneOffset; TV_FIRST = cfg.tvFirst; VOICE_LEN = cfg.voiceLen; };
+</script>
+</body>
+</html>
