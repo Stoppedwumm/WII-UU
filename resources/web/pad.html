@@ -158,10 +158,39 @@
   #rotate .phone { width: 60px; height: 100px; border: 4px solid var(--accent); border-radius: 12px; animation: turn 2s infinite ease-in-out; }
   @keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
   @media (orientation: portrait) { #rotate { display: flex; } }
+  /* Buzz! mode: the phone becomes a quiz buzzer */
+  #buzz { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; gap: 7vw;
+    background: radial-gradient(circle at 30% 55%, #3a1210 0%, #120b0b 55%, #060606 100%); }
+  #buzz .red { width: 72vh; height: 72vh; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 38% 32%, #ff7a6b 0%, #e8261a 38%, #9c0f08 100%);
+    box-shadow: 0 1.6vh 0 #5e0703, 0 3vh 6vh rgba(0, 0, 0, .6), inset 0 -1vh 2vh rgba(0, 0, 0, .3);
+    font-weight: 900; font-size: 9vh; color: rgba(255, 255, 255, .92); letter-spacing: .02em; text-shadow: 0 .4vh 1vh rgba(0, 0, 0, .35); }
+  #buzz .red.on { transform: translateY(1.2vh); box-shadow: 0 .4vh 0 #5e0703, 0 1.5vh 3vh rgba(0, 0, 0, .6); background: radial-gradient(circle at 38% 32%, #ffb1a6 0%, #ff3b2e 38%, #b3150c 100%) !important; color: #fff !important; }
+  #buzz .answers { display: flex; flex-direction: column; gap: 2.4vh; width: 36vw; }
+  #buzz .ans { height: 16vh; border-radius: 4vh; display: flex; align-items: center; padding-left: 4vw; font-weight: 900; font-size: 5vh;
+    color: rgba(0, 0, 0, .55); box-shadow: 0 .9vh 0 rgba(0, 0, 0, .35), 0 2vh 4vh rgba(0, 0, 0, .45); }
+  #buzz .ans.on { transform: translateY(.7vh); box-shadow: 0 .2vh 0 rgba(0, 0, 0, .35); filter: brightness(1.25); color: rgba(0, 0, 0, .75) !important; }
+  #buzz .b1 { background: #2f86ff !important; } #buzz .b2 { background: #ff8a1f !important; } #buzz .b3 { background: #2fd26b !important; } #buzz .b4 { background: #ffd21a !important; }
+  #buzz .who { position: absolute; left: 4vw; top: 4vh; font-weight: 900; font-size: 5vh; color: #fff; }
+  #buzz .who small { display: block; font-size: 2.6vh; font-weight: 700; color: #d9a39c; }
+  #buzz .tools { position: absolute; right: 3vw; top: 3vh; display: flex; gap: 2vw; }
+  #buzz .tools > * { padding: 1.4vh 2.6vw; border-radius: 99px; background: rgba(255, 255, 255, .12); color: #fff; font-weight: 800; font-size: 2.8vh; border: 0; }
 </style>
 </head>
 <body>
 <div id="pad">
+<div id="buzz" class="hidden">
+  <div class="who"><span id="buzzWho">Player 1</span><small>Buzz! mode</small></div>
+  <div class="tools"><div data-b="HOME">HOME</div><button id="buzzExit" data-ui>&#127918; GamePad</button></div>
+  <div class="red" data-b="BUZZ_RED">BUZZ!</div>
+  <div class="answers">
+    <div class="ans b1" data-b="BUZZ_BLUE">Blue</div>
+    <div class="ans b2" data-b="BUZZ_ORANGE">Orange</div>
+    <div class="ans b3" data-b="BUZZ_GREEN">Green</div>
+    <div class="ans b4" data-b="BUZZ_YELLOW">Yellow</div>
+  </div>
+</div>
+
   <!-- left: ZL L, left stick, d-pad -->
   <div class="col left">
     <div class="shoulders"><div class="sh z" data-b="ZL">ZL</div><div class="sh" data-b="L">L</div></div>
@@ -345,6 +374,8 @@ async function poll() {
     $("keysWarn").classList.toggle("hidden", j.keys !== false);
     if (j.library !== S.libVersion) loadLibrary();
     S.https = j.https; S.tv = j.tv; S.stream = j.stream;
+    if (!j.buzz) S.buzzHidden = false;          // the next Buzz! game shows the buzzer again
+    S.buzz = !!j.buzz; updateBuzz();
     $("ctlInfo").textContent = j.pad ? "Controls: virtual controller (analog sticks)" : "Controls: keyboard keys";
     if (j.stream === "java" && !S.ffmpegHint) {
       S.ffmpegHint = true;
@@ -764,7 +795,16 @@ function mark(b, on) {
   if (b === "HOME" && on) onHome();
 }
 
+// Buzz! mode: shown while a Buzz! game runs; HOME or "GamePad" switch back to the normal layout
+function updateBuzz() {
+  const on = S.buzz && !S.buzzHidden && S.player > 0;
+  $("buzz").classList.toggle("hidden", !on);
+  $("buzzWho").textContent = "Player " + S.player;
+}
+$("buzzExit").onclick = () => { S.buzzHidden = true; updateBuzz(); };
+
 function onHome() {
+  if (S.buzz && !S.buzzHidden) { S.buzzHidden = true; updateBuzz(); }
   if (S.mode === "game") $("homeSheet").classList.toggle("hidden");
   else { show(S.id ? "lib" : "pair"); $("v-lib").scrollTop = 0; }
   $("gyroSheet").classList.add("hidden");
@@ -793,7 +833,7 @@ function stickMove(t, x, y) {
 }
 
 pad.addEventListener("pointerdown", (e) => {
-  if (e.target.closest(".screen")) return;
+  if (e.target.closest(".screen") || e.target.closest("[data-ui]")) return;
   e.preventDefault();
   wakeLock();
   const stick = e.target.closest("[data-stick]");

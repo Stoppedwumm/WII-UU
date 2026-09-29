@@ -8,7 +8,9 @@ public enum PadButton {
     UP, DOWN, LEFT, RIGHT,
     L3, R3,
     LS_UP, LS_DOWN, LS_LEFT, LS_RIGHT,
-    RS_UP, RS_DOWN, RS_LEFT, RS_RIGHT;
+    RS_UP, RS_DOWN, RS_LEFT, RS_RIGHT,
+    /** Buzz! buzzers (Buzz! mode): the big red button and the four answer buttons */
+    BUZZ_RED, BUZZ_BLUE, BUZZ_ORANGE, BUZZ_GREEN, BUZZ_YELLOW;
 
     public static PadButton parse(String s) {
         try {
@@ -16,6 +18,10 @@ public enum PadButton {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    public boolean isBuzz() {
+        return this == BUZZ_RED || this == BUZZ_BLUE || this == BUZZ_ORANGE || this == BUZZ_GREEN || this == BUZZ_YELLOW;
     }
 
     public boolean isDirection() {

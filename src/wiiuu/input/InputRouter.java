@@ -212,6 +212,8 @@ public final class InputRouter {
             case L, ZL -> SwingUtilities.invokeLater(() -> m.page(-1));
             case R, ZR -> SwingUtilities.invokeLater(() -> m.page(1));
             case PLUS -> SwingUtilities.invokeLater(m::toggleGamepadInfo);
+            case BUZZ_RED -> SwingUtilities.invokeLater(m::activate);      // a buzzer can still pick a game
+            case BUZZ_YELLOW -> SwingUtilities.invokeLater(m::back);
             case MINUS -> SwingUtilities.invokeLater(m::refresh);
             default -> { }
         }

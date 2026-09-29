@@ -16,7 +16,16 @@ import wiiuu.core.Config;
  * listen to those keys. Stored as keys.p1.A=X etc. using java.awt.event.KeyEvent names.
  */
 public final class KeyMap {
-    public static final int MAX_PLAYERS = 4;
+    /** Players 1-4, or up to 8 in 8-player mode (server.maxPlayers=8). */
+    public static final int MAX_PLAYERS = 8;
+
+    /**
+     * Buzz! buzzers: red, blue, orange, green, yellow for players 1-8. Distinct for every player and
+     * clear of PCSX2's default shortcuts (F-keys, Escape, Space...).
+     */
+    private static final String[][] BUZZ = {
+            {"1", "2", "3", "4", "5"}, {"6", "7", "8", "9", "0"}, {"Q", "W", "E", "R", "T"}, {"Y", "U", "I", "O", "P"},
+            {"A", "S", "D", "F", "G"}, {"H", "J", "K", "L", "Z"}, {"X", "C", "V", "B", "N"}, {"M", "HOME", "END", "PAGE_UP", "PAGE_DOWN"}};
 
     private static final Map<String, Integer> NAMES = new TreeMap<>();
     private static final Map<Integer, String> CODES = new java.util.HashMap<>();
@@ -123,6 +132,9 @@ public final class KeyMap {
     }
 
     public static String defaultKey(int player, PadButton b) {
+        if (b.isBuzz()) {
+            return player >= 1 && player <= BUZZ.length ? BUZZ[player - 1][b.ordinal() - PadButton.BUZZ_RED.ordinal()] : "";
+        }
         Map<PadButton, String> m = player == 1 ? P1 : player == 2 ? P2 : Map.of();
         return m.getOrDefault(b, "");
     }
@@ -142,6 +154,7 @@ public final class KeyMap {
      */
     public int keyCode(int player, PadButton b, String profile) {
         String explicit = config.get("keys.p" + player + "." + b.name(), null);
+        if (b.isBuzz()) return codeOf(keyName(player, b));
         if (explicit != null || profile == null || player != 1 || !PROFILES.containsKey(profile)) {
             return codeOf(keyName(player, b));
         }

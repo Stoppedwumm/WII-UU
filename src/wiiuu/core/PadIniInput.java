@@ -78,17 +78,63 @@ final class PadIniInput implements InputPatch {
 
     private final Config config;
     private final Emulator emu;
+    /** Buzz! mode: PCSX2's emulated Buzz! controllers instead of the pads (see {@link Buzz}) */
+    private final boolean buzz;
     private Path patched;
 
     PadIniInput(Config config, Emulator emu) {
+        this(config, emu, false);
+    }
+
+    PadIniInput(Config config, Emulator emu, boolean buzz) {
         this.config = config;
         this.emu = emu;
+        this.buzz = buzz;
     }
 
     @Override
     public boolean applies(Game game, List<String> cmd) {
         String mode = config.get("input.emulatorMapping", "auto").trim().toLowerCase(Locale.ROOT);
-        return !mode.equals("off") && emu.matches().test(cmd);
+        if (buzz && !Buzz.active(config, game)) return false;
+        return (buzz || !mode.equals("off")) && emu.matches().test(cmd);
+    }
+
+    /**
+     * The lines to set for this game, as "Section/Key" -> value (null removes the line).
+     * Pads: players 1 and 2 on ports 1 and 2. Buzz!: up to four buzzers per USB port (players 1-4 on
+     * USB port 1, 5-8 on port 2 in 8-player mode), and no keyboard keys left on the pads, so a buzzer
+     * key can't also press a pad button.
+     */
+    private Map<String, String> plan(Ini ini) {
+        Map<String, String> plan = new LinkedHashMap<>();
+        KeyMap keys = new KeyMap(config);
+        if (!buzz) {
+            for (int player = 1; player <= 2; player++) {
+                for (Map.Entry<PadButton, String> e : BUTTONS.entrySet()) {
+                    String key = KeyMap.nameOf(keys.keyCode(player, e.getKey(), emu.profile()));
+                    plan.put("Pad" + player + "/" + e.getValue(), key.isEmpty() ? null : "Keyboard/" + qtKey(key));
+                }
+            }
+            return plan;
+        }
+        int ports = Buzz.players(config) > 4 ? 2 : 1;
+        for (int port = 1; port <= ports; port++) {
+            String section = "USB" + port;
+            plan.put(section + "/Type", Buzz.PCSX2_DEVICE);
+            for (int n = 1; n <= 4; n++) {
+                int player = (port - 1) * 4 + n;
+                for (Map.Entry<PadButton, String> e : Buzz.COLORS.entrySet()) {
+                    String key = KeyMap.nameOf(keys.keyCode(player, e.getKey(), null));
+                    plan.put(section + "/" + Buzz.PCSX2_DEVICE + "_" + e.getValue() + n, key.isEmpty() ? null : "Keyboard/" + qtKey(key));
+                }
+            }
+        }
+        for (String pad : new String[]{"Pad1", "Pad2"}) {
+            for (Map.Entry<String, String> e : ini.entries(pad).entrySet()) {
+                if (e.getValue().contains("Keyboard/")) plan.put(pad + "/" + e.getKey(), null);
+            }
+        }
+        return plan;
     }
 
     /** The emulator's settings file, if it has been run at least once (a missing file is left alone). */
@@ -112,27 +158,27 @@ final class PadIniInput implements InputPatch {
             Properties saved = new Properties();
             // a leftover backup means the file still holds our keys from a crash: keep the older originals
             if (Files.exists(backup)) try (var in = Files.newInputStream(backup)) { saved.load(in); }
-            KeyMap keys = new KeyMap(config);
-            for (int player = 1; player <= 2; player++) {
-                String section = "Pad" + player;
+            for (Map.Entry<String, String> e : plan(ini).entrySet()) {
+                int slash = e.getKey().indexOf('/');
+                String section = e.getKey().substring(0, slash), key = e.getKey().substring(slash + 1);
                 // a section that didn't exist is removed again afterwards
-                if (!saved.containsKey(section + "/") ) saved.setProperty(section + "/", ini.has(section) ? "" : ABSENT);
-                for (Map.Entry<PadButton, String> e : BUTTONS.entrySet()) {
-                    String key = KeyMap.nameOf(keys.keyCode(player, e.getKey(), emu.profile()));
-                    String value = key.isEmpty() ? "" : "Keyboard/" + qtKey(key);
-                    String id = section + "/" + e.getValue();
-                    if (!saved.containsKey(id)) {
-                        String old = ini.get(section, e.getValue());
-                        saved.setProperty(id, old == null ? ABSENT : old);
-                    }
-                    if (value.isEmpty()) ini.remove(section, e.getValue());
-                    else ini.set(section, e.getValue(), value);
+                if (!saved.containsKey(section + "/")) saved.setProperty(section + "/", ini.has(section) ? "" : ABSENT);
+                if (!saved.containsKey(e.getKey())) {
+                    String old = ini.get(section, key);
+                    saved.setProperty(e.getKey(), old == null ? ABSENT : old);
+                }
+                // unbinding keeps the line (empty = unbound), so restoring puts the value back in the same place
+                if (e.getValue() == null) {
+                    if (ini.get(section, key) != null) ini.set(section, key, "");
+                } else {
+                    ini.set(section, key, e.getValue());
                 }
             }
             try (var out = Files.newOutputStream(backup)) { saved.store(out, "WII-UU: your own " + emu.name() + " bindings"); }
             ini.write(file);
             patched = file;
-            System.out.println("[" + emu.name().toLowerCase(Locale.ROOT) + "] temporary GamePad mapping written to " + file);
+            System.out.println("[" + emu.name().toLowerCase(Locale.ROOT) + "] temporary " + (buzz ? "Buzz! controller" : "GamePad")
+                    + " mapping written to " + file);
         } catch (IOException | RuntimeException e) {
             System.err.println("[" + emu.name().toLowerCase(Locale.ROOT) + "] could not write controller mapping: " + e.getMessage());
         }
@@ -278,6 +324,19 @@ final class PadIniInput implements InputPatch {
                 while (at > r[0] && lines.get(at - 1).isBlank()) at--;       // before the blank line ending the section
                 lines.add(at, key + " = " + value);
             }
+        }
+
+        /** All key = value lines of a section, in order. */
+        Map<String, String> entries(String section) {
+            Map<String, String> out = new LinkedHashMap<>();
+            int[] r = sectionRange(section);
+            if (r == null) return out;
+            for (int i = r[0]; i < r[1]; i++) {
+                String l = lines.get(i);
+                int eq = l.indexOf('=');
+                if (eq > 0 && !l.trim().startsWith(";") && !l.trim().startsWith("#")) out.put(l.substring(0, eq).trim(), l.substring(eq + 1).trim());
+            }
+            return out;
         }
 
         boolean has(String section) {

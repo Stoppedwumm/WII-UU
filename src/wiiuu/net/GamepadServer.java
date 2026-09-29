@@ -413,7 +413,7 @@ public final class GamepadServer {
                 .noneMatch(o -> o != self && o.active && o.player == self.player)) {
             return self.player;
         }
-        for (int p = 1; p <= KeyMap.MAX_PLAYERS; p++) {
+        for (int p = 1; p <= wiiuu.core.Buzz.players(config); p++) {       // 4, or 8 in 8-player mode
             int pp = p;
             if (clients.values().stream().noneMatch(o -> o != self && o.active && o.player == pp)) return p;
         }
@@ -501,7 +501,9 @@ public final class GamepadServer {
                 .kv("pad", pads != null && pads.usable())
                 .kv("stream", screen == null ? "off" : screen.backend())
                 .kv("audio", audio != null)
-                .kv("captureBlocked", screen != null && screen.captureBlocked());
+                .kv("captureBlocked", screen != null && screen.captureBlocked())
+                .kv("buzz", g != null && wiiuu.core.Buzz.active(config, g))
+                .kv("maxPlayers", wiiuu.core.Buzz.players(config));
         String secure = httpsUrl();
         j.key("https");
         if (secure == null) j.val((String) null);

@@ -47,7 +47,9 @@ public final class Launcher {
 
     public Launcher(Config config) {
         this.config = config;
-        this.inputPatches = List.of(new DolphinInput(config), new PadIniInput(config, PadIniInput.pcsx2()),
+        // Buzz! first: for Buzz! games it replaces the PCSX2 pad mapping
+        this.inputPatches = List.of(new PadIniInput(config, PadIniInput.pcsx2(), true),
+                new DolphinInput(config), new PadIniInput(config, PadIniInput.pcsx2()),
                 new PadIniInput(config, PadIniInput.duckstation()));
         this.retroArch = new RetroArch(config);
         for (InputPatch p : inputPatches) p.recover();

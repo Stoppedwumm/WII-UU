@@ -72,6 +72,8 @@ public final class SettingsDialog extends JDialog {
     private final javax.swing.JComboBox<String> theme = new javax.swing.JComboBox<>(
             new String[]{"Auto (follow the system)", "Light", "Dark"});
     private final JCheckBox boot = new JCheckBox("Start-up animation");
+    private final JCheckBox eight = new JCheckBox("8-player mode: up to 8 phones at once (instead of 4)");
+    private final JCheckBox buzzMode = new JCheckBox("Buzz! mode: phones become Buzz! buzzers in PS2 Buzz! games");
     private final JCheckBox retroarch = new JCheckBox("RetroArch mode: run every system that has a RetroArch core in RetroArch");
     private final JCheckBox hideEmpty = new JCheckBox("Hide systems without games");
     private final JCheckBox minimize = new JCheckBox("Minimize menu while a game runs");
@@ -132,6 +134,8 @@ public final class SettingsDialog extends JDialog {
         String t = config.get("ui.theme", "auto").trim().toLowerCase();
         theme.setSelectedIndex(t.equals("light") ? 1 : t.equals("dark") ? 2 : 0);
         boot.setSelected(config.getBool("ui.bootAnimation", true));
+        eight.setSelected(config.getInt("server.maxPlayers", 4) > 4);
+        buzzMode.setSelected(config.getBool("buzz.enabled", true));
         retroarch.setSelected(config.getBool("retroarch.enabled", false));
         hideEmpty.setSelected(config.getBool("ui.hideEmpty", false));
         minimize.setSelected(config.getBool("ui.minimizeOnLaunch", true));
@@ -166,6 +170,8 @@ public final class SettingsDialog extends JDialog {
         config.set("ui.music", Boolean.toString(music.isSelected()));
         config.set("ui.theme", new String[]{"auto", "light", "dark"}[Math.max(0, theme.getSelectedIndex())]);
         config.set("ui.bootAnimation", Boolean.toString(boot.isSelected()));
+        config.set("server.maxPlayers", eight.isSelected() ? "8" : null);
+        config.set("buzz.enabled", buzzMode.isSelected() ? null : "false");
         config.set("retroarch.enabled", Boolean.toString(retroarch.isSelected()));
         config.set("ui.hideEmpty", Boolean.toString(hideEmpty.isSelected()));
         config.set("ui.minimizeOnLaunch", Boolean.toString(minimize.isSelected()));
@@ -358,7 +364,7 @@ public final class SettingsDialog extends JDialog {
             row = addRow(p, c, row, "macOS permissions", perms,
                     new JLabel("<html>Turn on <b>WII-UU</b> (or Java / Terminal) in both,<br>then restart WII-UU.</html>"));
         }
-        for (JCheckBox box : new JCheckBox[]{serverOn, requireCode, fullscreen, minimize, sounds, music, boot, retroarch, hideEmpty}) {
+        for (JCheckBox box : new JCheckBox[]{serverOn, requireCode, fullscreen, minimize, sounds, music, boot, retroarch, eight, buzzMode, hideEmpty}) {
             c.gridx = 1;
             c.gridy = row++;
             c.gridwidth = 2;

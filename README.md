@@ -215,6 +215,36 @@ and each one is assigned a player number (P1–P4).
 its player number in `~/.wiiuu/pads.properties`. When WII-UU restarts, phones reconnect on their
 own. To unpair all phones, change the code under *Settings → General*.
 
+### 8 players and Buzz! mode
+
+* **8-player mode:** *Settings → General → 8-player mode* (`server.maxPlayers=8`) lets up to 8 phones
+  play at once, as players 1–8.
+  * On Linux, each phone is its own virtual controller.
+  * DSU motion and touch are limited to players 1–4 by the protocol.
+  * With the keyboard fallback, players 3–8 have no default keys. Set them under *Settings → GamePad
+    Keys*.
+* **Buzz! mode:** in PS2 Buzz! quiz games, every phone turns into a Buzz! buzzer: a big red button
+  and the four coloured answer buttons.
+  * It switches on by itself for PS2 games with "Buzz" in the name (`buzz.games` is a regex), and
+    `buzz.enabled=false` turns it off.
+  * While the game runs, PCSX2 gets its emulated Buzz! controllers: four buzzers on USB port 1
+    (players 1–4) and, in 8-player mode, four more on port 2 (players 5–8).
+  * Each buzzer is bound to its own keys, and the pads' keyboard keys are cleared for the game, so a
+    buzzer can't press a pad button.
+  * Your own PCSX2 settings come back afterwards, line by line, as with the pad mapping.
+  * HOME or *GamePad* on the phone shows the normal GamePad again.
+
+| Player | Red | Blue | Orange | Green | Yellow |
+|---|---|---|---|---|---|
+| 1 | 1 | 2 | 3 | 4 | 5 |
+| 2 | 6 | 7 | 8 | 9 | 0 |
+| 3 | Q | W | E | R | T |
+| 4 | Y | U | I | O | P |
+| 5 | A | S | D | F | G |
+| 6 | H | J | K | L | Z |
+| 7 | X | C | V | B | N |
+| 8 | M | Home | End | Page Up | Page Down |
+
 ### How input reaches emulators
 
 * **Linux (including Raspberry Pi): real controllers.** Each phone becomes a virtual **Xbox 360

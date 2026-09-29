@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.7.0";
+    public static final String VERSION = "1.8.0";
 
     private final Config config;
     private final Library library;
@@ -74,6 +74,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     /** Whether WII-UU types keys into this game's emulator (else the phone is a virtual controller or DSU). */
     private boolean typesKeysFor(Game g) {
         if (g == null) return true;
+        if (wiiuu.core.Buzz.active(config, g)) return true;       // PCSX2's Buzz! buzzers are bound to keys
         String perSystem = config.get("system." + g.system().id() + ".keys", null);
         if (perSystem != null) return Boolean.parseBoolean(perSystem.trim());
         return switch (config.get("input.keys", "auto").trim().toLowerCase()) {
