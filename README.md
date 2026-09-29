@@ -113,6 +113,10 @@ that WII-UU synthesizes itself, so no audio files ship. The music fades out whil
 comes back afterwards. Both can be turned off under *Settings → General* (`ui.bootAnimation`,
 `ui.music`), and `ui.musicVolume` (0–100, default 45) sets the level.
 
+**Dark mode.** *Settings → General → Theme* offers Auto, Light or Dark (`ui.theme`). *Auto*
+follows the system's appearance on macOS, Windows and GNOME/KDE, and switches along when you
+change it.
+
 ## Phone as GamePad
 
 Press **+** or **F2** on the TV and scan the QR code. You can also open the URL shown there on a phone
@@ -325,6 +329,7 @@ ui.fullscreen=true
 ui.minimizeOnLaunch=true
 ui.music=true               # background music in the menu; ui.musicVolume=45 (0-100)
 ui.bootAnimation=true       # start-up animation and chime
+ui.theme=auto               # auto (follow the system) | light | dark
 ```
 
 Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home DIR] [--check-update|--upgrade]`

@@ -69,6 +69,8 @@ public final class SettingsDialog extends JDialog {
     private final JCheckBox fullscreen = new JCheckBox("Start in fullscreen");
     private final JCheckBox sounds = new JCheckBox("Menu sounds");
     private final JCheckBox music = new JCheckBox("Background music");
+    private final javax.swing.JComboBox<String> theme = new javax.swing.JComboBox<>(
+            new String[]{"Auto (follow the system)", "Light", "Dark"});
     private final JCheckBox boot = new JCheckBox("Start-up animation");
     private final JCheckBox hideEmpty = new JCheckBox("Hide systems without games");
     private final JCheckBox minimize = new JCheckBox("Minimize menu while a game runs");
@@ -126,6 +128,8 @@ public final class SettingsDialog extends JDialog {
         fullscreen.setSelected(config.getBool("ui.fullscreen", false));
         sounds.setSelected(config.getBool("ui.sounds", true));
         music.setSelected(config.getBool("ui.music", true));
+        String t = config.get("ui.theme", "auto").trim().toLowerCase();
+        theme.setSelectedIndex(t.equals("light") ? 1 : t.equals("dark") ? 2 : 0);
         boot.setSelected(config.getBool("ui.bootAnimation", true));
         hideEmpty.setSelected(config.getBool("ui.hideEmpty", false));
         minimize.setSelected(config.getBool("ui.minimizeOnLaunch", true));
@@ -158,6 +162,7 @@ public final class SettingsDialog extends JDialog {
         config.set("ui.fullscreen", Boolean.toString(fullscreen.isSelected()));
         config.set("ui.sounds", Boolean.toString(sounds.isSelected()));
         config.set("ui.music", Boolean.toString(music.isSelected()));
+        config.set("ui.theme", new String[]{"auto", "light", "dark"}[Math.max(0, theme.getSelectedIndex())]);
         config.set("ui.bootAnimation", Boolean.toString(boot.isSelected()));
         config.set("ui.hideEmpty", Boolean.toString(hideEmpty.isSelected()));
         config.set("ui.minimizeOnLaunch", Boolean.toString(minimize.isSelected()));
@@ -332,6 +337,7 @@ public final class SettingsDialog extends JDialog {
         });
         row = addRow(p, c, row, "ROM base folder", romBase, browse);
         row = addRow(p, c, row, "GamePad server port", port, null);
+        row = addRow(p, c, row, "Theme", theme, null);
         row = addRow(p, c, row, "Fixed pairing code", fixedCode, new JLabel("(phones stay paired; change it to unpair them)"));
         JButton update = new JButton("Check for updates");
         JLabel updateInfo = new JLabel("Version " + wiiuu.Main.VERSION);

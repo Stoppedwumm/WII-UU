@@ -74,10 +74,120 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         void closeGame();
     }
 
-    static final Color ACCENT = new Color(0x00A8E8);
-    static final Color TEXT = new Color(0x3C4043);
-    static final Color TEXT_DIM = new Color(0x8A9099);
-    static final Color CARD = Color.WHITE;
+    // ---- colours: one set per theme (see applyTheme); only changed on the Swing thread ------
+    static Color ACCENT, TEXT, TEXT_DIM, CARD;
+    private static Color DIVIDER, DOT_OFF, ICON, BUTTON, BG_TOP, BG_BOTTOM, STRIPE, BLOOM, BLOOM_ACCENT,
+            SHELF, OUTLINE, SHADOW_RGB, DIM, TOAST, BOOT_TOP, BOOT_BOTTOM, BOOT_FADE;
+    private static int shadowBoost = 1;
+    static boolean dark;
+
+    static {
+        applyTheme(false);
+    }
+
+    /** Switches every colour of the menu between the light and the dark set. */
+    static void applyTheme(boolean darkTheme) {
+        dark = darkTheme;
+        if (!darkTheme) {
+            ACCENT = new Color(0x00A8E8);
+            TEXT = new Color(0x3C4043);
+            TEXT_DIM = new Color(0x8A9099);
+            CARD = Color.WHITE;
+            DIVIDER = new Color(0xD5D9DE);
+            DOT_OFF = new Color(0xC3C8CE);
+            ICON = new Color(0x6B7178);
+            BUTTON = new Color(0xEEF0F2);
+            BG_TOP = new Color(0xF7F8FA);
+            BG_BOTTOM = new Color(0xE2E6EA);
+            STRIPE = new Color(0, 0, 0, 9);
+            BLOOM = new Color(255, 255, 255, 170);
+            BLOOM_ACCENT = new Color(0, 168, 232, 26);
+            SHELF = new Color(255, 255, 255, 120);
+            OUTLINE = new Color(0, 0, 0, 22);
+            SHADOW_RGB = new Color(40, 50, 60);
+            shadowBoost = 1;
+            DIM = new Color(235, 238, 241, 215);
+            TOAST = new Color(40, 44, 50, 225);
+            BOOT_TOP = Color.WHITE;
+            BOOT_BOTTOM = new Color(0xEEF2F5);
+            BOOT_FADE = new Color(0xF6F8FA);
+        } else {
+            ACCENT = new Color(0x26B9F2);
+            TEXT = new Color(0xE6E9EC);
+            TEXT_DIM = new Color(0x9AA3AD);
+            CARD = new Color(0x262B31);
+            DIVIDER = new Color(0x3C434B);
+            DOT_OFF = new Color(0x4A525B);
+            ICON = new Color(0xAEB6BF);
+            BUTTON = new Color(0x343A42);
+            BG_TOP = new Color(0x1C2025);
+            BG_BOTTOM = new Color(0x0F1113);
+            STRIPE = new Color(255, 255, 255, 6);
+            BLOOM = new Color(255, 255, 255, 16);
+            BLOOM_ACCENT = new Color(38, 185, 242, 30);
+            SHELF = new Color(255, 255, 255, 16);
+            OUTLINE = new Color(255, 255, 255, 18);
+            SHADOW_RGB = new Color(0, 0, 0);
+            shadowBoost = 3;
+            DIM = new Color(12, 14, 16, 215);
+            TOAST = new Color(58, 64, 72, 240);
+            BOOT_TOP = new Color(0x1B1F24);
+            BOOT_BOTTOM = new Color(0x0F1113);
+            BOOT_FADE = new Color(0x16191D);
+        }
+    }
+
+    private volatile String themeMode = "";
+    private Thread themeWatcher;
+
+    /**
+     * ui.theme: "light", "dark", or "auto" to follow the system's appearance (checked again every
+     * 15 seconds, so switching the Mac or PC to dark mode switches WII-UU too).
+     */
+    public void setThemeMode(String mode) {
+        mode = mode == null ? "auto" : mode.trim().toLowerCase(Locale.ROOT);
+        themeMode = mode;
+        switch (mode) {
+            case "dark" -> setTheme(true);
+            case "light" -> setTheme(false);
+            default -> {
+                setTheme(SystemTheme.isDark());
+                if (themeWatcher == null) {
+                    themeWatcher = new Thread(() -> {
+                        while (true) {
+                            try {
+                                Thread.sleep(15_000);
+                            } catch (InterruptedException e) {
+                                return;
+                            }
+                            if (!themeMode.equals("dark") && !themeMode.equals("light")) {
+                                boolean d = SystemTheme.isDark();
+                                SwingUtilities.invokeLater(() -> {
+                                    if (!themeMode.equals("dark") && !themeMode.equals("light")) setTheme(d);
+                                });
+                            }
+                        }
+                    }, "theme-watch");
+                    themeWatcher.setDaemon(true);
+                    themeWatcher.start();
+                }
+            }
+        }
+    }
+
+    /** Switches the theme while running: every cached picture is redrawn in the new colours. */
+    public void setTheme(boolean darkTheme) {
+        if (darkTheme == dark) return;
+        applyTheme(darkTheme);
+        synchronized (sprites) {
+            sprites.clear();
+            spriteBytes = 0;
+        }
+        bg = null;
+        topKey = dockKey = bootCacheKey = null;
+        repaint();
+    }
+
     private static final int COLS = 5, ROWS = 3, PER_PAGE = COLS * ROWS;
     private static final String FONT = pickFont();
     /** Sprites are drawn at the selected (largest) size so zooming in never upsamples. */
@@ -191,6 +301,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         setFocusTraversalKeysEnabled(false);
         setOpaque(true);
         Sfx.setEnabled(config.getBool("ui.sounds", true));
+        setThemeMode(config.get("ui.theme", "auto"));
         booting = config.getBool("ui.bootAnimation", true);
         if (booting) Sfx.prepareBoot();
         revealed = !booting;
@@ -731,7 +842,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         GraphicsConfiguration gc = this.gc;
         bootBg = gc != null ? gc.createCompatibleImage(w, h, Transparency.OPAQUE) : new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D b = bootBg.createGraphics();
-        b.setPaint(new GradientPaint(0, 0, Color.WHITE, 0, h, new Color(0xEEF2F5)));
+        b.setPaint(new GradientPaint(0, 0, BOOT_TOP, 0, h, BOOT_BOTTOM));
         b.fillRect(0, 0, w, h);
         b.dispose();
 
@@ -790,7 +901,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         } else {
             // fading out: a flat fill blends far faster than a full-screen picture
             g.setComposite(AlphaComposite.Src);
-            g.setColor(new Color(0xF6, 0xF8, 0xFA, Math.round(fade * 255)));
+            g.setColor(new Color(BOOT_FADE.getRed(), BOOT_FADE.getGreen(), BOOT_FADE.getBlue(), Math.round(fade * 255)));
             g.setComposite(AlphaComposite.SrcOver);
             g.fillRect(0, 0, (int) w + 1, (int) h + 1);
             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fade));
@@ -1011,17 +1122,17 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             BufferedImage bg = new BufferedImage(Math.max(1, w), Math.max(1, h), BufferedImage.TYPE_INT_RGB);
             Graphics2D b = bg.createGraphics();
             b.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            b.setPaint(new GradientPaint(0, 0, new Color(0xF7F8FA), 0, h, new Color(0xE2E6EA)));
+            b.setPaint(new GradientPaint(0, 0, BG_TOP, 0, h, BG_BOTTOM));
             b.fillRect(0, 0, w, h);
             // the Wii U menu's faint pinstripes
-            b.setColor(new Color(0, 0, 0, 9));
+            b.setColor(STRIPE);
             for (int y = 0; y < h; y += 6) b.fillRect(0, y, w, 2);
             // soft light blooms
             b.setPaint(new java.awt.RadialGradientPaint(w * 0.18f, h * 0.2f, w * 0.5f,
-                    new float[]{0, 1}, new Color[]{new Color(255, 255, 255, 170), new Color(255, 255, 255, 0)}));
+                    new float[]{0, 1}, new Color[]{BLOOM, new Color(BLOOM.getRed(), BLOOM.getGreen(), BLOOM.getBlue(), 0)}));
             b.fillRect(0, 0, w, h);
             b.setPaint(new java.awt.RadialGradientPaint(w * 0.9f, h * 0.95f, w * 0.45f,
-                    new float[]{0, 1}, new Color[]{new Color(0, 168, 232, 26), new Color(0, 168, 232, 0)}));
+                    new float[]{0, 1}, new Color[]{BLOOM_ACCENT, new Color(BLOOM_ACCENT.getRed(), BLOOM_ACCENT.getGreen(), BLOOM_ACCENT.getBlue(), 0)}));
             b.fillRect(0, 0, w, h);
             b.dispose();
             return bg;
@@ -1049,7 +1160,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.setColor(ACCENT);
         g.drawString(b, tx + fm.stringWidth(a), ty);
         float sepX = tx + fm.stringWidth(a + b) + pillH * 0.3f;
-        g.setColor(new Color(0xD5D9DE));
+        g.setColor(DIVIDER);
         g.fill(new Rectangle2D.Float(sepX, cy - pillH * 0.25f, 2, pillH * 0.5f));
         g.setFont(crumbFont);
         g.setColor(TEXT_DIM);
@@ -1116,7 +1227,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             float d = L.h * 0.012f, gap = d * 2.4f;
             float x0 = (L.w - (pages - 1) * gap) / 2, y = L.dockY - L.h * 0.025f;
             for (int p = 0; p < pages; p++) {
-                g.setColor(p == page() ? ACCENT : new Color(0xC3C8CE));
+                g.setColor(p == page() ? ACCENT : DOT_OFF);
                 float s = p == page() ? d * 1.35f : d;
                 g.fill(new Ellipse2D.Float(x0 + p * gap - s / 2, y - s / 2, s, s));
             }
@@ -1125,7 +1236,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private void paintCursor(Graphics2D g, float radius) {
         RoundRectangle2D r = new RoundRectangle2D.Float(hl[0], hl[1], hl[2], hl[3], radius, radius);
-        g.setColor(new Color(0, 168, 232, 60));
+        g.setColor(new Color(ACCENT.getRed(), ACCENT.getGreen(), ACCENT.getBlue(), 60));
         g.setStroke(new BasicStroke(12f));
         g.draw(r);
         g.setColor(ACCENT);
@@ -1179,7 +1290,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private BufferedImage sprite(Tile t, Layout L, float scale) {
         BufferedImage cover = t.game == null ? null : cover(t.game);
         Object key = List.of(t.id(), (int) L.tileW, (int) L.tileH, scale,
-                cover == null ? "" : System.identityHashCode(cover), t.count);
+                cover == null ? "" : System.identityHashCode(cover), t.count, dark);
         synchronized (sprites) {
             BufferedImage img = sprites.get(key);
             if (img != null) return img;
@@ -1223,7 +1334,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     /** Cheap stand-in shown for the frame or two before a tile's sprite is ready. */
     private static void paintPlaceholder(Graphics2D g, Tile t, Rectangle2D r) {
         float rad = (float) Math.min(r.getWidth(), r.getHeight()) * 0.12f;
-        g.setColor(new Color(40, 50, 60, 18));
+        g.setColor(new Color(SHADOW_RGB.getRed(), SHADOW_RGB.getGreen(), SHADOW_RGB.getBlue(), 18 * shadowBoost));
         g.fill(new RoundRectangle2D.Double(r.getX(), r.getY() + 3, r.getWidth(), r.getHeight(), rad, rad));
         g.setColor(CARD);
         g.fill(new RoundRectangle2D.Double(r.getX(), r.getY(), r.getWidth(), r.getHeight(), rad, rad));
@@ -1247,7 +1358,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.fill(card);
         if (t.game == null) paintSystemTile(g, t, card);
         else paintGameTile(g, t, card);
-        g.setColor(new Color(0, 0, 0, 22));
+        g.setColor(OUTLINE);
         g.setStroke(new BasicStroke(1f));
         g.draw(card);
         g.dispose();
@@ -1371,7 +1482,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         float shelfW = (float) (lastDock.getMaxX() + first.getWidth() * 0.9f) - shelfX;
         RoundRectangle2D shelf = new RoundRectangle2D.Float(shelfX, L.dockY + L.dockH * 0.02f, shelfW,
                 L.dockH * 0.9f, L.dockH * 0.5f, L.dockH * 0.5f);
-        g.setColor(new Color(255, 255, 255, 120));
+        g.setColor(SHELF);
         g.fill(shelf);
         Dock[] items = Dock.values();
         for (int i = 0; i < items.length; i++) {
@@ -1380,9 +1491,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             shadow(g, circle, 4);
             g.setColor(CARD);
             g.fill(circle);
-            g.setColor(new Color(0, 0, 0, 20));
+            g.setColor(OUTLINE);
             g.draw(circle);
-            Color ic = inDock && dockSel == i ? ACCENT : new Color(0x6B7178);
+            Color ic = inDock && dockSel == i ? ACCENT : ICON;
             drawDockIcon(g, items[i], r, ic);
             g.setColor(inDock && dockSel == i ? ACCENT : TEXT_DIM);
             g.setFont(font(Font.BOLD, L.dockH * 0.12f));
@@ -1459,7 +1570,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         float tw = fm.stringWidth(toast) + L.h * 0.07f, th = L.h * 0.06f;
         float tx = (L.w - tw) / 2, ty = L.dockY - th - L.h * 0.05f;
         RoundRectangle2D r = new RoundRectangle2D.Float(tx, ty, tw, th, th, th);
-        g.setColor(new Color(40, 44, 50, 225));
+        g.setColor(TOAST);
         g.fill(r);
         g.setColor(Color.WHITE);
         drawCentered(g, toast, L.w / 2, ty + th / 2 + fm.getAscent() * 0.36f);
@@ -1467,7 +1578,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private void dim(Graphics2D g, Layout L) {
-        g.setColor(new Color(235, 238, 241, 215));
+        g.setColor(DIM);
         g.fill(new Rectangle2D.Float(0, 0, L.w, L.h));
     }
 
@@ -1518,7 +1629,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 for (int x = 0; x < qr.size; x++)
                     if (qr.get(x, y))
                         g.fill(new Rectangle2D.Float(qx + (x + 2) * cell, qy + (y + 2) * cell, cell + 0.5f, cell + 0.5f));
-            g.setColor(new Color(0xD5D9DE));
+            g.setColor(DIVIDER);
             g.draw(new RoundRectangle2D.Float(qx - 4, qy - 4, qrSize + 8, qrSize + 8, 16, 16));
         }
         float tx = qx + qrSize + ch * 0.1f, tw = cx + cw - tx - ch * 0.08f;
@@ -1573,7 +1684,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         for (Rectangle2D r : new Rectangle2D[]{yes, no}) {
             boolean isYes = r == yes;
             RoundRectangle2D b = new RoundRectangle2D.Double(r.getX(), r.getY(), r.getWidth(), r.getHeight(), r.getHeight(), r.getHeight());
-            g.setColor(isYes ? ACCENT : new Color(0xEEF0F2));
+            g.setColor(isYes ? ACCENT : BUTTON);
             g.fill(b);
             g.setColor(isYes ? Color.WHITE : TEXT);
             g.setFont(font(Font.BOLD, ch * 0.08f));
@@ -1632,7 +1743,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         int layers = Math.min(4, depth);
         for (int i = layers; i >= 1; i--) {
             double grow = depth * 0.45 * i / layers, dy = depth * 0.35 * i / layers + 1;
-            g.setColor(new Color(40, 50, 60, 9 + (layers - i) * 3));
+            g.setColor(new Color(SHADOW_RGB.getRed(), SHADOW_RGB.getGreen(), SHADOW_RGB.getBlue(),
+                    Math.min(255, (9 + (layers - i) * 3) * shadowBoost)));
             double x = b.getX() - grow, y = b.getY() - grow + dy, w = b.getWidth() + 2 * grow, h = b.getHeight() + 2 * grow;
             if (round) g.fill(new RoundRectangle2D.Double(x, y, w, h, arc + 2 * grow, arc + 2 * grow));
             else if (oval) g.fill(new Ellipse2D.Double(x, y, w, h));
