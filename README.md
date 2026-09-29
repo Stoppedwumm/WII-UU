@@ -1,7 +1,9 @@
 # WII-UU
 
 A Wii U Menu–style emulator frontend written in Java, with a built-in web server that turns
-any phone into a Wii U–like GamePad. There are no dependencies beyond Java 17+.
+any phone into a Wii U–like GamePad. The GamePad has buttons and sticks, a live touch screen
+(Wii U GamePad view, DS/3DS bottom screen, or the whole TV), gyro, and the PC's sound. There are
+no dependencies beyond Java 17+.
 
 Website: **https://wiiuu.stoppedwumm.net** (served from `docs/`). It has a one-line install for
 Linux, Raspberry Pi and macOS: `curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash`.
@@ -22,7 +24,8 @@ your own legally dumped games and, where an emulator requires it, your own firmw
 
 ## Install
 
-Download `WII-UU-1.0.0.zip`, unzip it, then:
+Download [`WII-UU-latest.zip`](https://wiiuu.stoppedwumm.net/download/WII-UU-latest.zip), unzip
+it, then:
 
 * **Linux / macOS:** `./install.sh`
   (on Linux, `./install.sh --with-emulators` also installs the emulators, from official releases or source, and
@@ -36,6 +39,10 @@ The installer:
 * creates `~/WiiUU/roms/<system>` folders
 * on Windows it adds a firewall rule when run as administrator; on Linux it prints the `ufw` or
   `firewalld` command to run
+* **Linux:** offers the GamePad extras: `ffmpeg` (screen), `x11-utils` (finding windows), `python3`
+  and `uinput` (virtual controllers), and `pulseaudio-utils` (sound)
+* **macOS:** builds a native `WII-UU.app`, and offers Apple's Command Line Tools. WII-UU needs
+  them to compile its screen and sound helpers.
 
 To uninstall, run `./install.sh --uninstall` or `install.ps1 -Uninstall`. Your ROMs and settings are kept.
 
@@ -149,7 +156,8 @@ Notes on the keyboard fallback:
 
 * **Linux Wayland:** keys reach X11/XWayland windows. Most emulators accept them, and Qt apps
   can be forced with `QT_QPA_PLATFORM=xcb`.
-* **macOS:** allow Java under *Privacy & Security → Accessibility*.
+* **macOS:** allow WII-UU under *Privacy & Security → Accessibility* (see macOS setup). Dolphin
+  gets a temporary mapping of its own.
 
 ## The GamePad screen: Wii U, DS and 3DS
 
@@ -165,12 +173,14 @@ The picture is streamed at 30 fps.
   on first start with the Xcode Command Line Tools (`xcode-select --install`; Homebrew already
   installs them). Until the helper is ready, or if it fails, slower Java capture is used. It needs
   *Screen Recording* (see macOS setup). If something fails, the reason is in
-  `~/.wiiuu/logs/capture.log`.
+  `~/.wiiuu/logs/capture.log` (building: `capture-build.log`).
 * **TV mode during a game** streams only the emulator's window, not the whole desktop.
   `stream.tvFollowsGame=false` mirrors the whole screen instead.
 * **If ffmpeg fails:** WII-UU switches to Java capture on its own.
-* **On the phone:** only the newest frame is drawn, so a slow phone drops frames instead of
-  falling behind.
+* **On the phone:** the page fetches one frame at a time and asks for the next as soon as the
+  last one has arrived. Frames can't pile up in the network, so the picture is always the newest
+  one, and a slow phone or Wi-Fi drops frames instead of falling behind. Browsers that can't do
+  this fall back to a plain MJPEG stream.
 
 * **GamePad / Touch screen:** when a game with a second screen starts, the phone switches to it
   automatically, and a tap becomes a mouse click at that spot. Emulators read those clicks as
@@ -190,14 +200,17 @@ Tap **🔇 Sound** on the phone to hear the PC's sound there as well. Phones onl
 tap, so after reloading the page the first tap turns it back on. The phone keeps about 0.1 s of
 sound buffered, so the sound runs slightly behind the picture.
 
-* **macOS 13 or newer:** the ScreenCaptureKit helper records the sound as well. It uses the same
-  *Screen Recording* permission as the picture.
+* **macOS 13 or newer:** a second small ScreenCaptureKit helper (`resources/mac/audio.swift`)
+  records the sound. It is compiled on first start like the picture helper, but kept separate, so
+  a problem with sound never affects the picture. It uses the same *Screen Recording*
+  permission. The Mac keeps playing the sound too.
 * **Linux:** records the default output's monitor with `parec`, from `pulseaudio-utils`
   (PulseAudio or PipeWire), or with ffmpeg.
 * **Windows:** needs ffmpeg and a loopback recording device. Turn on *Stereo Mix* under Sound
   settings → Recording, or install a virtual cable. Set `audio.device` to pick a device by name.
 * **iPhone:** with the silent switch on, only iOS 17 and newer play the sound.
-* **If there's no sound:** the phone shows why, and details are in `~/.wiiuu/logs/audio.log`.
+* **If there's no sound:** the phone shows why, and details are in `~/.wiiuu/logs/audio.log`
+  (macOS helper build: `audio-build.log`).
   `audio.enabled=false` turns sound off, and `audio.command` replaces the recorder. The command
   must write raw 48 kHz 16-bit stereo PCM to its output.
 
@@ -269,12 +282,17 @@ emulators, run `wiiuu-emulators --update`.
   * **Linux:** the whole process group is stopped, and Flatpak apps with `flatpak kill`.
   * **macOS:** apps started with `open -a App` receive Quit, then their process is stopped by its
     path inside the `.app` bundle.
-* **Choppy GamePad screen:** install `ffmpeg` (Linux/Windows). The phone mentions it when it isn't
-  installed. On slow Wi-Fi, lower `stream.maxWidth` or `stream.quality`.
+* **Choppy GamePad screen:**
+  * **Linux/Windows:** install `ffmpeg`. The phone mentions it when it isn't installed.
+  * **macOS:** make sure the terminal shows `GamePad streaming via ScreenCaptureKit`. If it
+    doesn't, install the Command Line Tools and check `capture-build.log`.
+  * **Slow Wi-Fi:** lower `stream.maxWidth` or `stream.quality`.
 * **Delayed GamePad screen:** the phone fetches one picture at a time, so delay can't build up in the
   network. What's left comes from Wi-Fi and the frame rate:
   * Use 5 GHz Wi-Fi, or put the PC on a cable.
   * Try `stream.fps=60` for less delay, if the Wi-Fi keeps up.
+* **No sound on the phone:** tap *Sound*. The phone says why if the PC can't record, and
+  [Sound on the phone](#sound-on-the-phone) lists what each OS needs.
 
 ## Settings file
 

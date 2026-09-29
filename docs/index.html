@@ -176,7 +176,7 @@
           <a class="btn primary" href="download/WII-UU-latest.zip">⤓ Download</a>
           <a class="btn" href="#install">Install guide</a>
         </div>
-        <p class="meta">Version 1.1.5 · Linux · Windows · macOS · Raspberry Pi · Java 17+</p>
+        <p class="meta">Version <span id="ver">1.2.0</span> · Linux · Windows · macOS · Raspberry Pi · Java 17+</p>
       </div>
       <img class="shot" src="menu.png" alt="The WII-UU home screen: a grid of console tiles with a blue cursor, a clock and a GamePad status pill" width="1600" height="900">
     </div>
@@ -198,7 +198,7 @@
         <div class="card"><div class="icon">▦</div><h3>Wii U style menu</h3>
           <p>Paged tiles with a gliding cursor, a dock and soft menu sounds. It runs smoothly on a Raspberry Pi.</p></div>
         <div class="card"><div class="icon">▣</div><h3>Phone as GamePad</h3>
-          <p>Scan a QR code and your phone becomes the controller, with sticks, D-pad, ABXY, shoulder buttons and HOME. Up to 4 players.</p></div>
+          <p>Scan a QR code and your phone becomes the controller, with sticks, D-pad, ABXY, shoulder buttons, HOME, a live touch screen, gyro and sound. Up to 4 players.</p></div>
         <div class="card"><div class="icon">⤓</div><h3>Emulators installed for you</h3>
           <p>It downloads official releases for your CPU, or builds the latest source when a project has no build for it. Emulators are set up automatically.</p></div>
         <div class="card"><div class="icon">▶</div><h3>One-button launch</h3>
@@ -224,7 +224,8 @@
           <li>Press <b>HOME</b> during a game to close it and return to the menu.</li>
         </ol>
         <p class="meta">On Linux and the Raspberry Pi, each phone becomes a real virtual Xbox 360 controller with analog
-          sticks, which every emulator detects on its own. Gyro and touch reach Cemu, Dolphin, Azahar and Ryujinx through DSU.</p>
+          sticks, which every emulator detects on its own. On macOS, Dolphin gets a matching keyboard mapping for as long as a game runs, and your own settings are restored afterwards.
+          Gyro and touch reach Cemu, Dolphin, Azahar and Ryujinx through DSU.</p>
       </div>
     </div>
   </section>
@@ -242,6 +243,12 @@
           <p>The bottom screen of melonDS or Azahar moves to your phone. Draw, tap and swipe right on it while the top screen stays on the TV.</p></div>
         <div class="card"><div class="icon">▭</div><h3>Off-TV play</h3>
           <p>Mirror the whole TV to the phone, including the WII-UU menu, and tap tiles to open them.</p></div>
+        <div class="card"><div class="icon">♪</div><h3>Sound on the phone</h3>
+          <p>Tap <b>Sound</b> and the game's audio plays on the phone too, about a tenth of a second behind the picture. Plug in headphones and play anywhere in the house.</p></div>
+        <div class="card"><div class="icon">⚡</div><h3>Low delay</h3>
+          <p>The phone fetches one frame at a time, so frames never pile up on the network, and it always shows the newest picture. On macOS, Apple's ScreenCaptureKit does the capture on the GPU.</p></div>
+        <div class="card"><div class="icon">⟲</div><h3>Gyro</h3>
+          <p>Tilt the phone to steer or aim. Motion reaches Cemu, Dolphin, Azahar and Ryujinx as a DSU (cemuhook) controller.</p></div>
       </div>
       <p class="meta">Games with a second screen switch to it automatically. For gyro, open the secure GamePad address (<code>https://&lt;pc&gt;:8443</code>) once, which the phone offers.
         The <a href="https://github.com/Stoppedwumm/WII-UU#the-gamepad-screen-wii-u-ds-and-3ds">README</a> has the one-time emulator setup.</p>
@@ -284,8 +291,10 @@ curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash -s -- --with-emulators</c
       </div>
       <div class="panel" id="p-mac" role="tabpanel" hidden>
         <pre class="code"><code>curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash</code></pre>
-        <p>This installs <b>WII-UU.app</b> in <code>~/Applications</code>. Install emulators from their websites and set their paths under <b>Settings (F1)</b>.
-          Allow Java under <i>Privacy &amp; Security → Accessibility</i> so the GamePad can type into emulators.</p>
+        <p>This installs <b>WII-UU.app</b> in <code>~/Applications</code> and offers Apple's Command Line Tools, which WII-UU uses to build its screen and sound helpers.
+          Install emulators from their websites and set their paths under <b>Settings (F1)</b>.</p>
+        <p>Start WII-UU from <code>~/Applications</code>, then turn on <b>WII-UU</b> under <i>System Settings → Privacy &amp; Security</i> in <b>Screen Recording</b> (picture and sound) and <b>Accessibility</b> (buttons).
+          <i>Settings (F1) → General → macOS permissions</i> opens both pages. Restart WII-UU afterwards. Sound needs macOS 13 or newer.</p>
       </div>
     </div>
   </section>
@@ -342,13 +351,20 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
       <details><summary>How do I update WII-UU?</summary>
         <p>Open Settings (F1) → General → <b>Check for updates</b>, or run <code>wiiuu --upgrade</code>. WII-UU also tells you when a new version is out. Settings, ROMs, paired phones and emulators are kept.</p></details>
       <details><summary>The GamePad screen is choppy.</summary>
-        <p>Install <code>ffmpeg</code> on the PC (the installers offer it). It captures and encodes the picture at 30 fps, even on a Raspberry Pi.</p></details>
+        <p>On Linux and Windows, install <code>ffmpeg</code> on the PC (the installers offer it). It captures and encodes the picture at 30 fps, even on a Raspberry Pi.
+          On macOS, install the Command Line Tools (<code>xcode-select --install</code>), so WII-UU can build its ScreenCaptureKit helper. The terminal then says <i>GamePad streaming via ScreenCaptureKit</i>.</p></details>
+      <details><summary>The GamePad screen lags behind the TV.</summary>
+        <p>Update to 1.1.6 or newer, which fetches frames one by one so delay can't build up. What remains comes from Wi-Fi: use 5 GHz Wi-Fi or a cable for the PC, and try <code>stream.fps=60</code> in the settings file.</p></details>
+      <details><summary>How do I get sound on the phone?</summary>
+        <p>Tap <b>Sound</b> on the phone. The PC records what it plays: on macOS 13+ through ScreenCaptureKit, on Linux through PulseAudio/PipeWire (<code>pulseaudio-utils</code>), and on Windows through ffmpeg and <i>Stereo Mix</i>.
+          Phones only play sound after a tap, so after reloading the page, tap anywhere once. With the iPhone's silent switch on, iOS 17 or newer is needed. If the PC can't record, the phone says why.</p></details>
       <details><summary>Do I have to pair my phone again after a restart?</summary>
         <p>No. Phones stay paired and keep their player number, and they reconnect by themselves when WII-UU starts again.</p></details>
       <details><summary>Buttons don't reach the emulator.</summary>
         <p>On Linux, let the installer enable virtual controllers, and the phone then shows up as an Xbox 360 pad in every emulator.
           On macOS and Windows, player 1 gets each emulator's own default keys (Dolphin, PPSSPP, mGBA, melonDS, DuckStation, Ryujinx, Azahar).
-          For other emulators, set the emulator's keyboard controls to the keys listed under <b>Settings → GamePad Keys</b>. On Linux under Wayland, keys reach X11/XWayland windows. On macOS, allow Java under Accessibility.</p></details>
+          For other emulators, set the emulator's keyboard controls to the keys listed under <b>Settings → GamePad Keys</b>. On Linux under Wayland, keys reach X11/XWayland windows.
+          On macOS, allow WII-UU under Accessibility. Dolphin gets a temporary mapping that matches the phone.</p></details>
       <details><summary>Will a Raspberry Pi run everything?</summary>
         <p>The older consoles run well on a Pi 4/5. GameCube, Wii U, Switch, PS3 and PS4 are too demanding to play well on a Pi, and PS2 and PS4 emulators only run on x86-64.</p></details>
       <details><summary>The GamePad screen is black on my Mac.</summary>
@@ -388,6 +404,10 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
       + `<div class="cap">${name}</div>`;
     tiles.appendChild(t);
   }
+
+  // version from the release manifest, so this page never shows an old number
+  fetch("version.json", { cache: "no-store" }).then(r => r.json())
+    .then(j => { if (j.version) document.getElementById("ver").textContent = j.version; }).catch(() => {});
 
   // install tabs
   document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
