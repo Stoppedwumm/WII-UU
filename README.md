@@ -337,6 +337,14 @@ Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home 
 java -jar build/wiiuu.jar
 ```
 
+GitHub Actions (`.github/workflows/build.yml`) builds and smoke-tests every push, and keeps the
+zip as an artifact of the run. Each push to the default branch also publishes the website:
+* The build puts the new zip into `docs/download/` and writes a matching `version.json`, then deploys
+  `docs/` to GitHub Pages. The website and *Check for updates* always offer the newest build, with
+  no committed zips needed.
+* For this to work, set *Settings → Pages → Source* to **GitHub Actions**.
+* A `v*` tag also creates a GitHub release with the zip.
+
 The code is in `src/wiiuu`:
 
 * `core`: system catalogue, ROM scanner, config and emulator launcher
