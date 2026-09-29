@@ -449,6 +449,18 @@ as its narration. It also writes captions (`.srt`), the chapter timestamps, a th
 * `VOICE_ENGINE=elevenlabs ELEVENLABS=<key> ./trailer/render-youtube.sh` uses ElevenLabs instead.
   `VOICE_ID` picks the voice.
 
+## Presentation
+
+`presentation/` holds an 8-minute narrated presentation about WII-UU: what it does, how it works
+under the hood, and how to set it up. The slides are styled after the Wii U menu, with a pinstriped
+light background, white cards and pages that glide sideways.
+* The script and slides are in `talk.json`, one entry per slide, with its narration.
+* Every point on a slide appears when the narration reaches it, and each slide is as long as its
+  narration.
+* `presentation/render.sh` renders `dist/WII-UU-presentation.mp4`, with captions and chapter
+  timestamps.
+* `VOICE_ENGINE=elevenlabs ELEVENLABS=<key>` uses an ElevenLabs voice instead of the offline one.
+
 ## Build from source
 
 ```sh

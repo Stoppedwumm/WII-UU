@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WII-UU: the presentation</title>
+<!--
+  An 8-minute narrated presentation about WII-UU (script and slides: talk.json), in the style of
+  the Wii U menu: pinstriped light background, white cards, a top bar like the app's, and pages
+  that glide sideways. Each slide lasts as long as its narration, and every point appears when the
+  narration reaches it (the "line" of an element). window.seek(t) lays out frame t exactly.
+  Rendered by render.sh.
+-->
+<style>
+  @font-face { font-family: Inter; font-weight: 400; src: url(../trailer/fonts/inter-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 600; src: url(../trailer/fonts/inter-latin-600-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 800; src: url(../trailer/fonts/inter-latin-800-normal.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 900; src: url(../trailer/fonts/inter-latin-900-normal.woff2) format("woff2"); }
+  :root { --ink: #3c4043; --dim: #7a828c; --accent: #00a8e8; --card: #fff; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: Inter, sans-serif; color: var(--ink);
+    background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .028) 0 3px, transparent 3px 9px), linear-gradient(180deg, #f7f8fa, #e3e7eb); }
+  #stage::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(circle at 18% 18%, rgba(255, 255, 255, .8), transparent 45%), radial-gradient(circle at 90% 95%, rgba(0, 168, 232, .10), transparent 40%); }
+  /* top bar, like the app's */
+  .pill { position: absolute; top: 34px; height: 68px; border-radius: 999px; background: #fff; display: flex; align-items: center; gap: 18px;
+    padding: 0 30px; box-shadow: 0 2px 4px rgba(40, 50, 60, .08), 0 8px 24px rgba(40, 50, 60, .10); font-size: 28px; z-index: 5; }
+  #bar { left: 48px; } #bar .logo { font-weight: 900; font-size: 32px; } #bar .logo b { color: var(--accent); }
+  #bar .sep { width: 2px; height: 34px; background: #d5d9de; } #bar .ch { color: var(--dim); font-weight: 600; }
+  #count { right: 48px; font-weight: 800; } #count span { color: var(--dim); font-weight: 600; }
+  #progress { position: absolute; left: 0; bottom: 0; height: 6px; background: var(--accent); z-index: 5; }
+  /* slides */
+  .slide { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; will-change: transform; }
+  .h { position: absolute; left: 120px; right: 120px; top: 150px; font-weight: 900; font-size: 84px; letter-spacing: -.035em; line-height: 1.05; }
+  .h em, .big em { font-style: normal; color: var(--accent); }
+  .card { background: var(--card); border-radius: 30px; box-shadow: 0 2px 4px rgba(40, 50, 60, .08), 0 14px 40px rgba(40, 50, 60, .12); }
+  .r { opacity: 0; will-change: opacity, transform; }
+  .cards { position: absolute; left: 120px; right: 120px; top: 400px; display: flex; gap: 40px; }
+  .cards .card { flex: 1; padding: 44px 44px 50px; min-height: 420px; }
+  .cards .ico { font-size: 76px; margin-bottom: 26px; }
+  .cards h3 { font-size: 42px; font-weight: 800; letter-spacing: -.02em; margin-bottom: 16px; }
+  .cards p { font-size: 32px; color: var(--dim); line-height: 1.4; }
+  .tv { position: absolute; border-radius: 26px; background: #16191d; padding: 18px; box-shadow: 0 30px 80px rgba(40, 50, 60, .35); }
+  .tv .scr { position: relative; border-radius: 12px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; }
+  .tv .scr img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .phone { position: absolute; padding: 12px; border-radius: 44px; background: linear-gradient(160deg, #2a2e34, #111316);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .45); }
+  .phone img { display: block; width: 100%; border-radius: 32px; }
+  .points { position: absolute; left: 120px; top: 360px; width: 560px; }
+  .points .pt { display: flex; gap: 22px; align-items: flex-start; font-size: 38px; font-weight: 800; line-height: 1.25; margin-bottom: 44px; letter-spacing: -.01em; }
+  .points .pt i { flex: none; width: 22px; height: 22px; margin-top: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 7px rgba(0, 168, 232, .18); }
+  .tile { position: absolute; width: 150px; height: 150px; border-radius: 24px; color: #fff; font-weight: 900; font-size: 34px;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 26px rgba(40, 50, 60, .25), inset 0 1px 0 rgba(255, 255, 255, .3); }
+  .tile small { position: absolute; bottom: 14px; font-size: 15px; font-weight: 600; opacity: .85; }
+  .chip { display: inline-block; padding: 18px 34px; margin: 0 12px 16px 0; border-radius: 999px; background: #fff; font-weight: 800; font-size: 32px;
+    box-shadow: 0 2px 4px rgba(40, 50, 60, .08), 0 8px 20px rgba(40, 50, 60, .10); }
+  .chip.blue { background: var(--accent); color: #fff; }
+  .term { position: absolute; border-radius: 24px; overflow: hidden; background: #fff; box-shadow: 0 2px 4px rgba(40, 50, 60, .08), 0 20px 50px rgba(40, 50, 60, .15); }
+  .term .tb { height: 56px; background: #eef1f4; display: flex; align-items: center; gap: 12px; padding: 0 24px; }
+  .term .tb i { width: 16px; height: 16px; border-radius: 50%; display: block; }
+  .term pre { margin: 0; padding: 30px 40px; font-family: "DejaVu Sans Mono", monospace; font-size: 27px; line-height: 1.6; color: #2c3136; white-space: pre-wrap; }
+  .term .c { color: #0086c0; } .term .g { color: #17a34a; } .term .p { color: #9aa1a9; }
+  .box { position: absolute; padding: 30px 36px; border-radius: 28px; background: #fff; font-weight: 800; font-size: 36px; text-align: center;
+    box-shadow: 0 2px 4px rgba(40, 50, 60, .08), 0 14px 36px rgba(40, 50, 60, .12); }
+  .box small { display: block; margin-top: 10px; font-size: 26px; font-weight: 600; color: var(--dim); }
+  .box.blue { background: var(--accent); color: #fff; } .box.blue small { color: rgba(255, 255, 255, .85); }
+  svg.lines { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+  svg.lines path { fill: none; stroke: #b9c2cb; stroke-width: 6; stroke-linecap: round; }
+  svg.lines path.on { stroke: var(--accent); }
+  .code { position: absolute; padding: 34px 40px; border-radius: 26px; background: #1d2126; color: #e4e8ec; font-family: "DejaVu Sans Mono", monospace;
+    font-size: 30px; line-height: 1.7; white-space: pre; box-shadow: 0 20px 50px rgba(40, 50, 60, .25); }
+  .code .k { color: #7fd1ff; } .code .s { color: #9be29b; } .code .hd { color: #f5c26b; } .code .old { color: #8a939c; }
+  .big { position: absolute; left: 0; right: 0; text-align: center; font-weight: 900; letter-spacing: -.035em; }
+  .logo { font-weight: 900; letter-spacing: -.02em; } .logo b { color: var(--accent); }
+  .step { position: absolute; top: 380px; width: 500px; height: 440px; padding: 50px; }
+  .step .n { width: 110px; height: 110px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 900; font-size: 60px;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 36px; }
+  .step h3 { font-size: 48px; font-weight: 900; margin-bottom: 14px; letter-spacing: -.02em; }
+  .step p { font-size: 32px; color: var(--dim); line-height: 1.35; }
+  .packet { position: absolute; width: 90px; height: 56px; border-radius: 12px; background: var(--accent); box-shadow: 0 6px 16px rgba(0, 120, 180, .35); }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 9; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="slides"></div>
+  <div class="pill" id="bar"><span class="logo">WII-<b>UU</b></span><span class="sep"></span><span class="ch" id="chName"></span></div>
+  <div class="pill" id="count"><span id="num"></span></div>
+  <div id="progress"></div>
+  <div id="fade"></div>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const seg = (t, a, b) => clamp((t - a) / (b - a));
+  const out3 = (v) => 1 - Math.pow(1 - clamp(v), 3);
+  const inOut = (v) => { v = clamp(v); return v < .5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2; };
+  const FPS = 30, LEAD = 1.1, GAP = 0.6, TAIL = 1.4, SLIDE_MS = .7;
+  let S = null, SL = [], DURATION = 0, VOICE = [], CAPTIONS = [];
+  let PHONE_OFFSET = 5.0, TV_FIRST = 4.0;
+
+  const SYSTEMS = [["NES", "#E60012"], ["SNES", "#5C4B9E"], ["GB", "#8B9A3B"], ["N64", "#1A9E3F"], ["GBA", "#4B3FA0"],
+    ["GCN", "#6A5ACD"], ["DS", "#7A7A7A"], ["Wii", "#33B5E5"], ["3DS", "#CE181E"], ["Wii U", "#009AC7"],
+    ["Switch", "#E60012"], ["SMS", "#1F4E9E"], ["MD", "#2a2a2a"], ["SAT", "#3A3A6A"], ["DC", "#F28C28"],
+    ["PS1", "#8C8C8C"], ["PS2", "#1C3F94"], ["PSP", "#2B2B2B"], ["PS3", "#111111"], ["PS4", "#003791"]];
+  const r = (line, delay = 0, extra = "") => `class="r ${extra}" data-line="${line}" data-delay="${delay}"`;
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+  // ---- the layouts ------------------------------------------------------------------------------
+  const LAYOUTS = {
+    title: () => `
+      <div class="big logo" style="top: 330px; font-size: 230px">WII-<b>UU</b></div>
+      <div class="big" ${r(0, 1.2)} style="top: 610px; font-size: 54px; font-weight: 800; color: var(--dim); letter-spacing: -.02em">A Wii U–style console for every computer</div>
+      <div class="big" ${r(1, .3)} style="top: 760px"><span class="chip">What it does</span><span class="chip">How it works</span><span class="chip blue">How to set it up</span></div>`,
+
+    cards: (s) => `<div class="h">${s.heading}</div>
+      <div class="cards">${s.cards.map((c) => `<div ${r(c.line, c.delay || 0, "card")}><div class="ico">${c.icon}</div><h3>${c.title}</h3><p>${c.text}</p></div>`).join("")}</div>`,
+
+    idea: () => `<div class="h">The <em>idea</em></div>
+      <div ${r(0, .4)} style="position:absolute; left: 120px; top: 360px; width: 800px">
+        <div class="tv" style="position:relative"><div class="scr"><img src="../trailer/build/menu-light.png"></div></div>
+        <div style="margin-top: 34px; font-size: 40px; font-weight: 800">The Wii U menu, for all your games</div></div>
+      <div ${r(1, 0)} style="position:absolute; left: 960px; top: 470px; font-size: 120px; font-weight: 900; color: var(--accent)">+</div>
+      <div ${r(1, .6)} style="position:absolute; left: 1090px; top: 400px; width: 710px">
+        <div class="phone" style="position:relative"><img src="../docs/gamepad.png"></div>
+        <div style="margin-top: 44px; font-size: 40px; font-weight: 800">Your phone as the GamePad</div></div>`,
+
+    media: (s) => `<div class="h" style="width: 700px; font-size: 76px">${s.heading}</div>
+      <div class="points">${s.points.map((p) => `<div ${r(p.line, p.delay || 0, "pt")}><i></i><span>${p.text}</span></div>`).join("")}</div>
+      <div class="tv" style="left: 760px; top: 170px; width: 1060px"><div class="scr"><img class="mtv"><img class="mimg" style="opacity:0"></div></div>
+      ${s.media.phone ? `<div class="phone mphone" style="left: 1320px; top: 600px; width: 540px"><img class="mph"></div>` : ""}`,
+
+    consoles: () => `<div class="h">Twenty <em>consoles</em></div>
+      <div class="tilesbox">${SYSTEMS.map(([n, c], i) => `<div class="tile" data-tile="${i}" style="left:${120 + (i % 10) * 170}px; top:${320 + Math.floor(i / 10) * 175}px;
+        background: linear-gradient(160deg, ${c}, color-mix(in srgb, ${c} 70%, black))">${n}</div>`).join("")}</div>
+      <div ${r(1, .3)} style="position:absolute; left: 120px; top: 720px"><span class="chip" style="font-family: 'DejaVu Sans Mono', monospace; font-size: 30px">~/WiiUU/roms/snes/Star Runner.sfc</span></div>
+      <div ${r(2, .4)} style="position:absolute; left: 120px; top: 840px"><span class="chip blue">Dolphin</span><span class="chip blue">Cemu</span><span class="chip blue">DuckStation</span><span class="chip blue">PCSX2</span><span class="chip">and more</span></div>`,
+
+    install: () => `<div class="h">Installing</div>
+      <div class="term" style="left: 120px; top: 330px; width: 1020px"><div class="tb"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><pre class="t1"></pre></div>
+      <div ${r(0, 2.5)} style="position:absolute; left: 1210px; top: 340px; width: 600px">
+        <div class="chip">🐧 Linux</div><div class="chip">🍎 macOS</div><div class="chip">🍓 Raspberry Pi</div><div class="chip">🪟 install.bat</div></div>
+      <div ${r(2, 0, "term")} style="left: 1210px; top: 600px; width: 610px"><div class="tb"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+        <pre><span class="p">$ </span>wiiuu-emulators
+<span class="g">✓</span> DuckStation  <span class="p">release</span>
+<span class="g">✓</span> PPSSPP       <span class="p">release</span>
+<span class="g">✓</span> Dolphin      <span class="p">built from source</span></pre></div>`,
+
+    input: () => `<div class="h">Under the hood: <em>input</em></div>
+      <svg class="lines" viewBox="0 0 1920 1080"><path data-p="1" d="M470 640 L640 640"/><path data-p="2" d="M1000 640 C1080 640 1080 470 1160 470"/>
+        <path data-p="3" d="M1000 640 L1160 640"/><path data-p="4" d="M1000 640 C1080 640 1080 810 1160 810"/></svg>
+      <div ${r(0, .3, "box")} style="left: 120px; top: 560px; width: 350px">📱 Phone<small>a button press</small></div>
+      <div ${r(1, .2, "box blue")} style="left: 640px; top: 560px; width: 360px">WII-UU<small>over the web page</small></div>
+      <div ${r(2, 0, "box")} style="left: 1160px; top: 400px; width: 640px; text-align:left">🎮 Virtual Xbox 360 pad<small>Linux · every emulator detects it</small></div>
+      <div ${r(3, 0, "box")} style="left: 1160px; top: 570px; width: 640px; text-align:left">⌨️ Keyboard keys<small>Mac &amp; Windows · each emulator's own layout</small></div>
+      <div ${r(4, 0, "box")} style="left: 1160px; top: 740px; width: 640px; text-align:left">🌀 DSU (cemuhook)<small>motion &amp; touch · Cemu, Dolphin, Azahar, Ryujinx</small></div>
+      <div ${r(5, .2)} style="position:absolute; left: 120px; top: 780px"><span class="chip blue">P1</span><span class="chip blue">P2</span><span class="chip blue">P3</span><span class="chip blue">P4</span></div>`,
+
+    mapping: () => `<div class="h">Controllers that <em>just work</em></div>
+      <div ${r(0, .6)} style="position:absolute; left: 120px; top: 340px"><span class="chip">Dolphin</span><span class="chip">PCSX2</span><span class="chip">DuckStation</span></div>
+      <div ${r(1, .3, "code")} style="left: 120px; top: 480px; width: 780px"><span class="hd">[Pad1]</span>
+<span class="k">Cross</span>    = <span class="s">Keyboard/Z</span>
+<span class="k">Circle</span>   = <span class="s">Keyboard/X</span>
+<span class="k">Triangle</span> = <span class="s">Keyboard/S</span>
+<span class="k">Start</span>    = <span class="s">Keyboard/Return</span></div>
+      <div ${r(1, 1.3)} style="position:absolute; left: 950px; top: 610px; font-size: 90px; font-weight: 900; color: var(--accent)">→</div>
+      <div ${r(2, .3, "code")} style="left: 1080px; top: 480px; width: 720px"><span class="hd">[Pad1]</span>
+<span class="k">Cross</span>    = <span class="old">SDL-0/FaceSouth</span>
+<span class="k">Circle</span>   = <span class="old">SDL-0/FaceEast</span>
+<span class="k">Triangle</span> = <span class="old">SDL-0/FaceNorth</span>
+<span class="k">Start</span>    = <span class="old">SDL-0/Start</span></div>
+      <div ${r(2, 1.6)} style="position:absolute; left: 1080px; top: 850px"><span class="chip blue">✓ Your own settings, put back</span></div>
+      <div ${r(1, .8)} style="position:absolute; left: 120px; top: 850px"><span class="chip">During the game</span></div>`,
+
+    stream: () => `<div class="h">Keeping it <em>fast</em></div>
+      <div ${r(0, .4, "box")} style="left: 120px; top: 420px; width: 400px">📺 The PC's screen<small>only the part that matters</small></div>
+      <div ${r(1, .2, "box blue")} style="left: 700px; top: 420px; width: 520px">Capture<small>ffmpeg · ScreenCaptureKit on a Mac</small></div>
+      <div ${r(0, .8, "box")} style="left: 1400px; top: 420px; width: 400px">📱 The phone<small>draws the newest frame</small></div>
+      <div class="packets" style="position:absolute; inset: 0"><div class="packet" data-pk="1"></div><div class="packet" data-pk="2" style="background:#fff; border: 3px dashed var(--accent); box-shadow:none"></div></div>
+      <div ${r(2, .5)} style="position:absolute; left: 0; right: 0; top: 700px; text-align: center; font-size: 44px; font-weight: 800">One frame at a time: <span style="color: var(--accent)">nothing piles up.</span></div>
+      <div ${r(3, .2)} style="position:absolute; left: 0; right: 0; top: 820px; text-align:center"><span class="chip">🍓 Smooth on a Raspberry Pi too</span></div>`,
+
+    retroarch: () => `<div class="h">RetroArch <em>mode</em></div>
+      <div ${r(0, .6)} style="position:absolute; left: 120px; top: 340px; width: 1680px">${["Mesen", "Snes9x", "mGBA", "SameBoy", "Mupen64Plus-Next", "Dolphin", "melonDS", "Citra", "Genesis Plus GX", "Beetle Saturn", "Flycast", "SwanStation", "PCSX2", "PPSSPP"].map((n) => `<span class="chip">${n}</span>`).join("")}</div>
+      <div ${r(1, .3)} style="position:absolute; left: 120px; top: 640px"><span class="chip blue">Best installed core</span><span class="chip blue">Downloads missing cores</span><span class="chip blue">Same keys as the phone</span></div>
+      <div ${r(2, .3)} style="position:absolute; left: 120px; top: 760px"><span class="chip">Shortcuts moved out of the way</span></div>
+      <div ${r(1, 4.5)} style="position:absolute; left: 120px; top: 880px; font-size: 32px; color: var(--dim); font-weight: 600">Wii U, Switch, PS3 and PS4 keep their own emulators.</div>`,
+
+    steps: (s) => `<div class="h">Try it in <em>five minutes</em></div>
+      ${s.steps.map((st, i) => `<div ${r(st.line, .2, "card step")} style="left:${120 + i * 580}px"><div class="n">${st.n}</div><h3>${st.title}</h3><p>${esc(st.text)}</p></div>`).join("")}`,
+
+    platforms: () => `<div class="h">Where it <em>runs</em></div>
+      <div style="position:absolute; left: 120px; top: 350px; display:flex; gap: 36px">${[["🐧", "Linux"], ["🪟", "Windows"], ["🍎", "macOS"], ["🍓", "Raspberry Pi 4 & 5"]].map(([i, n], k) =>
+        `<div ${r(0, .3 + k * .5, "card")} style="width: 390px; padding: 40px; text-align:center"><div style="font-size: 90px">${i}</div><div style="font-size: 38px; font-weight: 800; margin-top: 16px">${n}</div></div>`).join("")}</div>
+      <div ${r(1, .4, "card")} style="position:absolute; left: 120px; top: 700px; width: 820px; padding: 36px 44px"><div style="font-size: 36px; font-weight: 900">Great on a Pi</div><div style="font-size: 30px; color: var(--dim); margin-top: 10px">NES to N64, GBA, DS, PS1, PSP …</div></div>
+      <div ${r(1, 2.8, "card")} style="position:absolute; left: 980px; top: 700px; width: 820px; padding: 36px 44px"><div style="font-size: 36px; font-weight: 900">Want a real PC</div><div style="font-size: 30px; color: var(--dim); margin-top: 10px">GameCube, Wii U, Switch, PS3</div></div>`,
+
+    end: () => `<div class="big logo" style="top: 280px; font-size: 200px">WII-<b>UU</b></div>
+      <div class="big" ${r(0, 1.2)} style="top: 540px"><span class="chip blue" style="font-size: 44px; padding: 22px 48px">wiiuu.stoppedwumm.net</span></div>
+      <div class="big" ${r(0, 3)} style="top: 690px; font-family: 'DejaVu Sans Mono', monospace; font-size: 32px; font-weight: 400; color: var(--dim); letter-spacing: 0">curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash</div>
+      <div class="big" ${r(1, .2)} style="top: 820px; font-size: 64px">Thanks for watching!</div>`,
+  };
+
+  const INSTALL = [["$ ", "p"], ["curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash\n", ""],
+    ["==> ", "c"], ["Checking Java\n", ""], ["  ✓ ", "g"], ["Java 21\n", ""], ["==> ", "c"], ["Installing to ~/.local/share/wiiuu\n", ""],
+    ["  ✓ ", "g"], ["Launcher: ~/.local/bin/wiiuu\n", ""], ["==> ", "c"], ["Creating ROM folders in ~/WiiUU/roms\n", ""],
+    ["  ✓ ", "g"], ["Menu entry: WII-UU\n\n", ""], ["Done! ", "g"], ["Start WII-UU with ", ""], ["wiiuu", "c"], ["\n", ""]];
+
+  function drawInstall(el, lt) {
+    const cmd = INSTALL[1][0], typed = Math.floor(clamp((lt - .5) / 2.4) * cmd.length), outLines = Math.floor(Math.max(0, lt - 3.2) / .5);
+    let html = `<span class="p">$ </span>` + esc(cmd.slice(0, typed)) + (typed < cmd.length ? "▌" : "\n"), n = 0;
+    if (typed >= cmd.length) INSTALL.slice(2).forEach(([text, cls]) => {
+      if (n < outLines) html += cls ? `<span class="${cls}">${esc(text)}</span>` : esc(text);
+      if (text.endsWith("\n")) n++;
+    });
+    el.innerHTML = html;
+  }
+
+  // ---- timeline -----------------------------------------------------------------------------------
+  function build(voiceLen) {
+    const box = $("slides");
+    let t = 0, n = 0;
+    SL = []; VOICE = []; CAPTIONS = [];
+    S.sections.forEach((s, i) => {
+      const el = document.createElement("div");
+      el.className = "slide";
+      el.innerHTML = LAYOUTS[s.layout](s);
+      box.appendChild(el);
+      const start = t, lineAt = [];
+      let at = start + LEAD;
+      s.lines.forEach((l) => {
+        const id = "y" + (++n), len = voiceLen[id] || 3;
+        VOICE.push([id, at]); CAPTIONS.push([at, at + len, l.text]); lineAt.push(at);
+        at += len + GAP;
+      });
+      const end = at - GAP + TAIL;
+      SL.push({ s, el, a: start, z: end, lineAt, reveals: [...el.querySelectorAll("[data-line]")] });
+      t = end;
+    });
+    DURATION = Math.round(t * FPS) / FPS;
+  }
+
+  const frameUrl = (dir, i) => `../trailer/build2/${dir}/${String(Math.max(1, i)).padStart(5, "0")}.jpg`;
+  async function load(img, src) {
+    if (!img || img.getAttribute("src") === src) return;
+    img.src = src;
+    try { await img.decode(); } catch (e) { /* keep the previous frame */ }
+  }
+
+  async function drawSlide(sl, t) {
+    const lt = t - sl.a, s = sl.s, el = sl.el;
+    for (const x of sl.reveals) {
+      const k = Number(x.dataset.line), at = (sl.lineAt[k] ?? sl.lineAt[sl.lineAt.length - 1]) + Number(x.dataset.delay || 0);
+      const v = out3(seg(t, at, at + .6));
+      x.style.opacity = v;
+      x.style.transform = `translateY(${(1 - v) * 40}px)`;
+    }
+    if (s.layout === "media") {
+      const m = s.media;
+      if (m.type === "demo") {
+        const st = Math.min(m.from + lt, m.to);
+        await load(el.querySelector(".mtv"), frameUrl("tv", Math.round((st - TV_FIRST) * FPS) + 1));
+        const ph = el.querySelector(".mphone");
+        if (ph) {
+          const on = out3(seg(st, PHONE_OFFSET + .3, PHONE_OFFSET + 1));
+          ph.style.opacity = on;
+          ph.style.transform = `translateY(${(1 - on) * 80}px)`;
+          if (on > 0) await load(el.querySelector(".mph"), frameUrl("phone", Math.round((st - PHONE_OFFSET) * FPS) + 1));
+        }
+        if (m.then) {
+          const v = inOut(seg(t, sl.lineAt[m.then.line], sl.lineAt[m.then.line] + .8));
+          const img = el.querySelector(".mimg");
+          if (img.getAttribute("src") !== m.then.src) await load(img, m.then.src);
+          img.style.opacity = v;
+          if (ph) ph.style.opacity = Math.min(Number(ph.style.opacity), 1 - v);
+        }
+      } else {
+        await load(el.querySelector(".mtv"), m.src);
+        if (m.then) {
+          const img = el.querySelector(".mimg");
+          if (img.getAttribute("src") !== m.then.src) await load(img, m.then.src);
+          img.style.opacity = inOut(seg(t, sl.lineAt[m.then.line], sl.lineAt[m.then.line] + .8));
+        }
+      }
+    } else if (s.layout === "consoles") {
+      el.querySelectorAll("[data-tile]").forEach((d) => {
+        const i = Number(d.dataset.tile), a = sl.lineAt[0] + .3 + i * .12;
+        const v = out3(seg(t, a, a + .5));
+        d.style.opacity = clamp(seg(t, a, a + .2));
+        d.style.transform = `translateY(${(1 - v) * 60}px) scale(${.7 + .3 * v})`;
+      });
+    } else if (s.layout === "install") {
+      drawInstall(el.querySelector(".t1"), t - sl.lineAt[0]);
+    } else if (s.layout === "input") {
+      el.querySelectorAll("path").forEach((p) => {
+        const k = Number(p.dataset.p), at = sl.lineAt[k];
+        p.style.opacity = seg(t, at, at + .5);
+        p.classList.toggle("on", t >= at && (k === 1 || t < (sl.lineAt[k + 1] ?? 1e9)));
+      });
+    } else if (s.layout === "stream") {
+      // one frame goes to the phone, then the next is asked for: shown as a packet travelling back and forth
+      const start = sl.lineAt[2], cyc = 1.6, p = Math.max(0, t - start) % cyc, on = seg(t, start, start + .4);
+      const pk1 = el.querySelector('[data-pk="1"]'), pk2 = el.querySelector('[data-pk="2"]');
+      const x1 = 1225 + 165 * inOut(p / (cyc / 2)), x2 = 1390 - 165 * inOut((p - cyc / 2) / (cyc / 2));
+      pk1.style.left = x1 + "px"; pk1.style.top = "470px"; pk1.style.opacity = p < cyc / 2 ? on : 0;
+      pk2.style.left = x2 + "px"; pk2.style.top = "560px"; pk2.style.opacity = p >= cyc / 2 ? on : 0;
+    }
+  }
+
+  async function seek(t) {
+    const i = SL.findIndex((x) => t >= x.a && t < x.z), idx = i < 0 ? (t < 0 ? 0 : SL.length - 1) : i;
+    const cur = SL[idx];
+    // pages glide sideways like the Wii U menu when a new slide starts
+    const g = idx > 0 ? inOut(seg(t, cur.a, cur.a + SLIDE_MS)) : 1;
+    const pos = idx - 1 + g;
+    for (let k = 0; k < SL.length; k++) {
+      const vis = Math.abs(k - pos) < 1;
+      SL[k].el.style.display = vis ? "block" : "none";
+      if (vis) SL[k].el.style.transform = `translateX(${(k - pos) * 1920}px)`;
+    }
+    if (idx > 0 && g < 1) await drawSlide(SL[idx - 1], t);
+    await drawSlide(cur, t);
+    $("chName").textContent = cur.s.chapter;
+    $("num").innerHTML = `${String(idx + 1).padStart(2, "0")} <span>/ ${SL.length}</span>`;
+    $("progress").style.width = (t / DURATION * 1920) + "px";
+    $("fade").style.opacity = Math.max(1 - seg(t, 0, .5), seg(t, DURATION - 1.2, DURATION));
+  }
+
+  window.seek = seek;
+  window.setup = async (cfg) => {
+    S = await (await fetch("talk.json")).json();
+    PHONE_OFFSET = cfg.phoneOffset; TV_FIRST = cfg.tvFirst;
+    build(cfg.voiceLen);
+    window.DURATION = DURATION; window.VOICE = VOICE; window.CAPTIONS = CAPTIONS;
+    window.CHAPTERS = SL.map((x) => [x.a, x.s.chapter]);
+  };
+</script>
+</body>
+</html>

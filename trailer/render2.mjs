@@ -34,12 +34,13 @@ const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 page.on("pageerror", (e) => console.error("page error:", e.message));
 const PAGE = process.env.PAGE || "trailer2.html";           // or youtube.html
 await page.goto(`http://127.0.0.1:${port}/trailer/${PAGE}`);
-await page.waitForFunction(() => document.getElementById("t1").contentWindow?.seek);
+await page.waitForFunction(() => !document.getElementById("t1") || document.getElementById("t1").contentWindow?.seek);
 await page.evaluate(() => document.fonts.ready);
-await page.evaluate(() => document.getElementById("t1").contentWindow.document.fonts.ready);
+await page.evaluate(() => document.getElementById("t1")?.contentWindow.document.fonts.ready);
 await page.evaluate((c) => window.setup(c), cfg);
 // trailer 1's own captions would clash with the subtitles
 await page.evaluate(() => {
+  if (!document.getElementById("t1")) return;
   const s = document.getElementById("t1").contentWindow.document.createElement("style");
   s.textContent = "#s5c1, #s5c2, #s5c3 { display: none !important; }";
   document.getElementById("t1").contentWindow.document.head.appendChild(s);
@@ -69,7 +70,7 @@ voice.forEach(([id, start], i) => {
   labels.push(`[v${i}]`);
 });
 const filter = parts.join(";") + `;${labels.join("")}amix=inputs=${labels.length}:normalize=0:duration=longest,atrim=0:${duration}[vo];`
-  + `[vo]asplit[vo1][vo2];[0]aformat=sample_rates=48000:channel_layouts=stereo,volume=0.55[m];`
+  + `[vo]asplit[vo1][vo2];[0]aformat=sample_rates=48000:channel_layouts=stereo,volume=${process.env.MUSIC_LEVEL || 0.55}[m];`
   + `[m][vo1]sidechaincompress=threshold=0.02:ratio=8:attack=30:release=500[duck];`
   + `[duck][vo2]amix=inputs=2:normalize=0,atrim=0:${duration},afade=t=out:st=${Math.max(0, duration - 3)}:d=3,loudnorm=I=-16:TP=-1.5:LRA=11[a]`;
 await new Promise((ok, bad) => spawn("ffmpeg", ["-y", "-loglevel", "error", ...inputs, "-filter_complex", filter, "-map", "[a]", "-ar", "48000", audio],

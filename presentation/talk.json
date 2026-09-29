@@ -1,0 +1,545 @@
+{
+  "title": "WII-UU: a Wii U–style console for every computer",
+  "sections": [
+    {
+      "chapter": "Welcome",
+      "layout": "title",
+      "lines": [
+        {
+          "say": "Hi! This is Wii U U, a free project that turns any computer into a console that looks and feels like the Wii U menu.",
+          "text": "Hi! This is WII-UU, a free project that turns any computer into a console that looks and feels like the Wii U menu."
+        },
+        {
+          "say": "In the next few minutes, I'll show you what it does, how it works under the hood, and how to set it up.",
+          "text": "In the next few minutes, I'll show you what it does, how it works under the hood, and how to set it up."
+        }
+      ]
+    },
+    {
+      "chapter": "The problem",
+      "layout": "cards",
+      "heading": "Emulators are amazing. <em>On a TV, not so much.</em>",
+      "cards": [
+        {
+          "icon": "🧩",
+          "title": "Many emulators, many menus",
+          "text": "Every one has its own settings and its own idea of a controller.",
+          "line": 1
+        },
+        {
+          "icon": "🖱️",
+          "title": "Built for a desk",
+          "text": "Finding a game means a mouse, a keyboard and a file browser.",
+          "line": 2
+        },
+        {
+          "icon": "🎮",
+          "title": "Controllers first",
+          "text": "A good pad for every player has to be bought and set up.",
+          "line": 3
+        }
+      ],
+      "lines": [
+        {
+          "say": "Emulators are amazing. But if you want to play on a TV, from the couch, they're not much fun to use.",
+          "text": "Emulators are amazing. But if you want to play on a TV, from the couch, they're not much fun to use."
+        },
+        {
+          "say": "Every emulator has its own menus, its own settings, and its own idea of how a controller should work.",
+          "text": "Every emulator has its own menus, its own settings, and its own idea of how a controller should work."
+        },
+        {
+          "say": "Finding a game usually means a mouse, a keyboard, and a file browser.",
+          "text": "Finding a game usually means a mouse, a keyboard, and a file browser."
+        },
+        {
+          "say": "And a good controller for every player is something you have to buy and set up first.",
+          "text": "And a good controller for every player is something you have to buy and set up first."
+        }
+      ]
+    },
+    {
+      "chapter": "The idea",
+      "layout": "idea",
+      "lines": [
+        {
+          "say": "So the idea behind Wii U U is simple. Take the friendliest console menu there is, the Wii U's, and put all of your games in it.",
+          "text": "So the idea behind WII-UU is simple. Take the friendliest console menu there is, the Wii U's, and put all of your games in it."
+        },
+        {
+          "say": "And instead of a controller, use the one thing everybody already has in their pocket. On the Wii U, the GamePad had a screen. Your phone has one too.",
+          "text": "And instead of a controller, use the one thing everybody already has in their pocket. On the Wii U, the GamePad had a screen. Your phone has one too."
+        }
+      ]
+    },
+    {
+      "chapter": "The menu",
+      "layout": "media",
+      "heading": "The menu",
+      "media": {
+        "type": "image",
+        "src": "../trailer/build/menu-light.png",
+        "then": {
+          "src": "../trailer/build/menu-dark.png",
+          "line": 2
+        }
+      },
+      "points": [
+        {
+          "text": "Start-up animation and chime",
+          "line": 0
+        },
+        {
+          "text": "A tile for every console, a gliding cursor",
+          "line": 1
+        },
+        {
+          "text": "Menu sounds, relaxed music, dark mode",
+          "line": 2
+        },
+        {
+          "text": "Everything adjustable in Settings",
+          "line": 3
+        }
+      ],
+      "lines": [
+        {
+          "say": "Here's the menu. It starts with a short animation and a chime, and then shows a tile for every console.",
+          "text": "Here's the menu. It starts with a short animation and a chime, and then shows a tile for every console."
+        },
+        {
+          "say": "You move a gliding cursor with the arrow keys, a gamepad, or your phone, and open a console to see its games.",
+          "text": "You move a gliding cursor with the arrow keys, a gamepad, or your phone, and open a console to see its games."
+        },
+        {
+          "say": "It has soft menu sounds, its own relaxed background music, and a dark mode that follows your system.",
+          "text": "It has soft menu sounds, its own relaxed background music, and a dark mode that follows your system."
+        },
+        {
+          "say": "Everything, from the game folders to the emulator commands, can be changed in a settings screen, or in a plain text file.",
+          "text": "Everything, from the game folders to the emulator commands, can be changed in a settings screen, or in a plain text file."
+        }
+      ]
+    },
+    {
+      "chapter": "Twenty consoles",
+      "layout": "consoles",
+      "lines": [
+        {
+          "say": "Wii U U knows twenty consoles. From Nintendo, that's the NES all the way to the Wii U and Switch. From Sega, the Master System to the Dreamcast. And from Sony, the PlayStation 1 to the PlayStation 4.",
+          "text": "WII-UU knows twenty consoles. From Nintendo, that's the NES all the way to the Wii U and Switch. From Sega, the Master System to the Dreamcast. And from Sony, the PlayStation 1 to the PlayStation 4."
+        },
+        {
+          "say": "You bring your own games. Drop them into a folder for each system, and they show up as tiles, with covers if you have them.",
+          "text": "You bring your own games. Drop them into a folder for each system, and they show up as tiles, with covers if you have them."
+        },
+        {
+          "say": "Wii U U itself is the launcher. For each console, it starts a well-known emulator, like Dolphin, Cemu, DuckStation, or PCSX2, and points it at your game.",
+          "text": "WII-UU itself is the launcher. For each console, it starts a well-known emulator, like Dolphin, Cemu, DuckStation or PCSX2, and points it at your game."
+        }
+      ]
+    },
+    {
+      "chapter": "Installing",
+      "layout": "install",
+      "lines": [
+        {
+          "say": "Installing takes one line in a terminal on Linux, macOS, and the Raspberry Pi. On Windows, you double-click the installer.",
+          "text": "Installing takes one line in a terminal on Linux, macOS and the Raspberry Pi. On Windows, you double-click the installer."
+        },
+        {
+          "say": "It checks for Java, installs Wii U U with a shortcut, and creates the folders for your games.",
+          "text": "It checks for Java, installs WII-UU with a shortcut, and creates the folders for your games."
+        },
+        {
+          "say": "On Linux, it can also install the emulators for you. It grabs the newest official release for your processor, and when there isn't one, it builds the emulator from source. That's how it covers the Raspberry Pi too.",
+          "text": "On Linux, it can also install the emulators for you. It grabs the newest official release for your processor, and when there isn't one, it builds the emulator from source. That's how it covers the Raspberry Pi too."
+        }
+      ]
+    },
+    {
+      "chapter": "Your phone is the GamePad",
+      "layout": "media",
+      "heading": "Your phone is the <em>GamePad</em>",
+      "media": {
+        "type": "demo",
+        "from": 4.8,
+        "to": 14.0,
+        "phone": true
+      },
+      "points": [
+        {
+          "text": "Press + on the TV, scan the code",
+          "line": 0
+        },
+        {
+          "text": "No app: a web page over your Wi-Fi",
+          "line": 1
+        },
+        {
+          "text": "Up to 4 phones, and they stay paired",
+          "line": 2
+        }
+      ],
+      "lines": [
+        {
+          "say": "Now the best part. Press plus on the TV, and a QR code appears. Scan it with your phone, and it becomes the GamePad.",
+          "text": "Now the best part. Press + on the TV, and a QR code appears. Scan it with your phone, and it becomes the GamePad."
+        },
+        {
+          "say": "There's no app to install. The GamePad is a web page that Wii U U serves itself, over your Wi-Fi.",
+          "text": "There's no app to install. The GamePad is a web page that WII-UU serves itself, over your Wi-Fi."
+        },
+        {
+          "say": "It has two sticks, a D-pad, four face buttons, the shoulder buttons, and HOME. Up to four phones can play at once, and they stay paired, even after a restart.",
+          "text": "It has two sticks, a D-pad, four face buttons, the shoulder buttons and HOME. Up to four phones can play at once, and they stay paired, even after a restart."
+        },
+        {
+          "say": "On Android, the phone vibrates on every press, and the screen stays awake while you play.",
+          "text": "On Android, the phone vibrates on every press, and the screen stays awake while you play."
+        }
+      ]
+    },
+    {
+      "chapter": "Playing a game",
+      "layout": "media",
+      "heading": "Playing a game",
+      "media": {
+        "type": "demo",
+        "from": 14.6,
+        "to": 23.2,
+        "phone": true
+      },
+      "points": [
+        {
+          "text": "Your library is on the phone",
+          "line": 0
+        },
+        {
+          "text": "HOME → Close game, like a Wii U",
+          "line": 1
+        }
+      ],
+      "lines": [
+        {
+          "say": "Your library is on the phone too. Tap a game, and it starts on the TV.",
+          "text": "Your library is on the phone too. Tap a game, and it starts on the TV."
+        },
+        {
+          "say": "While you play, press HOME for a menu with Close game, just like on a real Wii U.",
+          "text": "While you play, press HOME for a menu with Close game, just like on a real Wii U."
+        }
+      ]
+    },
+    {
+      "chapter": "Under the hood: input",
+      "layout": "input",
+      "lines": [
+        {
+          "say": "So how does a button press on a phone end up in an emulator? Let's look under the hood.",
+          "text": "So how does a button press on a phone end up in an emulator? Let's look under the hood."
+        },
+        {
+          "say": "The phone sends every press to Wii U U over a small, fast web connection. From there, it takes one of three roads.",
+          "text": "The phone sends every press to WII-UU over a small, fast web connection. From there, it takes one of three roads."
+        },
+        {
+          "say": "On Linux, each phone becomes a real virtual Xbox 360 controller. Every emulator detects it on its own, with analog sticks and triggers.",
+          "text": "On Linux, each phone becomes a real virtual Xbox 360 controller. Every emulator detects it on its own, with analog sticks and triggers."
+        },
+        {
+          "say": "On Mac and Windows, Wii U U types keys instead, using each emulator's own default layout.",
+          "text": "On Mac and Windows, WII-UU types keys instead, using each emulator's own default layout."
+        },
+        {
+          "say": "And motion and touch travel over DSU, the cemuhook protocol, which Cemu, Dolphin, Azahar, and Ryujinx understand.",
+          "text": "And motion and touch travel over DSU, the cemuhook protocol, which Cemu, Dolphin, Azahar and Ryujinx understand."
+        },
+        {
+          "say": "Each phone gets its own player number, so up to four people can play together.",
+          "text": "Each phone gets its own player number, so up to four people can play together."
+        }
+      ]
+    },
+    {
+      "chapter": "Controllers that just work",
+      "layout": "mapping",
+      "lines": [
+        {
+          "say": "Typing keys only works if the emulator listens to those keys. So for Dolphin, PCSX2, and DuckStation, Wii U U goes one step further.",
+          "text": "Typing keys only works if the emulator listens to those keys. So for Dolphin, PCSX2 and DuckStation, WII-UU goes one step further."
+        },
+        {
+          "say": "While a game runs, it writes a temporary controller mapping into the emulator's own settings, matching exactly the keys it sends.",
+          "text": "While a game runs, it writes a temporary controller mapping into the emulator's own settings, matching exactly the keys it sends."
+        },
+        {
+          "say": "When the game ends, it puts your own settings back, line by line. And even if something crashes, it restores them on the next start.",
+          "text": "When the game ends, it puts your own settings back, line by line. And even if something crashes, it restores them on the next start."
+        }
+      ]
+    },
+    {
+      "chapter": "A real second screen",
+      "layout": "media",
+      "heading": "A real <em>second screen</em>",
+      "media": {
+        "type": "demo",
+        "from": 23.4,
+        "to": 31.0,
+        "phone": true,
+        "then": {
+          "type": "image",
+          "src": "../docs/tv-and-gamepad.jpg",
+          "line": 2
+        }
+      },
+      "points": [
+        {
+          "text": "A live picture from the PC",
+          "line": 0
+        },
+        {
+          "text": "Mirror the TV, and tap on it",
+          "line": 1
+        },
+        {
+          "text": "Wii U GamePad view, DS & 3DS touch screens",
+          "line": 2
+        }
+      ],
+      "lines": [
+        {
+          "say": "The phone's screen isn't just for buttons. Like on a Wii U, it can show a live picture from the PC.",
+          "text": "The phone's screen isn't just for buttons. Like on a Wii U, it can show a live picture from the PC."
+        },
+        {
+          "say": "It can mirror the TV, so you can keep playing when someone else wants it. You can even tap on the picture.",
+          "text": "It can mirror the TV, so you can keep playing when someone else wants it. You can even tap on the picture."
+        },
+        {
+          "say": "With Wii U games, Cemu's GamePad view moves to your phone. And for DS and 3DS games, the bottom screen does, so you can draw right on it.",
+          "text": "With Wii U games, Cemu's GamePad view moves to your phone. And for DS and 3DS games, the bottom screen does, so you can draw right on it."
+        }
+      ]
+    },
+    {
+      "chapter": "Keeping it fast",
+      "layout": "stream",
+      "lines": [
+        {
+          "say": "Streaming a screen to a phone is easy. Streaming it without lag is the hard part.",
+          "text": "Streaming a screen to a phone is easy. Streaming it without lag is the hard part."
+        },
+        {
+          "say": "Wii U U captures only the part of the screen that matters, with ffmpeg, or on a Mac with Apple's ScreenCaptureKit, where the graphics chip does the work.",
+          "text": "WII-UU captures only the part of the screen that matters: with ffmpeg, or on a Mac with Apple's ScreenCaptureKit, where the graphics chip does the work."
+        },
+        {
+          "say": "And the phone asks for one frame at a time, as soon as the last one has arrived. So frames can never pile up in the network, and the picture is always the newest one.",
+          "text": "And the phone asks for one frame at a time, as soon as the last one has arrived. So frames can never pile up in the network, and the picture is always the newest one."
+        },
+        {
+          "say": "The same trick keeps the picture smooth on a Raspberry Pi too.",
+          "text": "The same trick keeps the picture smooth on a Raspberry Pi too."
+        }
+      ]
+    },
+    {
+      "chapter": "Sound and motion",
+      "layout": "cards",
+      "heading": "Sound and <em>motion</em>",
+      "cards": [
+        {
+          "icon": "🔊",
+          "title": "The PC's sound, on the phone",
+          "text": "Plug in headphones and play anywhere in the house.",
+          "line": 0
+        },
+        {
+          "icon": "🌀",
+          "title": "Gyro",
+          "text": "Steer and aim in Wii U, Wii and Switch games.",
+          "line": 1
+        }
+      ],
+      "lines": [
+        {
+          "say": "The PC's sound can play on the phone as well, so you can plug in headphones and play anywhere in the house.",
+          "text": "The PC's sound can play on the phone as well, so you can plug in headphones and play anywhere in the house."
+        },
+        {
+          "say": "And the phone's gyro works as a motion sensor, for steering and aiming in Wii U, Wii, and Switch games.",
+          "text": "And the phone's gyro works as a motion sensor, for steering and aiming in Wii U, Wii and Switch games."
+        }
+      ]
+    },
+    {
+      "chapter": "RetroArch mode",
+      "layout": "retroarch",
+      "lines": [
+        {
+          "say": "If you prefer RetroArch, turn on RetroArch mode. Every console with a core then runs in RetroArch instead.",
+          "text": "If you prefer RetroArch, turn on RetroArch mode. Every console with a core then runs in RetroArch instead."
+        },
+        {
+          "say": "Wii U U picks the best core you have installed, downloads one if it's missing, and gives RetroArch the same keys the phone sends. The Wii U, Switch, PS3 and PS4 keep their own emulators.",
+          "text": "WII-UU picks the best core you have installed, downloads one if it's missing, and gives RetroArch the same keys the phone sends. The Wii U, Switch, PS3 and PS4 keep their own emulators."
+        },
+        {
+          "say": "It even moves RetroArch's own keyboard shortcuts out of the way, so a stick can't reset your game by accident.",
+          "text": "It even moves RetroArch's own keyboard shortcuts out of the way, so a stick can't reset your game by accident."
+        }
+      ]
+    },
+    {
+      "chapter": "Console Mode",
+      "layout": "media",
+      "heading": "Console <em>Mode</em>",
+      "media": {
+        "type": "image",
+        "src": "../trailer/build/power-console.png"
+      },
+      "points": [
+        {
+          "text": "Boots straight into WII-UU",
+          "line": 1
+        },
+        {
+          "text": "Power → Desktop Mode, and back",
+          "line": 2
+        },
+        {
+          "text": "Restarts itself if it ever crashes",
+          "line": 2,
+          "delay": 3.5
+        },
+        {
+          "text": "One script sets it all up",
+          "line": 3
+        }
+      ],
+      "lines": [
+        {
+          "say": "And then there's Console Mode. It turns a PC or a Raspberry Pi into a real console, like SteamOS on a Steam Deck.",
+          "text": "And then there's Console Mode. It turns a PC or a Raspberry Pi into a real console, like SteamOS on a Steam Deck."
+        },
+        {
+          "say": "The computer boots straight into Wii U U, full screen. There's no login screen and no desktop in sight.",
+          "text": "The computer boots straight into WII-UU, full screen. There's no login screen and no desktop in sight."
+        },
+        {
+          "say": "When you do need the computer, Power, Desktop Mode takes you to your normal desktop, and one icon brings you back. And if Wii U U ever crashes, it simply restarts.",
+          "text": "When you do need the computer, Power → Desktop Mode takes you to your normal desktop, and one icon brings you back. And if WII-UU ever crashes, it simply restarts."
+        },
+        {
+          "say": "One setup script does all of it. It installs what's missing, sets up the automatic login, and adds the Desktop Mode switch.",
+          "text": "One setup script does all of it. It installs what's missing, sets up the automatic login, and adds the Desktop Mode switch."
+        }
+      ]
+    },
+    {
+      "chapter": "The little things",
+      "layout": "cards",
+      "heading": "The little <em>things</em>",
+      "cards": [
+        {
+          "icon": "⤓",
+          "title": "Updates itself",
+          "text": "Check for updates in Settings.",
+          "line": 0
+        },
+        {
+          "icon": "📶",
+          "title": "Phones reconnect",
+          "text": "After a restart, with no new code.",
+          "line": 0,
+          "delay": 2.2
+        },
+        {
+          "icon": "☕",
+          "title": "One small app",
+          "text": "Just Java, no other dependencies.",
+          "line": 0,
+          "delay": 4.2
+        }
+      ],
+      "lines": [
+        {
+          "say": "A lot of small things make it feel finished. It updates itself from the settings. Phones reconnect by themselves. And it's all one small app, with nothing else to install but Java.",
+          "text": "A lot of small things make it feel finished. It updates itself from the settings. Phones reconnect by themselves. And it's all one small app, with nothing else to install but Java."
+        }
+      ]
+    },
+    {
+      "chapter": "Where it runs",
+      "layout": "platforms",
+      "lines": [
+        {
+          "say": "Wii U U runs on Linux, Windows, and macOS, on normal PCs and on the Raspberry Pi 4 and 5.",
+          "text": "WII-UU runs on Linux, Windows and macOS, on normal PCs and on the Raspberry Pi 4 and 5."
+        },
+        {
+          "say": "The older consoles run great on a Pi. For the GameCube, the Wii U, the Switch, and the PlayStation 3, you'll want a real PC.",
+          "text": "The older consoles run great on a Pi. For the GameCube, the Wii U, the Switch and the PlayStation 3, you'll want a real PC."
+        }
+      ]
+    },
+    {
+      "chapter": "Try it in five minutes",
+      "layout": "steps",
+      "steps": [
+        {
+          "n": "1",
+          "title": "Install",
+          "text": "One line, or install.bat on Windows",
+          "line": 1
+        },
+        {
+          "n": "2",
+          "title": "Add your games",
+          "text": "~/WiiUU/roms/<system>",
+          "line": 2
+        },
+        {
+          "n": "3",
+          "title": "Scan the code",
+          "text": "Press + on the TV",
+          "line": 3
+        }
+      ],
+      "lines": [
+        {
+          "say": "So, if you want to try it, it takes about five minutes.",
+          "text": "So, if you want to try it, it takes about five minutes."
+        },
+        {
+          "say": "First, install it with the one line from the website, or the installer on Windows.",
+          "text": "First, install it with the one line from the website, or the installer on Windows."
+        },
+        {
+          "say": "Then drop your games into the folder for each console. Wii U U finds them by itself.",
+          "text": "Then drop your games into the folder for each console. WII-UU finds them by itself."
+        },
+        {
+          "say": "And finally, press plus on the TV and scan the code with your phone. That's it. You're playing.",
+          "text": "And finally, press + on the TV and scan the code with your phone. That's it. You're playing."
+        }
+      ]
+    },
+    {
+      "chapter": "Get it",
+      "layout": "end",
+      "lines": [
+        {
+          "say": "Wii U U is free. You'll find it at wiiuu dot stoppedwumm dot net, with a one-line installer and all the documentation.",
+          "text": "WII-UU is free. You'll find it at wiiuu.stoppedwumm.net, with a one-line installer and all the documentation."
+        },
+        {
+          "say": "Thanks for watching, and have fun!",
+          "text": "Thanks for watching, and have fun!"
+        }
+      ]
+    }
+  ]
+}
