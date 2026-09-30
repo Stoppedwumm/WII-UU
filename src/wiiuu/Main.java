@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.5";
+    public static final String VERSION = "1.9.6";
 
     private final Config config;
     private final Library library;
@@ -77,6 +77,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         router.setKeysEnabled(() -> typesKeysFor(launcher.current()));
         launcher.setTypesKeys(this::typesKeysFor);
         launcher.addListener(this);
+        wiiuu.screen.WinScript.setDir(config.home().resolve("bin"));
         wiiuu.screen.VirtualDisplay.recover(config);
         dual = new wiiuu.screen.DualScreen(config);
         // the TV's area is taken before the displays change (it's where WII-UU's window is)

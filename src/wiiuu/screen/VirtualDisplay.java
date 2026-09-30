@@ -115,8 +115,23 @@ public final class VirtualDisplay {
     public void close() {
         if (stateFile == null) return;
         if (winDevice != null) {
-            note("switching the virtual display off: "
-                    + String.join(" ", displayScript(config, "-Action", "detach", "-Device", winDevice)).replace("result ", "").trim());
+            // Windows refuses while it is still busy with the last display change (a game closed right
+            // after starting): try again for a few seconds, and on the next start if it stays on
+            for (int attempt = 1; attempt <= 5; attempt++) {
+                String res = String.join(" ", displayScript(config, "-Action", "detach", "-Device", winDevice)).replace("result ", "").trim();
+                note("switching the virtual display off: " + res);
+                if (!res.contains("still on")) break;
+                if (attempt == 5) {
+                    note("the virtual display is still on; WII-UU switches it off on its next start");
+                    return;                                         // the state file stays for recover()
+                }
+                try {
+                    Thread.sleep(1500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
         }
         else undo(pannedOutput, restoreFb);
         try {
@@ -322,9 +337,23 @@ public final class VirtualDisplay {
             return null;
         }
         if (v.attached() && v.rect() != null) {
-            // already part of the desktop (you use it yourself): use it as it is, leave it on afterwards
-            note("GamePad display: " + v.adapter() + " " + v.rect().width + "x" + v.rect().height + " (already on)");
-            return new VirtualDisplay(v.rect(), null, null);
+            // already on (left on by an earlier game, or you use it yourself): use it as it is; switched
+            // off afterwards unless screen.split.keepVirtualOn=true
+            boolean keep = config.getBool("screen.split.keepVirtualOn", false);
+            note("GamePad display: " + v.adapter() + " " + v.rect().width + "x" + v.rect().height + " at " + v.rect().x + "," + v.rect().y
+                    + " (already on" + (keep ? ", stays on)" : ", switched off after the game)"));
+            if (keep) return new VirtualDisplay(v.rect(), null, null);
+            Path state = config.home().resolve("virtual-display");
+            try {
+                Files.createDirectories(state.getParent());
+                Files.writeString(state, "win=" + v.name() + "\n");
+            } catch (IOException ignored) {
+                // still fine
+            }
+            VirtualDisplay d = new VirtualDisplay(v.rect(), null, state);
+            d.winDevice = v.name();
+            d.config = config;
+            return d;
         }
         int[] mode = bestMode(v.modes());
         if (mode == null) mode = new int[]{1920, 1080};

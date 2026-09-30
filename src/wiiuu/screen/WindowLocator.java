@@ -162,7 +162,7 @@ public final class WindowLocator {
     private static List<Win> windows() {
         // the script reports real pixels; WII-UU works in Java's scaled units (each monitor's own scaling)
         List<Win> out = new ArrayList<>();
-        for (String line : run(8, "powershell", "-NoProfile", "-NonInteractive", "-Command", PS_SCRIPT)) {
+        for (String line : WinScript.runInline("windows", PS_SCRIPT, 15)) {
             String[] p = line.split("\t", 5);
             if (p.length < 5) continue;
             try {

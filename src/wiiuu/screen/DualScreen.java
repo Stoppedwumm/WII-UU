@@ -214,9 +214,10 @@ public final class DualScreen {
 
     private static void place(String regex, Rectangle r) {
         if (OS.contains("win")) {
-            VirtualDisplay.run(8, "powershell", "-NoProfile", "-NonInteractive", "-Command", PS_PLACE
+            List<String> out = WinScript.runInline("place", PS_PLACE
                     .replace("%RE%", regex.replace("'", "''")).replace("%X%", "" + r.x).replace("%Y%", "" + r.y)
-                    .replace("%W%", "" + r.width).replace("%H%", "" + r.height));
+                    .replace("%W%", "" + r.width).replace("%H%", "" + r.height), 15);
+            if (!out.isEmpty()) VirtualDisplay.note("moving the window: " + String.join(" ", out));
             return;
         }
         for (String id : VirtualDisplay.run(3, "xdotool", "search", "--name", regex)) {
