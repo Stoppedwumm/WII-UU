@@ -240,7 +240,8 @@ public final class ScreenStreamer {
             }
             return;
         }
-        robot.mouseMove(px, py);
+        Rectangle rp = robotRect(new Rectangle(px, py, 1, 1));
+        robot.mouseMove(rp.x, rp.y);
         if (state == 1 && !mouseDown) {
             robot.mousePress(InputEvent.BUTTON1_DOWN_MASK);
             mouseDown = true;
@@ -313,6 +314,24 @@ public final class ScreenStreamer {
         } catch (RuntimeException e) {
             return false;
         }
+    }
+
+    /**
+     * {@code r} (Java's units, per monitor) as Java's Robot takes it. On Windows Robot converts with
+     * the main screen's scaling for every monitor, so a place on a monitor scaled differently (the
+     * virtual display at 125 % beside a TV at 150 %) has to be given in those terms.
+     */
+    static Rectangle robotRect(Rectangle r) {
+        if (!OS.contains("win")) return r;
+        double k;
+        try {
+            k = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration().getDefaultTransform().getScaleX();
+        } catch (RuntimeException e) {
+            return r;
+        }
+        Rectangle d = devicePixels(r);
+        if (k <= 0 || k == 1) return d;
+        return new Rectangle((int) Math.floor(d.x / k), (int) Math.floor(d.y / k), Math.max(1, (int) Math.round(d.width / k)), Math.max(1, (int) Math.round(d.height / k)));
     }
 
     /** The display scale (1.5 at 150 %) of the screen showing most of {@code r}; 1 when unknown. */
@@ -483,7 +502,12 @@ public final class ScreenStreamer {
                     } else {
                         sleep(500);
                     }
-                } else if (ffmpeg != null && (!javaFallback || outsideJava(r))) {
+                } else if (ffmpeg != null && (OS.contains("win")
+                        // Windows: ffmpeg's gdigrab stretches positions on a monitor scaled differently
+                        // from the main one; Java's capture gets them right there
+                        ? !javaFallback && !outsideJava(r)
+                        // elsewhere Java's capture can't reach a display added after start
+                        : !javaFallback || outsideJava(r))) {
                     moved = false;
                     if (runFfmpeg(r, fps) || moved) {
                         ffmpegFailures = 0;
@@ -642,7 +666,7 @@ public final class ScreenStreamer {
                     free.acquire();
                     BufferedImage img;
                     try {
-                        img = scale(robot.createScreenCapture(r), maxW);
+                        img = scale(robot.createScreenCapture(robotRect(r)), maxW);
                     } catch (RuntimeException e) {
                         free.release();
                         throw e;

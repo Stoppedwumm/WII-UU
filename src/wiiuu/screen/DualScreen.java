@@ -249,6 +249,13 @@ public final class DualScreen {
               [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
               [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
               [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+              [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr c);
+              public static void PerMonitor() {
+                // real pixels on every monitor, whatever its scaling (the older system-wide mode stretches
+                // positions on monitors scaled differently from the main one)
+                try { if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return; } catch (EntryPointNotFoundException) { }
+                SetProcessDPIAware();
+              }
               [DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e);
               [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
               static string Exe(IntPtr h) {
@@ -256,7 +263,7 @@ public final class DualScreen {
                 try { return System.Diagnostics.Process.GetProcessById((int) pid).ProcessName; } catch { return ""; }
               }
               public static void Go(string re, int x, int y, int w, int hh) {
-                SetProcessDPIAware();
+                PerMonitor();
                 EnumWindows((h, l) => {
                   if (!IsWindowVisible(h)) return true;
                   var sb = new StringBuilder(512); GetWindowText(h, sb, 512);
@@ -289,7 +296,9 @@ public final class DualScreen {
                 Runnable make = () -> {
                     // on the TV's own screen, sized as Java sees that screen now: switching a display on can
                     // change the scaling Java applies to a window made elsewhere (the black square on Windows)
-                    java.awt.GraphicsConfiguration gc = tvConfig(tv);
+                    // (Windows only: on Linux the TV's area is known exactly, and Java may briefly see the TV's
+                    // output as its whole panning area, hidden display included)
+                    java.awt.GraphicsConfiguration gc = OS.contains("win") ? tvConfig(tv) : null;
                     Rectangle bounds = gc != null ? gc.getBounds() : tv;
                     JWindow jw = gc != null ? new JWindow(gc) : new JWindow();
                     jw.setFocusableWindowState(false);          // the emulator keeps the keyboard
@@ -333,7 +342,9 @@ public final class DualScreen {
                     sleep(300);
                     continue;
                 }
-                if (ffmpeg != null) ffmpegLoop(ffmpeg, top);
+                // Windows: Java's capture, which gets each monitor's own scaling right (ffmpeg's
+                // gdigrab stretches positions on a monitor scaled differently from the main one)
+                if (ffmpeg != null && !OS.contains("win")) ffmpegLoop(ffmpeg, top);
                 else robotLoop(top);
             }
         }
@@ -378,12 +389,16 @@ public final class DualScreen {
 
         /** Without ffmpeg: Java's own capture (slower). */
         private void robotLoop(Rectangle top) {
+            if (starts++ < 5) VirtualDisplay.note("TV window captures " + ScreenStreamer.devicePixels(top) + " (real pixels) with Java");
             try {
                 Robot robot = new Robot();
                 long checked = System.currentTimeMillis();
                 while (!closed) {
-                    BufferedImage shot = robot.createScreenCapture(top);
-                    pic.show(shot);
+                    // the full-resolution picture, not the one scaled down to Java's units
+                    var multi = robot.createMultiResolutionScreenCapture(ScreenStreamer.robotRect(top));
+                    java.util.List<java.awt.Image> variants = multi.getResolutionVariants();
+                    java.awt.Image best = variants.get(variants.size() - 1);
+                    pic.show(best instanceof BufferedImage b ? b : robot.createScreenCapture(ScreenStreamer.robotRect(top)));
                     if (System.currentTimeMillis() - checked > 1000) {
                         checked = System.currentTimeMillis();
                         if (!top.equals(topRegion())) return;

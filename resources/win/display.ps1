@@ -29,6 +29,11 @@ public static class WiiuuDisplay {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int ChangeDisplaySettingsEx(string d, ref DM dm, IntPtr h, int f, IntPtr p);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int ChangeDisplaySettingsEx(string d, IntPtr dm, IntPtr h, int f, IntPtr p);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr c);
+  public static void PerMonitor() {
+    try { if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return; } catch (EntryPointNotFoundException) { }
+    SetProcessDPIAware();
+  }
   const int DM_POSITION = 0x20, DM_BITSPERPEL = 0x40000, DM_PELSWIDTH = 0x80000, DM_PELSHEIGHT = 0x100000, DM_DISPLAYFREQUENCY = 0x400000;
   const int CDS_UPDATEREGISTRY = 0x1, CDS_NORESET = 0x10000000;
 
@@ -164,7 +169,7 @@ public static class WiiuuDisplay {
   }
 }
 '@
-[void][WiiuuDisplay]::SetProcessDPIAware()
+[WiiuuDisplay]::PerMonitor()
 switch ($Action) {
   "list"   { [WiiuuDisplay]::List() }
   "attach" { "result " + [WiiuuDisplay]::Attach($Device, $X, $Y, $W, $H) }

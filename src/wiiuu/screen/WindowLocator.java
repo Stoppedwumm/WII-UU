@@ -136,6 +136,13 @@ public final class WindowLocator {
               [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
               [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
               [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+              [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr c);
+              public static void PerMonitor() {
+                // real pixels on every monitor, whatever its scaling (the older system-wide mode stretches
+                // positions on monitors scaled differently from the main one)
+                try { if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return; } catch (EntryPointNotFoundException) { }
+                SetProcessDPIAware();
+              }
               [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
               static string Exe(IntPtr h) {
                 uint pid; GetWindowThreadProcessId(h, out pid);
@@ -144,7 +151,7 @@ public final class WindowLocator {
               public struct RECT { public int L, T, R, B; }
               public struct POINT { public int X, Y; }
               public static void Dump() {
-                SetProcessDPIAware();   // real pixels, whatever PowerShell's own DPI setting
+                PerMonitor();
                 EnumWindows((h, l) => {
                   if (!IsWindowVisible(h)) return true;
                   var sb = new StringBuilder(512); GetWindowText(h, sb, 512);
