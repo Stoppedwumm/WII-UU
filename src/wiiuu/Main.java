@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.8.2";
+    public static final String VERSION = "1.8.3";
 
     private final Config config;
     private final Library library;
@@ -169,6 +169,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         dsuServer = dsu;
         ScreenStreamer screen = config.getBool("stream.enabled", true) ? new ScreenStreamer(config, launcher::current) : null;
         this.screen = screen;
+        if (screen != null) screen.setRetroArch(launcher::inRetroArch);
         router.setKeysPermitted(() -> !Boolean.FALSE.equals(macKeysAllowed));
         if (screen != null) {
             screen.setOnBlocked(msg -> SwingUtilities.invokeLater(() -> view.showToast(

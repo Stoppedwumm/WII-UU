@@ -313,6 +313,11 @@ The picture is streamed at 30 fps.
     "GamePad View" window.
   * **DS (melonDS):** the phone shows the bottom screen. Use melonDS's default vertical layout.
   * **3DS (Azahar):** the phone shows the bottom screen. Use the default layout.
+  * **RetroArch mode:** the DS and 3DS cores draw both screens into RetroArch's window, and the
+    phone shows the bottom one from there. Keep the core's default top/bottom layout and
+    RetroArch's *Core provided* aspect ratio. A different layout can be set with
+    `screen.<id>.retroarch.region` (and `.aspect`, `.window`).
+  * **macOS:** finding the emulator's window needs the Accessibility permission (see macOS setup).
 * **TV:** mirrors the whole screen, including the WII-UU menu (Off-TV play).
 * **Gyro (motion controls):** tap *Gyro* on the phone. Phones only share motion sensors with
   secure pages, so WII-UU also serves `https://<pc>:8443/`. The phone offers this link, and you

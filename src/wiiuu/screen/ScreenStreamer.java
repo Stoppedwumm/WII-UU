@@ -142,7 +142,14 @@ public final class ScreenStreamer {
     /** The second-screen profile for the running game, or null. */
     public ScreenProfile secondScreen() {
         Game g = currentGame.get();
-        return g == null ? null : ScreenProfile.forSystem(config, g.system());
+        return g == null ? null : ScreenProfile.forSystem(config, g.system(), inRetroArch.getAsBoolean());
+    }
+
+    /** whether the running game was started in RetroArch (its screens are then in RetroArch's window) */
+    private volatile java.util.function.BooleanSupplier inRetroArch = () -> false;
+
+    public void setRetroArch(java.util.function.BooleanSupplier inRetroArch) {
+        this.inRetroArch = inRetroArch;
     }
 
     // ---- phones watching ----------------------------------------------------------------
@@ -248,7 +255,8 @@ public final class ScreenStreamer {
             Rectangle win = windows.find(p.windowRegex());
             if (win == null) {
                 Game g = currentGame.get();
-                why[0] = "Waiting for the \"" + p.windowRegex() + "\" window"
+                boolean ra = inRetroArch.getAsBoolean();
+                why[0] = "Waiting for the " + (ra ? "RetroArch" : "\"" + p.windowRegex() + "\"") + " window"
                         + (g != null && "wiiu".equals(g.system().id()) ? " (Cemu: View > Separate GamePad view)" : "");
                 return null;
             }

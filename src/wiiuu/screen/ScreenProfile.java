@@ -13,7 +13,9 @@ import wiiuu.core.GameSystem;
  *
  * <p>Config keys (all optional): {@code screen.<system>.window} (title regex),
  * {@code screen.<system>.aspect} (e.g. {@code 256:384}), {@code screen.<system>.region}
- * ({@code x,y,w,h} as fractions of the picture), {@code screen.<system>.label}.
+ * ({@code x,y,w,h} as fractions of the picture), {@code screen.<system>.label}. In RetroArch mode
+ * the same keys with {@code retroarch.} in front of the last part apply
+ * ({@code screen.nds.retroarch.region}...), since the game then runs inside RetroArch's window.
  */
 public record ScreenProfile(String label, String windowRegex, double aspect, double rx, double ry, double rw, double rh) {
 
@@ -30,14 +32,34 @@ public record ScreenProfile(String label, String windowRegex, double aspect, dou
         };
     }
 
+    /**
+     * RetroArch mode: the DS and 3DS cores draw both screens into RetroArch's own window, top screen
+     * above the touch screen (their default layouts), and RetroArch keeps the core's aspect ratio
+     * (WII-UU's retroarch.cfg makes sure of that).
+     */
+    private static ScreenProfile builtinRetroArch(String systemId) {
+        return switch (systemId) {
+            // melonDS DS / melonDS / DeSmuME: 256x192 top screen above the 256x192 touch screen
+            case "nds" -> new ScreenProfile("Touch screen", "^RetroArch", 256.0 / 384.0, 0, 0.5, 1, 0.5);
+            // Citra: 400x240 top screen above a centred 320x240 bottom screen
+            case "3ds" -> new ScreenProfile("Touch screen", "^RetroArch", 400.0 / 480.0, 40.0 / 400, 0.5, 320.0 / 400, 0.5);
+            default -> null;
+        };
+    }
+
     public static ScreenProfile forSystem(Config config, GameSystem s) {
-        String id = s.id();
-        ScreenProfile def = builtin(id);
-        String window = config.get("screen." + id + ".window", def == null ? null : def.windowRegex);
+        return forSystem(config, s, false);
+    }
+
+    /** @param retroArch whether the game runs in RetroArch (RetroArch mode) */
+    public static ScreenProfile forSystem(Config config, GameSystem s, boolean retroArch) {
+        String id = s.id(), k = "screen." + id + (retroArch ? ".retroarch." : ".");
+        ScreenProfile def = retroArch ? builtinRetroArch(id) : builtin(id);
+        String window = config.get(k + "window", def == null ? null : def.windowRegex);
         if (window == null || window.isBlank()) return null;
-        String label = config.get("screen." + id + ".label", def == null ? "Second screen" : def.label);
-        double aspect = parseAspect(config.get("screen." + id + ".aspect", null), def == null ? 0 : def.aspect);
-        double[] r = parseRegion(config.get("screen." + id + ".region", null),
+        String label = config.get(k + "label", def == null ? "Second screen" : def.label);
+        double aspect = parseAspect(config.get(k + "aspect", null), def == null ? 0 : def.aspect);
+        double[] r = parseRegion(config.get(k + "region", null),
                 def == null ? new double[]{0, 0, 1, 1} : new double[]{def.rx, def.ry, def.rw, def.rh});
         return new ScreenProfile(label, window, aspect, r[0], r[1], r[2], r[3]);
     }
