@@ -139,6 +139,19 @@ public final class DualScreen {
         return p == null ? null : windows.find(p.windowRegex());
     }
 
+    /** The screen that holds the middle of {@code tv}, as Java sees it now. */
+    static java.awt.GraphicsConfiguration tvConfig(Rectangle tv) {
+        try {
+            for (var dev : java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+                var gc = dev.getDefaultConfiguration();
+                if (gc.getBounds().contains(tv.getCenterX(), tv.getCenterY())) return gc;
+            }
+            return java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     /** The largest rectangle of {@code aspect} inside {@code area}, centred. */
     static Rectangle fit(Rectangle area, double aspect) {
         int w = area.width, h = area.height;
@@ -196,6 +209,7 @@ public final class DualScreen {
         Rectangle top = topRegion();
         VirtualDisplay.note("desktop picture: " + out + (res.isEmpty() ? "" : " (" + String.join(" ", res) + ")")
                 + "; RetroArch's window " + window() + ", top screen " + top + " (Java units)");
+        if (window() == null) VirtualDisplay.note("no window matched \"" + profile.windowRegex() + "\"; windows now: " + windows.titles());
     }
 
     private static void place(String regex, Rectangle r) {
@@ -235,12 +249,17 @@ public final class DualScreen {
               [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
               [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
               [DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e);
+              [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+              static string Exe(IntPtr h) {
+                uint pid; GetWindowThreadProcessId(h, out pid);
+                try { return System.Diagnostics.Process.GetProcessById((int) pid).ProcessName; } catch { return ""; }
+              }
               public static void Go(string re, int x, int y, int w, int hh) {
                 SetProcessDPIAware();
                 EnumWindows((h, l) => {
                   if (!IsWindowVisible(h)) return true;
                   var sb = new StringBuilder(512); GetWindowText(h, sb, 512);
-                  if (!Regex.IsMatch(sb.ToString(), re, RegexOptions.IgnoreCase)) return true;
+                  if (!Regex.IsMatch(sb.ToString() + " [" + Exe(h) + "]", re, RegexOptions.IgnoreCase)) return true;
                   ShowWindow(h, 9); SetWindowPos(h, IntPtr.Zero, x, y, w, hh, 0x0040);
                   // Windows only lets the foreground app hand over the focus; a tap of Alt counts as one
                   keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero);
@@ -264,16 +283,22 @@ public final class DualScreen {
 
         Presenter(Rectangle tv) {
             JWindow[] w = new JWindow[1];
+            Rectangle[] shown = {tv};
             try {
                 Runnable make = () -> {
-                    JWindow jw = new JWindow();
+                    // on the TV's own screen, sized as Java sees that screen now: switching a display on can
+                    // change the scaling Java applies to a window made elsewhere (the black square on Windows)
+                    java.awt.GraphicsConfiguration gc = tvConfig(tv);
+                    Rectangle bounds = gc != null ? gc.getBounds() : tv;
+                    JWindow jw = gc != null ? new JWindow(gc) : new JWindow();
                     jw.setFocusableWindowState(false);          // the emulator keeps the keyboard
                     jw.setAlwaysOnTop(true);
                     jw.setBackground(Color.BLACK);
                     jw.setContentPane(pic);
                     jw.setCursor(Toolkit.getDefaultToolkit().createCustomCursor(
                             new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB), new Point(), "none"));
-                    jw.setBounds(tv);
+                    jw.setBounds(bounds);
+                    shown[0] = bounds;
                     jw.setVisible(true);
                     w[0] = jw;
                 };
@@ -283,7 +308,7 @@ public final class DualScreen {
                 System.err.println("[split] TV window: " + e.getMessage());
             }
             window = w[0];
-            VirtualDisplay.note("TV window " + (window == null ? "could not be made" : "at " + tv + " (Java units)"));
+            VirtualDisplay.note("TV window " + (window == null ? "could not be made" : "at " + shown[0] + " (Java units)"));
             capture = new Thread(this::captureLoop, "split-tv");
             capture.setDaemon(true);
             capture.start();

@@ -40,12 +40,15 @@ public record ScreenProfile(String label, String windowRegex, double aspect, dou
     private static ScreenProfile builtinRetroArch(String systemId) {
         return switch (systemId) {
             // melonDS DS / melonDS / DeSmuME: 256x192 top screen above the 256x192 touch screen
-            case "nds" -> new ScreenProfile("Touch screen", "^RetroArch", 256.0 / 384.0, 0, 0.5, 1, 0.5);
+            // (Windows also lists each window's program: "[retroarch]")
+            case "nds" -> new ScreenProfile("Touch screen", RETROARCH, 256.0 / 384.0, 0, 0.5, 1, 0.5);
             // Citra: 400x240 top screen above a centred 320x240 bottom screen
-            case "3ds" -> new ScreenProfile("Touch screen", "^RetroArch", 400.0 / 480.0, 40.0 / 400, 0.5, 320.0 / 400, 0.5);
+            case "3ds" -> new ScreenProfile("Touch screen", RETROARCH, 400.0 / 480.0, 40.0 / 400, 0.5, 320.0 / 400, 0.5);
             default -> null;
         };
     }
+
+    static final String RETROARCH = "^RetroArch|\\[retroarch\\]$";
 
     public static ScreenProfile forSystem(Config config, GameSystem s) {
         return forSystem(config, s, false);

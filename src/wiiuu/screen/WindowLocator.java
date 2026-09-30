@@ -49,6 +49,13 @@ public final class WindowLocator {
 
     private record Win(String title, Rectangle rect) {}
 
+    /** Titles of the windows now (for the split-screen log when the emulator's can't be found). */
+    public List<String> titles() {
+        List<String> out = new ArrayList<>();
+        for (Win w : windowsNow()) if (w.rect.width >= 32 && w.rect.height >= 32) out.add(w.title + " " + w.rect.width + "x" + w.rect.height);
+        return out;
+    }
+
     private static Rectangle largest(List<Win> wins, Pattern p) {
         Rectangle best = null;
         for (Win w : wins) {
@@ -129,6 +136,11 @@ public final class WindowLocator {
               [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
               [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
               [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+              [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+              static string Exe(IntPtr h) {
+                uint pid; GetWindowThreadProcessId(h, out pid);
+                try { return System.Diagnostics.Process.GetProcessById((int) pid).ProcessName; } catch { return ""; }
+              }
               public struct RECT { public int L, T, R, B; }
               public struct POINT { public int X, Y; }
               public static void Dump() {
@@ -139,7 +151,7 @@ public final class WindowLocator {
                   if (sb.Length == 0) return true;
                   RECT r; GetClientRect(h, out r); var p = new POINT();
                   ClientToScreen(h, ref p);
-                  Console.WriteLine(p.X + "\\t" + p.Y + "\\t" + (r.R - r.L) + "\\t" + (r.B - r.T) + "\\t" + sb);
+                  Console.WriteLine(p.X + "\\t" + p.Y + "\\t" + (r.R - r.L) + "\\t" + (r.B - r.T) + "\\t" + sb + " [" + Exe(h) + "]");
                   return true; }, IntPtr.Zero);
               }
             }
