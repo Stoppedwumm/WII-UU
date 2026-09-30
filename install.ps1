@@ -67,6 +67,7 @@ New-Item -ItemType Directory -Force -Path $Prefix | Out-Null
 Copy-Item -Force $jar (Join-Path $Prefix "wiiuu.jar")
 $ErrorActionPreference = "Continue"
 & java -jar (Join-Path $Prefix "wiiuu.jar") --write-icon (Join-Path $Prefix "wiiuu.png") 2>&1 | Out-Null
+& java -jar (Join-Path $Prefix "wiiuu.jar") --write-icon (Join-Path $Prefix "wiiuu.ico") 2>&1 | Out-Null
 $ErrorActionPreference = "Stop"
 Set-Content -Encoding ASCII -Path (Join-Path $Prefix "wiiuu.cmd") -Value "@echo off`r`nstart `"`" `"$javaw`" -Xmx384m -jar `"$Prefix\wiiuu.jar`" %*"
 Ok "Launcher: $Prefix\wiiuu.cmd"
@@ -98,6 +99,8 @@ foreach ($lnkPath in @($StartMenu, $DesktopLnk)) {
     $lnk.Arguments = "-Xmx384m -jar `"$Prefix\wiiuu.jar`""
     $lnk.WorkingDirectory = $Prefix
     $lnk.Description = "WII-UU emulator launcher"
+    # without it the shortcut, and the taskbar button of a WII-UU started from it, show Java's icon
+    if (Test-Path (Join-Path $Prefix "wiiuu.ico")) { $lnk.IconLocation = "$Prefix\wiiuu.ico,0" }
     $lnk.Save()
 }
 Ok "Shortcuts on the Start menu and Desktop"

@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.15 (2026-09-30)
+The WII-UU logo on Windows.
+- The Start menu and Desktop shortcuts, and the taskbar button of WII-UU started from them,
+  show WII-UU's logo instead of Java's. If you pinned WII-UU to the taskbar before, pin it again.
+- The window's icon comes in every size, so it stays sharp on scaled displays.
+
 ## 1.9.14 (2026-09-30)
 Release notes, in WII-UU itself.
 - After an update WII-UU shows what's new since the version you had.

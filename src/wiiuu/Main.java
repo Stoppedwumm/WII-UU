@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.14";
+    public static final String VERSION = "1.9.15";
 
     private final Config config;
     private final Library library;
@@ -126,7 +126,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                 case "--snapshot" -> snapshot = args[++i];
                 case "--snapshot-view" -> snapshotView = args[++i];
                 case "--write-icon" -> {
-                    ImageIO.write(appIcon(256), "png", Paths.get(args[++i]).toFile());
+                    String out = args[++i];
+                    // .ico (Windows shortcuts, several sizes) or .png
+                    if (out.toLowerCase(java.util.Locale.ROOT).endsWith(".ico")) writeIco(Paths.get(out));
+                    else ImageIO.write(appIcon(256), "png", Paths.get(out).toFile());
                     return;
                 }
                 case "--upgrade", "--check-update" -> {
@@ -257,7 +260,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         view = new MenuView(config, this);
         router.setMenu(view);
         frame = new JFrame("WII-UU");
-        frame.setIconImage(appIcon(64));
+        frame.setIconImages(appIcons());          // every size, so Windows' taskbar and Alt+Tab never rescale
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         frame.addWindowListener(new WindowAdapter() {
             @Override
@@ -536,6 +539,37 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     }
 
     // ---- misc ---------------------------------------------------------------------------
+
+    private static final int[] ICON_SIZES = {16, 20, 24, 32, 40, 48, 64, 128, 256};
+
+    private static java.util.List<java.awt.Image> appIcons() {
+        java.util.List<java.awt.Image> out = new java.util.ArrayList<>();
+        for (int s : ICON_SIZES) out.add(appIcon(s));
+        return out;
+    }
+
+    /** A Windows icon file with every size as PNG (the format Windows Vista and newer read). */
+    private static void writeIco(Path out) throws IOException {
+        java.util.List<byte[]> pngs = new java.util.ArrayList<>();
+        for (int s : ICON_SIZES) {
+            java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+            ImageIO.write(appIcon(s), "png", b);
+            pngs.add(b.toByteArray());
+        }
+        java.nio.ByteBuffer ico = java.nio.ByteBuffer.allocate(6 + 16 * pngs.size()
+                + pngs.stream().mapToInt(a -> a.length).sum()).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        ico.putShort((short) 0).putShort((short) 1).putShort((short) pngs.size());   // reserved, type icon, count
+        int offset = 6 + 16 * pngs.size();
+        for (int i = 0; i < pngs.size(); i++) {
+            int s = ICON_SIZES[i];
+            ico.put((byte) (s >= 256 ? 0 : s)).put((byte) (s >= 256 ? 0 : s))       // 0 means 256
+                    .put((byte) 0).put((byte) 0).putShort((short) 1).putShort((short) 32)
+                    .putInt(pngs.get(i).length).putInt(offset);
+            offset += pngs.get(i).length;
+        }
+        for (byte[] png : pngs) ico.put(png);
+        Files.write(out, ico.array());
+    }
 
     private static BufferedImage appIcon(int size) {
         BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
