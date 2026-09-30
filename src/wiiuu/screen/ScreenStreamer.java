@@ -278,6 +278,33 @@ public final class ScreenStreamer {
                 .getDefaultConfiguration().getBounds());
     }
 
+    /** The display scale (1.5 at 150 %) of the screen showing most of {@code r}; 1 when unknown. */
+    static double scaleAt(Rectangle r) {
+        double best = 1;
+        long most = -1;
+        try {
+            for (var dev : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+                var gc = dev.getDefaultConfiguration();
+                Rectangle i = gc.getBounds().intersection(r);
+                long area = i.isEmpty() ? 0 : (long) i.width * i.height;
+                if (area > most) {
+                    most = area;
+                    best = gc.getDefaultTransform().getScaleX();
+                }
+            }
+        } catch (RuntimeException e) {
+            // headless or no screens: unscaled
+        }
+        return best > 0 ? best : 1;
+    }
+
+    /** {@code r} (Java's scaled units, as everywhere in WII-UU) in real screen pixels, for ffmpeg. */
+    static Rectangle devicePixels(Rectangle r) {
+        double k = scaleAt(r);
+        if (k == 1) return r;
+        return new Rectangle((int) Math.round(r.x * k), (int) Math.round(r.y * k), (int) even(r.width * k), (int) even(r.height * k));
+    }
+
     private static Rectangle clip(Rectangle r) {
         Rectangle screen = new Rectangle();
         for (var dev : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
@@ -412,9 +439,12 @@ public final class ScreenStreamer {
             List<String> cmd = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-loglevel", "error",
                     "-fflags", "nobuffer", "-probesize", "32", "-analyzeduration", "0"));
             if (OS.contains("win")) {
+                // Java measures in scaled units (150 % display scaling: 2560 px wide reads as 1707), gdigrab
+                // in real pixels: convert, or only the top-left part of the screen is captured
+                Rectangle d = devicePixels(r);
                 cmd.addAll(List.of("-f", "gdigrab", "-draw_mouse", "0", "-framerate", Integer.toString(fps),
-                        "-offset_x", Integer.toString(r.x), "-offset_y", Integer.toString(r.y),
-                        "-video_size", r.width + "x" + r.height, "-i", "desktop"));
+                        "-offset_x", Integer.toString(d.x), "-offset_y", Integer.toString(d.y),
+                        "-video_size", d.width + "x" + d.height, "-i", "desktop"));
             } else if (OS.contains("mac")) {
                 // AVFoundation captures the main display in device pixels (2x on Retina): crop there
                 double k = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice()
@@ -425,8 +455,9 @@ public final class ScreenStreamer {
             } else {
                 String display = System.getenv("DISPLAY");
                 if (display == null || display.isBlank()) display = ":0";
+                Rectangle d = devicePixels(r);                     // Java can run scaled on Linux too (GDK_SCALE)
                 cmd.addAll(List.of("-f", "x11grab", "-draw_mouse", "0", "-framerate", Integer.toString(fps),
-                        "-video_size", r.width + "x" + r.height, "-i", display + "+" + r.x + "," + r.y));
+                        "-video_size", d.width + "x" + d.height, "-i", display + "+" + d.x + "," + d.y));
             }
             cmd.addAll(List.of("-an", "-vf", crop + "scale='trunc(min(" + maxW + ",iw)/2)*2':-2",
                     "-pix_fmt", "yuvj420p", "-q:v", Integer.toString(q), "-f", "mjpeg", "-"));

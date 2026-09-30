@@ -61,7 +61,17 @@ public final class WindowLocator {
     private static List<Win> list() {
         if (OS.contains("win")) return windows();
         if (OS.contains("mac")) return mac();
-        return x11();
+        // X11 reports real pixels; WII-UU works in Java's scaled units (GDK_SCALE / sun.java2d.uiScale)
+        double k = ScreenStreamer.scaleAt(new Rectangle(0, 0, 1, 1));
+        List<Win> wins = x11();
+        if (k == 1) return wins;
+        List<Win> out = new ArrayList<>();
+        for (Win w : wins) {
+            Rectangle r = w.rect;
+            out.add(new Win(w.title, new Rectangle((int) Math.round(r.x / k), (int) Math.round(r.y / k),
+                    (int) Math.round(r.width / k), (int) Math.round(r.height / k))));
+        }
+        return out;
     }
 
     // ---- Linux / X11 -------------------------------------------------------------------
@@ -118,9 +128,11 @@ public final class WindowLocator {
               [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
               [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
               [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
+              [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
               public struct RECT { public int L, T, R, B; }
               public struct POINT { public int X, Y; }
               public static void Dump() {
+                SetProcessDPIAware();   // real pixels, whatever PowerShell's own DPI setting
                 EnumWindows((h, l) => {
                   if (!IsWindowVisible(h)) return true;
                   var sb = new StringBuilder(512); GetWindowText(h, sb, 512);
@@ -136,13 +148,15 @@ public final class WindowLocator {
             """;
 
     private static List<Win> windows() {
+        // the script reports real pixels; WII-UU works in Java's scaled units (display scaling)
+        double k = ScreenStreamer.scaleAt(new java.awt.Rectangle(0, 0, 1, 1));
         List<Win> out = new ArrayList<>();
         for (String line : run(8, "powershell", "-NoProfile", "-NonInteractive", "-Command", PS_SCRIPT)) {
             String[] p = line.split("\t", 5);
             if (p.length < 5) continue;
             try {
-                out.add(new Win(p[4], new Rectangle(Integer.parseInt(p[0]), Integer.parseInt(p[1]),
-                        Integer.parseInt(p[2]), Integer.parseInt(p[3]))));
+                out.add(new Win(p[4], new Rectangle((int) Math.round(Integer.parseInt(p[0]) / k), (int) Math.round(Integer.parseInt(p[1]) / k),
+                        (int) Math.round(Integer.parseInt(p[2]) / k), (int) Math.round(Integer.parseInt(p[3]) / k))));
             } catch (NumberFormatException ignored) {
                 // malformed line
             }
