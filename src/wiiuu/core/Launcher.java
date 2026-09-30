@@ -60,6 +60,13 @@ public final class Launcher {
         this.typesKeys = typesKeys;
     }
 
+    /** RetroArch mode: where a game's window goes when its screens are split (see DualScreen), or null. */
+    private volatile java.util.function.Function<Game, java.awt.Rectangle> split = g -> null;
+
+    public void setSplit(java.util.function.Function<Game, java.awt.Rectangle> split) {
+        this.split = split;
+    }
+
     public void addListener(Listener l) {
         listeners.add(l);
     }
@@ -83,13 +90,14 @@ public final class Launcher {
         if (retroArch.handles(game.system())) {
             try {
                 // after downloading a missing core, start the game by itself
+                java.awt.Rectangle where = split.apply(game);
                 cmd = retroArch.command(game, () -> {
                     try {
                         launch(game);
                     } catch (LaunchException e) {
                         for (Listener l : listeners) l.message(e.getMessage());
                     }
-                });
+                }, where);
             } catch (RetroArch.Downloading d) {
                 throw new LaunchException(d.getMessage());
             }

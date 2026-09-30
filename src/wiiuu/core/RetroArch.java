@@ -87,6 +87,11 @@ public final class RetroArch {
      * @param afterDownload run once a missing core has been downloaded (then {@link Downloading} is thrown)
      */
     public List<String> command(Game game, Runnable afterDownload) throws Downloading {
+        return command(game, afterDownload, null);
+    }
+
+    /** @param split where RetroArch's window goes when the game's screens are split (real pixels), or null */
+    public List<String> command(Game game, Runnable afterDownload, java.awt.Rectangle split) throws Downloading {
         List<String> exe = executable();
         if (exe == null) {
             System.err.println("[retroarch] RetroArch not found; using " + game.system().emulator());
@@ -116,8 +121,9 @@ public final class RetroArch {
                     + ")\u2026 the game starts by itself in a moment");
         }
         List<String> cmd = new ArrayList<>(exe);
-        cmd.addAll(List.of("-f", "-L", core.toString()));
-        Path extra = writeExtraConfig();
+        if (split == null) cmd.add("-f");
+        cmd.addAll(List.of("-L", core.toString()));
+        Path extra = writeExtraConfig(split);
         if (extra != null) cmd.addAll(List.of("--appendconfig", extra.toString()));
         cmd.add(game.path().toAbsolutePath().toString());
         return cmd;
@@ -294,7 +300,23 @@ public final class RetroArch {
      * fast-forward...).
      */
     Path writeExtraConfig() {
+        return writeExtraConfig(null);
+    }
+
+    Path writeExtraConfig(java.awt.Rectangle split) {
         StringBuilder cfg = new StringBuilder("# written by WII-UU for games it starts in RetroArch\n");
+        if (split != null) {
+            // split screens: a borderless window exactly the size of both screens, on WII-UU's hidden display
+            cfg.append("video_fullscreen = \"false\"\n");
+            cfg.append("video_window_show_decorations = \"false\"\n");
+            cfg.append("ui_menubar_enable = \"false\"\n");
+            cfg.append("video_window_save_positions = \"true\"\n");
+            cfg.append("video_windowed_position_x = \"").append(split.x).append("\"\n");
+            cfg.append("video_windowed_position_y = \"").append(split.y).append("\"\n");
+            cfg.append("video_windowed_position_width = \"").append(split.width).append("\"\n");
+            cfg.append("video_windowed_position_height = \"").append(split.height).append("\"\n");
+            cfg.append("video_scale_integer = \"false\"\n");
+        }
         cfg.append("pause_nonactive = \"false\"\n");
         cfg.append("quit_press_twice = \"false\"\n");
         cfg.append("input_enable_hotkey = \"").append(config.get("retroarch.hotkeyEnable", "rctrl")).append("\"\n");

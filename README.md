@@ -317,6 +317,19 @@ The picture is streamed at 30 fps.
     phone shows the bottom one from there. Keep the core's default top/bottom layout and
     RetroArch's *Core provided* aspect ratio. A different layout can be set with
     `screen.<id>.retroarch.region` (and `.aspect`, `.window`).
+  * **Split screens (RetroArch mode, DS and 3DS):** like a DS game on a Wii U, the TV shows the top
+    screen big and the phone the touch screen. RetroArch's window goes onto a display the TV
+    doesn't show, sized to the two screens exactly, and WII-UU covers the TV with the live top
+    screen. Everything is put back when the game ends. Turn it off under *Settings → General*
+    (`screen.split=false`).
+    * **Linux (X11):** WII-UU makes the hidden display itself. It widens the X screen past the
+      TV, declares the new strip a monitor, and lets the mouse reach it (the TV output gets a
+      panning area whose tracking area is only the TV, so the TV never scrolls). Needs `xrandr` and
+      `xdotool`. Not on Wayland.
+    * **Windows:** Windows needs a driver for an extra display. Install a virtual display driver
+      (for example the free "Virtual Display Driver"); WII-UU uses a display whose adapter name
+      says "virtual", or the one set with `screen.split.display=<n>`.
+    * **macOS:** not yet; the TV shows both screens.
   * **macOS:** finding the emulator's window needs the Accessibility permission (see macOS setup).
 * **TV:** mirrors the whole screen, including the WII-UU menu (Off-TV play).
 * **Gyro (motion controls):** tap *Gyro* on the phone. Phones only share motion sensors with

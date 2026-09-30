@@ -152,6 +152,13 @@ public final class ScreenStreamer {
         this.inRetroArch = inRetroArch;
     }
 
+    /** split screens (top on the TV, bottom on the phone), or null */
+    private static volatile DualScreen dual;
+
+    public void setDualScreen(DualScreen d) {
+        dual = d;
+    }
+
     // ---- phones watching ----------------------------------------------------------------
 
     /**
@@ -220,6 +227,19 @@ public final class ScreenStreamer {
         if (robot == null || r == null) return;
         int px = r.x + (int) Math.round(Math.max(0, Math.min(1, x)) * (r.width - 1));
         int py = r.y + (int) Math.round(Math.max(0, Math.min(1, y)) * (r.height - 1));
+        if (outsideJava(new Rectangle(px, py, 1, 1)) && !OS.contains("win") && !OS.contains("mac")) {
+            // a display added after start (split screens): Java's mouse stops at the screens it knows
+            Rectangle d = devicePixels(new Rectangle(px, py, 1, 1));
+            List<String> cmd = new ArrayList<>(List.of("xdotool", "mousemove", "" + d.x, "" + d.y));
+            if (state == 1 && !mouseDown) { cmd.addAll(List.of("mousedown", "1")); mouseDown = true; }
+            else if (state == 0 && mouseDown) { cmd.addAll(List.of("mouseup", "1")); mouseDown = false; }
+            try {
+                new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start().waitFor();
+            } catch (IOException | InterruptedException ignored) {
+                // no xdotool: nothing to press
+            }
+            return;
+        }
         robot.mouseMove(px, py);
         if (state == 1 && !mouseDown) {
             robot.mousePress(InputEvent.BUTTON1_DOWN_MASK);
@@ -265,6 +285,11 @@ public final class ScreenStreamer {
         // TV while a game runs: just the emulator's window (much less to capture than a whole Retina
         // desktop, and no other apps around it); otherwise the whole screen
         Game g = currentGame.get();
+        DualScreen d = dual;
+        if (g != null && d != null && d.active()) {                     // split screens: the TV shows the top screen
+            Rectangle top = d.topRegion();
+            if (top != null && (top = clip(top)) != null) return top;
+        }
         if (g != null && config.getBool("stream.tvFollowsGame", true)) {
             Rectangle w = windows.find(java.util.regex.Pattern.quote(g.name()));
             if (w == null) w = windows.find(java.util.regex.Pattern.quote(g.system().emulator()));
@@ -276,6 +301,18 @@ public final class ScreenStreamer {
         }
         return clip(GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice()
                 .getDefaultConfiguration().getBounds());
+    }
+
+    /**
+     * Whether {@code r} lies off the screen Java's Robot works on (the main one): Robot's mouse and
+     * capture stop at its edges, so a display added later (split screens) needs other tools.
+     */
+    static boolean outsideJava(Rectangle r) {
+        try {
+            return !GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration().getBounds().intersects(r);
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     /** The display scale (1.5 at 150 %) of the screen showing most of {@code r}; 1 when unknown. */
@@ -310,6 +347,9 @@ public final class ScreenStreamer {
         for (var dev : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
             screen = screen.union(dev.getDefaultConfiguration().getBounds());
         }
+        DualScreen d = dual;
+        Rectangle hidden = d == null ? null : d.hiddenArea();
+        if (hidden != null && hidden.intersects(r)) screen = hidden;     // the display the TV doesn't show
         Rectangle c = r.intersection(screen);
         if (c.width < 8 || c.height < 8) return null;
         // even sizes keep video encoders happy
@@ -384,6 +424,7 @@ public final class ScreenStreamer {
                 Rectangle now = region(mode, why);
                 if (!java.util.Objects.equals(now, region)) {
                     region = now;
+                    moved = true;                          // not a failure: the capture stops on purpose
                     Process p = process;
                     if (p != null) p.destroy();          // producer restarts ffmpeg with the new area
                     if (now == null) publish(message(why[0]));
@@ -396,6 +437,7 @@ public final class ScreenStreamer {
         private int helperFailures;
         private boolean sawPicture;
         private int ffmpegFailures;
+        private volatile boolean moved;
 
         private void produce() {
             int fps = Math.max(1, Math.min(60, config.getInt("stream.fps", 30)));
@@ -414,10 +456,11 @@ public final class ScreenStreamer {
                     } else {
                         sleep(500);
                     }
-                } else if (ffmpeg != null && !javaFallback) {
-                    if (runFfmpeg(r, fps)) {
+                } else if (ffmpeg != null && (!javaFallback || outsideJava(r))) {
+                    moved = false;
+                    if (runFfmpeg(r, fps) || moved) {
                         ffmpegFailures = 0;
-                    } else if (++ffmpegFailures >= 2 && robot != null) {
+                    } else if (++ffmpegFailures >= 2 && robot != null && !outsideJava(r)) {
                         // ffmpeg can't capture here (no X11, missing permission, ...): never leave the phone blank
                         javaFallback = true;
                         System.err.println("[screen] ffmpeg produced no picture (" + lastLine(captureLog()) + "); using Java capture for " + mode);

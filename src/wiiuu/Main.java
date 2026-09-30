@@ -41,11 +41,13 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.8.4";
+    public static final String VERSION = "1.9.0";
 
     private final Config config;
     private final Library library;
     private final Launcher launcher;
+    /** split screens for DS/3DS in RetroArch mode: top on the TV, bottom on the phone */
+    private final wiiuu.screen.DualScreen dual;
     private final InputRouter router;
     private GamepadServer server;
     private DsuServer dsuServer;
@@ -73,6 +75,11 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         router.setKeysEnabled(() -> typesKeysFor(launcher.current()));
         launcher.setTypesKeys(this::typesKeysFor);
         launcher.addListener(this);
+        wiiuu.screen.VirtualDisplay.recover(config);
+        dual = new wiiuu.screen.DualScreen(config);
+        // the TV's area is taken before the displays change (it's where WII-UU's window is)
+        launcher.setSplit(g -> dual.prepare(g, frame == null ? null : frame.getGraphicsConfiguration().getBounds()));
+        Runtime.getRuntime().addShutdownHook(new Thread(dual::end, "split-cleanup"));
     }
 
     /** Whether WII-UU types keys into this game's emulator (else the phone is a virtual controller or DSU). */
@@ -169,7 +176,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         dsuServer = dsu;
         ScreenStreamer screen = config.getBool("stream.enabled", true) ? new ScreenStreamer(config, launcher::current) : null;
         this.screen = screen;
-        if (screen != null) screen.setRetroArch(launcher::inRetroArch);
+        if (screen != null) {
+            screen.setRetroArch(launcher::inRetroArch);
+            screen.setDualScreen(dual);
+        }
         router.setKeysPermitted(() -> !Boolean.FALSE.equals(macKeysAllowed));
         if (screen != null) {
             screen.setOnBlocked(msg -> SwingUtilities.invokeLater(() -> view.showToast(
@@ -262,6 +272,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         try {
             launcher.launch(game);
         } catch (Launcher.LaunchException e) {
+            dual.end();
             view.showToast(e.getMessage());
         }
     }
@@ -344,6 +355,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
     @Override
     public void started(Game game) {
+        dual.begin();
         SwingUtilities.invokeLater(() -> {
             view.setPlaying(game);
             if (config.getBool("ui.minimizeOnLaunch", true)) frame.setState(Frame.ICONIFIED);
@@ -395,6 +407,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
     @Override
     public void exited(Game game, int exitCode, boolean quickFailure, Path log) {
+        dual.end();
         SwingUtilities.invokeLater(() -> {
             view.setPlaying(null);
             frame.setState(Frame.NORMAL);
