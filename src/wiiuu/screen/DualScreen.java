@@ -55,8 +55,16 @@ public final class DualScreen {
      *
      * @return where the emulator's window should go (real pixels), or null for the usual single window
      */
+    /** Why the last game that could have split screens didn't, or null. */
+    private volatile String problem;
+
+    public String problem() {
+        return problem;
+    }
+
     public synchronized Rectangle prepare(Game game, Rectangle tv) {
         end();
+        problem = null;
         tvBounds = tv;
         if (!config.getBool("screen.split", true)) return null;
         ScreenProfile p = ScreenProfile.forSystem(config, game.system(), true);
@@ -64,7 +72,10 @@ public final class DualScreen {
         int h = Math.max(384, config.getInt("screen.split.height", 1152));
         int w = (int) Math.round(h * p.aspect()) & ~1;
         VirtualDisplay d = VirtualDisplay.open(config, w, h);
-        if (d == null) return null;
+        if (d == null) {
+            problem = VirtualDisplay.problem();
+            return null;
+        }
         display = d;
         if (d.tvArea() != null) tvBounds = VirtualDisplay.toJava(d.tvArea());
         profile = p;

@@ -59,6 +59,30 @@ public final class VirtualDisplay {
         this.stateFile = stateFile;
     }
 
+    /** Why the last {@link #open} gave no display (for the TV and the phone), or null. */
+    private static volatile String problem;
+
+    public static String problem() {
+        return problem;
+    }
+
+    /** Logs a step; one that ends in "the TV shows both screens" is kept as the reason there is no split. */
+    private static volatile Path logFile;
+
+    private static void note(String msg) {
+        System.out.println("[split] " + msg);
+        Path log = logFile;
+        if (log != null) {
+            try {
+                Files.writeString(log, java.time.LocalDateTime.now().withNano(0) + " " + msg + System.lineSeparator(),
+                        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            } catch (IOException ignored) {
+                // no log
+            }
+        }
+        if (msg.contains("the TV shows both screens") || msg.startsWith("needs") || msg.startsWith("no virtual")) problem = msg;
+    }
+
     /** Where the display is, in real screen pixels. */
     public Rectangle area() {
         return new Rectangle(area);
@@ -70,12 +94,19 @@ public final class VirtualDisplay {
      * @return null (with the reason printed) when there is none
      */
     public static VirtualDisplay open(Config config, int w, int h) {
+        problem = null;
+        logFile = config.logDir().resolve("split.log");
+        try {
+            Files.createDirectories(logFile.getParent());
+        } catch (IOException ignored) {
+            // no log
+        }
         try {
             if (OS.contains("win")) return windows(config);
             if (OS.contains("mac")) return null;
             return x11(config, w, h);
         } catch (RuntimeException e) {
-            System.err.println("[split] no GamePad display: " + e.getMessage());
+            note("no GamePad display (" + e.getMessage() + "); the TV shows both screens");
             return null;
         }
     }
@@ -106,7 +137,7 @@ public final class VirtualDisplay {
             }
             if (!OS.contains("win")) undo(output, fb != null && fb.matches("\\d+x\\d+") ? fb : null);
             Files.deleteIfExists(state);
-            System.out.println("[split] removed the GamePad display left from an interrupted game");
+            note("removed the GamePad display left from an interrupted game");
         } catch (IOException ignored) {
             // try again next time
         }
@@ -137,13 +168,13 @@ public final class VirtualDisplay {
 
     private static VirtualDisplay x11(Config config, int w, int h) {
         if ("wayland".equalsIgnoreCase(System.getenv("XDG_SESSION_TYPE")) || System.getenv("DISPLAY") == null) {
-            System.out.println("[split] needs an X11 session (on Wayland the TV shows both screens)");
+            note("needs an X11 session (on Wayland the TV shows both screens)");
             return null;
         }
         List<String> out = run(5, "xrandr");
         Matcher m = out.isEmpty() ? null : CURRENT.matcher(out.get(0));
         if (m == null || !m.find()) {
-            System.out.println("[split] xrandr not available (install x11-xserver-utils); the TV shows both screens");
+            note("xrandr not available (install x11-xserver-utils); the TV shows both screens");
             return null;
         }
         int fbW = Integer.parseInt(m.group(1)), fbH = Integer.parseInt(m.group(2));
@@ -157,7 +188,7 @@ public final class VirtualDisplay {
         if (right == 0) right = fbW;
         int needW = right + w, needH = Math.max(fbH, h);
         if (needW > maxW || needH > maxH) {
-            System.out.println("[split] the X screen can't grow to " + needW + "x" + needH + " (maximum " + maxW + "x" + maxH + ")");
+            note("the X screen can't grow to " + needW + "x" + needH + " (maximum " + maxW + "x" + maxH + "); the TV shows both screens");
             return null;
         }
         // the TV: the output whose right edge the strip joins (it gets the panning area)
@@ -179,7 +210,7 @@ public final class VirtualDisplay {
         run(5, "xrandr", "--setmonitor", NAME, w + "/0x" + h + "/0+" + right + "+0", "none");
         boolean ok = run(5, "xrandr", "--listmonitors").stream().anyMatch(l -> l.contains(NAME));
         if (!ok) {
-            System.out.println("[split] the X server did not accept an extra monitor; the TV shows both screens");
+            note("the X server did not accept an extra monitor; the TV shows both screens");
             new VirtualDisplay(new Rectangle(), restore, state).close();
             return null;
         }
@@ -193,18 +224,18 @@ public final class VirtualDisplay {
             d.pannedOutput = tv;
             d.tv = new Rectangle(tvArea);
         } else {
-            System.out.println("[split] no output found for the TV: taps can't reach the GamePad display");
+            note("no output found for the TV: taps can't reach the GamePad display");
         }
-        System.out.println("[split] GamePad display " + w + "x" + h + " at +" + right + "+0 (not shown on any screen)");
+        note("GamePad display " + w + "x" + h + " at +" + right + "+0 (not shown on any screen)");
         return d;
     }
 
     // ---- Windows ----------------------------------------------------------------------------------
 
     /** One display adapter from display.ps1: name, adapter, attached, primary, rect (if attached), modes. */
-    record WinDisplay(String name, String adapter, boolean attached, boolean primary, Rectangle rect, List<int[]> modes) {
+    record WinDisplay(String name, String adapter, boolean attached, boolean primary, Rectangle rect, List<int[]> modes, String ids) {
         boolean virtual() {
-            return adapter.toLowerCase(Locale.ROOT).matches(".*(virtual display|iddsampledriver|mttvdd|virtual).*");
+            return (adapter + " " + ids).toLowerCase(Locale.ROOT).matches(".*(virtual|iddsampledriver|iddcx|mttvdd|mtt1337).*");
         }
     }
 
@@ -233,7 +264,8 @@ public final class VirtualDisplay {
                     }
                 }
             }
-            out.add(new WinDisplay(p[0].trim(), p[1].trim(), p[2].trim().equals("attached"), p[3].trim().equals("primary"), r, modes));
+            String ids = (p.length > 6 ? p[6] : "") + " " + (p.length > 7 ? p[7] : "");
+            out.add(new WinDisplay(p[0].trim(), p[1].trim(), p[2].trim().equals("attached"), p[3].trim().equals("primary"), r, modes, ids.trim()));
         }
         return out;
     }
@@ -267,7 +299,13 @@ public final class VirtualDisplay {
 
     private static VirtualDisplay windows(Config config) {
         String pick = config.get("screen.split.display", "").trim();
-        List<WinDisplay> all = parseDisplays(displayScript(config, "-Action", "list"));
+        List<String> raw = displayScript(config, "-Action", "list");
+        List<WinDisplay> all = parseDisplays(raw);
+        if (all.isEmpty()) {
+            String err = raw.stream().filter(l -> !l.isBlank()).findFirst().orElse("no answer");
+            note("could not ask Windows about the displays (PowerShell: " + err.trim() + "); the TV shows both screens");
+            return null;
+        }
         WinDisplay v = null;
         for (WinDisplay d : all) {
             boolean chosen = pick.isEmpty() ? d.virtual() && !d.primary() : d.name().replaceAll("\\D", "").equals(pick.replaceAll("\\D", ""));
@@ -277,13 +315,12 @@ public final class VirtualDisplay {
             }
         }
         if (v == null) {
-            System.out.println("[split] no virtual display found. Install one with: install.ps1 -VirtualDisplay"
-                    + " (or set screen.split.display); the TV shows both screens");
+            note("no virtual display installed: Settings (F1) > General > Install virtual display; the TV shows both screens");
             return null;
         }
         if (v.attached() && v.rect() != null) {
             // already part of the desktop (you use it yourself): use it as it is, leave it on afterwards
-            System.out.println("[split] GamePad display: " + v.adapter() + " " + v.rect().width + "x" + v.rect().height + " (already on)");
+            note("GamePad display: " + v.adapter() + " " + v.rect().width + "x" + v.rect().height + " (already on)");
             return new VirtualDisplay(v.rect(), null, null);
         }
         int[] mode = bestMode(v.modes());
@@ -308,7 +345,7 @@ public final class VirtualDisplay {
             if (d.name().equals(v.name()) && d.attached()) now = d.rect();
         }
         if (now == null) {
-            System.out.println("[split] could not switch the virtual display on (" + String.join(" ", res).trim() + "); the TV shows both screens");
+            note("could not switch the virtual display on (" + String.join(" ", res).trim() + "); the TV shows both screens");
             try {
                 Files.deleteIfExists(state);
             } catch (IOException ignored) {
@@ -316,7 +353,7 @@ public final class VirtualDisplay {
             }
             return null;
         }
-        System.out.println("[split] GamePad display: " + v.adapter() + " " + now.width + "x" + now.height + " at " + now.x + "," + now.y + " (switched on for the game)");
+        note("GamePad display: " + v.adapter() + " " + now.width + "x" + now.height + " at " + now.x + "," + now.y + " (switched on for the game)");
         VirtualDisplay d = new VirtualDisplay(now, null, state);
         d.winDevice = v.name();
         d.config = config;
@@ -325,6 +362,84 @@ public final class VirtualDisplay {
 
     private volatile String winDevice;     // Windows: the display WII-UU switched on (switched off again at the end)
     private volatile Config config;
+
+    /**
+     * {@code wiiuu --split-check}: what Windows (or X11) reports, and a try at switching the hidden
+     * display on and off, printed for a bug report.
+     */
+    public static void check(Config config) {
+        System.out.println("WII-UU split-screen check (" + System.getProperty("os.name") + ")");
+        if (OS.contains("win")) {
+            List<String> raw = displayScript(config, "-Action", "list");
+            System.out.println("Displays Windows reports:");
+            for (String l : raw) System.out.println("  " + l.replace("\t", " | "));
+            for (WinDisplay d : parseDisplays(raw)) {
+                System.out.println("  " + d.name() + ": virtual=" + d.virtual() + " attached=" + d.attached() + " primary=" + d.primary()
+                        + " modes=" + d.modes().size() + (d.virtual() ? " best=" + java.util.Arrays.toString(bestMode(d.modes())) : ""));
+            }
+        }
+        System.out.println("Trying to switch the GamePad display on:");
+        VirtualDisplay d = open(config, 768, 1152);
+        if (d == null) {
+            System.out.println("  no display: " + problem);
+            return;
+        }
+        System.out.println("  on at " + d.area() + "; switching it off again");
+        d.close();
+        System.out.println("  done");
+    }
+
+    /** Whether a virtual display (driver) is installed. */
+    public static boolean virtualInstalled(Config config) {
+        return parseDisplays(displayScript(config, "-Action", "list")).stream().anyMatch(WinDisplay::virtual);
+    }
+
+    /**
+     * Installs the Virtual Display Driver: Windows asks for administrator rights once. Afterwards its
+     * display is switched off until a game needs it.
+     *
+     * @return what happened, in a sentence
+     */
+    public static String installWindows(Config config) {
+        if (virtualInstalled(config)) {
+            switchOffVirtual(config);
+            return "The virtual display is installed.";
+        }
+        Path script = config.home().resolve("bin").resolve("install-vdd.ps1");
+        Path log = Path.of(System.getProperty("java.io.tmpdir"), "wiiuu-vdd", "install.log");
+        try (var in = VirtualDisplay.class.getResourceAsStream("/win/install-vdd.ps1")) {
+            if (in == null) return "The installer script is missing from WII-UU.";
+            Files.createDirectories(script.getParent());
+            Files.write(script, in.readAllBytes());
+            Files.deleteIfExists(log);
+        } catch (IOException e) {
+            return "Could not prepare the install: " + e.getMessage();
+        }
+        // the path goes through the environment: no quoting trouble with spaces in user names
+        try {
+            ProcessBuilder pb = new ProcessBuilder("powershell", "-NoProfile", "-NonInteractive", "-Command",
+                    "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File \"' + $env:WIIUU_VDD + '\"')");
+            pb.environment().put("WIIUU_VDD", script.toString());
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            String out = new String(p.getInputStream().readAllBytes()).trim();
+            p.waitFor(10, java.util.concurrent.TimeUnit.MINUTES);
+            if (p.exitValue() != 0 && out.contains("canceled")) return "Administrator rights were not given, so nothing was installed.";
+        } catch (IOException | InterruptedException e) {
+            return "Could not start the install: " + e.getMessage();
+        }
+        String result = "";
+        try {
+            result = Files.readString(log).trim();
+        } catch (IOException ignored) {
+            // no log: see below
+        }
+        if (virtualInstalled(config)) {
+            switchOffVirtual(config);
+            return "Virtual display installed. DS and 3DS games in RetroArch mode now show the top screen on the TV and the touch screen on the phone.";
+        }
+        return result.startsWith("failed") ? "The install " + result : "The virtual display did not install (Administrator rights not given?).";
+    }
 
     /** Switches off every virtual display that is on (after installing the driver: keep the desktop as it was). */
     public static int switchOffVirtual(Config config) {

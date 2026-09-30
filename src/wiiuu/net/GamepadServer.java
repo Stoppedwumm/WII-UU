@@ -174,6 +174,15 @@ public final class GamepadServer {
     private volatile AudioStreamer audio;
 
     /** The PC's sound for the phones (optional). */
+    /** a message for the phones (shown once each), e.g. why a DS game's screens aren't split */
+    private volatile String notice;
+    private volatile long noticeId;
+
+    public void notice(String text) {
+        notice = text;
+        noticeId++;
+    }
+
     public void setAudio(AudioStreamer audio) {
         this.audio = audio;
     }
@@ -496,6 +505,7 @@ public final class GamepadServer {
                 .kv("pads", connectedPads())
                 .kv("library", library.snapshot().version())
                 .kv("keys", router.canInjectKeys())
+                .kv("notice", notice).kv("noticeId", noticeId)
                 .kv("keysWhy", router.canInjectKeys() ? null
                         : System.getProperty("os.name", "").toLowerCase().contains("mac") ? wiiuu.Main.MAC_KEYS_HELP
                         : "Key injection unavailable on the PC (headless or Wayland-only session).")

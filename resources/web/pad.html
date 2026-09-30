@@ -375,6 +375,9 @@ async function poll() {
     if (j.keysWhy) $("keysWarn").textContent = j.keysWhy;
     if (j.keys === false && j.keysWhy && !S.keysToast) { S.keysToast = true; toast(j.keysWhy); }
     if (j.keys !== false) S.keysToast = false;
+    // messages from WII-UU (each once); the first answer only tells us where we are
+    if (S.noticeId !== undefined && j.noticeId !== S.noticeId && j.notice) toast(j.notice);
+    S.noticeId = j.noticeId;
     if (j.library !== S.libVersion) loadLibrary();
     S.https = j.https; S.tv = j.tv; S.stream = j.stream;
     if (!j.buzz) S.buzzHidden = false;          // the next Buzz! game shows the buzzer again

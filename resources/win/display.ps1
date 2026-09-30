@@ -1,6 +1,6 @@
 # WII-UU: lists displays and switches one on or off (Windows display settings; no admin needed).
 #   display.ps1 -Action list                          one line per display adapter:
-#       name <tab> adapter <tab> attached|detached <tab> primary|"" <tab> x,y,w,h (if attached) <tab> modes "WxH WxH ..."
+#       name <tab> adapter <tab> attached|detached <tab> primary|"" <tab> x,y,w,h (if attached) <tab> modes "WxH WxH ..." <tab> device id <tab> monitor
 #   display.ps1 -Action attach -Device \\.\DISPLAY3 -X 1920 -Y 0 -W 2560 -H 1440
 #   display.ps1 -Action detach -Device \\.\DISPLAY3
 # Positions and sizes are real pixels. Used for split DS/3DS screens (a virtual display the TV doesn't show).
@@ -43,7 +43,9 @@ public static class WiiuuDisplay {
       var modes = new SortedSet<string>();
       var m = New();
       for (int k = 0; EnumDisplaySettings(dd.Name, k, ref m); k++) { modes.Add(m.PelsWidth + "x" + m.PelsHeight); m = New(); }
-      Console.WriteLine(dd.Name + "\t" + dd.Str + "\t" + (attached ? "attached" : "detached") + "\t" + (primary ? "primary" : "") + "\t" + rect + "\t" + string.Join(" ", modes));
+      var mon = new DD(); mon.cb = Marshal.SizeOf(mon);
+      string monitor = EnumDisplayDevices(dd.Name, 0, ref mon, 0) ? mon.Str + " " + mon.Id : "";
+      Console.WriteLine(dd.Name + "\t" + dd.Str + "\t" + (attached ? "attached" : "detached") + "\t" + (primary ? "primary" : "") + "\t" + rect + "\t" + string.Join(" ", modes) + "\t" + dd.Id + "\t" + monitor);
       dd.cb = Marshal.SizeOf(dd);
     }
   }

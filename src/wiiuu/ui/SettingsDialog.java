@@ -355,6 +355,25 @@ public final class SettingsDialog extends JDialog {
         JLabel updateInfo = new JLabel("Version " + wiiuu.Main.VERSION);
         update.addActionListener(e -> checkForUpdates(update, updateInfo));
         row = addRow(p, c, row, "Updates", update, updateInfo);
+        if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
+            // split DS/3DS screens need a display the TV doesn't show; Windows needs a driver for one
+            JButton vdd = new JButton("Install virtual display\u2026");
+            JLabel vddInfo = new JLabel("for split DS/3DS screens (asks for administrator rights once)");
+            vdd.addActionListener(e -> {
+                vdd.setEnabled(false);
+                vddInfo.setText("Installing\u2026 allow the administrator prompt");
+                Thread t = new Thread(() -> {
+                    String result = wiiuu.screen.VirtualDisplay.installWindows(config);
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        vddInfo.setText("<html>" + result + "</html>");
+                        vdd.setEnabled(true);
+                    });
+                }, "install-virtual-display");
+                t.setDaemon(true);
+                t.start();
+            });
+            row = addRow(p, c, row, "Split screens", vdd, vddInfo);
+        }
         if (System.getProperty("os.name", "").toLowerCase().contains("mac")) {
             // macOS silently blocks screen capture (black GamePad screen) and synthetic keys without these
             JPanel perms = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));

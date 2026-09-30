@@ -41,13 +41,15 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.1";
+    public static final String VERSION = "1.9.2";
 
     private final Config config;
     private final Library library;
     private final Launcher launcher;
     /** split screens for DS/3DS in RetroArch mode: top on the TV, bottom on the phone */
     private final wiiuu.screen.DualScreen dual;
+    /** reasons for no split screens already shown this session (each once) */
+    private final java.util.Set<String> shownSplitProblem = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final InputRouter router;
     private GamepadServer server;
     private DsuServer dsuServer;
@@ -78,7 +80,17 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         wiiuu.screen.VirtualDisplay.recover(config);
         dual = new wiiuu.screen.DualScreen(config);
         // the TV's area is taken before the displays change (it's where WII-UU's window is)
-        launcher.setSplit(g -> dual.prepare(g, frame == null ? null : frame.getGraphicsConfiguration().getBounds()));
+        launcher.setSplit(g -> {
+            java.awt.Rectangle r = dual.prepare(g, frame == null ? null : frame.getGraphicsConfiguration().getBounds());
+            String why = dual.problem();
+            if (r == null && why != null && shownSplitProblem.add(why)) {
+                // say it where it's seen: RetroArch covers the TV, so on the phone too
+                String msg = "Both DS screens stay on the TV: " + why.replace("; the TV shows both screens", "");
+                if (server != null) server.notice(msg);
+                SwingUtilities.invokeLater(() -> view.showToast(msg));
+            }
+            return r;
+        });
         Runtime.getRuntime().addShutdownHook(new Thread(dual::end, "split-cleanup"));
     }
 
@@ -119,6 +131,14 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                 case "--upgrade", "--check-update" -> {
                     System.exit(cliUpgrade(new Config(home), args[i].equals("--upgrade")));
                 }
+                case "--split-check" -> {
+                    wiiuu.screen.VirtualDisplay.check(new Config(home));
+                    return;
+                }
+                case "--install-virtual-display" -> {
+                    System.out.println(wiiuu.screen.VirtualDisplay.installWindows(new Config(home)));
+                    return;
+                }
                 case "--virtual-display-off" -> {
                     // after installing the virtual display driver: keep the desktop as it was until a game needs it
                     int n = wiiuu.screen.VirtualDisplay.switchOffVirtual(new Config(home));
@@ -137,6 +157,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --no-server                 do not start the phone GamePad server
                               --home DIR                  settings folder (default ~/.wiiuu)
                               --check-update / --upgrade  check for / install a newer version
+                              --install-virtual-display   Windows: install the virtual display (split DS/3DS screens)
                               --virtual-display-off       Windows: switch the virtual display off (split screens)
                             Keys: arrows move, Enter opens, Esc back, F1 settings, F2 GamePad, F5 refresh,
                                   F11 fullscreen, Ctrl+Q closes a running game.""".formatted(VERSION));

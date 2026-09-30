@@ -333,7 +333,12 @@ The picture is streamed at 30 fps.
       the largest size up to that, right of your screens) only while a DS/3DS game runs in
       RetroArch mode, and off again afterwards, so your desktop stays as it was. Taps are normal
       mouse clicks there. A virtual display you keep on yourself is used as it is and left on.
-      `screen.split.display=<n>` picks another display (`\\.\DISPLAY<n>`).
+      `screen.split.display=<n>` picks another display (`\\.\DISPLAY<n>`). *Settings → General →
+      Install virtual display* installs the driver from WII-UU itself.
+    * **When the screens aren't split,** the TV and the phone say why, and
+      `~/.wiiuu/logs/split.log` has the details. `wiiuu --split-check` (Windows:
+      `java -jar "%LOCALAPPDATA%\WII-UU\wiiuu.jar" --split-check`) prints what the system reports
+      about its displays and tries switching the hidden display on and off.
     * **macOS:** not yet; the TV shows both screens.
   * **macOS:** finding the emulator's window needs the Accessibility permission (see macOS setup).
 * **TV:** mirrors the whole screen, including the WII-UU menu (Off-TV play).
