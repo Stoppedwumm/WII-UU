@@ -354,7 +354,13 @@ public final class SettingsDialog extends JDialog {
         JButton update = new JButton("Check for updates");
         JLabel updateInfo = new JLabel("Version " + wiiuu.Main.VERSION);
         update.addActionListener(e -> checkForUpdates(update, updateInfo));
-        row = addRow(p, c, row, "Updates", update, updateInfo);
+        JButton news = new JButton("What's new");
+        news.addActionListener(e -> ChangelogDialog.show(this, "What's new in WII-UU", null,
+                wiiuu.core.Changelog.bundled().entries(), true));
+        JPanel updates = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        updates.add(update);
+        updates.add(news);
+        row = addRow(p, c, row, "Updates", updates, updateInfo);
         if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
             // split DS/3DS screens need a display the TV doesn't show; Windows needs a driver for one
             JButton vdd = new JButton("Install virtual display\u2026");
@@ -426,9 +432,13 @@ public final class SettingsDialog extends JDialog {
         button.setEnabled(false);
         info.setText("Checking...");
         new javax.swing.SwingWorker<wiiuu.core.Updater.Release, Void>() {
+            private java.util.List<wiiuu.core.Changelog.Entry> notes = java.util.List.of();
+
             @Override
             protected wiiuu.core.Updater.Release doInBackground() throws Exception {
-                return updater.check();
+                wiiuu.core.Updater.Release rel = updater.check();
+                if (rel != null) notes = updater.notes(rel);
+                return rel;
             }
 
             @Override
@@ -446,11 +456,11 @@ public final class SettingsDialog extends JDialog {
                     return;
                 }
                 info.setText("Version " + rel.version() + " is available");
-                int ok = JOptionPane.showConfirmDialog(SettingsDialog.this,
-                        "Update WII-UU " + wiiuu.Main.VERSION + " to " + rel.version() + " now?\n\n"
-                                + "Your settings, ROMs, paired phones and emulators are kept.\nWII-UU restarts when done.",
-                        "Update WII-UU", JOptionPane.OK_CANCEL_OPTION);
-                if (ok == JOptionPane.OK_OPTION) upgrade(rel, button, info);
+                boolean ok = ChangelogDialog.confirm(SettingsDialog.this, "Update WII-UU",
+                        "<b>Update WII-UU " + wiiuu.Main.VERSION + " to " + rel.version() + " now?</b><br>"
+                                + "Your settings, ROMs, paired phones and emulators are kept. WII-UU restarts when done.",
+                        notes, "Update now", "Later");
+                if (ok) upgrade(rel, button, info);
             }
         }.execute();
     }

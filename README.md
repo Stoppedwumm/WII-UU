@@ -437,6 +437,20 @@ An update downloads the new release, verifies its SHA-256 checksum, and runs its
 Settings, ROMs, paired phones and emulators are kept, and WII-UU restarts. To update the
 emulators, run `wiiuu-emulators --update`.
 
+### What's new
+
+Every release's changes are in [CHANGELOG.md](CHANGELOG.md), and WII-UU shows them itself:
+
+* Before an update installs, the update prompt lists what it brings.
+* The first start after an update shows what changed since the version you had. With
+  `ui.whatsNew=false` you get a short notification instead.
+* *Settings (F1) → General → What's new* lists every version.
+* `wiiuu --changelog` prints the notes in a terminal, and `wiiuu --changelog 1.9.0` prints only
+  what's newer than 1.9.0.
+
+For releases: `package.sh` refuses to build a version without a `## <version>` entry in
+CHANGELOG.md, and publishes the notes to the website with the download.
+
 ## Troubleshooting
 
 * **An emulator doesn't start:**
@@ -501,7 +515,7 @@ ui.theme=auto               # auto (follow the system) | light | dark
 retroarch.enabled=false     # RetroArch mode; retroarch.path, retroarch.core.<id>, retroarch.download
 ```
 
-Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home DIR] [--check-update|--upgrade]`
+Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home DIR] [--check-update|--upgrade] [--changelog [VERSION]]`
 
 ## Trailer
 

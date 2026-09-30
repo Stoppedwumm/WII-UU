@@ -401,6 +401,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }
 
+    /** True while the start-up animation plays. */
+    public boolean isBooting() {
+        return booting;
+    }
+
     public void showToast(String text) {
         toast = text;
         toastUntil = System.currentTimeMillis() + 3200;

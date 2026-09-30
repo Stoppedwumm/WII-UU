@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.13";
+    public static final String VERSION = "1.9.14";
 
     private final Config config;
     private final Library library;
@@ -146,6 +146,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                     System.out.println(n > 0 ? "Virtual display switched off (WII-UU switches it on for split DS/3DS screens)" : "No virtual display was on");
                     return;
                 }
+                case "--changelog" -> {
+                    // all of it, or only what's newer than a version: --changelog 1.9.0
+                    String since = i + 1 < args.length && args[i + 1].matches("\\d+(\\.\\d+)*") ? args[++i] : null;
+                    System.out.println(wiiuu.core.Changelog.text(wiiuu.core.Changelog.bundled().between(since, null)));
+                    return;
+                }
                 case "--version" -> {
                     System.out.println("WII-UU " + VERSION);
                     return;
@@ -157,7 +163,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --port N                    GamePad web server port (default 8080)
                               --no-server                 do not start the phone GamePad server
                               --home DIR                  settings folder (default ~/.wiiuu)
-                              --check-update / --upgrade  check for / install a newer version
+                              --check-update / --upgrade  check for / install a newer version (with its notes)
+                              --changelog [VERSION]       what changed (since VERSION)
                               --install-virtual-display   Windows: install the virtual display (split DS/3DS screens)
                               --virtual-display-off       Windows: switch the virtual display off (split screens)
                             Keys: arrows move, Enter opens, Esc back, F1 settings, F2 GamePad, F5 refresh,
@@ -170,7 +177,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         Config config = new Config(home);
         if (port != null) config.set("server.port", port.toString());
         if (fullscreen != null) config.set("ui.fullscreen", fullscreen.toString());
-        if (!Files.exists(home.resolve("config.properties"))) config.save();
+        freshInstall = !Files.exists(home.resolve("config.properties"));
+        if (freshInstall) config.save();
 
         Main app = new Main(config);
         if (snapshot != null) {
@@ -187,6 +195,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         app.library.rescanAsync();
         if (startServer) app.startServer();
         if (config.getBool("update.check", true)) app.checkForUpdateQuietly();
+        app.showWhatsNewAfterUpdate();
     }
 
     private void startServer() {
@@ -453,6 +462,38 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
     // ---- updates ------------------------------------------------------------------------
 
+    /**
+     * The first start after an update shows what changed since the version that ran before
+     * (ui.whatsNew=false: only a toast).
+     */
+    private static boolean freshInstall;
+
+    private void showWhatsNewAfterUpdate() {
+        String before = config.get("app.lastVersion", null);
+        if (VERSION.equals(before)) return;
+        config.set("app.lastVersion", VERSION);
+        config.save();
+        if (freshInstall || (before != null && !Updater.newer(VERSION, before))) return;     // first install, or a downgrade
+        java.util.List<wiiuu.core.Changelog.Entry> all = wiiuu.core.Changelog.bundled().between(before, VERSION);
+        // updated from a version that didn't keep track: this version's notes
+        java.util.List<wiiuu.core.Changelog.Entry> notes = before == null && all.size() > 1 ? all.subList(0, 1) : all;
+        if (notes.isEmpty()) return;
+        // after the start-up animation, so it doesn't cover it
+        javax.swing.Timer wait = new javax.swing.Timer(500, null);
+        wait.addActionListener(e -> {
+            if (view.isBooting()) return;
+            wait.stop();
+            if (!config.getBool("ui.whatsNew", true)) {
+                view.showToast("Updated to WII-UU " + VERSION + " - what's new: Settings (F1) > General");
+                return;
+            }
+            wiiuu.ui.ChangelogDialog.show(frame, "What's new in WII-UU " + VERSION,
+                    before == null ? "WII-UU was updated to " + VERSION + "."
+                            : "WII-UU was updated from " + before + " to " + VERSION + ".", notes, false);
+        });
+        wait.start();
+    }
+
     /** Background check at start; a newer version shows a toast pointing at Settings. */
     private void checkForUpdateQuietly() {
         Thread t = new Thread(() -> {
@@ -481,6 +522,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                 return 0;
             }
             System.out.println("Version " + rel.version() + " is available.");
+            var notes = u.notes(rel);
+            if (!notes.isEmpty()) System.out.println("\nWhat's new:\n\n" + wiiuu.core.Changelog.text(notes) + "\n");
             if (!install) return 0;
             System.out.println("Downloading " + rel.zipUrl());
             Path dir = u.download(rel);

@@ -81,6 +81,12 @@
   .meta { margin-top: 18px; color: var(--dim); font-size: 14px; }
 
   section { padding: 44px 0; }
+  .changelog { display: grid; gap: 14px; margin: 18px 0; }
+  .release { background: var(--card); border-radius: var(--radius); padding: 18px 22px; box-shadow: var(--shadow); }
+  .release h3 { margin: 0 0 4px; font-size: 19px; }
+  .release h3 small { font-weight: normal; color: var(--dim); font-size: 14px; margin-left: 6px; }
+  .release p { margin: 0 0 4px; }
+  .release ul { margin: 4px 0 0; padding-left: 20px; }
   h2 { font-size: 30px; margin: 0 0 8px; }
   .sub { color: var(--dim); margin: 0 0 26px; max-width: 70ch; }
 
@@ -221,6 +227,7 @@
       <a href="#gamepad" class="hide-sm">GamePad</a>
       <a href="#install">Install</a>
       <a href="#emulators" class="hide-sm">Emulators</a>
+      <a href="#changes" class="hide-sm">What's new</a>
       <a href="https://github.com/Stoppedwumm/WII-UU">GitHub</a>
       <button id="theme" class="pill" aria-label="Toggle dark mode" title="Toggle dark mode">◐</button>
     </nav>
@@ -456,6 +463,15 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
     </div>
   </section>
 
+  <section id="changes">
+    <div class="wrap">
+      <h2>What's new</h2>
+      <p class="lead">The latest releases. WII-UU shows these notes itself after an update, and under Settings (F1) → General → <b>What's new</b>.</p>
+      <div id="changelog" class="changelog"><p class="meta">Loading…</p></div>
+      <button id="changelog-more" class="btn" hidden>Show all versions</button>
+    </div>
+  </section>
+
   <section id="faq">
     <div class="wrap">
       <h2>FAQ</h2>
@@ -534,6 +550,43 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
   // version from the release manifest, so this page never shows an old number
   fetch("version.json", { cache: "no-store" }).then(r => r.json())
     .then(j => { if (j.version) document.getElementById("ver").textContent = j.version; }).catch(() => {});
+
+  // release notes from the same CHANGELOG.md that ships in the app
+  const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = t => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  function parseChangelog(md) {
+    const out = [];
+    let cur = null, blank = true;
+    for (const raw of md.replace(/\r/g, "").split("\n")) {
+      const wasBlank = blank; blank = !raw.trim();
+      const h = raw.match(/^##\s+v?(\d+(?:\.\d+)*)\s*(?:\((.*)\))?\s*$/);
+      if (h) { cur = { version: h[1], date: (h[2] || "").trim(), summary: [], points: [] }; out.push(cur); continue; }
+      if (!cur || blank) continue;
+      const line = raw.trim();
+      if (/^[-*] /.test(line)) cur.points.push(line.slice(2).trim());
+      else if (/^\s/.test(raw) && cur.points.length) cur.points[cur.points.length - 1] += " " + line;
+      else if (!cur.points.length && cur.summary.length && !wasBlank) cur.summary[cur.summary.length - 1] += " " + line;
+      else if (!cur.points.length) cur.summary.push(line);
+      else cur.points.push(line);
+    }
+    return out;
+  }
+  function showChangelog(list) {
+    document.getElementById("changelog").innerHTML = list.map(e =>
+      `<article class="release"><h3>${esc(e.version)}${e.date ? `<small>${esc(e.date)}</small>` : ""}</h3>`
+      + e.summary.map(t => `<p>${inline(t)}</p>`).join("")
+      + (e.points.length ? `<ul>${e.points.map(t => `<li>${inline(t)}</li>`).join("")}</ul>` : "") + `</article>`).join("");
+  }
+  fetch("changelog.md", { cache: "no-store" }).then(r => r.ok ? r.text() : Promise.reject())
+    .then(md => {
+      const all = parseChangelog(md), more = document.getElementById("changelog-more");
+      showChangelog(all.slice(0, 5));
+      if (all.length > 5) {
+        more.hidden = false;
+        more.onclick = () => { showChangelog(all); more.hidden = true; };
+      }
+    })
+    .catch(() => { document.getElementById("changelog").innerHTML = '<p class="meta">The release notes are in <a href="https://github.com/Stoppedwumm/WII-UU/blob/main/CHANGELOG.md">CHANGELOG.md</a>.</p>'; });
 
   // install tabs
   document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {

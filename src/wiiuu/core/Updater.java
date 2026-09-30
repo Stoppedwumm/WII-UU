@@ -52,6 +52,25 @@ public final class Updater {
         return newer(rel.version(), current) ? rel : null;
     }
 
+    /**
+     * What's new from this version up to {@code rel}: the website's changelog.md, next to
+     * version.json. Empty when it can't be read (the update itself doesn't depend on it).
+     */
+    public List<Changelog.Entry> notes(Release rel) {
+        try {
+            URI url = URI.create(config.get("update.url", DEFAULT_URL)).resolve("changelog.md");
+            HttpResponse<String> r = http.send(HttpRequest.newBuilder(url).timeout(Duration.ofSeconds(15))
+                    .header("User-Agent", "WII-UU/" + current).build(), HttpResponse.BodyHandlers.ofString());
+            if (r.statusCode() != 200) return List.of();
+            return Changelog.parse(r.body()).between(current, rel.version());
+        } catch (IOException | IllegalArgumentException e) {
+            return List.of();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return List.of();
+        }
+    }
+
     /** Numeric, dot-separated comparison: 1.10.0 > 1.9.2. */
     public static boolean newer(String candidate, String than) {
         String[] a = candidate.split("[.-]"), b = than.split("[.-]");
