@@ -29,14 +29,11 @@ public final class WinCapture implements AutoCloseable {
     private final Process process;
     private final DataInputStream in;
     public final int width, height;
-    private final byte[] raw;
-
     private WinCapture(Process process, DataInputStream in, int width, int height) {
         this.process = process;
         this.in = in;
         this.width = width;
         this.height = height;
-        this.raw = new byte[width * height * 4];
     }
 
     /** The helper, built on first use; null when it can't be built (not Windows, no compiler). */
@@ -72,15 +69,16 @@ public final class WinCapture implements AutoCloseable {
 
     /**
      * Starts streaming the part (fractions x, y, w, h of the client area) of the largest window
-     * whose "title [program]" matches {@code regex}.
+     * whose "title [program]" matches {@code regex}, scaled down by the helper to at most
+     * {@code maxW} pixels wide.
      *
      * @return null when the helper is missing or the window isn't there (yet)
      */
-    static WinCapture open(Path dir, String regex, double x, double y, double w, double h, int fps) {
+    static WinCapture open(Path dir, String regex, double x, double y, double w, double h, int fps, int maxW) {
         Path helper = helper(dir);
         if (helper == null) return null;
         try {
-            Process p = new ProcessBuilder(helper.toString(), regex, num(x), num(y), num(w), num(h), Integer.toString(fps))
+            Process p = new ProcessBuilder(helper.toString(), regex, num(x), num(y), num(w), num(h), Integer.toString(fps), Integer.toString(maxW))
                     .redirectError(ProcessBuilder.Redirect.DISCARD).start();
             DataInputStream in = new DataInputStream(new java.io.BufferedInputStream(p.getInputStream(), 1 << 20));
             ByteArrayOutputStream line = new ByteArrayOutputStream();
@@ -118,16 +116,19 @@ public final class WinCapture implements AutoCloseable {
 
     /** The next frame into {@code into} (TYPE_3BYTE_BGR, width x height), or a new image when null. */
     BufferedImage next(BufferedImage into) throws IOException {
-        in.readFully(raw);
         BufferedImage img = into != null && into.getWidth() == width && into.getHeight() == height && into.getType() == BufferedImage.TYPE_3BYTE_BGR
                 ? into : new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
-        byte[] bgr = ((DataBufferByte) img.getRaster().getDataBuffer()).getData();
-        for (int i = 0, j = 0; i < raw.length; i += 4, j += 3) {          // BGRA -> BGR
-            bgr[j] = raw[i];
-            bgr[j + 1] = raw[i + 1];
-            bgr[j + 2] = raw[i + 2];
-        }
+        in.readFully(((DataBufferByte) img.getRaster().getDataBuffer()).getData());     // the helper sends exactly this layout
         return img;
+    }
+
+    /**
+     * The visible titled windows, as the helper lists them: "left top width height title [program]"
+     * (tab-separated, real pixels). Null when the helper is missing.
+     */
+    static List<String> list(Path dir) {
+        Path helper = helper(dir);
+        return helper == null ? null : WinScript.exec(10, List.of(helper.toString(), "--list"));
     }
 
     /** A tap on the part being streamed: state 1 down, 2 move, 0 up; x, y fractions of the part. */

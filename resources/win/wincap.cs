@@ -1,11 +1,16 @@
 // WII-UU window capture helper for Windows: streams part of a window's own picture as raw frames.
 //
-//   wiiuu-wincap.exe <title regex> <x> <y> <w> <h> <fps>
+//   wiiuu-wincap.exe <title regex> <x> <y> <w> <h> <fps> [<max width>]
 //     x y w h: the part of the window's client area, as fractions (0..1)
-//   stdout: one line "<width> <height>", then frames of width*height*4 bytes (BGRA), until the
-//   window closes or changes size (exit code 3), or stdin closes.
+//   stdout: one line "<width> <height>", then frames of width*height*3 bytes (BGR, top row first),
+//   scaled down here to at most <max width> so the pipe and WII-UU carry no more than the phone
+//   gets, until the window closes or changes size (exit code 3), or stdin closes.
 //   stdin: taps on that part, one per line: "t <1 down | 2 move | 0 up> <x> <y>" (fractions of the part),
 //   done as mouse clicks there, in the window's own coordinates (whatever the monitors' scaling).
+//
+//   wiiuu-wincap.exe --list
+//     prints the visible titled windows, one per line: left, top, width, height of the client area
+//     (real pixels) and "title [program]", tab-separated. (Far cheaper than asking PowerShell.)
 //
 //   wiiuu-wincap.exe --show <left> <top> <width> <height> <title regex> <x> <y> <w> <h> <fps>
 //     shows that part instead, as large as fits, on black, in a borderless always-on-top window
@@ -53,10 +58,40 @@ static class WiiuuWinCap {
     struct RECT { public int L, T, R, B; }
     const uint PW_CLIENTONLY = 1, PW_RENDERFULLCONTENT = 2;
 
+    static readonly System.Collections.Generic.Dictionary<uint, string> exes = new System.Collections.Generic.Dictionary<uint, string>();
+
     static string Exe(IntPtr h) {
         uint pid;
         GetWindowThreadProcessId(h, out pid);
-        try { return Process.GetProcessById((int) pid).ProcessName; } catch { return ""; }
+        lock (exes) {
+            string name;
+            if (exes.TryGetValue(pid, out name)) return name;
+            try { name = Process.GetProcessById((int) pid).ProcessName; } catch { name = ""; }
+            exes[pid] = name;
+            return name;
+        }
+    }
+
+    static int List() {
+        StringBuilder out_ = new StringBuilder();
+        EnumWindows(delegate (IntPtr h, IntPtr l) {
+            if (!IsWindowVisible(h)) return true;
+            StringBuilder sb = new StringBuilder(512);
+            GetWindowText(h, sb, 512);
+            if (sb.Length == 0) return true;
+            RECT r;
+            GetClientRect(h, out r);
+            POINT p = new POINT();
+            ClientToScreen(h, ref p);
+            out_.Append(p.X).Append('\t').Append(p.Y).Append('\t').Append(r.R - r.L).Append('\t').Append(r.B - r.T)
+                .Append('\t').Append(sb.ToString().Replace('\t', ' ').Replace('\n', ' ')).Append(" [").Append(Exe(h)).Append("]\n");
+            return true;
+        }, IntPtr.Zero);
+        Stream o = Console.OpenStandardOutput();
+        byte[] b = Encoding.UTF8.GetBytes(out_.ToString());
+        o.Write(b, 0, b.Length);
+        o.Flush();
+        return 0;
     }
 
     static IntPtr Find(string re) {
@@ -118,6 +153,8 @@ static class WiiuuWinCap {
                     g.FillRectangle(black, 0, y, x, h);
                     g.FillRectangle(black, x + w, y, ClientSize.Width - x - w, h);
                 }
+                g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
+                g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
                 g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Bilinear;
                 g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
                 g.DrawImage(shown, x, y, w, h);
@@ -145,17 +182,17 @@ static class WiiuuWinCap {
                 Rectangle part = new Rectangle((int) Math.Round(fx * cw), (int) Math.Round(fy * ch),
                         Math.Max(2, (int) Math.Round(fw * cw)), Math.Max(2, (int) Math.Round(fh * ch)));
                 part.Intersect(new Rectangle(0, 0, cw, ch));
-                using (Bitmap full = new Bitmap(cw, ch, PixelFormat.Format32bppArgb)) {
+                using (Bitmap full = new Bitmap(cw, ch, PixelFormat.Format32bppRgb))
+                using (Graphics g = Graphics.FromImage(full)) {
                     long next = DateTime.UtcNow.Ticks;
                     while (IsWindow(h)) {
                         RECT now;
                         GetClientRect(h, out now);
                         if (now.R - now.L != cw || now.B - now.T != ch) break;
-                        using (Graphics g = Graphics.FromImage(full)) {
-                            IntPtr hdc = g.GetHdc();
-                            try { PrintWindow(h, hdc, PW_CLIENTONLY | PW_RENDERFULLCONTENT); } finally { g.ReleaseHdc(hdc); }
-                        }
-                        tv.Put(full.Clone(part, PixelFormat.Format32bppArgb));
+                        IntPtr hdc = g.GetHdc();
+                        try { PrintWindow(h, hdc, PW_CLIENTONLY | PW_RENDERFULLCONTENT); } finally { g.ReleaseHdc(hdc); }
+                        // premultiplied: the layout GDI+ draws fastest
+                        tv.Put(full.Clone(part, PixelFormat.Format32bppPArgb));
                         next += interval;
                         long wait = next - DateTime.UtcNow.Ticks;
                         if (wait > 0) Thread.Sleep((int) (wait / 10000)); else next = DateTime.UtcNow.Ticks;
@@ -173,6 +210,10 @@ static class WiiuuWinCap {
     }
 
     static int Main(string[] a) {
+        if (a.Length == 1 && a[0] == "--list") {
+            try { if (!SetProcessDpiAwarenessContext(new IntPtr(-4))) SetProcessDPIAware(); } catch (EntryPointNotFoundException) { SetProcessDPIAware(); }
+            return List();
+        }
         if (a.Length >= 11 && a[0] == "--show") {
             try { if (!SetProcessDpiAwarenessContext(new IntPtr(-4))) SetProcessDPIAware(); } catch (EntryPointNotFoundException) { SetProcessDPIAware(); }
             return Show(a);
@@ -182,6 +223,7 @@ static class WiiuuWinCap {
         System.Globalization.CultureInfo inv = System.Globalization.CultureInfo.InvariantCulture;
         double fx = double.Parse(a[1], inv), fy = double.Parse(a[2], inv), fw = double.Parse(a[3], inv), fh = double.Parse(a[4], inv);
         int fps = Math.Max(1, int.Parse(a[5], inv));
+        int maxW = a.Length >= 7 ? Math.Max(16, int.Parse(a[6], inv)) : int.MaxValue;
         IntPtr h = Find(a[0]);
         if (h == IntPtr.Zero) { Console.Error.WriteLine("no window matches " + a[0]); return 2; }
         AsWindowSees(h);
@@ -192,9 +234,12 @@ static class WiiuuWinCap {
         int x0 = Math.Max(0, (int) Math.Round(fx * cw)), y0 = Math.Max(0, (int) Math.Round(fy * ch));
         int w = Math.Min(cw - x0, (int) Math.Round(fw * cw)) & ~1, hh = Math.Min(ch - y0, (int) Math.Round(fh * ch)) & ~1;
         if (w < 2 || hh < 2) return 3;
+        // what is sent: the part, scaled down to the phone's width
+        int ow = w, oh = hh;
+        if (ow > maxW) { ow = maxW & ~1; oh = Math.Max(2, (int) Math.Round(hh * (ow / (double) w)) & ~1); }
 
         Stream stdout = Console.OpenStandardOutput();
-        byte[] head = Encoding.ASCII.GetBytes(w + " " + hh + "\n");
+        byte[] head = Encoding.ASCII.GetBytes(ow + " " + oh + "\n");
         stdout.Write(head, 0, head.Length);
         stdout.Flush();
         // taps from WII-UU; stop when it goes away (stdin closes)
@@ -225,21 +270,31 @@ static class WiiuuWinCap {
         taps.IsBackground = true;
         taps.Start();
 
-        Bitmap full = new Bitmap(cw, ch, PixelFormat.Format32bppArgb);
-        byte[] frame = new byte[w * hh * 4];
+        // allocated once: a frame costs no garbage
+        Bitmap full = new Bitmap(cw, ch, PixelFormat.Format32bppRgb);
+        Graphics fullG = Graphics.FromImage(full);
+        Bitmap small = new Bitmap(ow, oh, PixelFormat.Format24bppRgb);
+        Graphics smallG = Graphics.FromImage(small);
+        smallG.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
+        smallG.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
+        smallG.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+        // a big step down needs the prefiltered kind, or small print on the touch screen flickers
+        smallG.InterpolationMode = w > 2 * ow ? System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear
+                : System.Drawing.Drawing2D.InterpolationMode.Bilinear;
+        Rectangle src = new Rectangle(x0, y0, w, hh), dst = new Rectangle(0, 0, ow, oh);
+        byte[] frame = new byte[ow * oh * 3];
         long interval = 10000000L / fps, next = DateTime.UtcNow.Ticks;
         while (IsWindow(h)) {
             RECT now;
             GetClientRect(h, out now);
             if (now.R - now.L != cw || now.B - now.T != ch) return 3;          // resized: WII-UU starts again
-            using (Graphics g = Graphics.FromImage(full)) {
-                IntPtr hdc = g.GetHdc();
-                try { PrintWindow(h, hdc, PW_CLIENTONLY | PW_RENDERFULLCONTENT); } finally { g.ReleaseHdc(hdc); }
-            }
-            BitmapData bd = full.LockBits(new Rectangle(x0, y0, w, hh), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            IntPtr hdc = fullG.GetHdc();
+            try { PrintWindow(h, hdc, PW_CLIENTONLY | PW_RENDERFULLCONTENT); } finally { fullG.ReleaseHdc(hdc); }
+            smallG.DrawImage(full, dst, src, GraphicsUnit.Pixel);
+            BitmapData bd = small.LockBits(dst, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
             try {
-                for (int y = 0; y < hh; y++) Marshal.Copy(new IntPtr(bd.Scan0.ToInt64() + (long) y * bd.Stride), frame, y * w * 4, w * 4);
-            } finally { full.UnlockBits(bd); }
+                for (int y = 0; y < oh; y++) Marshal.Copy(new IntPtr(bd.Scan0.ToInt64() + (long) y * bd.Stride), frame, y * ow * 3, ow * 3);
+            } finally { small.UnlockBits(bd); }
             try { stdout.Write(frame, 0, frame.Length); stdout.Flush(); } catch (IOException) { return 0; }
             next += interval;
             long wait = next - DateTime.UtcNow.Ticks;

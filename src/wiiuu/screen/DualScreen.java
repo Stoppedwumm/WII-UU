@@ -454,7 +454,7 @@ public final class DualScreen {
             ScreenProfile p = profile;
             if (p == null) return false;
             int fps = Math.max(10, config.getInt("screen.split.fps", 60));
-            WinCapture cap = WinCapture.open(WinScript.dir(), p.windowRegex(), 0, 0, 1, p.ry(), fps);
+            WinCapture cap = WinCapture.open(WinScript.dir(), p.windowRegex(), 0, 0, 1, p.ry(), fps, Integer.MAX_VALUE);
             if (cap == null) {
                 if (starts++ < 5) VirtualDisplay.note("TV window: RetroArch's window picture isn't available (yet)");
                 return false;

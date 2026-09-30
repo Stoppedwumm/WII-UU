@@ -669,7 +669,8 @@ public final class ScreenStreamer {
             ScreenProfile p = secondScreen();
             if (!OS.contains("win") || d == null || !d.active() || !"second".equals(mode) || p == null) return false;
             if (WinCapture.helper(WinScript.dir()) == null) return false;           // no helper: screen capture
-            WinCapture cap = WinCapture.open(WinScript.dir(), p.windowRegex(), p.rx(), p.ry(), p.rw(), p.rh(), fps);
+            WinCapture cap = WinCapture.open(WinScript.dir(), p.windowRegex(), p.rx(), p.ry(), p.rw(), p.rh(), fps,
+                    Math.max(160, config.getInt("stream.maxWidth", 640)));
             if (cap == null) {
                 // RetroArch's window isn't there yet: keep trying (screen capture can't see it there)
                 publish(message("Waiting for RetroArch's window"));
