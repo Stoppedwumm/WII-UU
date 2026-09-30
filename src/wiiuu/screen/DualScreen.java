@@ -87,8 +87,15 @@ public final class DualScreen {
     public synchronized void begin() {
         if (display == null || running) return;
         Rectangle tv = tvBounds;
-        if (tv == null) return;
+        if (tv == null) {
+            VirtualDisplay.note("don't know where the TV is; the TV shows both screens");
+            return;
+        }
         running = true;
+        VirtualDisplay.note("TV " + tv + " (Java units), RetroArch's window goes to " + target + " (real pixels)");
+        Thread snap = new Thread(this::snapshot, "split-snapshot");
+        snap.setDaemon(true);
+        snap.start();
         keeper = new Thread(this::keepWindow, "split-window");
         keeper.setDaemon(true);
         keeper.start();
@@ -143,14 +150,18 @@ public final class DualScreen {
     // ---- keeping the window in place -------------------------------------------------------------
 
     /** RetroArch may open its window elsewhere, or make it anew when the core starts: put it back. */
+    private int moves;
+
     private void keepWindow() {
         boolean focused = false;
+        moves = 0;
         while (running) {
             Rectangle want = target, now = window();
             if (want != null && now != null) {
                 Rectangle real = ScreenStreamer.devicePixels(now);
                 if (Math.abs(real.x - want.x) > 2 || Math.abs(real.y - want.y) > 2
                         || Math.abs(real.width - want.width) > 2 || Math.abs(real.height - want.height) > 2) {
+                    if (moves++ < 5) VirtualDisplay.note("RetroArch's window is at " + real + " (real pixels): moving it");
                     place(profile.windowRegex(), want);
                     focused = false;
                 } else if (!focused) {
@@ -164,6 +175,27 @@ public final class DualScreen {
                 return;
             }
         }
+    }
+
+    /** A picture of the whole desktop a few seconds in (logs/split.jpg): where everything ended up. */
+    private void snapshot() {
+        try {
+            Thread.sleep(7000);
+        } catch (InterruptedException e) {
+            return;
+        }
+        if (!running) return;
+        String ffmpeg = ScreenStreamer.findFfmpeg(config.get("stream.ffmpeg", "ffmpeg"));
+        if (ffmpeg == null) return;
+        java.nio.file.Path out = config.logDir().resolve("split.jpg");
+        String display = System.getenv("DISPLAY");
+        List<String> cmd = OS.contains("win")
+                ? List.of(ffmpeg, "-y", "-loglevel", "error", "-f", "gdigrab", "-i", "desktop", "-frames:v", "1", "-vf", "scale='min(2400,iw)':-2", out.toString())
+                : List.of(ffmpeg, "-y", "-loglevel", "error", "-f", "x11grab", "-i", display == null ? ":0" : display, "-frames:v", "1", "-vf", "scale='min(2400,iw)':-2", out.toString());
+        List<String> res = VirtualDisplay.run(20, cmd.toArray(new String[0]));
+        Rectangle top = topRegion();
+        VirtualDisplay.note("desktop picture: " + out + (res.isEmpty() ? "" : " (" + String.join(" ", res) + ")")
+                + "; RetroArch's window " + window() + ", top screen " + top + " (Java units)");
     }
 
     private static void place(String regex, Rectangle r) {
@@ -251,10 +283,13 @@ public final class DualScreen {
                 System.err.println("[split] TV window: " + e.getMessage());
             }
             window = w[0];
+            VirtualDisplay.note("TV window " + (window == null ? "could not be made" : "at " + tv + " (Java units)"));
             capture = new Thread(this::captureLoop, "split-tv");
             capture.setDaemon(true);
             capture.start();
         }
+
+        private int starts;
 
         void close() {
             closed = true;
@@ -280,6 +315,7 @@ public final class DualScreen {
         /** Raw frames from ffmpeg, until the region moves or the game ends. */
         private void ffmpegLoop(String ffmpeg, Rectangle top) {
             Rectangle d = ScreenStreamer.devicePixels(top);
+            if (starts++ < 5) VirtualDisplay.note("TV window captures " + d + " (real pixels) with ffmpeg");
             int fps = Math.max(10, config.getInt("screen.split.fps", 60));
             List<String> cmd = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-fflags", "nobuffer"));
             if (OS.contains("win")) {
@@ -292,7 +328,8 @@ public final class DualScreen {
             }
             cmd.addAll(List.of("-an", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"));
             try {
-                Process p = new ProcessBuilder(cmd).redirectError(ProcessBuilder.Redirect.DISCARD).start();
+                java.nio.file.Path err = config.logDir().resolve("split-capture.log");
+                Process p = new ProcessBuilder(cmd).redirectError(ProcessBuilder.Redirect.appendTo(err.toFile())).start();
                 process = p;
                 long checked = System.currentTimeMillis();
                 try (DataInputStream in = new DataInputStream(p.getInputStream())) {

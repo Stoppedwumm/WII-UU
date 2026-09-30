@@ -69,7 +69,7 @@ public final class VirtualDisplay {
     /** Logs a step; one that ends in "the TV shows both screens" is kept as the reason there is no split. */
     private static volatile Path logFile;
 
-    private static void note(String msg) {
+    static void note(String msg) {
         System.out.println("[split] " + msg);
         Path log = logFile;
         if (log != null) {
