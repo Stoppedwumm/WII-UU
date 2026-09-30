@@ -83,7 +83,8 @@ public final class VirtualDisplay {
     /** Takes the display away again (Linux); nothing to do on Windows. */
     public void close() {
         if (stateFile == null) return;
-        undo(pannedOutput, restoreFb);
+        if (winDevice != null) displayScript(config, "-Action", "detach", "-Device", winDevice);
+        else undo(pannedOutput, restoreFb);
         try {
             Files.deleteIfExists(stateFile);
         } catch (IOException ignored) {
@@ -93,16 +94,17 @@ public final class VirtualDisplay {
 
     /** At start: undo a display left behind if WII-UU was killed during a game. */
     public static void recover(Config config) {
-        if (OS.contains("win") || OS.contains("mac")) return;
+        if (OS.contains("mac")) return;
         Path state = config.home().resolve("virtual-display");
         if (!Files.exists(state)) return;
         try {
             String fb = null, output = null;
             for (String l : Files.readAllLines(state)) {
+                if (l.startsWith("win=") && OS.contains("win")) displayScript(config, "-Action", "detach", "-Device", l.substring(4).trim());
                 if (l.startsWith("fb=")) fb = l.substring(3).trim();
                 if (l.startsWith("output=")) output = l.substring(7).trim();
             }
-            undo(output, fb != null && fb.matches("\\d+x\\d+") ? fb : null);
+            if (!OS.contains("win")) undo(output, fb != null && fb.matches("\\d+x\\d+") ? fb : null);
             Files.deleteIfExists(state);
             System.out.println("[split] removed the GamePad display left from an interrupted game");
         } catch (IOException ignored) {
@@ -199,66 +201,148 @@ public final class VirtualDisplay {
 
     // ---- Windows ----------------------------------------------------------------------------------
 
-    // every display: position and size in real pixels, primary or not, and the adapter's name
-    private static final String PS_DISPLAYS = """
-            Add-Type @'
-            using System; using System.Runtime.InteropServices;
-            public class WiiuuDisp {
-              [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public struct DD { public int cb;
-                [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string Name;
-                [MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)] public string Str; public int Flags;
-                [MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)] public string Id;
-                [MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)] public string Key; }
-              [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern bool EnumDisplayDevices(string d, int i, ref DD dd, int f);
-              [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-              public static string Adapter(string name) {
-                var dd = new DD(); dd.cb = Marshal.SizeOf(dd);
-                for (int i = 0; EnumDisplayDevices(null, i, ref dd, 0); i++) { if (dd.Name == name) return dd.Str; dd.cb = Marshal.SizeOf(dd); }
-                return "";
-              }
+    /** One display adapter from display.ps1: name, adapter, attached, primary, rect (if attached), modes. */
+    record WinDisplay(String name, String adapter, boolean attached, boolean primary, Rectangle rect, List<int[]> modes) {
+        boolean virtual() {
+            return adapter.toLowerCase(Locale.ROOT).matches(".*(virtual display|iddsampledriver|mttvdd|virtual).*");
+        }
+    }
+
+    static List<WinDisplay> parseDisplays(List<String> lines) {
+        List<WinDisplay> out = new ArrayList<>();
+        for (String line : lines) {
+            String[] p = line.split("\t", -1);
+            if (p.length < 6 || !p[0].startsWith("\\\\.\\")) continue;
+            Rectangle r = null;
+            String[] xywh = p[4].split(",");
+            if (xywh.length == 4) {
+                try {
+                    r = new Rectangle(Integer.parseInt(xywh[0].trim()), Integer.parseInt(xywh[1].trim()), Integer.parseInt(xywh[2].trim()), Integer.parseInt(xywh[3].trim()));
+                } catch (NumberFormatException ignored) {
+                    // not attached
+                }
             }
-            '@
-            [void][WiiuuDisp]::SetProcessDPIAware()
-            Add-Type -AssemblyName System.Windows.Forms
-            foreach ($s in [System.Windows.Forms.Screen]::AllScreens) {
-              $b = $s.Bounds
-              "$($b.X)`t$($b.Y)`t$($b.Width)`t$($b.Height)`t$(if ($s.Primary) {'primary'} else {''})`t$([WiiuuDisp]::Adapter($s.DeviceName))"
+            List<int[]> modes = new ArrayList<>();
+            for (String m : p[5].trim().split("\\s+")) {
+                String[] wh = m.split("x");
+                if (wh.length == 2) {
+                    try {
+                        modes.add(new int[]{Integer.parseInt(wh[0]), Integer.parseInt(wh[1])});
+                    } catch (NumberFormatException ignored) {
+                        // skip
+                    }
+                }
             }
-            """;
+            out.add(new WinDisplay(p[0].trim(), p[1].trim(), p[2].trim().equals("attached"), p[3].trim().equals("primary"), r, modes));
+        }
+        return out;
+    }
+
+    /** The mode to switch a virtual display on with: landscape, as tall as possible up to 1440 lines. */
+    static int[] bestMode(List<int[]> modes) {
+        int[] best = null;
+        for (int[] m : modes) {
+            if (m[0] < m[1] || m[1] > 1440) continue;
+            if (best == null || m[1] > best[1] || (m[1] == best[1] && m[0] < best[0])) best = m;
+        }
+        if (best == null) {
+            for (int[] m : modes) if (best == null || m[1] < best[1]) best = m;
+        }
+        return best;
+    }
+
+    private static List<String> displayScript(Config config, String... args) {
+        Path script = config.home().resolve("bin").resolve("display.ps1");
+        try (var in = VirtualDisplay.class.getResourceAsStream("/win/display.ps1")) {
+            if (in == null) return List.of();
+            Files.createDirectories(script.getParent());
+            Files.write(script, in.readAllBytes());
+        } catch (IOException e) {
+            return List.of();
+        }
+        List<String> cmd = new ArrayList<>(List.of("powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script.toString()));
+        cmd.addAll(List.of(args));
+        return run(20, cmd.toArray(new String[0]));
+    }
 
     private static VirtualDisplay windows(Config config) {
         String pick = config.get("screen.split.display", "").trim();
-        List<String> lines = run(10, "powershell", "-NoProfile", "-NonInteractive", "-Command", PS_DISPLAYS);
-        int n = 0;
-        for (String line : lines) {
-            String[] p = line.split("\t", 6);
-            if (p.length < 6) continue;
-            n++;
-            boolean primary = p[4].equals("primary");
-            boolean virtual = p[5].toLowerCase(Locale.ROOT).matches(".*(virtual|idd|vdd|parsec|dummy|spacedesk).*");
-            if (pick.isEmpty() ? virtual && !primary : pick.equals(Integer.toString(n))) {
-                Rectangle r = new Rectangle(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
-                System.out.println("[split] GamePad display: " + p[5].trim() + " " + r.width + "x" + r.height + " at " + r.x + "," + r.y);
-                return new VirtualDisplay(r, null, null);
+        List<WinDisplay> all = parseDisplays(displayScript(config, "-Action", "list"));
+        WinDisplay v = null;
+        for (WinDisplay d : all) {
+            boolean chosen = pick.isEmpty() ? d.virtual() && !d.primary() : d.name().replaceAll("\\D", "").equals(pick.replaceAll("\\D", ""));
+            if (chosen) {
+                v = d;
+                break;
             }
         }
-        System.out.println("[split] no virtual display found (install a virtual display driver, or set screen.split.display);"
-                + " the TV shows both screens");
-        return null;
+        if (v == null) {
+            System.out.println("[split] no virtual display found. Install one with: install.ps1 -VirtualDisplay"
+                    + " (or set screen.split.display); the TV shows both screens");
+            return null;
+        }
+        if (v.attached() && v.rect() != null) {
+            // already part of the desktop (you use it yourself): use it as it is, leave it on afterwards
+            System.out.println("[split] GamePad display: " + v.adapter() + " " + v.rect().width + "x" + v.rect().height + " (already on)");
+            return new VirtualDisplay(v.rect(), null, null);
+        }
+        int[] mode = bestMode(v.modes());
+        if (mode == null) mode = new int[]{1920, 1080};
+        int right = 0, top = 0;
+        for (WinDisplay d : all) {
+            if (d.attached() && d.rect() != null && d != v) {
+                right = Math.max(right, d.rect().x + d.rect().width);
+                if (d.primary()) top = d.rect().y;
+            }
+        }
+        Path state = config.home().resolve("virtual-display");
+        try {
+            Files.createDirectories(state.getParent());
+            Files.writeString(state, "win=" + v.name() + "\n");         // written first: recover() can switch it off after a crash
+        } catch (IOException ignored) {
+            // still try
+        }
+        List<String> res = displayScript(config, "-Action", "attach", "-Device", v.name(), "-X", "" + right, "-Y", "" + top, "-W", "" + mode[0], "-H", "" + mode[1]);
+        Rectangle now = null;
+        for (WinDisplay d : parseDisplays(displayScript(config, "-Action", "list"))) {
+            if (d.name().equals(v.name()) && d.attached()) now = d.rect();
+        }
+        if (now == null) {
+            System.out.println("[split] could not switch the virtual display on (" + String.join(" ", res).trim() + "); the TV shows both screens");
+            try {
+                Files.deleteIfExists(state);
+            } catch (IOException ignored) {
+                // nothing to undo
+            }
+            return null;
+        }
+        System.out.println("[split] GamePad display: " + v.adapter() + " " + now.width + "x" + now.height + " at " + now.x + "," + now.y + " (switched on for the game)");
+        VirtualDisplay d = new VirtualDisplay(now, null, state);
+        d.winDevice = v.name();
+        d.config = config;
+        return d;
+    }
+
+    private volatile String winDevice;     // Windows: the display WII-UU switched on (switched off again at the end)
+    private volatile Config config;
+
+    /** Switches off every virtual display that is on (after installing the driver: keep the desktop as it was). */
+    public static int switchOffVirtual(Config config) {
+        int n = 0;
+        for (WinDisplay d : parseDisplays(displayScript(config, "-Action", "list"))) {
+            if (d.virtual() && d.attached() && !d.primary()) {
+                displayScript(config, "-Action", "detach", "-Device", d.name());
+                n++;
+            }
+        }
+        return n;
     }
 
     // ---- helpers ----------------------------------------------------------------------------------
 
     /** Real screen pixels to Java's (scaled) units. */
     public static Rectangle toJava(Rectangle r) {
-        double k = 1;
-        try {
-            k = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration().getDefaultTransform().getScaleX();
-        } catch (RuntimeException ignored) {
-            // unscaled
-        }
-        if (k == 1) return new Rectangle(r);
-        return new Rectangle((int) Math.round(r.x / k), (int) Math.round(r.y / k), (int) Math.round(r.width / k), (int) Math.round(r.height / k));
+        return ScreenStreamer.toJavaUnits(r);
     }
 
     static List<String> run(int timeoutSec, String... cmd) {

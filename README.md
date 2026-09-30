@@ -326,9 +326,14 @@ The picture is streamed at 30 fps.
       TV, declares the new strip a monitor, and lets the mouse reach it (the TV output gets a
       panning area whose tracking area is only the TV, so the TV never scrolls). Needs `xrandr` and
       `xdotool`. Not on Wayland.
-    * **Windows:** Windows needs a driver for an extra display. Install a virtual display driver
-      (for example the free "Virtual Display Driver"); WII-UU uses a display whose adapter name
-      says "virtual", or the one set with `screen.split.display=<n>`.
+    * **Windows:** Windows needs a driver for an extra display. `install.ps1 -VirtualDisplay` (or
+      answering yes when the installer asks) installs the free, signed
+      [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver) once, with
+      administrator rights, and switches its display off. WII-UU switches it on (at 2560×1440 or
+      the largest size up to that, right of your screens) only while a DS/3DS game runs in
+      RetroArch mode, and off again afterwards, so your desktop stays as it was. Taps are normal
+      mouse clicks there. A virtual display you keep on yourself is used as it is and left on.
+      `screen.split.display=<n>` picks another display (`\\.\DISPLAY<n>`).
     * **macOS:** not yet; the TV shows both screens.
   * **macOS:** finding the emulator's window needs the Accessibility permission (see macOS setup).
 * **TV:** mirrors the whole screen, including the WII-UU menu (Off-TV play).

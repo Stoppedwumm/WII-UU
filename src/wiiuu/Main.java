@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.0";
+    public static final String VERSION = "1.9.1";
 
     private final Config config;
     private final Library library;
@@ -119,6 +119,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                 case "--upgrade", "--check-update" -> {
                     System.exit(cliUpgrade(new Config(home), args[i].equals("--upgrade")));
                 }
+                case "--virtual-display-off" -> {
+                    // after installing the virtual display driver: keep the desktop as it was until a game needs it
+                    int n = wiiuu.screen.VirtualDisplay.switchOffVirtual(new Config(home));
+                    System.out.println(n > 0 ? "Virtual display switched off (WII-UU switches it on for split DS/3DS screens)" : "No virtual display was on");
+                    return;
+                }
                 case "--version" -> {
                     System.out.println("WII-UU " + VERSION);
                     return;
@@ -131,6 +137,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --no-server                 do not start the phone GamePad server
                               --home DIR                  settings folder (default ~/.wiiuu)
                               --check-update / --upgrade  check for / install a newer version
+                              --virtual-display-off       Windows: switch the virtual display off (split screens)
                             Keys: arrows move, Enter opens, Esc back, F1 settings, F2 GamePad, F5 refresh,
                                   F11 fullscreen, Ctrl+Q closes a running game.""".formatted(VERSION));
                     return;

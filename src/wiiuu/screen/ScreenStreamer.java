@@ -335,6 +335,33 @@ public final class ScreenStreamer {
         return best > 0 ? best : 1;
     }
 
+    /**
+     * Real screen pixels to Java's units, with the scale of the monitor showing {@code phys} (Windows
+     * can scale each monitor differently: Java's bounds of a monitor are its real ones divided by its
+     * scale).
+     */
+    static Rectangle toJavaUnits(Rectangle phys) {
+        double k = 0;
+        try {
+            var ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+            double cx = phys.getCenterX(), cy = phys.getCenterY();
+            for (var dev : ge.getScreenDevices()) {
+                var gc = dev.getDefaultConfiguration();
+                double s = gc.getDefaultTransform().getScaleX();
+                Rectangle b = gc.getBounds();
+                if (cx >= b.x * s && cx < (b.x + b.width) * s && cy >= b.y * s && cy < (b.y + b.height) * s) {
+                    k = s;
+                    break;
+                }
+            }
+            if (k <= 0) k = ge.getDefaultScreenDevice().getDefaultConfiguration().getDefaultTransform().getScaleX();
+        } catch (RuntimeException e) {
+            k = 1;
+        }
+        if (k <= 0 || k == 1) return new Rectangle(phys);
+        return new Rectangle((int) Math.round(phys.x / k), (int) Math.round(phys.y / k), (int) Math.round(phys.width / k), (int) Math.round(phys.height / k));
+    }
+
     /** {@code r} (Java's scaled units, as everywhere in WII-UU) in real screen pixels, for ffmpeg. */
     static Rectangle devicePixels(Rectangle r) {
         double k = scaleAt(r);

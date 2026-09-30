@@ -1,10 +1,12 @@
 # WII-UU installer for Windows.
-#   powershell -ExecutionPolicy Bypass -File install.ps1 [-Roms D:\Games\roms] [-Port 8080] [-Uninstall] [-Yes]
+#   powershell -ExecutionPolicy Bypass -File install.ps1 [-Roms D:\Games\roms] [-Port 8080] [-VirtualDisplay] [-Uninstall] [-Yes]
+#   -VirtualDisplay: also install a virtual display (split DS/3DS screens: top on the TV, touch screen on the phone)
 # or just double-click install.bat
 param(
     [string]$Roms = (Join-Path $env:USERPROFILE "WiiUU\roms"),
     [int]$Port = 8080,
     [switch]$Uninstall,
+    [switch]$VirtualDisplay,
     [switch]$Yes
 )
 $ErrorActionPreference = "Stop"
@@ -106,6 +108,63 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
         winget install --id Gyan.FFmpeg -e --accept-source-agreements --accept-package-agreements
     } else {
         Warn "Install ffmpeg (winget install Gyan.FFmpeg) for a much higher GamePad frame rate."
+    }
+}
+
+# ---------------------------------------------------------------- virtual display (split DS/3DS screens)
+# RetroArch mode puts a DS/3DS game's window on a display the TV doesn't show; Windows needs a driver
+# for one. WII-UU switches it on only while such a game runs. Never installed by -Yes alone (updates).
+function Test-VirtualDisplay {
+    [bool](Get-PnpDevice -Class Display -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -match 'Virtual Display Driver|IddSampleDriver' })
+}
+$wantVdd = $VirtualDisplay
+if (-not $wantVdd -and -not $Yes -and -not (Test-VirtualDisplay)) {
+    $wantVdd = Ask "Install a virtual display, so DS and 3DS games show the top screen on the TV and the touch screen on the phone? (RetroArch mode; asks for administrator rights once)"
+}
+if ($wantVdd) {
+    if (Test-VirtualDisplay) {
+        Ok "Virtual display already installed"
+    } elseif ($env:PROCESSOR_ARCHITECTURE -ne "AMD64") {
+        Warn "The virtual display driver is installed for x64 PCs only; install it by hand: github.com/VirtualDrivers/Virtual-Display-Driver"
+    } else {
+        Say "Installing the Virtual Display Driver (github.com/VirtualDrivers/Virtual-Display-Driver, MIT licence, signed)"
+        $vdd = Join-Path $env:TEMP "wiiuu-vdd"
+        New-Item -ItemType Directory -Force -Path $vdd | Out-Null
+        $vddScript = Join-Path $vdd "install-vdd.ps1"
+        # the project's own silent install (Community Scripts/silent-install.ps1): its signing certificate, then the driver via nefcon
+        Set-Content -Path $vddScript -Encoding UTF8 -Value @'
+$ErrorActionPreference = "Stop"
+$dir = Join-Path $env:TEMP "wiiuu-vdd"
+Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/nefarius/nefcon/releases/download/v1.14.0/nefcon_v1.14.0.zip" -OutFile "$dir\nefcon.zip"
+Expand-Archive -Force -Path "$dir\nefcon.zip" -DestinationPath $dir
+Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/25.7.23/VirtualDisplayDriver-x86.Driver.Only.zip" -OutFile "$dir\driver.zip"
+Expand-Archive -Force -Path "$dir\driver.zip" -DestinationPath $dir
+$certs = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2Collection
+$certs.Import([System.IO.File]::ReadAllBytes("$dir\VirtualDisplayDriver\mttvdd.cat"))
+foreach ($c in $certs) {
+    $f = "$dir\$($c.Thumbprint).cer"
+    [System.IO.File]::WriteAllBytes($f, $c.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+    Import-Certificate -FilePath $f -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher" | Out-Null
+}
+Push-Location $dir
+& "$dir\x64\nefconw.exe" install .\VirtualDisplayDriver\MttVDD.inf "Root\MttVDD"
+Start-Sleep -Seconds 8
+Pop-Location
+'@
+        try {
+            Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$vddScript`""
+        } catch {
+            Warn "Administrator rights were not given: the virtual display was not installed"
+        }
+        if (Test-VirtualDisplay) { Ok "Virtual display installed" } else { Warn "The virtual display did not install; see github.com/VirtualDrivers/Virtual-Display-Driver" }
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $vdd
+    }
+    if (Test-VirtualDisplay) {
+        # off until a game needs it, so the desktop stays as it was
+        $ErrorActionPreference = "Continue"
+        & java -jar (Join-Path $Prefix "wiiuu.jar") --virtual-display-off 2>&1 | Out-Null
+        $ErrorActionPreference = "Stop"
+        Ok "WII-UU switches the virtual display on only while a DS/3DS game runs in RetroArch mode"
     }
 }
 

@@ -148,15 +148,14 @@ public final class WindowLocator {
             """;
 
     private static List<Win> windows() {
-        // the script reports real pixels; WII-UU works in Java's scaled units (display scaling)
-        double k = ScreenStreamer.scaleAt(new java.awt.Rectangle(0, 0, 1, 1));
+        // the script reports real pixels; WII-UU works in Java's scaled units (each monitor's own scaling)
         List<Win> out = new ArrayList<>();
         for (String line : run(8, "powershell", "-NoProfile", "-NonInteractive", "-Command", PS_SCRIPT)) {
             String[] p = line.split("\t", 5);
             if (p.length < 5) continue;
             try {
-                out.add(new Win(p[4], new Rectangle((int) Math.round(Integer.parseInt(p[0]) / k), (int) Math.round(Integer.parseInt(p[1]) / k),
-                        (int) Math.round(Integer.parseInt(p[2]) / k), (int) Math.round(Integer.parseInt(p[3]) / k))));
+                out.add(new Win(p[4], ScreenStreamer.toJavaUnits(new Rectangle(Integer.parseInt(p[0]), Integer.parseInt(p[1]),
+                        Integer.parseInt(p[2]), Integer.parseInt(p[3])))));
             } catch (NumberFormatException ignored) {
                 // malformed line
             }

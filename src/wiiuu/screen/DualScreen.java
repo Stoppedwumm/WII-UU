@@ -191,13 +191,17 @@ public final class DualScreen {
               [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
               [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
               [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+              [DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e);
               public static void Go(string re, int x, int y, int w, int hh) {
                 SetProcessDPIAware();
                 EnumWindows((h, l) => {
                   if (!IsWindowVisible(h)) return true;
                   var sb = new StringBuilder(512); GetWindowText(h, sb, 512);
                   if (!Regex.IsMatch(sb.ToString(), re, RegexOptions.IgnoreCase)) return true;
-                  ShowWindow(h, 9); SetWindowPos(h, IntPtr.Zero, x, y, w, hh, 0x0040); SetForegroundWindow(h);
+                  ShowWindow(h, 9); SetWindowPos(h, IntPtr.Zero, x, y, w, hh, 0x0040);
+                  // Windows only lets the foreground app hand over the focus; a tap of Alt counts as one
+                  keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero);
+                  SetForegroundWindow(h);
                   return true; }, IntPtr.Zero);
               }
             }
