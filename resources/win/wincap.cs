@@ -35,6 +35,15 @@ static class WiiuuWinCap {
     [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
     [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr c);
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] static extern IntPtr GetWindowDpiAwarenessContext(IntPtr h);
+    [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);
+
+    // Measure and capture a window in its own DPI terms. A window that isn't DPI-aware (RetroArch) is
+    // drawn at 100 % and stretched by Windows on a scaled monitor; asked for in real pixels, its
+    // picture comes out magnified (by the monitor's scaling) and cut off.
+    static void AsWindowSees(IntPtr h) {
+        try { SetThreadDpiAwarenessContext(GetWindowDpiAwarenessContext(h)); } catch (EntryPointNotFoundException) { }
+    }
     struct RECT { public int L, T, R, B; }
     const uint PW_CLIENTONLY = 1, PW_RENDERFULLCONTENT = 2;
 
@@ -122,6 +131,7 @@ static class WiiuuWinCap {
             while (true) {
                 IntPtr h = Find(re);
                 if (h == IntPtr.Zero) { Thread.Sleep(300); continue; }
+                AsWindowSees(h);
                 RECT cr;
                 GetClientRect(h, out cr);
                 int cw = cr.R - cr.L, ch = cr.B - cr.T;
@@ -168,6 +178,7 @@ static class WiiuuWinCap {
         int fps = Math.Max(1, int.Parse(a[5], inv));
         IntPtr h = Find(a[0]);
         if (h == IntPtr.Zero) { Console.Error.WriteLine("no window matches " + a[0]); return 2; }
+        AsWindowSees(h);
         RECT cr;
         GetClientRect(h, out cr);
         int cw = cr.R - cr.L, ch = cr.B - cr.T;
