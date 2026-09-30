@@ -8,3 +8,5 @@ trailer/build-yt/
 dist/WII-UU-youtube*
 presentation/build/
 dist/WII-UU-presentation*
+# release zips from package.sh (the website copy lives in docs/download)
+dist/WII-UU-*.zip
