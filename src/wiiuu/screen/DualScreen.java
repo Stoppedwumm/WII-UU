@@ -345,7 +345,7 @@ public final class DualScreen {
                 // Windows: Java's capture, which gets each monitor's own scaling right (ffmpeg's
                 // gdigrab stretches positions on a monitor scaled differently from the main one)
                 if (ffmpeg != null && !OS.contains("win")) ffmpegLoop(ffmpeg, top);
-                else robotLoop(top);
+                else if (!OS.contains("win") || !windowLoop()) robotLoop(top);
             }
         }
 
@@ -385,6 +385,28 @@ public final class DualScreen {
             } catch (IOException e) {
                 if (!closed) sleep(300);
             }
+        }
+
+        /**
+         * Windows: the top of RetroArch's window from the window's own picture (copying the screen
+         * gives black or stale pictures on the virtual display). False when that isn't possible.
+         */
+        private boolean windowLoop() {
+            ScreenProfile p = profile;
+            if (p == null) return false;
+            int fps = Math.max(10, config.getInt("screen.split.fps", 60));
+            WinCapture cap = WinCapture.open(WinScript.dir(), p.windowRegex(), 0, 0, 1, p.ry(), fps);
+            if (cap == null) {
+                if (starts++ < 5) VirtualDisplay.note("TV window: RetroArch's window picture isn't available (yet)");
+                return false;
+            }
+            if (starts++ < 5) VirtualDisplay.note("TV window shows RetroArch's window picture (" + cap.width + "x" + cap.height + ")");
+            try (cap) {
+                while (!closed) pic.show(cap.next(pic.spare(cap.width, cap.height)));
+            } catch (IOException e) {
+                // the window closed or changed size: the loop starts again
+            }
+            return true;
         }
 
         /** Without ffmpeg: Java's own capture (slower). */

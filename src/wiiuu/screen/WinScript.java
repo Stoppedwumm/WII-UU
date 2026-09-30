@@ -28,6 +28,10 @@ public final class WinScript {
         dir = d;
     }
 
+    static Path dir() {
+        return dir;
+    }
+
     /**
      * Runs {@code body} (PowerShell) with {@code args}. {@code csharp}, if given, is compiled once
      * into a DLL and loaded before {@code body} runs.

@@ -519,7 +519,7 @@ public final class ScreenStreamer {
                         sleep(500);
                     }
                 } else {
-                    captureWithJava(r, fps);
+                    if (!captureWindowPart(r, fps)) captureWithJava(r, fps);
                 }
             }
         }
@@ -646,6 +646,37 @@ public final class ScreenStreamer {
          * the slower of the two steps rather than their sum; late frames are dropped, never sent out of order.
          */
         private void captureWithJava(Rectangle r, int fps) {
+            captureWithJava(r, fps, () -> robot.createScreenCapture(robotRect(r)));
+        }
+
+        /**
+         * Windows, split screens: the phone's part of RetroArch's window from the window's own picture
+         * (the screen copy is black on the virtual display). False when that isn't possible.
+         */
+        private boolean captureWindowPart(Rectangle r, int fps) {
+            DualScreen d = dual;
+            ScreenProfile p = secondScreen();
+            if (!OS.contains("win") || d == null || !d.active() || !"second".equals(mode) || p == null) return false;
+            WinCapture cap = WinCapture.open(WinScript.dir(), p.windowRegex(), p.rx(), p.ry(), p.rw(), p.rh(), fps);
+            if (cap == null) return false;
+            BufferedImage[] ring = new BufferedImage[5];                   // JPEG encoders still read older frames
+            int[] at = {0};
+            try {
+                captureWithJava(r, fps, () -> {
+                    try {
+                        int i = at[0]++ % ring.length;
+                        return ring[i] = cap.next(ring[i]);
+                    } catch (IOException e) {
+                        throw new java.io.UncheckedIOException(e);
+                    }
+                });
+            } finally {
+                cap.close();
+            }
+            return true;
+        }
+
+        private void captureWithJava(Rectangle r, int fps, Supplier<BufferedImage> grab) {
             int maxW = Math.max(160, config.getInt("stream.maxWidth", 640));
             float quality = Math.max(0.2f, Math.min(0.95f, config.getInt("stream.quality", 60) / 100f));
             long frameNanos = 1_000_000_000L / fps;
@@ -666,7 +697,7 @@ public final class ScreenStreamer {
                     free.acquire();
                     BufferedImage img;
                     try {
-                        img = scale(robot.createScreenCapture(robotRect(r)), maxW);
+                        img = scale(grab.get(), maxW);
                     } catch (RuntimeException e) {
                         free.release();
                         throw e;
