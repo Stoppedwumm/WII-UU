@@ -80,6 +80,18 @@ public final class DualScreen {
         if (d.tvArea() != null && !OS.contains("win")) tvBounds = VirtualDisplay.toJava(d.tvArea());
         profile = p;
         target = fit(d.area(), p.aspect());
+        spanning = false;
+        Rectangle tvReal = d.tvArea(), hid = d.area();
+        if (OS.contains("win") && tvReal != null && hid.x == tvReal.x && hid.y == tvReal.y + tvReal.height
+                && hid.height >= tvReal.height && hid.width >= Math.round(2 * tvReal.height * p.aspect())) {
+            // the hidden display is right below the TV: one window over both, twice the TV's height. The
+            // top screen fills the TV (RetroArch draws it itself: full speed, no copying), the touch
+            // screen is on the hidden display.
+            target = new Rectangle(tvReal.x, tvReal.y, tvReal.width, tvReal.height * 2);
+            spanning = true;
+        }
+        VirtualDisplay.note(spanning ? "RetroArch's window spans the TV and the GamePad display below it"
+                : "RetroArch's window goes onto the GamePad display; the TV shows a copy of its top screen");
         return new Rectangle(target);
     }
 
@@ -99,6 +111,7 @@ public final class DualScreen {
         keeper = new Thread(this::keepWindow, "split-window");
         keeper.setDaemon(true);
         keeper.start();
+        if (spanning) return;                                   // the TV shows RetroArch itself
         // Windows: the capture helper shows the top screen in a window of its own, placed in real pixels
         // (Java's idea of the TV's size can be off after a display switches on: a cropped, too-big picture)
         Rectangle tvReal = display.tvArea();
@@ -111,8 +124,26 @@ public final class DualScreen {
     }
 
     private Process tvHelper;
+    /** Windows: RetroArch's window covers the TV and the hidden display below it */
+    private volatile boolean spanning;
 
     /** Game over: the TV window goes, the hidden display goes. */
+    /** The game ended: says so in split.log (a game that quits at once is worth knowing about). */
+    public synchronized void ended(int exitCode, java.nio.file.Path log) {
+        if (display != null || running) {
+            VirtualDisplay.note("the game ended (exit code " + exitCode + "); RetroArch's own log: " + log);
+            try {
+                List<String> lines = java.nio.file.Files.readAllLines(log);
+                for (String l : lines.subList(Math.max(0, lines.size() - 6), lines.size())) {
+                    if (!l.isBlank()) VirtualDisplay.note("  " + l.trim());
+                }
+            } catch (IOException | RuntimeException ignored) {
+                // no log
+            }
+        }
+        end();
+    }
+
     public synchronized void end() {
         running = false;
         if (keeper != null) keeper.interrupt();
@@ -137,9 +168,25 @@ public final class DualScreen {
         return d == null ? null : VirtualDisplay.toJava(d.area());
     }
 
+    /**
+     * Spanning (Windows): the touch screen's place, from the window's place in real pixels, converted
+     * with the scaling of the monitor it is on (the window straddles two differently scaled monitors,
+     * so converting the whole window at once would be off). Null otherwise.
+     */
+    public Rectangle secondRegion() {
+        ScreenProfile p = profile;
+        Rectangle t = target;
+        if (!spanning || p == null || t == null) return null;
+        return ScreenStreamer.toJavaUnits(p.locate(t));
+    }
+
     /** The emulator's top screen right now, in Java's units, or null. */
     public Rectangle topRegion() {
         ScreenProfile p = profile;
+        if (spanning && display != null && display.tvArea() != null) {
+            Rectangle all = new ScreenProfile(p.label(), p.windowRegex(), p.aspect(), 0, 0, 1, 1).locate(target);
+            return ScreenStreamer.toJavaUnits(new Rectangle(all.x, all.y, all.width, (int) Math.round(all.height * p.ry()) & ~1));
+        }
         Rectangle win = window();
         if (p == null || win == null) return null;
         Rectangle all = new ScreenProfile(p.label(), p.windowRegex(), p.aspect(), 0, 0, 1, 1).locate(win);

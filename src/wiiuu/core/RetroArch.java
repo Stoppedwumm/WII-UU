@@ -122,7 +122,8 @@ public final class RetroArch {
         }
         List<String> cmd = new ArrayList<>(exe);
         if (split == null) cmd.add("-f");
-        cmd.addAll(List.of("-L", core.toString()));
+        // --verbose: RetroArch's own log goes to logs/<system>.log (why a game didn't start)
+        cmd.addAll(List.of("--verbose", "-L", core.toString()));
         Path extra = writeExtraConfig(split);
         if (extra != null) cmd.addAll(List.of("--appendconfig", extra.toString()));
         cmd.add(game.path().toAbsolutePath().toString());

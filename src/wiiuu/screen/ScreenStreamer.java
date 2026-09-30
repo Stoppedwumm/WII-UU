@@ -273,6 +273,9 @@ public final class ScreenStreamer {
                 why[0] = "This game has no second screen";
                 return null;
             }
+            DualScreen ds = dual;
+            Rectangle spanned = ds != null && ds.active() ? ds.secondRegion() : null;
+            if (spanned != null) return clip(spanned);
             Rectangle win = windows.find(p.windowRegex());
             if (win == null) {
                 Game g = currentGame.get();

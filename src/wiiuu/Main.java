@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.10";
+    public static final String VERSION = "1.9.11";
 
     private final Config config;
     private final Library library;
@@ -436,7 +436,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
     @Override
     public void exited(Game game, int exitCode, boolean quickFailure, Path log) {
-        dual.end();
+        dual.ended(exitCode, log);
         SwingUtilities.invokeLater(() -> {
             view.setPlaying(null);
             frame.setState(Frame.NORMAL);

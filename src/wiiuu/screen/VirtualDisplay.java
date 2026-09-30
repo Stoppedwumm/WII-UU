@@ -343,18 +343,6 @@ public final class VirtualDisplay {
             note("GamePad display: " + v.adapter() + " " + v.rect().width + "x" + v.rect().height + " at " + v.rect().x + "," + v.rect().y
                     + " (already on" + (keep ? ", stays on)" : ", switched off after the game)"));
             if (keep) return new VirtualDisplay(v.rect(), null, null);
-            Path state = config.home().resolve("virtual-display");
-            try {
-                Files.createDirectories(state.getParent());
-                Files.writeString(state, "win=" + v.name() + "\n");
-            } catch (IOException ignored) {
-                // still fine
-            }
-            VirtualDisplay d = new VirtualDisplay(v.rect(), null, state);
-            d.winDevice = v.name();
-            d.config = config;
-            d.tv = mainDisplay(all);
-            return d;
         }
         int[] mode = bestMode(v.modes());
         if (mode == null) mode = new int[]{1920, 1080};
@@ -363,6 +351,22 @@ public final class VirtualDisplay {
             if (d.attached() && d.rect() != null && d != v) {
                 right = Math.max(right, d.rect().x + d.rect().width);
                 if (d.primary()) top = d.rect().y;
+            }
+        }
+        // Below the TV, at the TV's size: RetroArch's window then spans both, its top screen on the TV
+        // (drawn by RetroArch itself, at full speed) and its touch screen on the hidden display
+        Rectangle main = mainDisplay(all);
+        boolean below = main != null && !config.get("screen.split.windowsLayout", "below").equalsIgnoreCase("beside");
+        if (below) {
+            int[] same = null;
+            for (int[] m : v.modes()) {
+                if (m[0] == main.width && m[1] == main.height) same = m;
+                else if (same == null && m[0] >= main.width && m[1] >= main.height) same = m;
+            }
+            if (same != null) {
+                mode = same;
+                right = main.x;
+                top = main.y + main.height;
             }
         }
         Path state = config.home().resolve("virtual-display");
