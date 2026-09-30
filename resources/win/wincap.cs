@@ -4,6 +4,8 @@
 //     x y w h: the part of the window's client area, as fractions (0..1)
 //   stdout: one line "<width> <height>", then frames of width*height*4 bytes (BGRA), until the
 //   window closes or changes size (exit code 3), or stdin closes.
+//   stdin: taps on that part, one per line: "t <1 down | 2 move | 0 up> <x> <y>" (fractions of the part),
+//   done as mouse clicks there, in the window's own coordinates (whatever the monitors' scaling).
 //
 //   wiiuu-wincap.exe --show <left> <top> <width> <height> <title regex> <x> <y> <w> <h> <fps>
 //     shows that part instead, as large as fits, on black, in a borderless always-on-top window
@@ -35,6 +37,10 @@ static class WiiuuWinCap {
     [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
     [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr c);
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr h, ref POINT p);
+    [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] static extern void mouse_event(uint f, uint x, uint y, uint d, UIntPtr e);
+    struct POINT { public int X, Y; }
     [DllImport("user32.dll")] static extern IntPtr GetWindowDpiAwarenessContext(IntPtr h);
     [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);
 
@@ -191,10 +197,33 @@ static class WiiuuWinCap {
         byte[] head = Encoding.ASCII.GetBytes(w + " " + hh + "\n");
         stdout.Write(head, 0, head.Length);
         stdout.Flush();
-        // stop when WII-UU goes away (stdin closes)
-        Thread watch = new Thread(delegate () { try { Console.OpenStandardInput().Read(new byte[1], 0, 1); } catch { } Environment.Exit(0); });
-        watch.IsBackground = true;
-        watch.Start();
+        // taps from WII-UU; stop when it goes away (stdin closes)
+        IntPtr win = h;
+        int px = x0, py = y0, pw = w, ph = hh;
+        Thread taps = new Thread(delegate () {
+            AsWindowSees(win);                       // this thread measures in the window's terms too
+            try {
+                TextReader rd = Console.In;
+                string line;
+                bool down = false;
+                while ((line = rd.ReadLine()) != null) {
+                    string[] t = line.Trim().Split(' ');
+                    if (t.Length != 4 || t[0] != "t") continue;
+                    int state = int.Parse(t[1], inv);
+                    double tx = Math.Max(0, Math.Min(1, double.Parse(t[2], inv))), ty = Math.Max(0, Math.Min(1, double.Parse(t[3], inv)));
+                    POINT pt = new POINT();
+                    pt.X = px + (int) Math.Round(tx * (pw - 1));
+                    pt.Y = py + (int) Math.Round(ty * (ph - 1));
+                    ClientToScreen(win, ref pt);
+                    SetCursorPos(pt.X, pt.Y);
+                    if (state == 1 && !down) { mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); down = true; }       // left down
+                    else if (state == 0 && down) { mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); down = false; }  // left up
+                }
+            } catch { }
+            Environment.Exit(0);
+        });
+        taps.IsBackground = true;
+        taps.Start();
 
         Bitmap full = new Bitmap(cw, ch, PixelFormat.Format32bppArgb);
         byte[] frame = new byte[w * hh * 4];

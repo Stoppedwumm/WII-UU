@@ -223,6 +223,12 @@ public final class ScreenStreamer {
     /** A tap on the phone: x/y are fractions of the streamed picture; state 1 = down, 2 = move, 0 = up. */
     public synchronized void touch(String mode, double x, double y, int state) {
         Channel ch = channels.get(mode);
+        WinCapture wc = ch == null ? null : ch.winCap;
+        if (wc != null) {                                               // in RetroArch's window's own terms
+            wc.tap(state, x, y);
+            mouseDown = state != 0;
+            return;
+        }
         Rectangle r = ch == null ? null : ch.region;
         if (robot == null || r == null) return;
         int px = r.x + (int) Math.round(Math.max(0, Math.min(1, x)) * (r.width - 1));
@@ -496,6 +502,8 @@ public final class ScreenStreamer {
                     sleep(300);
                     continue;
                 }
+                // Windows, split screens: RetroArch's window picture (and taps) through the helper, first
+                if (OS.contains("win") && "second".equals(mode) && dual != null && dual.active() && captureWindowPart(r, fps)) continue;
                 if (macHelper != null && !helperFailed) {
                     if (runMacHelper(r, fps)) {
                         helperFailures = 0;
@@ -522,7 +530,7 @@ public final class ScreenStreamer {
                         sleep(500);
                     }
                 } else {
-                    if (!captureWindowPart(r, fps)) captureWithJava(r, fps);
+                    captureWithJava(r, fps);
                 }
             }
         }
@@ -660,8 +668,15 @@ public final class ScreenStreamer {
             DualScreen d = dual;
             ScreenProfile p = secondScreen();
             if (!OS.contains("win") || d == null || !d.active() || !"second".equals(mode) || p == null) return false;
+            if (WinCapture.helper(WinScript.dir()) == null) return false;           // no helper: screen capture
             WinCapture cap = WinCapture.open(WinScript.dir(), p.windowRegex(), p.rx(), p.ry(), p.rw(), p.rh(), fps);
-            if (cap == null) return false;
+            if (cap == null) {
+                // RetroArch's window isn't there yet: keep trying (screen capture can't see it there)
+                publish(message("Waiting for RetroArch's window"));
+                sleep(500);
+                return true;
+            }
+            winCap = cap;
             BufferedImage[] ring = new BufferedImage[5];                   // JPEG encoders still read older frames
             int[] at = {0};
             try {
@@ -674,10 +689,14 @@ public final class ScreenStreamer {
                     }
                 });
             } finally {
+                winCap = null;
                 cap.close();
             }
             return true;
         }
+
+        /** Windows split screens: the helper streams the phone's part of RetroArch's window, and taps on it */
+        volatile WinCapture winCap;
 
         private void captureWithJava(Rectangle r, int fps, Supplier<BufferedImage> grab) {
             int maxW = Math.max(160, config.getInt("stream.maxWidth", 640));

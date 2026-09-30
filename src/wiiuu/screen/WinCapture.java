@@ -130,6 +130,17 @@ public final class WinCapture implements AutoCloseable {
         return img;
     }
 
+    /** A tap on the part being streamed: state 1 down, 2 move, 0 up; x, y fractions of the part. */
+    synchronized void tap(int state, double x, double y) {
+        try {
+            var out = process.getOutputStream();
+            out.write(("t " + state + " " + num(x) + " " + num(y) + "\n").getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+        } catch (IOException ignored) {
+            // the helper is gone; the next frame read ends the stream
+        }
+    }
+
     @Override
     public void close() {
         process.destroyForcibly();
