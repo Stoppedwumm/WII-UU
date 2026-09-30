@@ -29,7 +29,7 @@ public static class WiiuuDisplay {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int ChangeDisplaySettingsEx(string d, ref DM dm, IntPtr h, int f, IntPtr p);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int ChangeDisplaySettingsEx(string d, IntPtr dm, IntPtr h, int f, IntPtr p);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-  const int DM_POSITION = 0x20, DM_PELSWIDTH = 0x80000, DM_PELSHEIGHT = 0x100000;
+  const int DM_POSITION = 0x20, DM_BITSPERPEL = 0x40000, DM_PELSWIDTH = 0x80000, DM_PELSHEIGHT = 0x100000, DM_DISPLAYFREQUENCY = 0x400000;
   const int CDS_UPDATEREGISTRY = 0x1, CDS_NORESET = 0x10000000;
 
   static DM New() { var dm = new DM(); dm.Size = (short) Marshal.SizeOf(typeof(DM)); return dm; }
@@ -50,20 +50,123 @@ public static class WiiuuDisplay {
     }
   }
 
-  // width/height 0 detaches the display from the desktop
-  public static int Set(string name, int x, int y, int w, int h) {
-    var dm = New();
-    dm.Fields = DM_POSITION | DM_PELSWIDTH | DM_PELSHEIGHT;
-    dm.PosX = x; dm.PosY = y; dm.PelsWidth = w; dm.PelsHeight = h;
+  static int Apply(string name, ref DM dm) {
     int r = ChangeDisplaySettingsEx(name, ref dm, IntPtr.Zero, CDS_UPDATEREGISTRY | CDS_NORESET, IntPtr.Zero);
     int r2 = ChangeDisplaySettingsEx(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
     return r != 0 ? r : r2;
+  }
+
+  public static bool Attached(string name) {
+    var dd = new DD(); dd.cb = Marshal.SizeOf(dd);
+    for (int i = 0; EnumDisplayDevices(null, i, ref dd, 0); i++) {
+      if (dd.Name == name) return (dd.Flags & 1) != 0;
+      dd.cb = Marshal.SizeOf(dd);
+    }
+    return false;
+  }
+
+  static int Place(string name, int x, int y, int w, int h, bool full) {
+    var dm = New();
+    dm.Fields = DM_POSITION | DM_PELSWIDTH | DM_PELSHEIGHT | (full ? DM_BITSPERPEL | DM_DISPLAYFREQUENCY : 0);
+    dm.PosX = x; dm.PosY = y; dm.PelsWidth = w; dm.PelsHeight = h; dm.BitsPerPel = 32; dm.DisplayFrequency = 60;
+    return Apply(name, ref dm);
+  }
+
+  // ---- the modern display API (QueryDisplayConfig / SetDisplayConfig), for drivers the old one can't switch on
+  [DllImport("user32.dll")] static extern int GetDisplayConfigBufferSizes(uint flags, out uint paths, out uint modes);
+  [DllImport("user32.dll")] static extern int QueryDisplayConfig(uint flags, ref uint numPaths, byte[] paths, ref uint numModes, byte[] modes, IntPtr topology);
+  [DllImport("user32.dll")] static extern int SetDisplayConfig(uint numPaths, byte[] paths, uint numModes, byte[] modes, uint flags);
+  [DllImport("user32.dll")] static extern int DisplayConfigGetDeviceInfo(byte[] packet);
+  const uint QDC_ALL_PATHS = 1, QDC_ONLY_ACTIVE_PATHS = 2;
+  const uint SDC_TOPOLOGY_EXTEND = 0x4, SDC_USE_SUPPLIED_DISPLAY_CONFIG = 0x20, SDC_APPLY = 0x80, SDC_SAVE_TO_DATABASE = 0x200, SDC_ALLOW_CHANGES = 0x400;
+  const int PATH = 72, MODE = 64;            // sizeof DISPLAYCONFIG_PATH_INFO / DISPLAYCONFIG_MODE_INFO
+  const uint ACTIVE = 1, INVALID = 0xffffffff;
+
+  // the GDI name (\\.\DISPLAYn) of a path's source: adapter LUID at +0, source id at +8
+  static string SourceName(byte[] paths, int i) {
+    var p = new byte[20 + 64];
+    BitConverter.GetBytes(1).CopyTo(p, 0);                   // DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME
+    BitConverter.GetBytes(p.Length).CopyTo(p, 4);
+    Array.Copy(paths, i * PATH, p, 8, 8);                    // adapter LUID
+    Array.Copy(paths, i * PATH + 8, p, 16, 4);               // source id
+    if (DisplayConfigGetDeviceInfo(p) != 0) return "";
+    return System.Text.Encoding.Unicode.GetString(p, 20, 64).TrimEnd('\0');
+  }
+
+  static bool Query(uint flags, out byte[] paths, out uint np, out byte[] modes, out uint nm) {
+    paths = null; modes = null; np = 0; nm = 0;
+    if (GetDisplayConfigBufferSizes(flags, out np, out nm) != 0) return false;
+    paths = new byte[np * PATH]; modes = new byte[nm * MODE];
+    return QueryDisplayConfig(flags, ref np, paths, ref nm, modes, IntPtr.Zero) == 0;
+  }
+
+  static uint U(byte[] b, int at) { return BitConverter.ToUInt32(b, at); }
+  static void Put(byte[] b, int at, uint v) { BitConverter.GetBytes(v).CopyTo(b, at); }
+
+  // switches on the first possible path of this source, keeping every active path as it is
+  static int EnablePath(string name) {
+    byte[] all, allModes; uint na, nma;
+    if (!Query(QDC_ALL_PATHS, out all, out na, out allModes, out nma)) return -100;
+    byte[] act, modes; uint n, nm;
+    if (!Query(QDC_ONLY_ACTIVE_PATHS, out act, out n, out modes, out nm)) return -101;
+    for (int i = 0; i < na; i++) {
+      bool active = (U(all, i * PATH + 68) & ACTIVE) != 0, available = U(all, i * PATH + 60) != 0;
+      if (active || !available || SourceName(all, i) != name) continue;
+      var paths = new byte[(n + 1) * PATH];
+      Array.Copy(act, paths, n * PATH);
+      Array.Copy(all, i * PATH, paths, n * PATH, PATH);
+      int at = (int) n * PATH;
+      Put(paths, at + 12, INVALID);                           // source mode: let Windows choose
+      Put(paths, at + 32, INVALID);                           // target mode
+      Put(paths, at + 68, ACTIVE);
+      return SetDisplayConfig(n + 1, paths, nm, modes, SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES | SDC_SAVE_TO_DATABASE);
+    }
+    return -102;                                              // no free path for it
+  }
+
+  // switches off this source's path, keeping every other active path
+  static int DisablePath(string name) {
+    byte[] act, modes; uint n, nm;
+    if (!Query(QDC_ONLY_ACTIVE_PATHS, out act, out n, out modes, out nm)) return -101;
+    var keep = new List<byte[]>();
+    for (int i = 0; i < n; i++) {
+      if (SourceName(act, i) == name) continue;
+      var one = new byte[PATH]; Array.Copy(act, i * PATH, one, 0, PATH); keep.Add(one);
+    }
+    if (keep.Count == n) return -102;
+    var paths = new byte[keep.Count * PATH];
+    for (int i = 0; i < keep.Count; i++) keep[i].CopyTo(paths, i * PATH);
+    return SetDisplayConfig((uint) keep.Count, paths, nm, modes, SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES | SDC_SAVE_TO_DATABASE);
+  }
+
+  // switches the display on at x,y with w x h; tries one way after the other and says what each did
+  public static string Attach(string name, int x, int y, int w, int h) {
+    var log = new List<string>();
+    log.Add("old api " + Place(name, x, y, w, h, true));
+    if (!Attached(name)) {
+      var reg = New();
+      if (EnumDisplaySettings(name, -2, ref reg) && reg.PelsWidth > 0) {
+        reg.Fields = DM_POSITION | DM_PELSWIDTH | DM_PELSHEIGHT; reg.PosX = x; reg.PosY = y;
+        log.Add("old api, saved size " + Apply(name, ref reg));
+      }
+    }
+    if (!Attached(name)) log.Add("display config " + EnablePath(name));
+    if (!Attached(name)) log.Add("extend " + SetDisplayConfig(0, null, 0, null, SDC_APPLY | SDC_TOPOLOGY_EXTEND));
+    if (Attached(name)) log.Add("place " + Place(name, x, y, w, h, false));
+    return string.Join(", ", log) + (Attached(name) ? " -> on" : " -> still off");
+  }
+
+  public static string Detach(string name) {
+    var log = new List<string>();
+    log.Add("old api " + Place(name, 0, 0, 0, 0, false));
+    if (Attached(name)) log.Add("display config " + DisablePath(name));
+    return string.Join(", ", log) + (Attached(name) ? " -> still on" : " -> off");
   }
 }
 '@
 [void][WiiuuDisplay]::SetProcessDPIAware()
 switch ($Action) {
   "list"   { [WiiuuDisplay]::List() }
-  "attach" { "result " + [WiiuuDisplay]::Set($Device, $X, $Y, $W, $H) }
-  "detach" { "result " + [WiiuuDisplay]::Set($Device, 0, 0, 0, 0) }
+  "attach" { "result " + [WiiuuDisplay]::Attach($Device, $X, $Y, $W, $H) }
+  "detach" { "result " + [WiiuuDisplay]::Detach($Device) }
 }

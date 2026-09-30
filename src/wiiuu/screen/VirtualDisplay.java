@@ -114,7 +114,10 @@ public final class VirtualDisplay {
     /** Takes the display away again (Linux); nothing to do on Windows. */
     public void close() {
         if (stateFile == null) return;
-        if (winDevice != null) displayScript(config, "-Action", "detach", "-Device", winDevice);
+        if (winDevice != null) {
+            note("switching the virtual display off: "
+                    + String.join(" ", displayScript(config, "-Action", "detach", "-Device", winDevice)).replace("result ", "").trim());
+        }
         else undo(pannedOutput, restoreFb);
         try {
             Files.deleteIfExists(stateFile);
@@ -340,12 +343,14 @@ public final class VirtualDisplay {
             // still try
         }
         List<String> res = displayScript(config, "-Action", "attach", "-Device", v.name(), "-X", "" + right, "-Y", "" + top, "-W", "" + mode[0], "-H", "" + mode[1]);
+        String how = String.join(" ", res).replace("result ", "").trim();
+        note("switching the virtual display on: " + how);
         Rectangle now = null;
         for (WinDisplay d : parseDisplays(displayScript(config, "-Action", "list"))) {
             if (d.name().equals(v.name()) && d.attached()) now = d.rect();
         }
         if (now == null) {
-            note("could not switch the virtual display on (" + String.join(" ", res).trim() + "); the TV shows both screens");
+            note("Windows would not switch the virtual display on (" + how + "); the TV shows both screens");
             try {
                 Files.deleteIfExists(state);
             } catch (IOException ignored) {
