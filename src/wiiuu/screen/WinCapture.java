@@ -56,7 +56,7 @@ public final class WinCapture implements AutoCloseable {
                 Path csc = Path.of(win, "Microsoft.NET", fw, "v4.0.30319", "csc.exe");
                 if (!Files.exists(csc)) continue;
                 List<String> res = WinScript.exec(120, List.of(csc.toString(), "/nologo", "/target:exe", "/optimize+", "/out:" + out,
-                        "/r:System.Drawing.dll", cs.toString()));
+                        "/r:System.Drawing.dll", "/r:System.Windows.Forms.dll", cs.toString()));
                 if (Files.exists(out)) {
                     VirtualDisplay.note("window capture helper built: " + out);
                     return exe = out;
@@ -92,6 +92,22 @@ public final class WinCapture implements AutoCloseable {
             }
             return new WinCapture(p, in, Integer.parseInt(wh[0]), Integer.parseInt(wh[1]));
         } catch (IOException | NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Shows the part of the window on the TV ({@code tv}: real pixels) in a window of the helper's
+     * own: no Java scaling in between. Null when the helper is missing.
+     */
+    static Process show(Path dir, java.awt.Rectangle tv, String regex, double x, double y, double w, double h, int fps) {
+        Path helper = helper(dir);
+        if (helper == null) return null;
+        try {
+            return new ProcessBuilder(helper.toString(), "--show", "" + tv.x, "" + tv.y, "" + tv.width, "" + tv.height,
+                    regex, num(x), num(y), num(w), num(h), Integer.toString(fps))
+                    .redirectError(ProcessBuilder.Redirect.DISCARD).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+        } catch (IOException e) {
             return null;
         }
     }

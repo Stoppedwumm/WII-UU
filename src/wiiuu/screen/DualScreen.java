@@ -77,7 +77,7 @@ public final class DualScreen {
             return null;
         }
         display = d;
-        if (d.tvArea() != null) tvBounds = VirtualDisplay.toJava(d.tvArea());
+        if (d.tvArea() != null && !OS.contains("win")) tvBounds = VirtualDisplay.toJava(d.tvArea());
         profile = p;
         target = fit(d.area(), p.aspect());
         return new Rectangle(target);
@@ -99,8 +99,18 @@ public final class DualScreen {
         keeper = new Thread(this::keepWindow, "split-window");
         keeper.setDaemon(true);
         keeper.start();
-        presenter = new Presenter(tv);
+        // Windows: the capture helper shows the top screen in a window of its own, placed in real pixels
+        // (Java's idea of the TV's size can be off after a display switches on: a cropped, too-big picture)
+        Rectangle tvReal = display.tvArea();
+        if (OS.contains("win") && tvReal != null) {
+            tvHelper = WinCapture.show(WinScript.dir(), tvReal, profile.windowRegex(), 0, 0, 1, profile.ry(),
+                    Math.max(10, config.getInt("screen.split.fps", 60)));
+            if (tvHelper != null) VirtualDisplay.note("TV shows RetroArch's top screen in the helper's window at " + tvReal + " (real pixels)");
+        }
+        if (tvHelper == null) presenter = new Presenter(tv);
     }
+
+    private Process tvHelper;
 
     /** Game over: the TV window goes, the hidden display goes. */
     public synchronized void end() {
@@ -109,6 +119,8 @@ public final class DualScreen {
         keeper = null;
         if (presenter != null) presenter.close();
         presenter = null;
+        if (tvHelper != null) tvHelper.destroyForcibly();
+        tvHelper = null;
         if (display != null) display.close();
         display = null;
         profile = null;

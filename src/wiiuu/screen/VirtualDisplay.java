@@ -353,6 +353,7 @@ public final class VirtualDisplay {
             VirtualDisplay d = new VirtualDisplay(v.rect(), null, state);
             d.winDevice = v.name();
             d.config = config;
+            d.tv = mainDisplay(all);
             return d;
         }
         int[] mode = bestMode(v.modes());
@@ -391,7 +392,14 @@ public final class VirtualDisplay {
         VirtualDisplay d = new VirtualDisplay(now, null, state);
         d.winDevice = v.name();
         d.config = config;
+        d.tv = mainDisplay(all);
         return d;
+    }
+
+    /** Windows: the main display (where WII-UU's TV is), real pixels. */
+    private static Rectangle mainDisplay(List<WinDisplay> all) {
+        for (WinDisplay d : all) if (d.primary() && d.rect() != null) return new Rectangle(d.rect());
+        return null;
     }
 
     private volatile String winDevice;     // Windows: the display WII-UU switched on (switched off again at the end)
