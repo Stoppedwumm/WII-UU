@@ -35,8 +35,8 @@ import java.util.Random;
 /**
  * Visual stingers for WII-UU trailers: short animated logo stings and transitions, each with its
  * sound from the sound kit (SoundKit). Every frame is drawn with a transparent background, then
- * written twice by ffmpeg: a ProRes 4444 .mov with alpha (to lay over footage) and an .mp4 on
- * WII-UU's dark background. Uses Logo3D for the 3D logo. Run by render-stingers.sh.
+ * written three times by ffmpeg: a ProRes 4444 .mov with alpha (to lay over footage), an .mp4 on
+ * WII-UU's dark background, and an .mp4 on pure green for chroma keying. Uses Logo3D for the 3D logo. Run by render-stingers.sh.
  *
  * <pre>usage: VisualStingers outdir fontdir sounddir</pre>
  */
@@ -67,7 +67,7 @@ public final class VisualStingers {
 
     public static void main(String[] args) throws Exception {
         VisualStingers v = new VisualStingers(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]));
-        Files.createDirectories(v.out);
+        Files.createDirectories(v.out.resolve("Greenscreen"));
         String st = "Stingers/WII-UU Stinger - ", fx = "SFX/", ui = "UI/";
         v.render("01 Logo Spin-In", 3.0, v::spinIn, cue(0.0, fx + "Whoosh Short"), cue(0.88, st + "Logo Impact"));
         v.render("02 Logo Reveal", 3.5, v::reveal, cue(0.0, st + "Boot Chime"));
@@ -92,44 +92,65 @@ public final class VisualStingers {
         return new Cue(at, sound);
     }
 
-    /** Draws every frame on a transparent canvas and hands it to ffmpeg for both versions. */
+    /** Draws on green screen: without the soft glow and the flashes, which would leave green fringes after keying. */
+    private static boolean keyable;
+
+    /**
+     * Draws every frame on a transparent canvas for the .mov and the preview, and again for the
+     * green screen version, and hands them to ffmpeg.
+     */
     private void render(String name, double seconds, Frame f, Cue... cues) throws Exception {
+        Process main = ffmpeg(seconds, cues, "[0:v]split=2[vm][vp0];color=c=0x070a18:s=" + W + "x" + H + ":r=" + FPS
+                        + "[bg];[bg][vp0]overlay=shortest=1,format=yuv420p[vp]", "[am][ap]",
+                List.of("-map", "[vm]", "-map", "[am]", "-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le",
+                        "-vendor", "apl0", "-c:a", "pcm_s24le", "-ar", "48000", out.resolve(name + ".mov").toString(),
+                        "-map", "[vp]", "-map", "[ap]", "-c:v", "libx264", "-crf", "16", "-preset", "slow", "-c:a", "aac", "-b:a", "256k",
+                        "-ar", "48000", "-movflags", "+faststart", out.resolve(name + " (preview).mp4").toString()));
+        Process green = ffmpeg(seconds, cues, "color=c=0x00FF00:s=" + W + "x" + H + ":r=" + FPS
+                        + "[green];[green][0:v]overlay=shortest=1,format=yuv420p[vg]", "[ag]",
+                List.of("-map", "[vg]", "-map", "[ag]", "-c:v", "libx264", "-crf", "10", "-preset", "slow", "-c:a", "aac", "-b:a", "256k",
+                        "-ar", "48000", "-movflags", "+faststart", out.resolve("Greenscreen").resolve(name + " (greenscreen).mp4").toString()));
+        BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB);
+        int[] px = ((DataBufferInt) img.getRaster().getDataBuffer()).getData();
+        ByteBuffer bytes = ByteBuffer.allocate(W * H * 4).order(ByteOrder.LITTLE_ENDIAN);
+        int frames = (int) Math.round(seconds * FPS);
+        try (OutputStream a = new BufferedOutputStream(main.getOutputStream(), 1 << 22);
+             OutputStream b = new BufferedOutputStream(green.getOutputStream(), 1 << 22)) {
+            for (int i = 0; i < frames; i++) {
+                for (boolean key : new boolean[]{false, true}) {
+                    keyable = key;
+                    java.util.Arrays.fill(px, 0);
+                    Graphics2D g = pen(img);
+                    f.draw(g, img, i / (double) FPS);
+                    g.dispose();
+                    bytes.clear();
+                    bytes.asIntBuffer().put(px);
+                    (key ? b : a).write(bytes.array());
+                }
+            }
+        }
+        keyable = false;
+        if (main.waitFor() != 0 || green.waitFor() != 0) throw new IOException("ffmpeg failed for " + name);
+        System.err.printf(Locale.ROOT, "  %-32s %.1f s%n", name, seconds);
+    }
+
+    /** ffmpeg reading raw frames, with the cues' sounds mixed into the labels in {@code audioOut}. */
+    private Process ffmpeg(double seconds, Cue[] cues, String video, String audioOut, List<String> outputs) throws IOException {
         List<String> cmd = new ArrayList<>(List.of("ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgra",
                 "-s", W + "x" + H, "-r", Integer.toString(FPS), "-i", "-"));
         for (Cue c : cues) cmd.addAll(List.of("-i", sounds.resolve(c.sound() + ".wav").toString()));
-        StringBuilder fc = new StringBuilder();
-        StringBuilder mix = new StringBuilder();
+        StringBuilder fc = new StringBuilder(), mix = new StringBuilder();
         for (int i = 0; i < cues.length; i++) {
             int ms = (int) Math.round(cues[i].at() * 1000);
             fc.append(String.format(Locale.ROOT, "[%d:a]adelay=%d|%d[a%d];", i + 1, ms, ms, i));
             mix.append("[a").append(i).append(']');
         }
-        fc.append(mix).append(String.format(Locale.ROOT, "amix=inputs=%d:normalize=0,apad,atrim=0:%.3f,asplit=2[am][ap];", cues.length, seconds));
-        fc.append(String.format(Locale.ROOT, "[0:v]split=2[vm][vp0];color=c=0x070a18:s=%dx%d:r=%d[bg];[bg][vp0]overlay=shortest=1,format=yuv420p[vp]",
-                W, H, FPS));
-        cmd.addAll(List.of("-filter_complex", fc.toString(),
-                "-map", "[vm]", "-map", "[am]", "-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le",
-                "-vendor", "apl0", "-c:a", "pcm_s24le", "-ar", "48000", out.resolve(name + ".mov").toString(),
-                "-map", "[vp]", "-map", "[ap]", "-c:v", "libx264", "-crf", "16", "-preset", "slow", "-c:a", "aac", "-b:a", "256k",
-                "-ar", "48000", "-movflags", "+faststart", out.resolve(name + " (preview).mp4").toString()));
-        Process ff = new ProcessBuilder(cmd).inheritIO().redirectInput(ProcessBuilder.Redirect.PIPE).start();
-        BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB);
-        int[] px = ((DataBufferInt) img.getRaster().getDataBuffer()).getData();
-        ByteBuffer bytes = ByteBuffer.allocate(W * H * 4).order(ByteOrder.LITTLE_ENDIAN);
-        int frames = (int) Math.round(seconds * FPS);
-        try (OutputStream o = new BufferedOutputStream(ff.getOutputStream(), 1 << 22)) {
-            for (int i = 0; i < frames; i++) {
-                java.util.Arrays.fill(px, 0);
-                Graphics2D g = pen(img);
-                f.draw(g, img, i / (double) FPS);
-                g.dispose();
-                bytes.clear();
-                bytes.asIntBuffer().put(px);
-                o.write(bytes.array());
-            }
-        }
-        if (ff.waitFor() != 0) throw new IOException("ffmpeg failed for " + name);
-        System.err.printf(Locale.ROOT, "  %-32s %.1f s%n", name, seconds);
+        int outs = audioOut.split("\\]").length;
+        fc.append(mix).append(String.format(Locale.ROOT, "amix=inputs=%d:normalize=0,apad,atrim=0:%.3f", cues.length, seconds))
+                .append(outs > 1 ? ",asplit=" + outs : "").append(audioOut).append(';').append(video);
+        cmd.addAll(List.of("-filter_complex", fc.toString()));
+        cmd.addAll(outputs);
+        return new ProcessBuilder(cmd).inheritIO().redirectInput(ProcessBuilder.Redirect.PIPE).start();
     }
 
     private static Graphics2D pen(BufferedImage img) {
@@ -405,7 +426,7 @@ public final class VisualStingers {
 
     /** A soft blue glow from {@code layer}'s shape, drawn under it. */
     private static void glow(Graphics2D g, BufferedImage layer, double strength) {
-        if (strength <= 0.01) return;
+        if (strength <= 0.01 || keyable) return;
         int sw = W / 16, sh = H / 16;
         BufferedImage small = new BufferedImage(sw, sh, BufferedImage.TYPE_INT_ARGB);
         Graphics2D s = small.createGraphics();
@@ -511,7 +532,7 @@ public final class VisualStingers {
     }
 
     private static void flash(Graphics2D g, double a) {
-        if (a <= 0.003) return;
+        if (a <= 0.003 || keyable) return;
         g.setColor(alpha(Color.WHITE, a));
         g.fillRect(0, 0, W, H);
     }

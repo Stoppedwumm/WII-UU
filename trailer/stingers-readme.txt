@@ -5,10 +5,14 @@ Animated logo stings and transitions for WII-UU trailers and videos, 1920x1080 a
 with its sound from the WII-UU Sound Kit already in place. Made by WII-UU's own code
 (trailer/VisualStingers.java): use them freely in your WII-UU videos.
 
-Every stinger comes twice:
+Every stinger comes three times:
   .mov            ProRes 4444 with a transparent background and 48 kHz audio. Put it on a
                   track above your footage (Premiere, DaVinci Resolve, Final Cut, After Effects).
   (preview).mp4   The same on WII-UU's dark background, for a quick look or direct use.
+  Greenscreen/    The same on pure green (#00FF00), for editors and phone apps that can't read
+                  a transparent background (CapCut and others): key out the green. These are
+                  drawn without the soft glow and the white flashes, which can't be keyed
+                  cleanly; the .mov has the full look, so use it when your editor can.
 
 Stingers
 --------

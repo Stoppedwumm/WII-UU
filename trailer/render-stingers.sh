@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Makes the WII-UU visual stingers (trailer/VisualStingers.java): animated logo stings and
 # transitions with their sound from the sound kit, each as a ProRes 4444 .mov with a transparent
-# background and an .mp4 preview on WII-UU's dark background, zipped into
-# dist/WII-UU-Visual-Stingers.zip. Needs Java 17+, ffmpeg and zip; python3 with fonttools for Inter.
+# background, an .mp4 preview on WII-UU's dark background and an .mp4 on green screen, zipped into
+# dist/WII-UU-Visual-Stingers.zip (the green screen ones also on their own, -Greenscreen.zip).
+# Needs Java 17+, ffmpeg and zip; python3 with fonttools for Inter.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 B=trailer/build-stingers
@@ -26,4 +27,6 @@ java -Xmx3g -Djava.awt.headless=true -cp "build/wiiuu.jar:$B/classes" wiiuu.ui.V
 cp trailer/stingers-readme.txt "$K/README.txt"
 rm -f dist/WII-UU-Visual-Stingers.zip
 (cd "$B" && zip -qr "../../dist/WII-UU-Visual-Stingers.zip" "WII-UU Visual Stingers")
-echo "Visual stingers: dist/WII-UU-Visual-Stingers.zip"
+rm -f dist/WII-UU-Visual-Stingers-Greenscreen.zip
+(cd "$K" && zip -qr "../../../dist/WII-UU-Visual-Stingers-Greenscreen.zip" Greenscreen README.txt)
+echo "Visual stingers: dist/WII-UU-Visual-Stingers.zip (green screen only: dist/WII-UU-Visual-Stingers-Greenscreen.zip)"
