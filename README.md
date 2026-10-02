@@ -593,6 +593,11 @@ as its narration. It also writes captions (`.srt`), the chapter timestamps, a th
 shimmer, glitch, tape stop and more) and the menu's own UI sounds, as 48 kHz 24-bit WAVs. All
 synthesized by `SoundKit.java` with WII-UU's own instruments, in F major like the menu theme.
 
+`trailer/render-stingers.sh` makes visual stingers to go with it (`dist/WII-UU-Visual-Stingers.zip`):
+a 3D logo spin-in, a logo reveal, a house drop, a glitch logo, an 8-bit pixel logo, an end card and
+two transitions (a swoosh wipe and Wii U menu tiles), each with its sound from the kit, as ProRes
+4444 `.mov` files with a transparent background plus `.mp4` previews (`VisualStingers.java`).
+
 `trailer/ChannelBanner.java` draws the YouTube channel banner (2560 × 1440) in the same look,
 with the logo and words inside the 1546 × 423 middle that every device shows. `render-mix.sh`
 writes it as `dist/mix/WII-UU-channel-banner.png`.
