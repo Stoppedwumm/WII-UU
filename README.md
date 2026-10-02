@@ -587,6 +587,12 @@ as its narration. It also writes captions (`.srt`), the chapter timestamps, a th
 * The sound comes from WII-UU itself: the extended remixes, blended as in the Extended Mix, and
   the visualizer's own analysis. It renders in parallel pieces (`PARTS=3`), then joins them.
 
+`trailer/render-soundkit.sh` makes a sound kit for trailers (`dist/WII-UU-Sound-Kit.zip`):
+7 stingers (the boot chime, a logo impact, a menu-jazz sting, an 8-bit sting, a house drop at
+128 BPM, an outro and a swoosh bell), 15 effects (whooshes, risers, a downlifter, impacts,
+shimmer, glitch, tape stop and more) and the menu's own UI sounds, as 48 kHz 24-bit WAVs. All
+synthesized by `SoundKit.java` with WII-UU's own instruments, in F major like the menu theme.
+
 `trailer/ChannelBanner.java` draws the YouTube channel banner (2560 × 1440) in the same look,
 with the logo and words inside the 1546 × 423 middle that every device shows. `render-mix.sh`
 writes it as `dist/mix/WII-UU-channel-banner.png`.
