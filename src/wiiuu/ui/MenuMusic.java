@@ -142,7 +142,7 @@ final class MenuMusic {
     // ---- instruments ------------------------------------------------------------------------
 
     /** Rhodes-like: FM with a bright attack that mellows, and a gentle auto-pan. */
-    private static void electricPiano(float[] l, float[] r, double at, double len, double f, double vol) {
+    static void electricPiano(float[] l, float[] r, double at, double len, double f, double vol) {
         int start = (int) (at * RATE), n = (int) ((len + 0.35) * RATE);
         for (int i = 0; i < n; i++) {
             double t = i / (double) RATE;
@@ -157,7 +157,7 @@ final class MenuMusic {
         }
     }
 
-    private static void bass(float[] l, float[] r, double at, double len, double f) {
+    static void bass(float[] l, float[] r, double at, double len, double f) {
         int start = (int) (at * RATE), n = (int) ((len + 0.12) * RATE);
         for (int i = 0; i < n; i++) {
             double t = i / (double) RATE;
@@ -171,7 +171,7 @@ final class MenuMusic {
     }
 
     /** Vibraphone-like lead: soft mallet, motor tremolo, a little to the right. */
-    private static void vibes(float[] l, float[] r, double at, double len, double f) {
+    static void vibes(float[] l, float[] r, double at, double len, double f) {
         int start = (int) (at * RATE), n = (int) ((len + 0.6) * RATE);
         for (int i = 0; i < n; i++) {
             double t = i / (double) RATE;
@@ -185,7 +185,7 @@ final class MenuMusic {
         }
     }
 
-    private static void shaker(float[] l, float[] r, double at, double vol, Random noise) {
+    static void shaker(float[] l, float[] r, double at, double vol, Random noise) {
         int start = (int) (at * RATE), n = (int) (0.07 * RATE);
         double prev = 0;
         for (int i = 0; i < n; i++) {
@@ -198,7 +198,7 @@ final class MenuMusic {
         }
     }
 
-    private static void rim(float[] l, float[] r, double at, Random noise) {
+    static void rim(float[] l, float[] r, double at, Random noise) {
         int start = (int) (at * RATE), n = (int) (0.05 * RATE);
         for (int i = 0; i < n; i++) {
             double t = i / (double) RATE;
@@ -209,7 +209,7 @@ final class MenuMusic {
         }
     }
 
-    private static void kick(float[] l, float[] r, double at) {
+    static void kick(float[] l, float[] r, double at) {
         int start = (int) (at * RATE), n = (int) (0.25 * RATE);
         double phase = 0;
         for (int i = 0; i < n; i++) {

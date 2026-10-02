@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.17 (2026-10-02)
+More menu music, each tune in two versions.
+- New: Für Elise, the Turkish March, Greensleeves and Pachelbel's Canon.
+- Every tune now also comes as a **WII-UU remix**: slower, lightly swung, in the menu's own
+  sound with vibraphone and electric piano.
+- Settings > General > Menu music, or All of them, taking turns.
+
 ## 1.9.16 (2026-10-02)
 More menu music, and N64 games fill the screen.
 - Settings > General > **Menu music**: besides WII-UU's own tune, 8-bit style versions of

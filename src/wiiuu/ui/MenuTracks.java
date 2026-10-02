@@ -12,8 +12,9 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 
 /**
- * The menu's music to choose from: WII-UU's own tune, the chiptune arrangements, and the
- * player's own sound files in the music folder (WAV, AIFF or AU, which Java plays by itself).
+ * The menu's music to choose from: WII-UU's own tune, public-domain melodies in 8-bit and as
+ * WII-UU remixes, and the player's own sound files in the music folder (WAV, AIFF or AU, which
+ * Java plays by itself).
  */
 public final class MenuTracks {
     /** Every track in turn. */
@@ -24,11 +25,14 @@ public final class MenuTracks {
 
     public record Track(String id, String name) {}
 
-    private static final List<Track> BUILT_IN = List.of(
-            new Track("wiiuu", "WII-UU (original)"),
-            new Track("korobeiniki", "Korobeiniki (the Tetris theme)"),
-            new Track("mountainking", "In the Hall of the Mountain King"),
-            new Track("odetojoy", "Ode to Joy"));
+    private static final List<Track> BUILT_IN = builtIn();
+
+    private static List<Track> builtIn() {
+        List<Track> out = new ArrayList<>();
+        out.add(new Track(DEFAULT, "WII-UU (original)"));
+        for (Tunes.Track t : Tunes.tracks()) out.add(new Track(t.id(), t.name()));
+        return List.copyOf(out);
+    }
 
     private MenuTracks() {}
 
@@ -55,7 +59,7 @@ public final class MenuTracks {
                 if (name.contains("/") || name.contains("\\") || name.startsWith(".")) return null;
                 return decode(folder.resolve(name));
             }
-            return ChipTunes.render(id);
+            return Tunes.render(id);
         } catch (Exception | OutOfMemoryError e) {
             return null;
         }
