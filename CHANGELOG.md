@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.19 (2026-10-02)
+Color House remixes.
+- Every tune, WII-UU's own included, now also comes as a **Color House remix** at 126 BPM:
+  bubbly, metallic chord plucks tuned to the chords, a vocal-like lead gliding through vowels,
+  a talking bass bouncing around the kick, and crisp hats.
+
 ## 1.9.18 (2026-10-02)
 Future House remixes.
 - Every tune, WII-UU's own included, now also comes as a **Future House remix** at 128 BPM:

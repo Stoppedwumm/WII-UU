@@ -15,8 +15,13 @@ import java.util.function.DoubleUnaryOperator;
  *       piano with richer chords, bass and soft percussion;</li>
  *   <li>Future House remix: 128 BPM, a build-up with filtered chords, vocal chops, a snare roll
  *       and a riser, then a drop with kick and clap, sub and bouncing mid bass, a detuned saw
- *       lead, sidechain pumping and heavy saturation. WII-UU's own tune gets one too.</li>
+ *       lead, sidechain pumping and heavy saturation;</li>
+ *   <li>Color House remix: 126 BPM, the same build and drop, but with "colored" sound: chord
+ *       plucks from a resonator bank tuned to the chord, a lead through chord-tuned resonators
+ *       and a gliding vowel filter, a talking "yoy" bass bouncing around the kick, crisp
+ *       sixteenth hats.</li>
  * </ul>
+ * WII-UU's own tune gets both dance remixes too.
  */
 final class Tunes {
     private static final int RATE = MenuAudio.RATE;
@@ -36,6 +41,7 @@ final class Tunes {
 
     static final String REMIX = "-remix";
     static final String HOUSE = "-house";
+    static final String COLOR = "-color";
 
     // ---- the tunes --------------------------------------------------------------------------
 
@@ -142,25 +148,34 @@ final class Tunes {
         return sb.toString();
     }
 
-    /** WII-UU's own tune as Future House, then each tune in 8-bit, as a WII-UU remix and as Future House. */
+    /** WII-UU's own tune as Future and Color House, then each tune in 8-bit, as a WII-UU remix, as Future House and as Color House. */
     static List<Track> tracks() {
         List<Track> out = new ArrayList<>();
         out.add(new Track(THEME.id() + HOUSE, THEME.name() + " \u2013 Future House remix"));
+        out.add(new Track(THEME.id() + COLOR, THEME.name() + " \u2013 Color House remix"));
         for (Tune t : TUNES) {
             out.add(new Track(t.id(), t.name()));
             out.add(new Track(t.id() + REMIX, t.name() + " \u2013 WII-UU remix"));
             out.add(new Track(t.id() + HOUSE, t.name() + " \u2013 Future House remix"));
+            out.add(new Track(t.id() + COLOR, t.name() + " \u2013 Color House remix"));
         }
         return out;
     }
 
     /** Renders a track by id; null for an unknown id. */
     static short[] render(String id) {
-        boolean remix = id.endsWith(REMIX), house = id.endsWith(HOUSE);
-        String base = remix ? id.substring(0, id.length() - REMIX.length()) : house ? id.substring(0, id.length() - HOUSE.length()) : id;
-        if (house && base.equals(THEME.id())) return house(THEME);
-        for (Tune t : TUNES) if (t.id().equals(base)) return remix ? remix(t) : house ? house(t) : chip(t);
-        return null;
+        String style = "";
+        for (String suffix : new String[]{REMIX, HOUSE, COLOR}) if (id.endsWith(suffix)) style = suffix;
+        String base = id.substring(0, id.length() - style.length());
+        Tune tune = base.equals(THEME.id()) && (style.equals(HOUSE) || style.equals(COLOR)) ? THEME : null;
+        for (Tune t : TUNES) if (t.id().equals(base)) tune = t;
+        if (tune == null) return null;
+        return switch (style) {
+            case REMIX -> remix(tune);
+            case HOUSE -> house(tune);
+            case COLOR -> color(tune);
+            default -> chip(tune);
+        };
     }
 
     // ---- notation ---------------------------------------------------------------------------
@@ -544,13 +559,7 @@ final class Tunes {
                 houseSnare(drumL, drumR, bar + 3 * beat, 0.3, noise);
             }
         }
-        // snare roll over the last two bars: eighths, sixteenths, thirty-seconds, louder and higher
-        for (int k = 0; k < 8; k++) houseSnare(drumL, drumR, drop - 2 * bar4 + k * beat / 2, 0.15 + 0.02 * k, noise);
-        for (int k = 0; k < 8; k++) houseSnare(drumL, drumR, drop - bar4 + k * step, 0.32 + 0.02 * k, noise);
-        for (int k = 0; k < 16; k++) houseSnare(drumL, drumR, drop - bar4 / 2 + k * step / 2, 0.48 + 0.02 * k, noise);
-        int riser = Math.min(4, build / 2);
-        noiseSweep(busL, busR, drop - riser * bar4, riser * bar4, 400, 11000, 0, 0.28, noise);
-        noiseSweep(busL, busR, 0, bar4, 9000, 200, 0.22, 0, noise);                   // downlifter out of the drop
+        buildFx(busL, busR, drumL, drumR, build, beat, noise);
         for (Note note : notes) {
             if (note.beat() >= build * bpb) break;
             double len = Math.min(note.len(), build * bpb - note.beat());
@@ -591,8 +600,30 @@ final class Tunes {
             if (note.beat() >= n * bpb / 2.0) synth(busL, busR, at, len, note.midi() + shift + 12, 0.12, LEAD, x -> 4000);
         }
 
-        // ---- mix: reverb on the synths, everything but the drums pumps with the kick, then squash
+        return master(busL, busR, dryL, dryR, drumL, drumR, drop, beat);
+    }
+
+    /** The end of a build-up: a snare roll over the last two bars, a riser, and a downlifter at the loop's start. */
+    private static void buildFx(float[] busL, float[] busR, float[] drumL, float[] drumR, int build, double beat, Random noise) {
+        double bar4 = 4 * beat, step = beat / 4, drop = build * bar4;
+        // eighths, sixteenths, thirty-seconds, louder and louder
+        for (int k = 0; k < 8; k++) houseSnare(drumL, drumR, drop - 2 * bar4 + k * beat / 2, 0.15 + 0.02 * k, noise);
+        for (int k = 0; k < 8; k++) houseSnare(drumL, drumR, drop - bar4 + k * step, 0.32 + 0.02 * k, noise);
+        for (int k = 0; k < 16; k++) houseSnare(drumL, drumR, drop - bar4 / 2 + k * step / 2, 0.48 + 0.02 * k, noise);
+        int riser = Math.min(4, build / 2);
+        noiseSweep(busL, busR, drop - riser * bar4, riser * bar4, 400, 11000, 0, 0.28, noise);
+        noiseSweep(busL, busR, 0, bar4, 9000, 200, 0.22, 0, noise);                   // downlifter out of the drop
+    }
+
+    /**
+     * Mixes a build-and-drop remix: reverb on the synths, everything but the drums pumps with the
+     * kick from the drop on, then the drop is driven into a soft clipper (loud and dense) and the
+     * whole brought to about the level of the other tracks, so switching between them doesn't jump.
+     */
+    private static short[] master(float[] busL, float[] busR, float[] dryL, float[] dryR, float[] drumL, float[] drumR,
+                                  double drop, double beat) {
         MenuMusic.reverb(busL, busR);
+        int frames = busL.length;
         float[] l = new float[frames], r = new float[frames];
         int dropFrame = (int) (drop * RATE);
         double dropPower = 0;
@@ -607,8 +638,6 @@ final class Tunes {
             r[i] = (float) ((busR[i] + dryR[i]) * duck + drumR[i]);
             if (i >= dropFrame) dropPower += l[i] * l[i] + r[i] * r[i];
         }
-        // the drop driven into a soft clipper (loud and dense), then brought to about the level of
-        // the other tracks so switching between them doesn't jump
         double drive = 0.45 / Math.sqrt(dropPower / Math.max(1, 2.0 * (frames - dropFrame))), level = 0.42;
         short[] out = new short[frames * 2];
         for (int i = 0; i < frames; i++) {
@@ -798,6 +827,248 @@ final class Tunes {
             double s = Math.sin(2 * Math.PI * f * t) * Math.min(1, t / 0.005) * (t <= len ? 1 : Math.max(0, 1 - (t - len) / 0.03)) * vol;
             add(l, start + i, s);
             add(r, start + i, s);
+        }
+    }
+
+    // ---- Color House remix ------------------------------------------------------------------
+
+    private static final double COLOR_BPM = 126;
+    /** Sixteenths of the bass line: around the kick, never on it. */
+    private static final int[] BASS_STEPS = {2, 3, 7, 10, 11, 14};
+    /** Semitones above the root for each of those: octave jumps and a fifth. */
+    private static final int[] BASS_UP = {0, 12, 0, 0, 12, 7};
+
+    /** Like {@link #house}: a build-up over the tune's first bars, then the drop with the whole tune. */
+    private static short[] color(Tune t) {
+        double beat = 60.0 / COLOR_BPM, bar4 = 4 * beat, step = beat / 4;
+        int bpb = t.beatsPerBar();
+        double stretch = 4.0 / bpb;
+        String[] bars = bars(t);
+        int n = bars.length;
+        int build = Math.max(4, Math.min(8, n / 4 * 2));
+        int frames = (int) Math.round((build + n) * bar4 * RATE);
+        float[] busL = new float[frames], busR = new float[frames];
+        float[] dryL = new float[frames], dryR = new float[frames];
+        float[] drumL = new float[frames], drumR = new float[frames];
+        Random noise = new Random(9);
+        double drop = build * bar4;
+        DoubleUnaryOperator opening = s -> 500 * Math.pow(16, Math.min(1, s / drop));
+
+        List<Note> notes = melody(t.melody());
+        double sum = 0;
+        for (Note note : notes) sum += note.midi();
+        int shift = 12 * (int) Math.round((74 - sum / Math.max(1, notes.size())) / 12);
+
+        // ---- build-up: the colored chords through an opening filter, hats coming in
+        for (int b = 0; b < build; b++) {
+            double bar = b * bar4;
+            for (int s = 0; s < 16; s++) {
+                double at = bar + s * step;
+                int[] c = chordAt(bars[b], s / 4.0 / stretch, bpb);
+                if (contains(BOUNCE, s)) colorChord(busL, busR, at, beat * 0.5, c, 0.2, opening.applyAsDouble(at), noise);
+                if (b >= build / 2) hat16(drumL, drumR, at, s, 0.5 * (b + 1) / build, noise);
+            }
+            if (b >= build / 2 && b < build - 2) {
+                houseSnare(drumL, drumR, bar + beat, 0.3, noise);
+                houseSnare(drumL, drumR, bar + 3 * beat, 0.3, noise);
+            }
+        }
+        buildFx(busL, busR, drumL, drumR, build, beat, noise);
+        for (Note note : notes) {
+            if (note.beat() >= build * bpb) break;
+            double len = Math.min(note.len(), build * bpb - note.beat());
+            double at = note.beat() * stretch * beat;
+            colorLead(busL, busR, at, len * stretch * beat * 0.95, note.midi() + shift, chordNotes(chordOf(bars, note.beat(), bpb)),
+                    0.22, opening.applyAsDouble(at) * 1.5);
+        }
+
+        // ---- drop
+        for (int b = 0; b < n; b++) {
+            double bar = drop + b * bar4;
+            if (b % 8 == 0) crash(drumL, drumR, bar, noise);
+            for (int k = 0; k < 4; k++) {
+                houseKick(drumL, drumR, bar + k * beat);
+                if (k % 2 == 1) {
+                    clap(drumL, drumR, bar + k * beat, noise);
+                    houseSnare(drumL, drumR, bar + k * beat, 0.15, noise);
+                }
+            }
+            for (int s = 0; s < 16; s++) {
+                double at = bar + s * step;
+                hat16(drumL, drumR, at, s, 1, noise);
+                if (s == 7 || s == 15) MenuMusic.rim(drumL, drumR, at, noise);
+                int[] c = chordAt(bars[b], s / 4.0 / stretch, bpb);
+                if (contains(BOUNCE, s)) colorChord(busL, busR, at, beat * 0.45, c, 0.12, 6500, noise);
+                for (int k = 0; k < BASS_STEPS.length; k++) {
+                    if (BASS_STEPS[k] != s) continue;
+                    int root = bassRoot(c[0]);
+                    sub(dryL, dryR, at, step * 1.6, hz(root - 12), 0.2);
+                    yoyBass(dryL, dryR, at, step * 1.6, root + BASS_UP[k], 0.2);
+                }
+            }
+        }
+        for (Note note : notes) {
+            double at = drop + note.beat() * stretch * beat, len = note.len() * stretch * beat * 0.95;
+            colorLead(busL, busR, at, len, note.midi() + shift, chordNotes(chordOf(bars, note.beat(), bpb)), 0.3, 5000);
+        }
+        return master(busL, busR, dryL, dryR, drumL, drumR, drop, beat);
+    }
+
+    /** The chord under a melody note at {@code beat} of the tune. */
+    private static int[] chordOf(String[] bars, double beat, int bpb) {
+        int b = Math.min(bars.length - 1, (int) Math.floor(beat / bpb + 1e-9));
+        return chordAt(bars[b], beat - b * bpb, bpb);
+    }
+
+    /** Comb filters tuned to {@code notes}: the "color" that rings at the chord's pitches. */
+    private static final class Resonators {
+        private final float[][] lines;
+        private final double[] delay;
+        private final double[] damp;
+        private final int[] pos;
+        private final double feedback;
+
+        Resonators(int[] notes, double feedback) {
+            this.feedback = feedback;
+            lines = new float[notes.length][];
+            delay = new double[notes.length];
+            damp = new double[notes.length];
+            pos = new int[notes.length];
+            for (int k = 0; k < notes.length; k++) {
+                delay[k] = RATE / hz(notes[k]);
+                lines[k] = new float[(int) delay[k] + 3];
+            }
+        }
+
+        /** Feeds {@code x} in; returns what the even and odd resonators ring (left, right). */
+        double[] run(double x, double[] out) {
+            out[0] = out[1] = 0;
+            for (int k = 0; k < lines.length; k++) {
+                float[] line = lines[k];
+                int len = line.length;
+                double back = pos[k] - delay[k];
+                while (back < 0) back += len;
+                int i0 = (int) back;
+                double frac = back - i0, d = line[i0 % len] * (1 - frac) + line[(i0 + 1) % len] * frac;
+                damp[k] += 0.6 * (d - damp[k]);                   // a little darker each time round
+                double y = x + feedback * damp[k];
+                line[pos[k]] = (float) y;
+                pos[k] = (pos[k] + 1) % len;
+                out[k % 2] += y;
+            }
+            return out;
+        }
+    }
+
+    /** The chord's tones an octave and two octaves up (C4 to F#6). */
+    private static int[] colorNotes(int[] c) {
+        int[] base = chordNotes(c), out = new int[base.length * 2];
+        for (int k = 0; k < base.length; k++) {
+            out[k * 2] = base[k] + 12;
+            out[k * 2 + 1] = base[k] + 24;
+        }
+        return out;
+    }
+
+    /** A colored chord pluck: a short noise hit ringing a resonator bank tuned to the chord. */
+    private static void colorChord(float[] l, float[] r, double at, double len, int[] c, double vol, double cutoff, Random noise) {
+        int start = (int) (at * RATE), n = (int) ((len + 0.05) * RATE);
+        Resonators res = new Resonators(colorNotes(c), 0.985);
+        Svf fl = new Svf(), fr = new Svf();
+        double g = Svf.g(cutoff), k = 1 / 0.8;
+        double[] y = new double[2];
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) RATE;
+            double x = (noise.nextDouble() * 2 - 1) * Math.exp(-t * 250) * 0.3;
+            res.run(x, y);
+            double env = t <= len ? 1 : Math.max(0, 1 - (t - len) / 0.05);
+            add(l, start + i, Math.tanh(1.5 * fl.run(y[0], g, k)) * env * vol);
+            add(r, start + i, Math.tanh(1.5 * fr.run(y[1], g, k)) * env * vol);
+        }
+    }
+
+    /** Formants of o, a and e: the lead glides through them on every note. */
+    private static final double[][] GLIDE = {{450, 800}, {730, 1090}, {530, 1840}};
+
+    /**
+     * The colored lead: detuned saws through resonators tuned to the chord and the note, then a
+     * vowel filter gliding o, a, e over the note, then drive.
+     */
+    private static void colorLead(float[] l, float[] r, double at, double len, double midi, int[] chord,
+                                  double vol, double cutoff) {
+        int start = (int) (at * RATE), n = (int) ((len + 0.25) * RATE);
+        int[] tuned = new int[chord.length + 1];
+        for (int k = 0; k < chord.length; k++) tuned[k] = chord[k] + 12;
+        tuned[chord.length] = (int) Math.round(midi);
+        Resonators res = new Resonators(tuned, 0.97);
+        Svf f1 = new Svf(), f2 = new Svf(), lp = new Svf();
+        double[] phase = {0, 0.33, 0.67}, ratio = {Math.pow(2, -15 / 1200.0), 1, Math.pow(2, 15 / 1200.0)};
+        double f = hz(midi), g1 = 0, g2 = 0, g = Svf.g(cutoff);
+        double[] y = new double[2];
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) RATE;
+            if ((i & 15) == 0) {
+                double m = Math.min(1, t / Math.max(0.05, len)) * 2;   // 0..2: o -> a -> e
+                int v = Math.min(1, (int) m);
+                double w = m - v;
+                g1 = Svf.g(GLIDE[v][0] + (GLIDE[v + 1][0] - GLIDE[v][0]) * w);
+                g2 = Svf.g(GLIDE[v][1] + (GLIDE[v + 1][1] - GLIDE[v][1]) * w);
+            }
+            double saw = 0;
+            for (int j = 0; j < 3; j++) {
+                double dt = f * ratio[j] / RATE;
+                saw += 2 * phase[j] - 1 - blep(phase[j], dt);
+                phase[j] += dt;
+                if (phase[j] >= 1) phase[j] -= 1;
+            }
+            double env = Math.min(1, t / 0.005) * (0.7 + 0.3 * Math.exp(-t * 6)) * (t <= len ? 1 : Math.max(0, 1 - (t - len) / 0.06));
+            double x = saw / 3 * env;
+            res.run(x * 0.25, y);
+            double colored = 0.35 * x + 0.65 * (y[0] + y[1]) * 0.25;
+            f1.run(colored, g1, 1 / 5.0);
+            f2.run(colored, g2, 1 / 5.0);
+            double out = Math.tanh(2 * lp.run(0.4 * colored + f1.bp + 0.7 * f2.bp, g, 1 / 0.8));
+            double tail = t <= len + 0.2 ? 1 : Math.max(0, 1 - (t - len - 0.2) / 0.05);
+            add(l, start + i, out * vol * tail * 0.55);
+            add(r, start + i, out * vol * tail * 0.45);
+        }
+    }
+
+    /** The talking bass: saws through a vowel filter sliding from "o" to "ee" on each note ("yoy"). */
+    private static void yoyBass(float[] l, float[] r, double at, double len, double midi, double vol) {
+        int start = (int) (at * RATE), n = (int) ((len + 0.02) * RATE);
+        Svf f1 = new Svf(), f2 = new Svf();
+        double f = hz(midi), p1 = 0, p2 = 0.5, r2 = Math.pow(2, 8 / 1200.0);
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) RATE;
+            double m = 1 - Math.exp(-t * 18);
+            double dt1 = f / RATE, dt2 = f * r2 / RATE;
+            double saw = 2 * p1 - 1 - blep(p1, dt1) + 2 * p2 - 1 - blep(p2, dt2);
+            p1 += dt1;
+            if (p1 >= 1) p1 -= 1;
+            p2 += dt2;
+            if (p2 >= 1) p2 -= 1;
+            f1.run(saw, Svf.g(400 - 120 * m), 1 / 4.0);
+            f2.run(saw, Svf.g(800 + 1400 * m), 1 / 4.0);
+            double env = Math.min(1, t / 0.002) * (t <= len ? 1 : Math.max(0, 1 - (t - len) / 0.02));
+            double y = Math.tanh(2.5 * (f1.bp + 0.6 * f2.bp + 0.15 * saw)) * env * vol;
+            add(l, start + i, y);
+            add(r, start + i, y);
+        }
+    }
+
+    /** Crisp sixteenth hats: accented on the off-beat, a little open there, panned left and right. */
+    private static void hat16(float[] l, float[] r, double at, int step, double vol, Random noise) {
+        double[] accent = {0.45, 0.2, 1, 0.3};
+        int start = (int) (at * RATE), n = (int) ((step % 4 == 2 ? 0.12 : 0.04) * RATE);
+        Svf f = new Svf();
+        double g = Svf.g(8000), decay = step % 4 == 2 ? 25 : 80, pan = step % 2 == 0 ? 0.4 : 0.6;
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) RATE;
+            f.run(noise.nextDouble() * 2 - 1, g, 1 / 0.7);
+            double s = f.hp * Math.exp(-t * decay) * 0.06 * accent[step % 4] * vol;
+            add(l, start + i, s * (1 - pan) * 2);
+            add(r, start + i, s * pan * 2);
         }
     }
 }
