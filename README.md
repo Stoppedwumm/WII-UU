@@ -599,6 +599,13 @@ two transitions (a swoosh wipe and Wii U menu tiles), each with its sound from t
 4444 `.mov` files with a transparent background, `.mp4` previews, and green screen `.mp4`s for
 editors that can't read transparency (`VisualStingers.java`).
 
+`trailer/render-intro.sh` renders a 15-second 3D intro (`dist/WII-UU-3D-Intro.mp4`): a game
+console and its GamePad turn into a TV and a phone, the TV wakes up to the WII-UU menu, the
+system tiles drop into it, then they break into blocks that come together as the 3D WII-UU logo.
+The scene is three.js (`intro3d.html`), drawn frame by frame in headless Chromium with software
+WebGL, so no GPU is needed; the logo is extruded from the real wordmark (`LogoPath.java`) and
+the sound comes from the sound kit (`IntroAudio.java`).
+
 `trailer/ChannelBanner.java` draws the YouTube channel banner (2560 × 1440) in the same look,
 with the logo and words inside the 1546 × 423 middle that every device shows. `render-mix.sh`
 writes it as `dist/mix/WII-UU-channel-banner.png`.
