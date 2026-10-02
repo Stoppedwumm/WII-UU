@@ -5,6 +5,7 @@ dist/*.mp4
 trailer/build2/
 dist/*.wav
 trailer/build-yt/
+trailer/build-mix/
 dist/WII-UU-youtube*
 presentation/build/
 dist/WII-UU-presentation*

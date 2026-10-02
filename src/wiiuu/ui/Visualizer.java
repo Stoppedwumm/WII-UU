@@ -29,6 +29,34 @@ final class Visualizer {
     /** Reads the latest music and updates the bars; call once per frame. */
     void update() {
         MenuAudio.get().scope(samples);
+        analyse();
+    }
+
+    /** Updates the bars from {@code mono}, the last {@value #N} samples or more (the music video). */
+    void update(float[] mono, int end) {
+        for (int i = 0; i < N; i++) {
+            int k = end - N + i;
+            samples[i] = k >= 0 && k < mono.length ? mono[k] : 0f;
+        }
+        analyse();
+    }
+
+    /** The bars, 0..1, low to high. */
+    float[] levels() {
+        return level;
+    }
+
+    /** The bass, 0..1: jumps with each kick, then falls back. */
+    float bass() {
+        return bass;
+    }
+
+    /** The waveform just played, about -1..1. */
+    float[] wave() {
+        return wave;
+    }
+
+    private void analyse() {
         for (int i = 0; i < N; i++) {
             double w = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1));    // Hann window
             re[i] = samples[i] * w;

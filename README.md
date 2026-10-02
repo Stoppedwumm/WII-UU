@@ -576,6 +576,17 @@ as its narration. It also writes captions (`.srt`), the chapter timestamps, a th
 * `VOICE_ENGINE=elevenlabs ELEVENLABS=<key> ./trailer/render-youtube.sh` uses ElevenLabs instead.
   `VOICE_ID` picks the voice.
 
+`trailer/render-mix.sh` makes the music video of the WII-UU Extended Mix, about 17 minutes at
+1080p (`dist/mix/WII-UU-Extended-Mix.mp4`), with a thumbnail, chapters and a description:
+* A 3D opening: the logo, as solid letters rendered by WII-UU's own small software renderer
+  (`Logo3D.java`), spins in through hyperspace and lands on the boot chime.
+* An intro card, then all 16 dance remixes non-stop with a visualizer: the spectrum ring, the
+  waveform on the horizon, a neon grid floor moving on the beat, stars speeding up with the bass,
+  the track playing and a progress bar.
+* An end card, then a 3D ending: the logo spins once and flies off into the stars.
+* The sound comes from WII-UU itself: the extended remixes, blended as in the Extended Mix, and
+  the visualizer's own analysis. It renders in parallel pieces (`PARTS=3`), then joins them.
+
 ## Presentation
 
 `presentation/` holds an 8-minute narrated presentation about WII-UU: what it does, how it works

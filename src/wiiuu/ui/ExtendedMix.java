@@ -28,6 +28,11 @@ final class ExtendedMix {
     /** One stretch of the mix; {@code following} is the next track's extended version, for the next segment. */
     record Segment(int index, short[] pcm, String title, short[] following) {}
 
+    /** The track ids in mix order (for the music video). */
+    static List<String> order() {
+        return ORDER;
+    }
+
     static int size() {
         return ORDER.size();
     }
