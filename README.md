@@ -153,7 +153,10 @@ comes back afterwards. Both can be turned off under *Settings → General* (`ui.
 *Settings → General → Menu music* picks the tune (`ui.musicTrack`). Besides WII-UU's own loop,
 there are public-domain melodies: Korobeiniki (the folk song that became the Tetris theme), In the
 Hall of the Mountain King, Ode to Joy, Für Elise, the Turkish March, Greensleeves and Pachelbel's
-Canon. Each comes in two versions: 8-bit, and a *WII-UU remix* in the menu's own relaxed sound.
+Canon. Each comes in three versions: 8-bit, a *WII-UU remix* in the menu's own relaxed sound,
+and a *Future House remix* at 128 BPM, with a build-up (filter opening on the chords, vocal chops,
+snare roll, riser) and a drop (kick and clap, sub and bouncing bass, saw lead, sidechain pumping).
+WII-UU's own tune has a Future House remix too.
 *All of them, taking turns* plays each one twice and then moves to the next. For any other music,
 such as a game theme you own, click *Add your own…* and put WAV or AIFF files into the folder
 that opens (`~/.wiiuu/music`). WII-UU loops up to 5 minutes of each file. MP3 isn't supported,
@@ -520,7 +523,8 @@ ui.fullscreen=true
 ui.minimizeOnLaunch=true
 ui.music=true               # background music in the menu; ui.musicVolume=45 (0-100)
 ui.musicTrack=wiiuu         # wiiuu | korobeiniki | mountainking | odetojoy | furelise | turkishmarch | greensleeves | canon
-                            # (add -remix for the WII-UU remix) | all | file:<name> (in ~/.wiiuu/music)
+                            # (-remix: WII-UU remix, -house: Future House remix, also wiiuu-house)
+                            # | all | file:<name> (in ~/.wiiuu/music)
 ui.bootAnimation=true       # start-up animation and chime
 ui.theme=auto               # auto (follow the system) | light | dark
 retroarch.enabled=false     # RetroArch mode; retroarch.path, retroarch.core.<id>, retroarch.download

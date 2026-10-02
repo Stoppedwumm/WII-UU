@@ -43,7 +43,7 @@ final class MenuMusic {
     };
 
     /** Melody: bar (1-based), beat, MIDI note, length in beats. */
-    private static final double[][] MELODY = {
+    static final double[][] MELODY = {
             {1, 0, 69, .5}, {1, .5, 72, .5}, {1, 1, 76, 1}, {1, 2.5, 74, .5}, {1, 3, 72, 1},
             {2, 0, 76, 1.5}, {2, 1.5, 79, .5}, {2, 2, 76, .5}, {2, 2.5, 72, 1.5},
             {3, 0, 74, .5}, {3, .5, 77, .5}, {3, 1, 81, 1.5}, {3, 2.5, 79, .5}, {3, 3, 77, 1},

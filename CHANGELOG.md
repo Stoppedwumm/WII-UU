@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.18 (2026-10-02)
+Future House remixes.
+- Every tune, WII-UU's own included, now also comes as a **Future House remix** at 128 BPM:
+  a build-up with the filter opening on the chords, vocal chops, a snare roll and a riser, then
+  a drop with kick and clap, sub and bouncing bass, a crisp saw lead and sidechain pumping.
+- They play at the same volume as the other tracks.
+
 ## 1.9.17 (2026-10-02)
 More menu music, each tune in two versions.
 - New: Für Elise, the Turkish March, Greensleeves and Pachelbel's Canon.
