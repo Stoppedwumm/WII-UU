@@ -261,7 +261,7 @@ public final class MixVideo {
                     "-i", wav.toString(), "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "256k", "-shortest"));
         }
         cmd.addAll(List.of("-c:v", "libx264", "-preset", System.getenv().getOrDefault("X264_PRESET", "medium"),
-                "-crf", System.getenv().getOrDefault("CRF", "20"), "-pix_fmt", "yuv420p", "-g", Integer.toString(fps * 2),
+                "-crf", System.getenv().getOrDefault("CRF", "21"), "-pix_fmt", "yuv420p", "-g", Integer.toString(fps * 2),
                 "-movflags", "+faststart", mp4.toString()));
         Process ff = new ProcessBuilder(cmd).inheritIO().redirectInput(ProcessBuilder.Redirect.PIPE).start();
         BufferedImage frame = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
@@ -431,15 +431,15 @@ public final class MixVideo {
         stars.draw(g, w, h, 1);
         double beat = (mt / BEAT) % 1;
         grid(g, mt, 0.55 + 0.45 * viz.bass(), beat);
-        horizonWave(g, (1 - card) * (1 - 0.5 * outro));
-        ring(g, (1 - card) * (1 - 0.75 * outro), mt);
+        horizonWave(g, (1 - card) * (1 - outro));
+        ring(g, (1 - card) * (1 - outro), mt);
         // corners: the brand and the website, the progress along the bottom
-        brand(g, 1 - card);
+        brand(g, (1 - card) * (1 - outro));
         g.setFont(semi.deriveFont(m() * 0.02f));
-        g.setColor(new Color(255, 255, 255, (int) (150 * (1 - card))));
+        g.setColor(new Color(255, 255, 255, (int) (150 * (1 - card) * (1 - outro))));
         FontMetrics fm = g.getFontMetrics();
         g.drawString("wiiuu.stoppedwumm.net", w - m() * 0.045f - fm.stringWidth("wiiuu.stoppedwumm.net"), m() * 0.066f);
-        progress(g, t);
+        progress(g, t, 1 - outro);
         nowPlaying(g, t, (1 - card) * (1 - outro));
         g.dispose();
         if (card > 0) introCard(frame, rgb, mt, card);
@@ -462,8 +462,9 @@ public final class MixVideo {
         double op = fade(u, 4.6, 5.4);
         if (op > 0) logo3d(rgb, -0.05, ry, 0, 0, ty, z, -5.5 + (u - 0.4) * 6, op);
         g = pen(frame);
-        double k = ease((u - 0.6) / 0.8) * fade(u, 3.0, 3.6);
-        if (k > 0) centered(g, heavy.deriveFont(m() * 0.05f), "Thanks for listening!", w / 2f, h * 0.76f, new Color(255, 255, 255, (int) (255 * k)));
+        endTexts(g, fade(u, 0.2, 1.4));
+        double k = ease((u - 1.4) / 0.8) * fade(u, 3.0, 3.6);
+        if (k > 0) centered(g, heavy.deriveFont(m() * 0.05f), "See you in the menu!", w / 2f, h * 0.76f, new Color(255, 255, 255, (int) (255 * k)));
         flash(g, 0.5 * Math.exp(-u * 4));
         fill(g, new Color(0, 0, 0), smooth((u - 5.2) / (TAIL - 5.4)));
         g.dispose();
@@ -603,7 +604,10 @@ public final class MixVideo {
         g.drawString("EXTENDED MIX", x + fm.stringWidth("WII-UU") + m() * 0.012f, y - m() * 0.004f);
     }
 
-    private void progress(Graphics2D g, double t) {
+    private void progress(Graphics2D g, double t, double alpha) {
+        if (alpha <= 0.01) return;
+        g = (Graphics2D) g.create();
+        g.setComposite(AlphaComposite.SrcOver.derive((float) alpha));
         float y = h - m() * 0.006f, hh = m() * 0.006f;
         g.setColor(new Color(255, 255, 255, 30));
         g.fill(new java.awt.geom.Rectangle2D.Float(0, y, w, hh));
@@ -614,6 +618,7 @@ public final class MixVideo {
         String s = clock(t) + " / " + clock(total);
         g.setColor(new Color(255, 255, 255, 170));
         g.drawString(s, w - m() * 0.045f - fm.stringWidth(s), y - m() * 0.02f);
+        g.dispose();
     }
 
     /** The track playing, bottom left, sliding in when the next one takes over. */
@@ -664,6 +669,17 @@ public final class MixVideo {
     private void endCard(BufferedImage frame, int[] rgb, double u, double alpha) {
         logo3d(rgb, -0.05, 0.25 * Math.sin(u * 0.6), 0, 0, 2.4, 16, -6 + ((u * 2.2) % 14), alpha);
         Graphics2D g = pen(frame);
+        endTexts(g, alpha);
+        g.dispose();
+    }
+
+    private void endTexts(Graphics2D g, double alpha) {
+        if (alpha <= 0.01) return;
+        // a soft dark band behind the words, over the bright horizon
+        Color band = new Color(4, 6, 16, (int) (200 * alpha)), clear = new Color(4, 6, 16, 0);
+        g.setPaint(new java.awt.LinearGradientPaint(0, h * 0.5f, 0, h * 0.86f, new float[]{0, 0.3f, 0.75f, 1},
+                new Color[]{clear, band, band, clear}));
+        g.fill(new java.awt.geom.Rectangle2D.Float(0, h * 0.5f, w, h * 0.36f));
         centered(g, black.deriveFont(m() * 0.055f), "Thanks for listening!", w / 2f, h * 0.6f, new Color(255, 255, 255, (int) (255 * alpha)));
         centered(g, semi.deriveFont(m() * 0.03f), "Get WII-UU free  ·  wiiuu.stoppedwumm.net", w / 2f, h * 0.68f,
                 new Color(120, 220, 255, (int) (255 * alpha)));
@@ -671,7 +687,6 @@ public final class MixVideo {
                 w / 2f, h * 0.735f, new Color(255, 255, 255, (int) (190 * alpha)));
         centered(g, semi.deriveFont(m() * 0.019f), "Music: WII-UU's own arrangements of public-domain melodies  ·  Tracklist in the description",
                 w / 2f, h * 0.79f, new Color(255, 255, 255, (int) (130 * alpha)));
-        g.dispose();
     }
 
     private void flash(Graphics2D g, double a) {
