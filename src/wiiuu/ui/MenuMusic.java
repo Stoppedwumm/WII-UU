@@ -230,7 +230,7 @@ final class MenuMusic {
     // ---- room -------------------------------------------------------------------------------
 
     /** A small, soft room (Schroeder style: combs then all-passes), applied around the loop. */
-    private static void reverb(float[] l, float[] r) {
+    static void reverb(float[] l, float[] r) {
         int n = l.length;
         float[] wetL = new float[n], wetR = new float[n];
         room(l, wetL, 0);

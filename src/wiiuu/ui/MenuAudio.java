@@ -33,6 +33,9 @@ final class MenuAudio {
     private float musicGain;              // current, ramps toward target
     private float musicTarget;
     private float musicVolume = 0.5f;
+    private short[] pending;              // fades the music out, then starts this loop
+    private int wraps;                    // times the current loop has played through
+    private java.util.function.IntConsumer onWrap;
     private boolean broken;
     private Thread thread;
 
@@ -49,18 +52,28 @@ final class MenuAudio {
         }
     }
 
-    /** Hands over the rendered background loop (interleaved stereo at {@link #RATE}). */
+    /**
+     * Hands over a background loop (interleaved stereo at {@link #RATE}). Music already playing
+     * fades out first, then the new loop starts from its beginning.
+     */
     void setMusic(short[] loop) {
         synchronized (lock) {
-            music = loop;
-            musicPos = 0;
+            if (music == null || musicGain <= 0f) {
+                music = loop;
+                musicPos = 0;
+                pending = null;
+            } else {
+                pending = loop;
+            }
+            wraps = 0;
             wake();
         }
     }
 
-    boolean hasMusic() {
+    /** Called on the audio thread, under the mixer's lock, each time the loop comes round. */
+    void onLoopEnd(java.util.function.IntConsumer timesPlayed) {
         synchronized (lock) {
-            return music != null;
+            onWrap = timesPlayed;
         }
     }
 
@@ -89,7 +102,7 @@ final class MenuAudio {
     }
 
     private boolean busy() {
-        return !voices.isEmpty() || (music != null && (musicGain > 0.0005f || musicTarget > 0));
+        return !voices.isEmpty() || (music != null && (musicGain > 0.0005f || musicTarget > 0)) || pending != null;
     }
 
     private void run() {
@@ -147,16 +160,27 @@ final class MenuAudio {
 
     private void mixMusic(float[] mix) {
         if (music == null) return;
-        int frames = music.length / 2;
         for (int i = 0; i < BLOCK; i++) {
             // ~1.5 s fade in, ~0.6 s fade out
-            if (musicGain < musicTarget) musicGain = Math.min(musicTarget, musicGain + 1f / (RATE * 1.5f));
-            else if (musicGain > musicTarget) musicGain = Math.max(musicTarget, musicGain - 1f / (RATE * 0.6f));
-            if (musicGain <= 0f) continue;
+            float target = pending != null ? 0f : musicTarget;
+            if (musicGain < target) musicGain = Math.min(target, musicGain + 1f / (RATE * 1.5f));
+            else if (musicGain > target) musicGain = Math.max(target, musicGain - 1f / (RATE * 0.6f));
+            if (musicGain <= 0f) {
+                if (pending != null) {
+                    music = pending;
+                    pending = null;
+                    musicPos = 0;
+                }
+                continue;
+            }
             float g = musicGain * musicGain * musicVolume / 32768f;
             mix[i * 2] += music[musicPos * 2] * g;
             mix[i * 2 + 1] += music[musicPos * 2 + 1] * g;
-            if (++musicPos >= frames) musicPos = 0;
+            if (++musicPos >= music.length / 2) {
+                musicPos = 0;
+                wraps++;
+                if (onWrap != null) onWrap.accept(wraps);
+            }
         }
     }
 

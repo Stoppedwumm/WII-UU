@@ -108,6 +108,7 @@ public final class Launcher {
             cmd = expand(template, game);
             if (cmd.isEmpty()) throw new LaunchException("No emulator command set for " + game.system().name());
             cmd = resolve(cmd, game.system());
+            cmd = mupenFillsScreen(cmd, screenPixels());
         }
         InputPatch patch = null;
         if (!viaRetroArch && typesKeys.test(game)) {
@@ -344,6 +345,35 @@ public final class Launcher {
         l.add(prog);
         l.addAll(args);
         return l;
+    }
+
+    /**
+     * Mupen64Plus draws at its configured size (640x480 unless changed), fullscreen or not, so the
+     * game sat small in a corner or in a little window. Unless the command sets a size, give it
+     * the screen's: {@code --resolution WxH} right after the program.
+     */
+    static List<String> mupenFillsScreen(List<String> cmd, java.awt.Dimension screen) {
+        if (screen == null || cmd.contains("--resolution")) return cmd;
+        for (int i = 0; i < cmd.size(); i++) {
+            String arg = cmd.get(i);
+            String name = arg.substring(Math.max(arg.lastIndexOf('/'), arg.lastIndexOf('\\')) + 1).toLowerCase(java.util.Locale.ROOT);
+            if (!name.startsWith("mupen64plus") || name.endsWith(".so") || name.contains(".so.") || name.endsWith(".dll")) continue;
+            List<String> out = new ArrayList<>(cmd);
+            out.addAll(i + 1, List.of("--resolution", screen.width + "x" + screen.height));
+            return out;
+        }
+        return cmd;
+    }
+
+    /** The main screen's size in real pixels (whatever the display scaling), or null without one. */
+    private static java.awt.Dimension screenPixels() {
+        try {
+            if (java.awt.GraphicsEnvironment.isHeadless()) return null;
+            java.awt.DisplayMode m = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDisplayMode();
+            return m.getWidth() >= 320 && m.getHeight() >= 240 ? new java.awt.Dimension(m.getWidth(), m.getHeight()) : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** "open -W -a Dolphin --args ..." -> "Dolphin" (null for anything else). */

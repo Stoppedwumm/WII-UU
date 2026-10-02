@@ -260,7 +260,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private BufferedImage bootBg, bootLogoImg, bootSheenImg, bootTagImg;
     private String bootCacheKey;
     private boolean musicEnabled;
-    private Thread musicRender;
+    private String musicChoice;              // the ui.musicTrack setting now loaded
+    private volatile int musicGen;           // bumped on every change; stale renders are dropped
+    private volatile short[] upNext;         // "all": the next track, ready when the current one ends
 
     // overlays / status
     private boolean showPad;
@@ -419,17 +421,54 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     /** Background music on the menu; it fades out while a game runs. */
     public void setMusicEnabled(boolean on) {
         musicEnabled = on;
-        if (on && musicRender == null && !MenuAudio.get().hasMusic() && !booting) {
-            // about a second of synthesis (longer on a Pi), off the Swing thread
-            musicRender = new Thread(() -> {
-                MenuAudio.get().setMusic(MenuMusic.render());
+        String choice = config.get("ui.musicTrack", MenuTracks.DEFAULT).trim();
+        if (on && !booting && !choice.equals(musicChoice)) {
+            musicChoice = choice;
+            int gen = ++musicGen;
+            upNext = null;
+            List<String> list = MenuTracks.playlist(musicFolder());
+            boolean all = choice.equals(MenuTracks.ALL);
+            String first = all ? MenuTracks.DEFAULT : list.contains(choice) ? choice : MenuTracks.DEFAULT;
+            MenuAudio.get().onLoopEnd(null);
+            renderMusic(gen, first, loop -> {
+                MenuAudio.get().setMusic(loop);
                 SwingUtilities.invokeLater(this::updateMusic);
-            }, "menu-music");
-            musicRender.setDaemon(true);
-            musicRender.setPriority(Thread.MIN_PRIORITY);
-            musicRender.start();
+                if (all) takeTurns(gen, list, list.indexOf(first));
+            });
         }
         updateMusic();
+    }
+
+    /** Each track plays twice, then the next one fades in. */
+    private void takeTurns(int gen, List<String> list, int playing) {
+        if (list.size() < 2) return;
+        int next = (playing + 1) % list.size();
+        renderMusic(gen, list.get(next), loop -> {
+            upNext = loop;
+            MenuAudio.get().onLoopEnd(times -> {
+                short[] n = upNext;
+                if (times < 2 || n == null || gen != musicGen) return;
+                upNext = null;
+                MenuAudio.get().setMusic(n);
+                takeTurns(gen, list, next);
+            });
+        });
+    }
+
+    /** Renders (up to a few seconds on a Pi) off the Swing thread; WII-UU's own tune if it fails. */
+    private void renderMusic(int gen, String id, java.util.function.Consumer<short[]> then) {
+        Thread t = new Thread(() -> {
+            short[] loop = MenuTracks.load(id, musicFolder());
+            if (loop == null) loop = MenuTracks.load(MenuTracks.DEFAULT, null);
+            if (loop != null && gen == musicGen) then.accept(loop);
+        }, "menu-music");
+        t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
+        t.start();
+    }
+
+    private java.nio.file.Path musicFolder() {
+        return config.home().resolve("music");
     }
 
     private void updateMusic() {

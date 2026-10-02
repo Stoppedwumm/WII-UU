@@ -150,6 +150,13 @@ that WII-UU synthesizes itself, so no audio files ship. The music fades out whil
 comes back afterwards. Both can be turned off under *Settings → General* (`ui.bootAnimation`,
 `ui.music`), and `ui.musicVolume` (0–100, default 45) sets the level.
 
+*Settings → General → Menu music* picks the tune (`ui.musicTrack`). Besides WII-UU's own loop,
+there are 8-bit style versions of public-domain melodies: Korobeiniki (the folk song that became
+the Tetris theme), In the Hall of the Mountain King and Ode to Joy. *All of them, taking turns*
+plays each one twice and then moves to the next. For any other music, such as a game theme you
+own, click *Add your own…* and put WAV or AIFF files into the folder that opens (`~/.wiiuu/music`).
+WII-UU loops up to 5 minutes of each file. MP3 isn't supported, so convert those first.
+
 **Dark mode.** *Settings → General → Theme* offers Auto, Light or Dark (`ui.theme`). *Auto*
 follows the system's appearance on macOS, Windows and GNOME/KDE, and switches along when you
 change it.
@@ -510,6 +517,7 @@ keys.p1.A=X
 ui.fullscreen=true
 ui.minimizeOnLaunch=true
 ui.music=true               # background music in the menu; ui.musicVolume=45 (0-100)
+ui.musicTrack=wiiuu         # wiiuu | korobeiniki | mountainking | odetojoy | all | file:<name> (in ~/.wiiuu/music)
 ui.bootAnimation=true       # start-up animation and chime
 ui.theme=auto               # auto (follow the system) | light | dark
 retroarch.enabled=false     # RetroArch mode; retroarch.path, retroarch.core.<id>, retroarch.download

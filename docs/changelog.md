@@ -3,6 +3,14 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.16 (2026-10-02)
+More menu music, and N64 games fill the screen.
+- Settings > General > **Menu music**: besides WII-UU's own tune, 8-bit style versions of
+  Korobeiniki (the Tetris theme), In the Hall of the Mountain King and Ode to Joy, or all of
+  them taking turns.
+- **Add your own…** opens a folder for your own WAV or AIFF music.
+- Mupen64Plus games fill the screen instead of a small 640x480 picture.
+
 ## 1.9.15 (2026-09-30)
 The WII-UU logo on Windows.
 - The Start menu and Desktop shortcuts, and the taskbar button of WII-UU started from them,

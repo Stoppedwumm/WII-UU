@@ -69,6 +69,7 @@ public final class SettingsDialog extends JDialog {
     private final JCheckBox fullscreen = new JCheckBox("Start in fullscreen");
     private final JCheckBox sounds = new JCheckBox("Menu sounds");
     private final JCheckBox music = new JCheckBox("Background music");
+    private final javax.swing.JComboBox<MenuTracks.Track> musicTrack = new javax.swing.JComboBox<>();
     private final javax.swing.JComboBox<String> theme = new javax.swing.JComboBox<>(
             new String[]{"Auto (follow the system)", "Light", "Dark"});
     private final JCheckBox boot = new JCheckBox("Start-up animation");
@@ -132,6 +133,11 @@ public final class SettingsDialog extends JDialog {
         fullscreen.setSelected(config.getBool("ui.fullscreen", false));
         sounds.setSelected(config.getBool("ui.sounds", true));
         music.setSelected(config.getBool("ui.music", true));
+        String track = config.get("ui.musicTrack", MenuTracks.DEFAULT).trim();
+        musicTrack.removeAllItems();
+        for (MenuTracks.Track t : MenuTracks.all(musicFolder())) musicTrack.addItem(t);
+        musicTrack.addItem(new MenuTracks.Track(MenuTracks.ALL, "All of them, taking turns"));
+        for (int i = 0; i < musicTrack.getItemCount(); i++) if (musicTrack.getItemAt(i).id().equals(track)) musicTrack.setSelectedIndex(i);
         String t = config.get("ui.theme", "auto").trim().toLowerCase();
         theme.setSelectedIndex(t.equals("light") ? 1 : t.equals("dark") ? 2 : 0);
         boot.setSelected(config.getBool("ui.bootAnimation", true));
@@ -170,6 +176,8 @@ public final class SettingsDialog extends JDialog {
         config.set("ui.fullscreen", Boolean.toString(fullscreen.isSelected()));
         config.set("ui.sounds", Boolean.toString(sounds.isSelected()));
         config.set("ui.music", Boolean.toString(music.isSelected()));
+        MenuTracks.Track track = (MenuTracks.Track) musicTrack.getSelectedItem();
+        config.set("ui.musicTrack", track == null || track.id().equals(MenuTracks.DEFAULT) ? null : track.id());
         config.set("ui.theme", new String[]{"auto", "light", "dark"}[Math.max(0, theme.getSelectedIndex())]);
         config.set("ui.bootAnimation", Boolean.toString(boot.isSelected()));
         config.set("server.maxPlayers", eight.isSelected() ? "8" : null);
@@ -350,6 +358,26 @@ public final class SettingsDialog extends JDialog {
         row = addRow(p, c, row, "ROM base folder", romBase, browse);
         row = addRow(p, c, row, "GamePad server port", port, null);
         row = addRow(p, c, row, "Theme", theme, null);
+        musicTrack.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,
+                                                                   boolean selected, boolean focus) {
+                return super.getListCellRendererComponent(list, value instanceof MenuTracks.Track t ? t.name() : value,
+                        index, selected, focus);
+            }
+        });
+        JButton musicDir = new JButton("Add your own\u2026");
+        musicDir.setToolTipText("Opens the music folder: put WAV or AIFF files there, then reopen Settings");
+        musicDir.addActionListener(e -> {
+            try {
+                java.nio.file.Files.createDirectories(musicFolder());
+                Desktop.getDesktop().open(musicFolder().toFile());
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Put WAV or AIFF files in " + musicFolder()
+                        + ", then reopen Settings.", "Your own music", JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+        row = addRow(p, c, row, "Menu music", musicTrack, musicDir);
         row = addRow(p, c, row, "Fixed pairing code", fixedCode, new JLabel("(phones stay paired; change it to unpair them)"));
         JButton update = new JButton("Check for updates");
         JLabel updateInfo = new JLabel("Version " + wiiuu.Main.VERSION);
@@ -488,6 +516,10 @@ public final class SettingsDialog extends JDialog {
                 }
             }
         }.execute();
+    }
+
+    private java.nio.file.Path musicFolder() {
+        return config.home().resolve("music");
     }
 
     private static int addRow(JPanel p, GridBagConstraints c, int row, String label, JComponent field, JComponent extra) {
