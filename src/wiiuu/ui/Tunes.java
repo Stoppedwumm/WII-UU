@@ -523,7 +523,11 @@ final class Tunes {
      * then the drop with the whole tune. Tunes in 3/4 are stretched to 4/4 bars.
      */
     private static short[] house(Tune t) {
-        double beat = 60.0 / HOUSE_BPM, bar4 = 4 * beat, step = beat / 4;
+        return master(houseParts(t, HOUSE_BPM));
+    }
+
+    private static Parts houseParts(Tune t, double bpm) {
+        double beat = 60.0 / bpm, bar4 = 4 * beat, step = beat / 4;
         int bpb = t.beatsPerBar();
         double stretch = 4.0 / bpb;
         String[] bars = bars(t);
@@ -600,7 +604,7 @@ final class Tunes {
             if (note.beat() >= n * bpb / 2.0) synth(busL, busR, at, len, note.midi() + shift + 12, 0.12, LEAD, x -> 4000);
         }
 
-        return master(busL, busR, dryL, dryR, drumL, drumR, drop, beat);
+        return new Parts(busL, busR, dryL, dryR, drumL, drumR, drop, beat, bars, build);
     }
 
     /** The end of a build-up: a snare roll over the last two bars, a riser, and a downlifter at the loop's start. */
@@ -616,35 +620,105 @@ final class Tunes {
     }
 
     /**
-     * Mixes a build-and-drop remix: reverb on the synths, everything but the drums pumps with the
-     * kick from the drop on, then the drop is driven into a soft clipper (loud and dense) and the
-     * whole brought to about the level of the other tracks, so switching between them doesn't jump.
+     * A build-and-drop remix before mixing: synths (reverb and sidechain), bass (sidechain) and drums,
+     * where the drop starts, the beat length, the tune's chord bars and the build's length in bars.
      */
-    private static short[] master(float[] busL, float[] busR, float[] dryL, float[] dryR, float[] drumL, float[] drumR,
-                                  double drop, double beat) {
+    private record Parts(float[] busL, float[] busR, float[] dryL, float[] dryR, float[] drumL, float[] drumR,
+                         double drop, double beat, String[] bars, int build) {}
+
+    private static short[] master(Parts p) {
+        return master(p, 0, p.drop(), p.busL().length / (double) RATE);
+    }
+
+    /**
+     * Mixes a build-and-drop remix: reverb on the synths, everything but the drums pumps with the
+     * kick (all but the build-up, from {@code buildFrom} to {@code buildTo}), then the drop is driven
+     * into a soft clipper (loud and dense) and the whole brought to about the level of the other
+     * tracks, so switching between them doesn't jump.
+     */
+    private static short[] master(Parts p, double buildFrom, double buildTo, double dropEnd) {
+        float[] busL = p.busL(), busR = p.busR(), dryL = p.dryL(), dryR = p.dryR(), drumL = p.drumL(), drumR = p.drumR();
+        double beat = p.beat();
         MenuMusic.reverb(busL, busR);
         int frames = busL.length;
         float[] l = new float[frames], r = new float[frames];
-        int dropFrame = (int) (drop * RATE);
+        int dropFrom = (int) (buildTo * RATE), dropTo = Math.min(frames, (int) (dropEnd * RATE));
         double dropPower = 0;
         for (int i = 0; i < frames; i++) {
             double s = i / (double) RATE;
             double duck = 1;
-            if (s >= drop) {
-                double x = Math.max(0, 1 - ((s - drop) % beat) / 0.16);
+            if (s < buildFrom || s >= buildTo) {
+                double x = Math.max(0, 1 - (s % beat) / 0.16);
                 duck = 1 - 0.78 * x * x;
             }
             l[i] = (float) ((busL[i] + dryL[i]) * duck + drumL[i]);
             r[i] = (float) ((busR[i] + dryR[i]) * duck + drumR[i]);
-            if (i >= dropFrame) dropPower += l[i] * l[i] + r[i] * r[i];
+            if (i >= dropFrom && i < dropTo) dropPower += l[i] * l[i] + r[i] * r[i];
         }
-        double drive = 0.45 / Math.sqrt(dropPower / Math.max(1, 2.0 * (frames - dropFrame))), level = 0.42;
+        double drive = 0.45 / Math.sqrt(dropPower / Math.max(1, 2.0 * (dropTo - dropFrom))), level = 0.42;
         short[] out = new short[frames * 2];
         for (int i = 0; i < frames; i++) {
             out[i * 2] = (short) (Math.tanh(drive * l[i]) * level * 32767);
             out[i * 2 + 1] = (short) (Math.tanh(drive * r[i]) * level * 32767);
         }
         return out;
+    }
+
+    // ---- extended versions, for the Extended Mix --------------------------------------------
+
+    /** Bars of drums and bass before and after an extended version: the DJ's room to blend. */
+    static final int EXTENDED_BARS = 8;
+
+    /**
+     * A Future or Color House remix ("korobeiniki-house", "wiiuu-color") at {@code bpm} with
+     * {@link #EXTENDED_BARS} bars of kick, hats, clap and bass before and after it, like a club
+     * "extended mix"; null for an unknown id.
+     */
+    static short[] extended(String id, double bpm) {
+        boolean house = id.endsWith(HOUSE);
+        if (!house && !id.endsWith(COLOR)) return null;
+        String base = id.substring(0, id.length() - (house ? HOUSE : COLOR).length());
+        Tune tune = base.equals(THEME.id()) ? THEME : null;
+        for (Tune t : TUNES) if (t.id().equals(base)) tune = t;
+        if (tune == null) return null;
+        Parts core = house ? houseParts(tune, bpm) : colorParts(tune, bpm);
+        double beat = core.beat(), bar4 = 4 * beat, step = beat / 4, pad = EXTENDED_BARS * bar4;
+        String[] bars = core.bars();
+        int bpb = tune.beatsPerBar(), coreBars = core.build() + bars.length;
+        int offset = (int) Math.round(pad * RATE), length = core.busL().length;
+        int frames = offset + length + offset;
+        float[][] parts = new float[6][];
+        float[][] coreParts = {core.busL(), core.busR(), core.dryL(), core.dryR(), core.drumL(), core.drumR()};
+        for (int k = 0; k < 6; k++) {
+            parts[k] = new float[frames];
+            System.arraycopy(coreParts[k], 0, parts[k], offset, length);
+        }
+        Random noise = new Random(13);
+        double outro = pad + coreBars * bar4;
+        for (int b = 0; b < EXTENDED_BARS; b++) {
+            for (int side = 0; side < 2; side++) {
+                boolean intro = side == 0;
+                double bar = (intro ? 0 : outro) + b * bar4;
+                for (int k = 0; k < 4; k++) {
+                    houseKick(parts[4], parts[5], bar + k * beat);
+                    // the clap joins after two bars of the intro and leaves two bars before the end
+                    if (k % 2 == 1 && (intro ? b >= 2 : b < EXTENDED_BARS - 2)) clap(parts[4], parts[5], bar + k * beat, noise);
+                }
+                for (int s = 0; s < 16; s++) hat16(parts[4], parts[5], bar + s * step, s, 0.8, noise);
+                // bass: in the second half of the intro, the first half of the outro
+                if (intro ? b < EXTENDED_BARS / 2 : b >= EXTENDED_BARS / 2) continue;
+                String chordBar = intro ? bars[0] : bars[bars.length - 1];
+                for (int s = 2; s < 16; s += 4) {
+                    int root = bassRoot(chordAt(chordBar, s / 4.0 * bpb / 4, bpb)[0]);
+                    double at = bar + s * step;
+                    sub(parts[2], parts[3], at, beat * 0.45, hz(root - 12), 0.2);
+                    if (house) synth(parts[2], parts[3], at, beat * 0.32, root + (s == 6 || s == 14 ? 12 : 0), 0.24, MID_BASS, x -> 380);
+                    else yoyBass(parts[2], parts[3], at, step * 1.6, root + (s == 6 || s == 14 ? 12 : 0), 0.2);
+                }
+            }
+        }
+        Parts all = new Parts(parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], pad + core.drop(), beat, bars, core.build());
+        return master(all, pad, pad + core.drop(), outro);
     }
 
     private static boolean contains(int[] a, int v) {
@@ -840,7 +914,11 @@ final class Tunes {
 
     /** Like {@link #house}: a build-up over the tune's first bars, then the drop with the whole tune. */
     private static short[] color(Tune t) {
-        double beat = 60.0 / COLOR_BPM, bar4 = 4 * beat, step = beat / 4;
+        return master(colorParts(t, COLOR_BPM));
+    }
+
+    private static Parts colorParts(Tune t, double bpm) {
+        double beat = 60.0 / bpm, bar4 = 4 * beat, step = beat / 4;
         int bpb = t.beatsPerBar();
         double stretch = 4.0 / bpb;
         String[] bars = bars(t);
@@ -911,7 +989,7 @@ final class Tunes {
             double at = drop + note.beat() * stretch * beat, len = note.len() * stretch * beat * 0.95;
             colorLead(busL, busR, at, len, note.midi() + shift, chordNotes(chordOf(bars, note.beat(), bpb)), 0.3, 5000);
         }
-        return master(busL, busR, dryL, dryR, drumL, drumR, drop, beat);
+        return new Parts(busL, busR, dryL, dryR, drumL, drumR, drop, beat, bars, build);
     }
 
     /** The chord under a melody note at {@code beat} of the tune. */

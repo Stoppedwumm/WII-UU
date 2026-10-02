@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.20 (2026-10-02)
+The WII-UU Extended Mix, and a music visualizer.
+- Settings > General > Menu music > **WII-UU Extended Mix**: every Future and Color House
+  remix non-stop at 128 BPM, like a DJ set. Each track gets 8 bars of drums and bass at its start
+  and end, and the next one is beat-matched and blended in over them.
+- **Music visualizer**: frequency bars move behind the menu while music plays. Press **V** for
+  the full-screen visualizer, with a spectrum ring that pulses with the bass, the waveform and
+  the name of the track. V, Esc or B goes back.
+
 ## 1.9.19 (2026-10-02)
 Color House remixes.
 - Every tune, WII-UU's own included, now also comes as a **Color House remix** at 126 BPM:

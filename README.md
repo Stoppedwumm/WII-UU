@@ -142,6 +142,7 @@ wiiuu-emulators --releases-only
 | F5 | − | Rescan games |
 | F1 | – | Settings |
 | F11 | – | Toggle fullscreen |
+| V | – | Full-screen music visualizer |
 | Ctrl+Q | HOME → Close game | Quit the running game |
 
 **Start-up and music.** WII-UU opens with a short start-up animation and chime. Any key, click or
@@ -164,6 +165,17 @@ Canon. Each comes in four versions:
   gliding vowel filter, a talking "yoy" bass bouncing around the kick, crisp sixteenth hats.
 
 WII-UU's own tune has both dance remixes too.
+
+*WII-UU Extended Mix* plays every Future and Color House remix non-stop at 128 BPM, like a DJ
+set (about 16 minutes before it starts over). Each track plays as an extended version, with
+8 bars of drums and bass before and after it, and the next track is beat-matched and blended in
+over those bars. WII-UU makes the mix one track ahead while it plays, so it needs little memory;
+the first track takes a few seconds to start.
+
+**Music visualizer.** While menu music plays, frequency bars move behind the tiles
+(`ui.visualizer`; *Settings → General*). Press **V** for the full-screen visualizer: a spectrum
+ring around the WII-UU logo that pulses with the bass, the waveform, and the name of the track
+playing. V, Esc or the GamePad's B button go back.
 *All of them, taking turns* plays each one twice and then moves to the next. For any other music,
 such as a game theme you own, click *Add your own…* and put WAV or AIFF files into the folder
 that opens (`~/.wiiuu/music`). WII-UU loops up to 5 minutes of each file. MP3 isn't supported,
@@ -531,8 +543,9 @@ ui.minimizeOnLaunch=true
 ui.music=true               # background music in the menu; ui.musicVolume=45 (0-100)
 ui.musicTrack=wiiuu         # wiiuu | korobeiniki | mountainking | odetojoy | furelise | turkishmarch | greensleeves | canon
                             # (-remix: WII-UU remix, -house: Future House, -color: Color House;
-                            # also wiiuu-house, wiiuu-color)
+                            # also wiiuu-house, wiiuu-color) | mix (the Extended Mix)
                             # | all | file:<name> (in ~/.wiiuu/music)
+ui.visualizer=true          # frequency bars behind the menu while music plays (V: full screen)
 ui.bootAnimation=true       # start-up animation and chime
 ui.theme=auto               # auto (follow the system) | light | dark
 retroarch.enabled=false     # RetroArch mode; retroarch.path, retroarch.core.<id>, retroarch.download

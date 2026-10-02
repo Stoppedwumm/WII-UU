@@ -263,6 +263,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private String musicChoice;              // the ui.musicTrack setting now loaded
     private volatile int musicGen;           // bumped on every change; stale renders are dropped
     private volatile short[] upNext;         // "all": the next track, ready when the current one ends
+    private volatile String musicTitle;      // what's playing, for the visualizer
+    private final Visualizer viz = new Visualizer();
+    private boolean vizOn;                   // the strip behind the tiles (ui.visualizer)
+    private boolean vizFull;                 // full screen (V)
 
     // overlays / status
     private boolean showPad;
@@ -421,17 +425,25 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     /** Background music on the menu; it fades out while a game runs. */
     public void setMusicEnabled(boolean on) {
         musicEnabled = on;
+        vizOn = config.getBool("ui.visualizer", true);
         String choice = config.get("ui.musicTrack", MenuTracks.DEFAULT).trim();
         if (on && !booting && !choice.equals(musicChoice)) {
             musicChoice = choice;
             int gen = ++musicGen;
             upNext = null;
+            if (choice.equals(ExtendedMix.ID)) {
+                MenuAudio.get().onLoopEnd(null);
+                playMix(gen, 0, null, true);
+                updateMusic();
+                return;
+            }
             List<String> list = MenuTracks.playlist(musicFolder());
             boolean all = choice.equals(MenuTracks.ALL);
             String first = all ? MenuTracks.DEFAULT : list.contains(choice) ? choice : MenuTracks.DEFAULT;
             MenuAudio.get().onLoopEnd(null);
             renderMusic(gen, first, loop -> {
                 MenuAudio.get().setMusic(loop);
+                musicTitle = MenuTracks.name(first, musicFolder());
                 SwingUtilities.invokeLater(this::updateMusic);
                 if (all) takeTurns(gen, list, list.indexOf(first));
             });
@@ -450,9 +462,41 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 if (times < 2 || n == null || gen != musicGen) return;
                 upNext = null;
                 MenuAudio.get().setMusic(n);
+                musicTitle = MenuTracks.name(list.get(next), musicFolder());
                 takeTurns(gen, list, next);
             });
         });
+    }
+
+    /**
+     * The Extended Mix, a segment at a time: segment {@code i} is made in the background and queued
+     * to follow the one playing; when it starts, the next one is made. {@code track} is segment i's
+     * track when the previous segment already made it.
+     */
+    private void playMix(int gen, int i, short[] track, boolean first) {
+        Thread t = new Thread(() -> {
+            ExtendedMix.Segment seg;
+            try {
+                seg = ExtendedMix.segment(i, track);
+            } catch (RuntimeException | OutOfMemoryError e) {
+                return;                                    // the segment playing goes on looping
+            }
+            if (gen != musicGen) return;
+            Runnable started = () -> {
+                musicTitle = seg.title();
+                playMix(gen, i + 1, seg.following(), false);
+            };
+            if (first) {
+                MenuAudio.get().setMusic(seg.pcm());
+                started.run();
+                SwingUtilities.invokeLater(this::updateMusic);
+            } else {
+                MenuAudio.get().queue(seg.pcm(), started);
+            }
+        }, "menu-mix");
+        t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
+        t.start();
     }
 
     /** Renders (up to a few seconds on a Pi) off the Swing thread; WII-UU's own tune if it fails. */
@@ -566,6 +610,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void activate() {
         if (skipBoot()) return;
+        if (vizFull) {
+            back();
+            return;
+        }
         if (confirmQuit) {
             choosePower(powerSel);
             return;
@@ -615,6 +663,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void back() {
         if (skipBoot()) return;
+        if (vizFull) {
+            vizFull = false;
+            repaint();
+            return;
+        }
         if (confirmQuit || showPad) {
             confirmQuit = false;
             showPad = false;
@@ -701,6 +754,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     case KeyEvent.VK_F1 -> actions.openSettings();
                     case KeyEvent.VK_F2 -> toggleGamepadInfo();
                     case KeyEvent.VK_F5 -> refresh();
+                    case KeyEvent.VK_V -> toggleVisualizer();
                     default -> { }
                 }
             }
@@ -711,6 +765,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 requestFocusInWindow();
                 if (skipBoot()) return;
                 if (playing != null) return;
+                if (vizFull) {
+                    back();
+                    return;
+                }
                 if (showPad || confirmQuit) {
                     if (confirmQuit) {
                         List<Rectangle2D> rs = powerRects();
@@ -808,7 +866,32 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 }
             }
         }
+        // the visualizer moves while music plays (about 30 frames a second)
+        if ((vizFull || vizOn && playing == null && !booting) && (++vizTick & 1) == 0
+                && (vizFull || MenuAudio.get().musicAudible() || vizFading())) dirty = true;
         if (dirty) repaint();
+    }
+
+    private int vizTick;
+    private long vizQuietSince;
+
+    /** True for a second after the music stops, so the bars sink instead of freezing. */
+    private boolean vizFading() {
+        if (MenuAudio.get().musicAudible()) {
+            vizQuietSince = 0;
+            return true;
+        }
+        if (vizQuietSince == 0) vizQuietSince = System.currentTimeMillis();
+        return System.currentTimeMillis() - vizQuietSince < 1200;
+    }
+
+    /** V: the full-screen visualizer on and off. */
+    public void toggleVisualizer() {
+        if (playing != null || booting) return;
+        vizFull = !vizFull;
+        if (vizFull) Sfx.select();
+        else Sfx.back();
+        repaint();
     }
 
     /** Runs the animations to completion (for offscreen snapshots). */
@@ -1152,6 +1235,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             return;
         }
         paintBackground(g);
+        boolean vizStrip = vizOn && playing == null;
+        if (vizStrip || vizFull) viz.update();
+        if (vizStrip && !vizFull) viz.paintAmbient(g, getWidth(), (float) L.dockY - 8, getHeight() * 0.16f, ACCENT);
         paintTopBarCached(g, L);
         if (tiles.isEmpty()) paintEmpty(g, L);
         else paintGrid(g, L);
@@ -1161,6 +1247,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (playing != null) paintNowPlaying(g, L);
         else if (showPad) paintPadOverlay(g, L);
         else if (confirmQuit) paintConfirm(g);
+        if (vizFull) {
+            boolean mix = ExtendedMix.ID.equals(musicChoice);
+            viz.paintFull(g, getWidth(), getHeight(), musicEnabled ? musicTitle : "Music is off",
+                    !musicEnabled ? "Turn it on in Settings (F1) > General" : mix ? "WII-UU Extended Mix" : "Menu music");
+        }
         if (booting) paintBoot(g, L);
         g.dispose();
         Toolkit.getDefaultToolkit().sync(); // flush X11 so animation doesn't stutter on Linux

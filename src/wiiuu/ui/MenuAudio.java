@@ -36,6 +36,10 @@ final class MenuAudio {
     private short[] pending;              // fades the music out, then starts this loop
     private int wraps;                    // times the current loop has played through
     private java.util.function.IntConsumer onWrap;
+    private short[] queued;               // starts right where the loop ends, without a fade
+    private Runnable onQueuedStart;
+    private final float[] scope = new float[4096];   // the music just played (mono), for the visualizer
+    private int scopePos;
     private boolean broken;
     private Thread thread;
 
@@ -66,7 +70,40 @@ final class MenuAudio {
                 pending = loop;
             }
             wraps = 0;
+            queued = null;
+            onQueuedStart = null;
             wake();
+        }
+    }
+
+    /**
+     * Plays {@code next} straight after the current music reaches its end, without a gap or fade
+     * (the Extended Mix, which arrives a piece at a time). {@code onStart} runs on the audio thread,
+     * under the mixer's lock, when it begins.
+     */
+    void queue(short[] next, Runnable onStart) {
+        synchronized (lock) {
+            queued = next;
+            onQueuedStart = onStart;
+        }
+    }
+
+    /** The last {@code dst.length} music samples played (mono, after volume and fades); silence without sound. */
+    void scope(float[] dst) {
+        synchronized (lock) {
+            if (broken || music == null || musicGain <= 0f) {
+                java.util.Arrays.fill(dst, 0f);
+                return;
+            }
+            int n = Math.min(dst.length, scope.length);
+            for (int i = 0; i < n; i++) dst[i] = scope[(scopePos - n + i + scope.length) % scope.length];
+        }
+    }
+
+    /** Whether music can be heard right now. */
+    boolean musicAudible() {
+        synchronized (lock) {
+            return music != null && musicGain > 0.01f && pending == null;
         }
     }
 
@@ -171,13 +208,27 @@ final class MenuAudio {
                     pending = null;
                     musicPos = 0;
                 }
+                scope[scopePos] = 0;
+                scopePos = (scopePos + 1) % scope.length;
                 continue;
             }
             float g = musicGain * musicGain * musicVolume / 32768f;
-            mix[i * 2] += music[musicPos * 2] * g;
-            mix[i * 2 + 1] += music[musicPos * 2 + 1] * g;
+            float sl = music[musicPos * 2] * g, sr = music[musicPos * 2 + 1] * g;
+            mix[i * 2] += sl;
+            mix[i * 2 + 1] += sr;
+            scope[scopePos] = (sl + sr) * 0.5f;
+            scopePos = (scopePos + 1) % scope.length;
             if (++musicPos >= music.length / 2) {
                 musicPos = 0;
+                if (queued != null && pending == null) {
+                    music = queued;
+                    queued = null;
+                    wraps = 0;
+                    Runnable start = onQueuedStart;
+                    onQueuedStart = null;
+                    if (start != null) start.run();
+                    continue;
+                }
                 wraps++;
                 if (onWrap != null) onWrap.accept(wraps);
             }

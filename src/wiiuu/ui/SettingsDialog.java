@@ -69,6 +69,7 @@ public final class SettingsDialog extends JDialog {
     private final JCheckBox fullscreen = new JCheckBox("Start in fullscreen");
     private final JCheckBox sounds = new JCheckBox("Menu sounds");
     private final JCheckBox music = new JCheckBox("Background music");
+    private final JCheckBox visualizer = new JCheckBox("Music visualizer behind the menu (V: full screen)");
     private final javax.swing.JComboBox<MenuTracks.Track> musicTrack = new javax.swing.JComboBox<>();
     private final javax.swing.JComboBox<String> theme = new javax.swing.JComboBox<>(
             new String[]{"Auto (follow the system)", "Light", "Dark"});
@@ -136,7 +137,9 @@ public final class SettingsDialog extends JDialog {
         String track = config.get("ui.musicTrack", MenuTracks.DEFAULT).trim();
         musicTrack.removeAllItems();
         for (MenuTracks.Track t : MenuTracks.all(musicFolder())) musicTrack.addItem(t);
+        musicTrack.addItem(new MenuTracks.Track(ExtendedMix.ID, ExtendedMix.NAME));
         musicTrack.addItem(new MenuTracks.Track(MenuTracks.ALL, "All of them, taking turns"));
+        visualizer.setSelected(config.getBool("ui.visualizer", true));
         for (int i = 0; i < musicTrack.getItemCount(); i++) if (musicTrack.getItemAt(i).id().equals(track)) musicTrack.setSelectedIndex(i);
         String t = config.get("ui.theme", "auto").trim().toLowerCase();
         theme.setSelectedIndex(t.equals("light") ? 1 : t.equals("dark") ? 2 : 0);
@@ -176,6 +179,7 @@ public final class SettingsDialog extends JDialog {
         config.set("ui.fullscreen", Boolean.toString(fullscreen.isSelected()));
         config.set("ui.sounds", Boolean.toString(sounds.isSelected()));
         config.set("ui.music", Boolean.toString(music.isSelected()));
+        config.set("ui.visualizer", visualizer.isSelected() ? null : "false");
         MenuTracks.Track track = (MenuTracks.Track) musicTrack.getSelectedItem();
         config.set("ui.musicTrack", track == null || track.id().equals(MenuTracks.DEFAULT) ? null : track.id());
         config.set("ui.theme", new String[]{"auto", "light", "dark"}[Math.max(0, theme.getSelectedIndex())]);
@@ -420,7 +424,7 @@ public final class SettingsDialog extends JDialog {
             row = addRow(p, c, row, "macOS permissions", perms,
                     new JLabel("<html>Turn on <b>WII-UU</b> (or Java / Terminal) in both,<br>then restart WII-UU.</html>"));
         }
-        for (JCheckBox box : new JCheckBox[]{serverOn, requireCode, fullscreen, minimize, sounds, music, boot, retroarch, split, eight, buzzMode, hideEmpty}) {
+        for (JCheckBox box : new JCheckBox[]{serverOn, requireCode, fullscreen, minimize, sounds, music, visualizer, boot, retroarch, split, eight, buzzMode, hideEmpty}) {
             c.gridx = 1;
             c.gridy = row++;
             c.gridwidth = 2;

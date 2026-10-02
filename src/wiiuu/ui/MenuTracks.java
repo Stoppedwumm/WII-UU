@@ -43,6 +43,13 @@ public final class MenuTracks {
         return out;
     }
 
+    /** A track's name as the menu lists it, or the id itself. */
+    static String name(String id, Path folder) {
+        if (id.equals(ExtendedMix.ID)) return ExtendedMix.NAME;
+        for (Track t : all(folder)) if (t.id().equals(id)) return t.name();
+        return id;
+    }
+
     /** The tracks "all" takes turns with. */
     static List<String> playlist(Path folder) {
         List<String> ids = new ArrayList<>();
