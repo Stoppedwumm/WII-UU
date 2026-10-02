@@ -5,7 +5,7 @@
 # A 3D opening, an intro card, every Future and Color House remix non-stop with a visualizer, an end
 # card and a 3D ending (trailer/MixVideo.java, trailer/Logo3D.java). Needs Java 17+ and ffmpeg;
 # python3 with fonttools for the Inter font (otherwise the system's sans-serif).
-#   PARTS=3 (pieces rendered at once)  TRACKS=16  FPS=30  SIZE=1920x1080  CRF=20  X264_PRESET=medium
+#   PARTS=3 (pieces rendered at once)  TRACKS=16  FPS=30  SIZE=1920x1080  CRF=21  X264_PRESET=medium
 set -euo pipefail
 cd "$(dirname "$0")/.."
 B=trailer/build-mix
