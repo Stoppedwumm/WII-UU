@@ -587,6 +587,10 @@ as its narration. It also writes captions (`.srt`), the chapter timestamps, a th
 * The sound comes from WII-UU itself: the extended remixes, blended as in the Extended Mix, and
   the visualizer's own analysis. It renders in parallel pieces (`PARTS=3`), then joins them.
 
+`trailer/ChannelBanner.java` draws the YouTube channel banner (2560 × 1440) in the same look,
+with the logo and words inside the 1546 × 423 middle that every device shows. `render-mix.sh`
+writes it as `dist/mix/WII-UU-channel-banner.png`.
+
 ## Presentation
 
 `presentation/` holds an 8-minute narrated presentation about WII-UU: what it does, how it works

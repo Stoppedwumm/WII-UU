@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Renders the WII-UU Extended Mix music video for YouTube into dist/mix/:
-#   WII-UU-Extended-Mix.mp4 (1080p30, H.264/AAC), -thumbnail.jpg, -chapters.txt, -description.txt
+#   WII-UU-Extended-Mix.mp4 (1080p30, H.264/AAC), -thumbnail.jpg, -chapters.txt, -description.txt,
+#   and the channel banner (WII-UU-channel-banner.png, ChannelBanner.java)
 # A 3D opening, an intro card, every Future and Color House remix non-stop with a visualizer, an end
 # card and a 3D ending (trailer/MixVideo.java, trailer/Logo3D.java). Needs Java 17+ and ffmpeg;
 # python3 with fonttools for the Inter font (otherwise the system's sans-serif).
@@ -24,10 +25,12 @@ for weight in ("600", "800", "900"):
     font.save(f"{sys.argv[1]}/Inter-{weight}.ttf")
 PY
 
-javac -cp build/wiiuu.jar -d "$B/classes" trailer/Logo3D.java trailer/MixVideo.java
+javac -cp build/wiiuu.jar -d "$B/classes" trailer/Logo3D.java trailer/MixVideo.java trailer/ChannelBanner.java
 CP="build/wiiuu.jar:$B/classes"
 ARGS=(--fps "$FPS" --size "${SIZE:-1920x1080}" --tracks "${TRACKS:-16}")
 run() { java -Xmx2500m -Djava.awt.headless=true -cp "$CP" wiiuu.ui.MixVideo "$OUT" "$B/fonts" "${ARGS[@]}" "$@"; }
+
+java -Djava.awt.headless=true -cp "$CP" wiiuu.ui.ChannelBanner "$OUT/WII-UU-channel-banner.png" "$B/fonts"
 
 # 1. the soundtrack, chapters, description and thumbnail; prints the length in seconds
 total="$(run --prepare)"
