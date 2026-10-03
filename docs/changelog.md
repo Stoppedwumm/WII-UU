@@ -3,6 +3,17 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.22 (2026-10-03)
+More reliable sound on the Mac.
+- When macOS is slow to allow sound recording (for example while a permission dialog waits),
+  WII-UU keeps waiting instead of giving up after 20 seconds, and the phone says what it's
+  waiting for.
+- On macOS 14.2 and newer, if Screen Recording doesn't give sound within 5 seconds, WII-UU
+  records the system output another way. macOS may then ask you to allow
+  "System Audio Recording".
+- Each step is written to ~/.wiiuu/logs/audio.log, to find out what's wrong if there's still no
+  sound.
+
 ## 1.9.21 (2026-10-03)
 Sound on the Mac without the Xcode Command Line Tools.
 - The phone's sound on a Mac now comes from a small library built into WII-UU (Objective-C,
