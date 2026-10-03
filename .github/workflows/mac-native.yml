@@ -2,12 +2,16 @@ name: Mac sound library
 
 # Builds the macOS sound library (native/mac/wiiuu_audio.m, Objective-C, called from Java with JNI)
 # for Apple Silicon and Intel on a Mac runner, checks that both load in a JVM and that starting a
-# capture fails cleanly instead of crashing (CI Macs have no Screen Recording permission), and keeps
-# the library as an artifact. Commit it as resources/mac/libwiiuu-audio.dylib to ship it in the jar.
+# capture fails cleanly instead of crashing (CI Macs have no Screen Recording permission), then
+# commits it as resources/mac/libwiiuu-audio.dylib when it changed, so it ships in the jar. The
+# checks' results show as notes on the run.
 on:
   push:
     paths: ["native/mac/**", "src/wiiuu/screen/MacAudio.java", ".github/workflows/mac-native.yml"]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -26,16 +30,23 @@ jobs:
           chmod +x native/mac/build.sh
           native/mac/build.sh build/libwiiuu-audio.dylib
           javac --release 17 -d build/t src/wiiuu/screen/MacAudio.java
+          echo "::notice title=Architectures::$(lipo -archs build/libwiiuu-audio.dylib)"
 
       - name: Load on Apple Silicon
-        run: java -cp build/t wiiuu.screen.MacAudio --check build/libwiiuu-audio.dylib
+        run: |
+          out="$(java -cp build/t wiiuu.screen.MacAudio --check build/libwiiuu-audio.dylib)"
+          echo "$out"
+          echo "::notice title=Apple Silicon::$out"
 
       - name: Start a capture (expected to stop with a permission message, not a crash)
         run: |
           set +e
           perl -e 'alarm 30; exec @ARGV' java -cp build/t wiiuu.screen.MacAudio 48000 build/libwiiuu-audio.dylib > build/pcm.raw 2> build/err.txt
           code=$?
-          echo "exit code $code, $(wc -c < build/pcm.raw) bytes of sound"; cat build/err.txt
+          bytes="$(wc -c < build/pcm.raw | tr -d ' ')"
+          err="$(tr '\n' ' ' < build/err.txt)"
+          echo "exit code $code, $bytes bytes of sound: $err"
+          echo "::notice title=Capture test::exit code $code, $bytes bytes of sound: $err"
           # 0/1: ran or stopped with a message; 142: still capturing after 30 s (SIGALRM). A crash is 134 or 139.
           case "$code" in 0|1|142) exit 0 ;; *) exit 1 ;; esac
 
@@ -46,10 +57,25 @@ jobs:
           architecture: x64
 
       - name: Load on Intel (Rosetta)
-        run: java -cp build/t wiiuu.screen.MacAudio --check build/libwiiuu-audio.dylib
+        run: |
+          out="$(java -cp build/t wiiuu.screen.MacAudio --check build/libwiiuu-audio.dylib)"
+          echo "$out"
+          echo "::notice title=Intel::$out"
 
       - uses: actions/upload-artifact@v4
         with:
           name: libwiiuu-audio
           path: build/libwiiuu-audio.dylib
           if-no-files-found: error
+
+      - name: Commit the library into resources/mac (when it changed)
+        if: github.event_name != 'pull_request' && github.ref_type == 'branch'
+        run: |
+          cp build/libwiiuu-audio.dylib resources/mac/libwiiuu-audio.dylib
+          if [ -z "$(git status --porcelain resources/mac)" ]; then echo "unchanged"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add resources/mac/libwiiuu-audio.dylib
+          git commit -m "Mac sound library built from native/mac/wiiuu_audio.m ($(git rev-parse --short HEAD))"
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
