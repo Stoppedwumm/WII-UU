@@ -210,7 +210,7 @@ static void startSck(void) API_AVAILABLE(macos(13.0)) {
         }
         SCStreamConfiguration *config = [SCStreamConfiguration new];
         config.capturesAudio = YES;
-        config.excludesCurrentProcessAudio = YES;
+        config.excludesCurrentProcessAudio = NO;      // WII-UU's own menu music goes to the phone too
         config.sampleRate = targetRate;
         config.channelCount = 2;
         // a picture is required, so ask for a tiny, rare one and ignore it
@@ -463,5 +463,5 @@ JNIEXPORT jstring JNICALL Java_wiiuu_screen_MacAudio_takeNotes(JNIEnv *env, jcla
 
 /** The library's version, to check that it loads. */
 JNIEXPORT jint JNICALL Java_wiiuu_screen_MacAudio_version(JNIEnv *env, jclass cls) {
-    return 4;
+    return 5;
 }
