@@ -3,6 +3,14 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.21 (2026-10-03)
+Sound on the Mac without the Xcode Command Line Tools.
+- The phone's sound on a Mac now comes from a small library built into WII-UU (Objective-C,
+  for Apple Silicon and Intel), so it no longer has to be compiled on your Mac first, and Apple's
+  Command Line Tools updates can't break it any more.
+- It still needs the Screen Recording permission. If it gives no sound, WII-UU falls back to the
+  old way by itself.
+
 ## 1.9.20 (2026-10-02)
 The WII-UU Extended Mix, and a music visualizer.
 - Settings > General > Menu music > **WII-UU Extended Mix**: every Future and Color House
