@@ -242,12 +242,13 @@ static void startTap(void) {
     pthread_mutex_unlock(&startLock);
     if (!first) return;
     if (@available(macOS 14.2, *)) {
-        note(@"trying a Core Audio tap on the system output");
+        note(@"trying a Core Audio tap on the system output (macOS may ask to allow \"System Audio Recording\")");
         CATapDescription *tap = [[CATapDescription alloc] initStereoGlobalTapButExcludeProcesses:@[]];
         tap.name = @"WII-UU sound";
         tap.privateTap = YES;
         tap.muteBehavior = CATapUnmuted;
         OSStatus st = AudioHardwareCreateProcessTap(tap, &tapId);
+        note([NSString stringWithFormat:@"tap created (%d)", (int) st]);
         if (st != noErr) {
             fail([NSString stringWithFormat:@"no sound: ScreenCaptureKit didn't start, and the Core Audio tap failed (%d)", (int) st]);
             return;
@@ -271,6 +272,7 @@ static void startTap(void) {
             @kAudioAggregateDeviceTapListKey: @[@{@kAudioSubTapDriftCompensationKey: @YES, @kAudioSubTapUIDKey: tap.UUID.UUIDString}],
         };
         st = AudioHardwareCreateAggregateDevice((__bridge CFDictionaryRef) description, &aggregateId);
+        note([NSString stringWithFormat:@"tap device created (%d)", (int) st]);
         if (st != noErr) {
             fail([NSString stringWithFormat:@"no sound: ScreenCaptureKit didn't start, and the tap's device failed (%d)", (int) st]);
             return;
@@ -292,6 +294,7 @@ static void startTap(void) {
             pthread_mutex_unlock(&startLock);
             if (!use) return;                                      // ScreenCaptureKit came through after all
             st = AudioDeviceStart(aggregateId, ioProc);
+            note([NSString stringWithFormat:@"tap device started (%d)", (int) st]);
         }
         if (st != noErr) {
             fail([NSString stringWithFormat:@"no sound: ScreenCaptureKit didn't start, and the tap could not start (%d)", (int) st]);
@@ -393,5 +396,5 @@ JNIEXPORT void JNICALL Java_wiiuu_screen_MacAudio_stop(JNIEnv *env, jclass cls) 
 
 /** The library's version, to check that it loads. */
 JNIEXPORT jint JNICALL Java_wiiuu_screen_MacAudio_version(JNIEnv *env, jclass cls) {
-    return 2;
+    return 3;
 }
