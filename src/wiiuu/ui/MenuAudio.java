@@ -7,12 +7,15 @@ import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.SourceDataLine;
 
+import wiiuu.screen.OwnSound;
+
 /**
  * The menu's one audio output: background music and sound effects mixed into a single line.
  *
  * <p>One line instead of one per blip keeps effects in time with the music and works on sound
  * cards that can't mix. The line is closed whenever nothing plays (for example during a game),
- * so emulators always get the audio device. Everything fails silently without audio.
+ * so emulators always get the audio device. Everything fails silently without audio. The mix also
+ * goes to the phone directly ({@link OwnSound}).
  */
 final class MenuAudio {
     static final int RATE = 44100;
@@ -169,6 +172,8 @@ final class MenuAudio {
                     mixMusic(mix);
                     mixVoices(mix);
                 }
+                // the phone gets this straight from here (when the Mac capture leaves WII-UU out)
+                if (OwnSound.wanted()) OwnSound.feed(mix, BLOCK, RATE);
                 if (line == null) {
                     line = AudioSystem.getSourceDataLine(fmt);
                     line.open(fmt, RATE / 20 * 4);              // 50 ms: effects stay snappy

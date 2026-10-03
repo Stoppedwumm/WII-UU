@@ -44,6 +44,9 @@ public final class MacAudio {
     /** The library's progress notes since the last call (lines), or null. */
     static native String takeNotes();
 
+    /** Whether WII-UU's own sound is left out of the capture, so {@link OwnSound} has to add it. */
+    static native boolean ownSoundLeftOut();
+
     static native int version();
 
     /**

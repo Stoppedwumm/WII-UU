@@ -150,6 +150,7 @@ static int running;                        // 0 none yet, 1 ScreenCaptureKit, 2 
 static int sckGaveUp, tapTried;            // guarded by startLock
 static volatile int session;               // each start() is a new one; late answers to old ones are ignored
 static id sckStream;                       // kept alive while capturing
+static volatile int ownSoundLeftOut;       // WII-UU's own sound isn't in what's captured
 
 static void startTap(void);
 
@@ -210,7 +211,7 @@ static void startSck(void) API_AVAILABLE(macos(13.0)) {
         }
         SCStreamConfiguration *config = [SCStreamConfiguration new];
         config.capturesAudio = YES;
-        config.excludesCurrentProcessAudio = NO;      // WII-UU's own menu music goes to the phone too
+        config.excludesCurrentProcessAudio = YES;     // WII-UU mixes its own sound in itself (MenuAudio)
         config.sampleRate = targetRate;
         config.channelCount = 2;
         // a picture is required, so ask for a tiny, rare one and ignore it
@@ -235,7 +236,10 @@ static void startSck(void) API_AVAILABLE(macos(13.0)) {
             }
             pthread_mutex_lock(&startLock);
             BOOL use = running == 0 && asked == session;
-            if (use) running = 1;
+            if (use) {
+                running = 1;
+                ownSoundLeftOut = 1;
+            }
             pthread_mutex_unlock(&startLock);
             if (use) {
                 sckStream = @[stream, output];
@@ -273,7 +277,20 @@ static void startTap(void) {
     if (!first) return;
     if (@available(macOS 14.2, *)) {
         note(@"trying a Core Audio tap on the system output (macOS may ask to allow \"System Audio Recording\")");
-        CATapDescription *tap = [[CATapDescription alloc] initStereoGlobalTapButExcludeProcesses:@[]];
+        // leave WII-UU's own sound out (it mixes that in itself), if macOS knows this process yet
+        AudioObjectID me = kAudioObjectUnknown;
+        pid_t pid = getpid();
+        AudioObjectPropertyAddress pa = {kAudioHardwarePropertyTranslatePIDToProcessObject,
+                kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+        UInt32 meSize = sizeof me;
+        if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &pa, sizeof pid, &pid, &meSize, &me) != noErr) {
+            me = kAudioObjectUnknown;
+        }
+        int excludedSelf = me != kAudioObjectUnknown;
+        NSArray *excluded = me != kAudioObjectUnknown ? @[@(me)] : @[];
+        note(me != kAudioObjectUnknown ? @"the tap leaves WII-UU's own sound out"
+                                       : @"the tap includes WII-UU's own sound (macOS doesn't know it yet)");
+        CATapDescription *tap = [[CATapDescription alloc] initStereoGlobalTapButExcludeProcesses:excluded];
         tap.name = @"WII-UU sound";
         tap.privateTap = YES;
         tap.muteBehavior = CATapUnmuted;
@@ -320,7 +337,10 @@ static void startTap(void) {
         if (st == noErr) {
             pthread_mutex_lock(&startLock);
             BOOL use = running == 0;
-            if (use) running = 2;
+            if (use) {
+                running = 2;
+                ownSoundLeftOut = excludedSelf;
+            }
             pthread_mutex_unlock(&startLock);
             if (!use) return;                                      // ScreenCaptureKit came through after all
             st = AudioDeviceStart(aggregateId, ioProc);
@@ -350,6 +370,7 @@ JNIEXPORT jstring JNICALL Java_wiiuu_screen_MacAudio_start(JNIEnv *env, jclass c
     pthread_mutex_lock(&startLock);
     session++;
     running = 0;
+    ownSoundLeftOut = 0;
     sckGaveUp = 0;
     tapTried = 0;
     pthread_mutex_unlock(&startLock);
@@ -429,6 +450,7 @@ JNIEXPORT jstring JNICALL Java_wiiuu_screen_MacAudio_error(JNIEnv *env, jclass c
 JNIEXPORT void JNICALL Java_wiiuu_screen_MacAudio_stop(JNIEnv *env, jclass cls) {
     int was = running;
     running = 0;
+    ownSoundLeftOut = 0;
     if (was == 1) {
         if (@available(macOS 13.0, *)) {
             NSArray *s = sckStream;
@@ -461,7 +483,13 @@ JNIEXPORT jstring JNICALL Java_wiiuu_screen_MacAudio_takeNotes(JNIEnv *env, jcla
     return s;
 }
 
+/** Whether WII-UU's own sound is left out of what's captured (so WII-UU mixes it in itself). */
+JNIEXPORT jboolean JNICALL Java_wiiuu_screen_MacAudio_ownSoundLeftOut(JNIEnv *env, jclass cls) {
+    return ownSoundLeftOut ? JNI_TRUE : JNI_FALSE;
+}
+
 /** The library's version, to check that it loads. */
+
 JNIEXPORT jint JNICALL Java_wiiuu_screen_MacAudio_version(JNIEnv *env, jclass cls) {
-    return 5;
+    return 6;
 }

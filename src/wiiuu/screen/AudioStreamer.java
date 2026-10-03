@@ -172,7 +172,11 @@ public final class AudioStreamer {
                     fill += k;
                     i += k;
                     if (fill == CHUNK) {
-                        publish(chunk.clone());
+                        boolean own = MacAudio.ownSoundLeftOut();
+                        OwnSound.want(own);
+                        byte[] out = chunk.clone();
+                        if (own) OwnSound.mixInto(out);            // WII-UU's menu music, straight from its mixer
+                        publish(out);
                         fill = 0;
                         if (!any) problem = null;
                         any = true;
@@ -180,6 +184,7 @@ public final class AudioStreamer {
                 }
             }
         } finally {
+            OwnSound.want(false);
             MacAudio.stop();
             log(MacAudio.takeNotes());
         }

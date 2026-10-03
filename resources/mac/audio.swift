@@ -81,7 +81,7 @@ do {
                 guard let display = content.displays.first else { fail("no display found") }
                 let config = SCStreamConfiguration()
                 config.capturesAudio = true
-                config.excludesCurrentProcessAudio = false
+                config.excludesCurrentProcessAudio = true
                 config.sampleRate = rate
                 config.channelCount = 2
                 // a picture is required, so ask for a tiny, rare one and ignore it
