@@ -14,7 +14,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Sound capture on macOS 13+ through ScreenCaptureKit, in an Objective-C library called with JNI
+ * Sound capture on macOS 13+ through ScreenCaptureKit, or a Core Audio tap on macOS 14.2+ when
+ * ScreenCaptureKit refuses or doesn't answer, in an Objective-C library called with JNI
  * (native/mac/wiiuu_audio.m). The library is built once, by GitHub Actions on a Mac, for Apple
  * Silicon and Intel, and ships in the jar as /mac/libwiiuu-audio.dylib, so unlike the Swift
  * helper it needs no Xcode Command Line Tools on the Mac.

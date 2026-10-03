@@ -38,20 +38,23 @@ jobs:
           echo "$out"
           echo "::notice title=Apple Silicon::$out"
 
-      - name: Capture 20 s while system sounds play (must not crash)
+      - name: Capture while system sounds play, each way (must not crash)
         run: |
           set +e
-          # play system sounds while it records, to see whether real sound comes through
-          (sleep 5; for i in 1 2 3 4 5 6 7 8; do afplay /System/Library/Sounds/Glass.aiff; done) &
-          perl -e 'alarm 20; exec @ARGV' java -cp build/t wiiuu.screen.MacAudio 48000 build/libwiiuu-audio.dylib > build/pcm.raw 2> build/err.txt
-          code=$?
-          bytes="$(wc -c < build/pcm.raw | tr -d ' ')"
-          peak="$(python3 -c "import array,sys; a=array.array('h', open('build/pcm.raw','rb').read()[:len(open('build/pcm.raw','rb').read())//2*2]); print(max((abs(x) for x in a), default=0))")"
-          err="$(tr '\n' ' ' < build/err.txt)"
-          echo "exit code $code, $bytes bytes of sound, loudest sample $peak of 32767: $err"
-          echo "::notice title=Capture test::exit code $code, $bytes bytes of sound, loudest sample $peak of 32767: $err"
-          # 0/1: ran or stopped with a message; 142: still capturing after 20 s (SIGALRM). A crash is 134 or 139.
-          case "$code" in 0|1|142) exit 0 ;; *) exit 1 ;; esac
+          for way in auto sck tap; do
+            # play system sounds while it records, to see whether real sound comes through
+            (sleep 4; for i in 1 2 3 4 5; do afplay /System/Library/Sounds/Glass.aiff; done) &
+            WIIUU_MAC_AUDIO=$way perl -e 'alarm 15; exec @ARGV' java -cp build/t wiiuu.screen.MacAudio 48000 build/libwiiuu-audio.dylib > build/pcm.raw 2> build/err.txt
+            code=$?
+            wait
+            bytes="$(wc -c < build/pcm.raw | tr -d ' ')"
+            peak="$(python3 -c "import array; b=open('build/pcm.raw','rb').read(); a=array.array('h', b[:len(b)//2*2]); print(max((abs(x) for x in a), default=0))")"
+            err="$(tr '\n' ' ' < build/err.txt)"
+            echo "$way: exit code $code, $bytes bytes, loudest sample $peak of 32767: $err"
+            echo "::notice title=Capture ($way)::exit code $code, $bytes bytes, loudest sample $peak of 32767: $err"
+            # 0/1: ran or stopped with a message; 142: still capturing after 15 s (SIGALRM). A crash is 134 or 139.
+            case "$code" in 0|1|142) ;; *) exit 1 ;; esac
+          done
 
       - uses: actions/setup-java@v4
         with:

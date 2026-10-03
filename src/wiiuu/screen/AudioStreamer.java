@@ -137,12 +137,16 @@ public final class AudioStreamer {
         }
         process = p;
         boolean any = false;
+        java.util.concurrent.atomic.AtomicBoolean heard = new java.util.concurrent.atomic.AtomicBoolean();
+        long started = System.currentTimeMillis();
         Thread stopper = new Thread(() -> {        // stop capture once nobody listens
             while (p.isAlive()) {
                 if (idle()) {
                     p.destroy();
                     return;
                 }
+                // a recorder that is still waiting (e.g. for a permission dialog) says why on the phone
+                if (!heard.get() && System.currentTimeMillis() - started > 6000) problem = "No sound yet: " + lastLine();
                 sleep(500);
             }
         }, "audio-idle");
@@ -153,6 +157,10 @@ public final class AudioStreamer {
                 byte[] chunk = new byte[CHUNK];
                 in.readFully(chunk);
                 publish(chunk);
+                if (!any) {
+                    heard.set(true);
+                    problem = null;
+                }
                 any = true;
             }
         } catch (IOException ended) {
