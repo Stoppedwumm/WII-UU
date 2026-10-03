@@ -1,14 +1,15 @@
 // WII-UU sound capture for macOS: a JNI library in Objective-C (wiiuu.screen.MacAudio).
 //
 // It records everything the Mac plays and hands it to Java as 16-bit little-endian stereo PCM at
-// the rate asked for. Two ways, tried in turn:
+// the rate asked for. WII-UU loads it into its own process (AudioStreamer), so it has the same
+// macOS permissions as the picture capture. Two ways, tried in turn:
 //   1. ScreenCaptureKit (macOS 13+), with the Screen Recording permission WII-UU already has for
 //      the picture;
 //   2. a Core Audio tap on the system output (macOS 14.2+), if ScreenCaptureKit refuses or doesn't
 //      answer within a few seconds (it can wait on a permission dialog, or stall).
 // Built once by GitHub Actions on a Mac (native/mac/build.sh, .github/workflows/mac-native.yml) for
 // Apple Silicon and Intel, and shipped in wiiuu.jar, so the Mac needs no Xcode Command Line Tools.
-// Progress goes to stderr, which WII-UU keeps in ~/.wiiuu/logs/audio.log.
+// Progress notes (takeNotes) go to ~/.wiiuu/logs/audio.log, with the sound's level every 5 s at first.
 // WIIUU_MAC_AUDIO=sck or =tap picks one way only (for testing).
 #import <Foundation/Foundation.h>
 #import <CoreAudio/CoreAudio.h>
@@ -17,13 +18,23 @@
 #import <CoreMedia/CoreMedia.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 #include <jni.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 
+static pthread_mutex_t noteLock = PTHREAD_MUTEX_INITIALIZER;
+static char notes[16384];                  // notes not yet taken by Java
+static size_t notesLength;
+
 static void note(NSString *message) {
-    fprintf(stderr, "[mac audio] %s\n", message.UTF8String);
+    const char *text = message.UTF8String ?: "?";
+    fprintf(stderr, "[mac audio] %s\n", text);
     fflush(stderr);
+    pthread_mutex_lock(&noteLock);
+    int n = snprintf(notes + notesLength, sizeof notes - notesLength, "[mac audio] %s\n", text);
+    if (n > 0) notesLength = MIN(sizeof notes - 1, notesLength + (size_t) n);
+    pthread_mutex_unlock(&noteLock);
 }
 
 // ---- a ring buffer between the capture's queue and Java's read() ------------------------------
@@ -67,6 +78,10 @@ static void push(const int16_t *samples, size_t frames) {
 static int targetRate = 48000;
 static double resamplePos;                 // position between the previous and next source frame
 static float lastL, lastR;                 // the previous source frame
+static double statSince;                   // level notes: since when, how much, how loud, how many so far
+static size_t statFrames;
+static float statPeak;
+static int statNotes;
 
 /** One source frame (left, right) from an AudioBufferList of any common layout. */
 static void frameAt(const AudioBufferList *list, const AudioStreamBasicDescription *asbd, size_t f, float *l, float *r) {
@@ -110,9 +125,22 @@ static void deliver(const AudioBufferList *list, const AudioStreamBasicDescripti
         resamplePos -= 1.0;
         lastL = l;
         lastR = r;
+        statPeak = MAX(statPeak, MAX(fabsf(l), fabsf(r)));
     }
     push(out, n);
     free(out);
+    // the first half minute: how much sound arrives and how loud, to tell silence from nothing
+    statFrames += n;
+    double now = CFAbsoluteTimeGetCurrent();
+    if (statSince == 0) statSince = now;
+    if (now - statSince >= 5 && statNotes < 6) {
+        note([NSString stringWithFormat:@"%.0f frames/s, loudest %.3f%@", statFrames / (now - statSince), statPeak,
+                                        statPeak == 0 ? @" (silence: is the sound muted, or recording not allowed?)" : @""]);
+        statNotes++;
+        statSince = now;
+        statFrames = 0;
+        statPeak = 0;
+    }
 }
 
 // ---- which way is running ----------------------------------------------------------------------
@@ -120,6 +148,7 @@ static void deliver(const AudioBufferList *list, const AudioStreamBasicDescripti
 static pthread_mutex_t startLock = PTHREAD_MUTEX_INITIALIZER;
 static int running;                        // 0 none yet, 1 ScreenCaptureKit, 2 Core Audio tap
 static int sckGaveUp, tapTried;            // guarded by startLock
+static volatile int session;               // each start() is a new one; late answers to old ones are ignored
 static id sckStream;                       // kept alive while capturing
 
 static void startTap(void);
@@ -158,9 +187,9 @@ API_AVAILABLE(macos(13.0))
 @end
 
 /** ScreenCaptureKit failed or is too slow: the tap instead (once), or give up if there is none. */
-static void sckDidNotStart(NSString *why) {
+static void sckDidNotStart(NSString *why, int asked) {
     pthread_mutex_lock(&startLock);
-    BOOL first = !sckGaveUp && running == 0;
+    BOOL first = asked == session && !sckGaveUp && running == 0;
     sckGaveUp = 1;
     pthread_mutex_unlock(&startLock);
     if (!first) return;
@@ -169,13 +198,14 @@ static void sckDidNotStart(NSString *why) {
 }
 
 static void startSck(void) API_AVAILABLE(macos(13.0)) {
+    int asked = session;
     note(@"asking ScreenCaptureKit for the sound");
     [SCShareableContent getShareableContentExcludingDesktopWindows:NO onScreenWindowsOnly:YES
             completionHandler:^(SCShareableContent *content, NSError *contentError) {
         if (contentError || content.displays.count == 0) {
             sckDidNotStart(contentError
                     ? [NSString stringWithFormat:@"ScreenCaptureKit refused: %@ (Screen Recording permission?)", contentError.localizedDescription]
-                    : @"ScreenCaptureKit found no display");
+                    : @"ScreenCaptureKit found no display", asked);
             return;
         }
         SCStreamConfiguration *config = [SCStreamConfiguration new];
@@ -194,17 +224,17 @@ static void startSck(void) API_AVAILABLE(macos(13.0)) {
         NSError *addError = nil;
         if (![stream addStreamOutput:output type:SCStreamOutputTypeAudio
                   sampleHandlerQueue:dispatch_queue_create("wiiuu.audio.sck", DISPATCH_QUEUE_SERIAL) error:&addError]) {
-            sckDidNotStart([NSString stringWithFormat:@"ScreenCaptureKit: %@", addError.localizedDescription]);
+            sckDidNotStart([NSString stringWithFormat:@"ScreenCaptureKit: %@", addError.localizedDescription], asked);
             return;
         }
         [stream startCaptureWithCompletionHandler:^(NSError *startError) {
             if (startError) {
                 sckDidNotStart([NSString stringWithFormat:@"ScreenCaptureKit could not start: %@ (Screen Recording permission?)",
-                                                          startError.localizedDescription]);
+                                                          startError.localizedDescription], asked);
                 return;
             }
             pthread_mutex_lock(&startLock);
-            BOOL use = running == 0;
+            BOOL use = running == 0 && asked == session;
             if (use) running = 1;
             pthread_mutex_unlock(&startLock);
             if (use) {
@@ -316,6 +346,25 @@ static void startTap(void) {
  */
 JNIEXPORT jstring JNICALL Java_wiiuu_screen_MacAudio_start(JNIEnv *env, jclass cls, jint rate) {
     targetRate = rate > 0 ? rate : 48000;
+    // a fresh start (WII-UU starts again when someone listens after a pause)
+    pthread_mutex_lock(&startLock);
+    session++;
+    running = 0;
+    sckGaveUp = 0;
+    tapTried = 0;
+    pthread_mutex_unlock(&startLock);
+    pthread_mutex_lock(&lock);
+    ringStart = ringCount = 0;
+    problem[0] = 0;
+    stopped = 0;
+    pthread_mutex_unlock(&lock);
+    resamplePos = 0;
+    lastL = lastR = 0;
+    statSince = 0;
+    statFrames = 0;
+    statPeak = 0;
+    statNotes = 0;
+    int asked = session;
     const char *only = getenv("WIIUU_MAC_AUDIO");
     if (only && strcmp(only, "tap") == 0) {
         sckGaveUp = 1;
@@ -327,7 +376,7 @@ JNIEXPORT jstring JNICALL Java_wiiuu_screen_MacAudio_start(JNIEnv *env, jclass c
         if (!(only && strcmp(only, "sck") == 0)) {
             // ScreenCaptureKit can wait on a permission dialog, or stall: don't wait for it for long
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-                if (running == 0) sckDidNotStart(@"ScreenCaptureKit hasn't answered in 5 s (a permission dialog may be waiting)");
+                if (running == 0) sckDidNotStart(@"ScreenCaptureKit hasn't answered in 5 s (a permission dialog may be waiting)", asked);
             });
         }
         return NULL;
@@ -388,13 +437,31 @@ JNIEXPORT void JNICALL Java_wiiuu_screen_MacAudio_stop(JNIEnv *env, jclass cls) 
     } else if (was == 2) {
         AudioDeviceStop(aggregateId, ioProc);
         AudioDeviceDestroyIOProcID(aggregateId, ioProc);
-        AudioHardwareDestroyAggregateDevice(aggregateId);
-        if (@available(macOS 14.2, *)) AudioHardwareDestroyProcessTap(tapId);
     }
-    fail(@"stopped");
+    sckStream = nil;
+    if (aggregateId != kAudioObjectUnknown) AudioHardwareDestroyAggregateDevice(aggregateId);
+    aggregateId = kAudioObjectUnknown;
+    if (@available(macOS 14.2, *)) {
+        if (tapId != kAudioObjectUnknown) AudioHardwareDestroyProcessTap(tapId);
+    }
+    tapId = kAudioObjectUnknown;
+    pthread_mutex_lock(&lock);
+    stopped = 1;
+    pthread_cond_broadcast(&ready);
+    pthread_mutex_unlock(&lock);
+}
+
+/** The notes since the last call (several lines), or null. */
+JNIEXPORT jstring JNICALL Java_wiiuu_screen_MacAudio_takeNotes(JNIEnv *env, jclass cls) {
+    pthread_mutex_lock(&noteLock);
+    jstring s = notesLength > 0 ? (*env)->NewStringUTF(env, notes) : NULL;
+    notesLength = 0;
+    notes[0] = 0;
+    pthread_mutex_unlock(&noteLock);
+    return s;
 }
 
 /** The library's version, to check that it loads. */
 JNIEXPORT jint JNICALL Java_wiiuu_screen_MacAudio_version(JNIEnv *env, jclass cls) {
-    return 3;
+    return 4;
 }

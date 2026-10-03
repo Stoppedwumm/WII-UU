@@ -19,8 +19,8 @@ import wiiuu.core.Config;
  *
  * <p>Like the picture, the phone pulls: it asks for everything newer than the last chunk it has,
  * so sound never queues up in the network. Capture runs only while someone listens.
- * Sources: ScreenCaptureKit on macOS 13+ (the Objective-C library shipped in the jar, see
- * {@link MacAudio}, else the Swift helper built on the Mac), the PulseAudio / PipeWire monitor of
+ * Sources: on macOS 13+ the Objective-C library shipped in the jar, loaded into WII-UU itself (see
+ * {@link MacAudio}), else the Swift helper built on the Mac; the PulseAudio / PipeWire monitor of
  * the default output on Linux ({@code parec}, or ffmpeg), and ffmpeg + a loopback device on Windows.
  */
 public final class AudioStreamer {
@@ -100,6 +100,14 @@ public final class AudioStreamer {
     private void run() {
         int failures = 0;
         while (!idle()) {
+            if (macLibrary()) {
+                // the Mac library, inside WII-UU: the same permissions as the picture capture
+                boolean any = pumpMac();
+                nativeFailures = any ? 0 : nativeFailures + 1;
+                if (nativeFailures == 2) System.err.println("[audio] the Mac sound library gave no sound twice: trying the Swift helper");
+                sleep(any ? 300 : 2000);
+                continue;
+            }
             List<String> cmd = command();
             if (cmd == null) {
                 sleep(1000);
@@ -107,10 +115,6 @@ public final class AudioStreamer {
             }
             long started = System.currentTimeMillis();
             boolean any = pump(cmd);
-            if (cmd.contains(MacAudio.class.getName())) {
-                nativeFailures = any ? 0 : nativeFailures + 1;
-                if (nativeFailures == 2) System.err.println("[audio] the Mac sound library gave no sound twice: trying the Swift helper");
-            }
             if (any) {
                 problem = null;
                 failures = 0;
@@ -122,6 +126,77 @@ public final class AudioStreamer {
         }
         Process p = process;
         if (p != null) p.destroy();
+    }
+
+    /** Whether to use the Mac library: on macOS, no audio.command of one's own, and it hasn't failed twice. */
+    private boolean macLibrary() {
+        if (!OS.contains("mac") || !config.get("audio.command", "").trim().isEmpty() || nativeFailures >= 2) return false;
+        String why = MacAudio.load(config.home().resolve("bin"));
+        if (why != null) {
+            if (nativeFailures < 2) log(why);
+            nativeFailures = 2;                                   // it won't load later either
+            return false;
+        }
+        return true;
+    }
+
+    /** Captures with the Mac library until it stops or nobody listens; returns whether it gave sound. */
+    private boolean pumpMac() {
+        String why = MacAudio.start(RATE);
+        if (why != null) {
+            log(why);
+            problem = why;
+            return false;
+        }
+        long started = System.currentTimeMillis();
+        boolean any = false;
+        byte[] buffer = new byte[CHUNK], chunk = new byte[CHUNK];
+        int fill = 0;
+        try {
+            while (!idle()) {
+                log(MacAudio.takeNotes());
+                int n = MacAudio.read(buffer, 500);
+                if (n < 0) {
+                    String error = MacAudio.error();
+                    problem = "No sound from the Mac: " + (error != null ? error : "capture stopped");
+                    break;
+                }
+                if (n == 0) {
+                    // still waiting for macOS (e.g. a permission dialog): say so on the phone
+                    if (!any && System.currentTimeMillis() - started > 6000) problem = "No sound yet: " + lastLine();
+                    continue;
+                }
+                for (int i = 0; i < n; ) {
+                    int k = Math.min(n - i, CHUNK - fill);
+                    System.arraycopy(buffer, i, chunk, fill, k);
+                    fill += k;
+                    i += k;
+                    if (fill == CHUNK) {
+                        publish(chunk.clone());
+                        fill = 0;
+                        if (!any) problem = null;
+                        any = true;
+                    }
+                }
+            }
+        } finally {
+            MacAudio.stop();
+            log(MacAudio.takeNotes());
+        }
+        return any;
+    }
+
+    /** Adds lines to audio.log. */
+    private void log(String text) {
+        if (text == null || text.isBlank()) return;
+        try {
+            Path log = config.logDir().resolve("audio.log");
+            Files.createDirectories(log.getParent());
+            Files.writeString(log, text.endsWith("\n") ? text : text + "\n", java.nio.charset.StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (IOException ignored) {
+            // no log
+        }
     }
 
     /** Runs one capture process until it ends or nobody listens; returns whether it gave sound. */
@@ -188,11 +263,7 @@ public final class AudioStreamer {
         String custom = config.get("audio.command", "").trim();
         if (!custom.isEmpty()) return List.of("sh", "-c", custom);
         if (OS.contains("mac")) {
-            // the library from the jar first (no compiler needed); the Swift helper if it keeps failing
-            if (nativeFailures < 2) {
-                List<String> lib = MacAudio.command(config.home().resolve("bin"), RATE);
-                if (lib != null) return lib;
-            }
+            // the library didn't give sound (see run): the Swift helper, if it built
             Path helper = macHelper.get();
             if (helper == null) {
                 problem = nativeFailures >= 2

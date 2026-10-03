@@ -9,8 +9,6 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 
 /**
@@ -20,42 +18,50 @@ import java.util.Locale;
  * Silicon and Intel, and ships in the jar as /mac/libwiiuu-audio.dylib, so unlike the Swift
  * helper it needs no Xcode Command Line Tools on the Mac.
  *
- * <p>It runs in a small Java process of its own ({@link #main}), started by {@link AudioStreamer}
- * like the other capture commands: it writes raw 16-bit stereo PCM to stdout, and a problem in
- * native code can only end that process, never WII-UU.
+ * <p>{@link AudioStreamer} loads it into WII-UU itself ({@link #load}), so sound has the same macOS
+ * permissions as the picture capture (a second Java process can't even start from WII-UU.app,
+ * whose built-in Java has no java command). {@link #main} runs it on its own, for the Mac build's
+ * checks.
  */
 public final class MacAudio {
     private static final String LIBRARY = "libwiiuu-audio.dylib";
+    private static boolean loaded;
 
     private MacAudio() {}
 
+    /** Starts capturing without waiting for macOS: null, or why it can't even try. */
     static native String start(int rate);
 
+    /** Waits up to timeoutMs for sound: bytes copied, 0 if none came, -1 once capture stopped. */
     static native int read(byte[] buffer, int timeoutMs);
 
+    /** Why capture stopped, or null. */
     static native String error();
 
+    /** Stops capturing (starting again later is fine). */
     static native void stop();
+
+    /** The library's progress notes since the last call (lines), or null. */
+    static native String takeNotes();
 
     static native int version();
 
     /**
-     * The command that captures sound with the library: this Java running this class, or null when
-     * this WII-UU has no library for the Mac (built without it) or the Mac is older than macOS 13.
+     * Loads the library from the jar (unpacked into {@code binDir}) into this process, once: null
+     * when it's ready, else why sound can't use it.
      */
-    static List<String> command(Path binDir, int rate) {
-        if (!macOs13()) return null;
+    static synchronized String load(Path binDir) {
+        if (loaded) return null;
+        if (!macOs13()) return "Sound on the Mac needs macOS 13 (Ventura) or newer.";
         Path lib = unpack(binDir);
-        if (lib == null) return null;
-        String java = ProcessHandle.current().info().command()
-                .orElse(Path.of(System.getProperty("java.home"), "bin", "java").toString());
-        // the class path as absolute paths, so the child finds the classes whatever its directory
-        List<String> cp = new ArrayList<>();
-        for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator)) {
-            if (!entry.isEmpty()) cp.add(new File(entry).getAbsolutePath());
+        if (lib == null) return "This WII-UU has no Mac sound library.";
+        try {
+            System.load(lib.toAbsolutePath().toString());
+            loaded = true;
+            return null;
+        } catch (UnsatisfiedLinkError e) {
+            return "The Mac sound library did not load: " + e.getMessage();
         }
-        return List.of(java, "-Xmx24m", "-XX:+UseSerialGC", "-Djava.awt.headless=true", "-Dapple.awt.UIElement=true",
-                "-cp", String.join(File.pathSeparator, cp), MacAudio.class.getName(), Integer.toString(rate), lib.toString());
     }
 
     /** Whether this WII-UU carries the library (resources/mac, from the Mac build). */
@@ -91,8 +97,8 @@ public final class MacAudio {
     }
 
     /**
-     * The capture process: {@code MacAudio <rate> <library>} writes raw PCM to stdout until WII-UU
-     * stops reading; {@code MacAudio --check <library>} only loads the library (for the build).
+     * On its own, for the Mac build's checks: {@code MacAudio <rate> <library>} writes raw PCM to
+     * stdout (and the notes to stderr); {@code MacAudio --check <library>} only loads the library.
      */
     public static void main(String[] args) throws IOException {
         if (args.length == 2 && args[0].equals("--check")) {
@@ -112,6 +118,7 @@ public final class MacAudio {
         try {
             while (true) {
                 int n = read(buffer, 1000);
+                takeNotes();                                           // already on stderr
                 if (n < 0) {
                     String why = error();
                     System.err.println(why != null ? why : "sound capture stopped");
@@ -123,7 +130,6 @@ public final class MacAudio {
                 }
             }
         } catch (IOException readerGone) {
-            // WII-UU stopped listening
             stop();
             System.exit(0);
         }
