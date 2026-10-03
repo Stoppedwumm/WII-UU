@@ -263,6 +263,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private String musicChoice;              // the ui.musicTrack setting now loaded
     private volatile int musicGen;           // bumped on every change; stale renders are dropped
     private volatile short[] upNext;         // "all": the next track, ready when the current one ends
+    private volatile String upNextId;
     private volatile String musicTitle;      // what's playing, for the visualizer
     private final Visualizer viz = new Visualizer();
     private boolean vizOn;                   // the strip behind the tiles (ui.visualizer)
@@ -441,8 +442,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             boolean all = choice.equals(MenuTracks.ALL);
             String first = all ? MenuTracks.DEFAULT : list.contains(choice) ? choice : MenuTracks.DEFAULT;
             MenuAudio.get().onLoopEnd(null);
-            renderMusic(gen, first, loop -> {
-                MenuAudio.get().setMusic(loop);
+            renderMusic(gen, first, (loop, id) -> {
+                MenuAudio.get().setMusic(loop, id);
                 musicTitle = MenuTracks.name(first, musicFolder());
                 SwingUtilities.invokeLater(this::updateMusic);
                 if (all) takeTurns(gen, list, list.indexOf(first));
@@ -455,13 +456,14 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void takeTurns(int gen, List<String> list, int playing) {
         if (list.size() < 2) return;
         int next = (playing + 1) % list.size();
-        renderMusic(gen, list.get(next), loop -> {
+        renderMusic(gen, list.get(next), (loop, id) -> {
             upNext = loop;
+            upNextId = id;
             MenuAudio.get().onLoopEnd(times -> {
                 short[] n = upNext;
                 if (times < 2 || n == null || gen != musicGen) return;
                 upNext = null;
-                MenuAudio.get().setMusic(n);
+                MenuAudio.get().setMusic(n, upNextId);
                 musicTitle = MenuTracks.name(list.get(next), musicFolder());
                 takeTurns(gen, list, next);
             });
@@ -487,11 +489,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 playMix(gen, i + 1, seg.following(), false);
             };
             if (first) {
-                MenuAudio.get().setMusic(seg.pcm());
+                MenuAudio.get().setMusic(seg.pcm(), "mix:" + seg.index());
                 started.run();
                 SwingUtilities.invokeLater(this::updateMusic);
             } else {
-                MenuAudio.get().queue(seg.pcm(), started);
+                MenuAudio.get().queue(seg.pcm(), "mix:" + seg.index(), started);
             }
         }, "menu-mix");
         t.setDaemon(true);
@@ -500,11 +502,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     /** Renders (up to a few seconds on a Pi) off the Swing thread; WII-UU's own tune if it fails. */
-    private void renderMusic(int gen, String id, java.util.function.Consumer<short[]> then) {
+    private void renderMusic(int gen, String id, java.util.function.BiConsumer<short[], String> then) {
         Thread t = new Thread(() -> {
+            String made = id;
             short[] loop = MenuTracks.load(id, musicFolder());
-            if (loop == null) loop = MenuTracks.load(MenuTracks.DEFAULT, null);
-            if (loop != null && gen == musicGen) then.accept(loop);
+            if (loop == null) loop = MenuTracks.load(made = MenuTracks.DEFAULT, null);
+            if (loop != null && gen == musicGen) then.accept(loop, made);
         }, "menu-music");
         t.setDaemon(true);
         t.setPriority(Thread.MIN_PRIORITY);

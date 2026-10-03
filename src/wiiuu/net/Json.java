@@ -73,6 +73,15 @@ final class Json {
         return key(k).val(v);
     }
 
+    /** A number with millisecond-ish precision (positions in seconds); 0 for NaN or infinity. */
+    Json kv(String k, double v) {
+        key(k);
+        comma();
+        sb.append(Double.isFinite(v) ? String.format(java.util.Locale.ROOT, "%.4f", v) : "0");
+        needComma = true;
+        return this;
+    }
+
     private void comma() {
         if (needComma) sb.append(',');
     }

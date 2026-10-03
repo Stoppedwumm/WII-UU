@@ -388,8 +388,10 @@ sound buffered, so the sound runs slightly behind the picture.
   Actions builds it for Apple Silicon and Intel, so sound needs no Xcode Command Line Tools. It
   runs inside WII-UU, with the same *Screen Recording* permission as the picture, and the Mac
   keeps playing the sound too. On macOS 14.2 and newer a Core Audio tap is the second way. The
-  recording leaves WII-UU's own sound out: the menu music and effects go to the phone straight
-  from WII-UU's mixer instead (`OwnSound`), so they arrive clean. If it gives no sound twice, WII-UU falls back to the older Swift helper
+  recording leaves WII-UU's own sound out. The phone makes the built-in menu music itself: the
+  page loads the same synthesizer (`resources/web/music.js`, a port of `MenuMusic` and `Tunes`
+  whose output matches the PC's sample for sample) and plays the track WII-UU plays, in step with
+  it. Effects and your own music files come straight from WII-UU's mixer (`OwnSound`). If it gives no sound twice, WII-UU falls back to the older Swift helper
   (`resources/mac/audio.swift`), compiled on first start when the Command Line Tools are there.
 * **Linux:** records the default output's monitor with `parec`, from `pulseaudio-utils`
   (PulseAudio or PipeWire), or with ffmpeg.

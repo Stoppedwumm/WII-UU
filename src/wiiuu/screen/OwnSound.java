@@ -9,6 +9,10 @@ package wiiuu.screen;
  * <p>The mixer {@link #feed feeds} 44.1 kHz blocks as it plays them; {@link AudioStreamer} takes
  * the same span of time out at 48 kHz for each chunk it sends. A short cushion absorbs the two
  * sides' uneven timing, and it is reset when they drift apart.
+ *
+ * <p>The built-in menu music isn't even sent: the phone makes it itself (web/music.js, the same
+ * synthesizer), from what {@link #music()} says plays where. Only effects and the player's own
+ * music files come through here then.
  */
 public final class OwnSound {
     private static final int RATE = AudioStreamer.RATE;
@@ -23,7 +27,41 @@ public final class OwnSound {
     private static double pos;            // resampling: position between prevL/R and the next frame
     private static float prevL, prevR;
 
+    private static volatile Music music;
+
     private OwnSound() {}
+
+    /**
+     * The menu music now: track id ("korobeiniki-house", "mix:3" for the Extended Mix's fourth
+     * segment, "file:..." for one of the player's files), position and length in seconds, whether
+     * it's on (fading in) or off, its volume (0..1), and the id queued to follow it, or null.
+     */
+    public record Music(String id, double pos, double length, boolean on, double volume, String next) {}
+
+    /** Called by the mixer as it plays. */
+    public static void music(Music now) {
+        music = now;
+    }
+
+    /** What the menu music is doing, or null before it started. */
+    public static Music music() {
+        return music;
+    }
+
+    private static volatile long lastWithoutMusic;
+
+    /** A phone fetched sound without saying it makes the music itself (an older page, no Web Worker). */
+    public static void listenerWithoutMusic() {
+        lastWithoutMusic = System.currentTimeMillis();
+    }
+
+    /**
+     * Whether the phones make the menu music {@code id} themselves (so it isn't sent): a built-in
+     * track, and every phone listening says it can.
+     */
+    public static boolean phoneMakes(String id) {
+        return id != null && !id.startsWith("file:") && wanted() && System.currentTimeMillis() - lastWithoutMusic > 3000;
+    }
 
     /** Whether anyone takes the sound now (the mixer skips feeding otherwise). */
     public static synchronized boolean wanted() {

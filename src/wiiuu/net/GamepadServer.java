@@ -105,6 +105,7 @@ public final class GamepadServer {
     private int httpsPort;
     private ScheduledExecutorService reaper;
     private byte[] pageCache;
+    private byte[] musicCache;
     private byte[] iconCache;
     private int port;
 
@@ -194,6 +195,8 @@ public final class GamepadServer {
             json(ex, 404, error("sound is off (audio.enabled=false)"));
             return;
         }
+        // phones that make the menu music themselves say so; for any other, it's sent along
+        if (!"1".equals(q.get("music"))) wiiuu.screen.OwnSound.listenerWithoutMusic();
         long after;
         try {
             after = Long.parseLong(q.getOrDefault("after", "-1"));
@@ -333,6 +336,7 @@ public final class GamepadServer {
             switch (path) {
                 case "/", "/index.html" -> send(ex, 200, "text/html; charset=utf-8", page());
                 case "/manifest.json" -> send(ex, 200, "application/manifest+json", manifest());
+                case "/music.js" -> send(ex, 200, "text/javascript; charset=utf-8", musicScript());
                 case "/icon.png" -> send(ex, 200, "image/png", icon());
                 case "/api/hello" -> hello(ex);
                 default -> {
@@ -528,6 +532,13 @@ public final class GamepadServer {
         j.key("game");
         if (g == null) j.val((String) null);
         else j.obj().kv("name", g.name()).kv("system", g.system().name()).kv("color", g.system().hexColor()).endObj();
+        // the menu music, for phones that make it themselves (web/music.js); "local" when the sound
+        // they get leaves it out
+        wiiuu.screen.OwnSound.Music m = wiiuu.screen.OwnSound.music();
+        j.key("music");
+        if (m == null || m.id() == null) j.val((String) null);
+        else j.obj().kv("id", m.id()).kv("pos", m.pos()).kv("length", m.length()).kv("on", m.on())
+                .kv("volume", m.volume()).kv("next", m.next()).kv("local", wiiuu.screen.OwnSound.phoneMakes(m.id())).endObj();
         return j.endObj();
     }
 
@@ -559,6 +570,17 @@ public final class GamepadServer {
             }
         }
         return pageCache;
+    }
+
+    /** The menu music's synthesizer, for phones that make the music themselves. */
+    private byte[] musicScript() throws IOException {
+        if (musicCache == null) {
+            try (InputStream in = GamepadServer.class.getResourceAsStream("/web/music.js")) {
+                if (in == null) throw new IOException("music.js missing from jar");
+                musicCache = in.readAllBytes();
+            }
+        }
+        return musicCache;
     }
 
     private static byte[] manifest() {

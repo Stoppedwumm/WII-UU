@@ -32,6 +32,8 @@ final class MenuAudio {
     // guarded by lock
     private final List<Voice> voices = new ArrayList<>();
     private short[] music;                // interleaved stereo loop, once rendered
+    private String musicId;               // its track id, for the phone (OwnSound.Music)
+    private String pendingId, queuedId;
     private int musicPos;                 // frame
     private float musicGain;              // current, ramps toward target
     private float musicTarget;
@@ -60,20 +62,23 @@ final class MenuAudio {
     }
 
     /**
-     * Hands over a background loop (interleaved stereo at {@link #RATE}). Music already playing
-     * fades out first, then the new loop starts from its beginning.
+     * Hands over a background loop (interleaved stereo at {@link #RATE}) and its track id. Music
+     * already playing fades out first, then the new loop starts from its beginning.
      */
-    void setMusic(short[] loop) {
+    void setMusic(short[] loop, String id) {
         synchronized (lock) {
             if (music == null || musicGain <= 0f) {
                 music = loop;
+                musicId = id;
                 musicPos = 0;
                 pending = null;
             } else {
                 pending = loop;
+                pendingId = id;
             }
             wraps = 0;
             queued = null;
+            queuedId = null;
             onQueuedStart = null;
             wake();
         }
@@ -84,9 +89,10 @@ final class MenuAudio {
      * (the Extended Mix, which arrives a piece at a time). {@code onStart} runs on the audio thread,
      * under the mixer's lock, when it begins.
      */
-    void queue(short[] next, Runnable onStart) {
+    void queue(short[] next, String id, Runnable onStart) {
         synchronized (lock) {
             queued = next;
+            queuedId = id;
             onQueuedStart = onStart;
         }
     }
@@ -149,8 +155,9 @@ final class MenuAudio {
         AudioFormat fmt = new AudioFormat(RATE, 16, 2, true, false);
         SourceDataLine line = null;
         byte[] out = new byte[BLOCK * 4];
-        float[] mix = new float[BLOCK * 2];
+        float[] mix = new float[BLOCK * 2], musicMix = new float[BLOCK * 2];
         long idleSince = 0;
+        boolean phoneMakesMusic = false;
         try {
             while (true) {
                 synchronized (lock) {
@@ -169,11 +176,17 @@ final class MenuAudio {
                         idleSince = 0;
                     }
                     java.util.Arrays.fill(mix, 0f);
-                    mixMusic(mix);
+                    java.util.Arrays.fill(musicMix, 0f);
+                    mixMusic(musicMix);
                     mixVoices(mix);
+                    tellPhone();
+                    phoneMakesMusic = OwnSound.phoneMakes(musicId);
                 }
-                // the phone gets this straight from here (when the Mac capture leaves WII-UU out)
-                if (OwnSound.wanted()) OwnSound.feed(mix, BLOCK, RATE);
+                // the phone gets WII-UU's sound straight from here (when the Mac capture leaves WII-UU
+                // out), but not the built-in music, which it makes itself
+                if (phoneMakesMusic) OwnSound.feed(mix, BLOCK, RATE);
+                for (int i = 0; i < mix.length; i++) mix[i] += musicMix[i];
+                if (!phoneMakesMusic && OwnSound.wanted()) OwnSound.feed(mix, BLOCK, RATE);
                 if (line == null) {
                     line = AudioSystem.getSourceDataLine(fmt);
                     line.open(fmt, RATE / 20 * 4);              // 50 ms: effects stay snappy
@@ -210,6 +223,7 @@ final class MenuAudio {
             if (musicGain <= 0f) {
                 if (pending != null) {
                     music = pending;
+                    musicId = pendingId;
                     pending = null;
                     musicPos = 0;
                 }
@@ -227,7 +241,9 @@ final class MenuAudio {
                 musicPos = 0;
                 if (queued != null && pending == null) {
                     music = queued;
+                    musicId = queuedId;
                     queued = null;
+                    queuedId = null;
                     wraps = 0;
                     Runnable start = onQueuedStart;
                     onQueuedStart = null;
@@ -238,6 +254,14 @@ final class MenuAudio {
                 if (onWrap != null) onWrap.accept(wraps);
             }
         }
+    }
+
+    /** What plays where, for phones that make the music themselves. */
+    private void tellPhone() {
+        if (music == null) return;
+        boolean on = musicTarget > 0 && pending == null;
+        OwnSound.music(new OwnSound.Music(musicId, musicPos / (double) RATE, music.length / 2 / (double) RATE, on,
+                musicVolume, queuedId != null ? queuedId : pending != null ? pendingId : null));
     }
 
     private void mixVoices(float[] mix) {

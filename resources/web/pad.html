@@ -366,9 +366,13 @@ async function flush() {
 async function poll() {
   if (!S.id) return;
   try {
+    const asked = performance.now();
     const r = await api("/api/status");
     const j = await r.json();
     setOnline(true);
+    tunes.at = (asked + performance.now()) / 2;      // about when the PC said where its music is
+    tunes.want = j.music || null;
+    syncTunes();
     S.player = j.player;
     $("player").textContent = j.player > 0 ? "P" + j.player : "Viewer";
     $("keysWarn").classList.toggle("hidden", j.keys !== false);
@@ -648,7 +652,7 @@ function setSoundUi() {
 // must run inside a tap: phones only allow sound that the user started
 function toggleSound() {
   if (soundOn) {
-    soundOn = false; stopSound(); store.set("sound", "0"); setSoundUi(); toast("Sound off"); return;
+    soundOn = false; stopSound(); syncTunes(); store.set("sound", "0"); setSoundUi(); toast("Sound off"); return;
   }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) { toast("This browser can't play sound"); return; }
@@ -672,7 +676,7 @@ function stopSound() { if (soundCtl) { soundCtl.abort(); soundCtl = null; } }
 async function pullSound(ctl) {
   let seq = -1, playAt = 0, warned = false;
   while (soundCtl === ctl) {
-    const r = await fetch("/api/audio?c=" + encodeURIComponent(S.id) + "&after=" + seq + "&t=" + Date.now(),
+    const r = await fetch("/api/audio?c=" + encodeURIComponent(S.id) + "&after=" + seq + (tuneWorker() ? "&music=1" : "") + "&t=" + Date.now(),
                           { signal: ctl.signal, cache: "no-store" });
     if (r.status === 204) {                      // silence, or no sound capture: say why once
       const why = r.headers.get("X-Problem");
@@ -698,9 +702,97 @@ async function pullSound(ctl) {
   }
 }
 document.addEventListener("visibilitychange", () => {
+  syncTunes();
   if (!soundOn) return;
   if (document.hidden) stopSound(); else startSound();
 });
+
+// The menu music is made right here (music.js, the PC's own synthesizer, in a worker) instead of
+// being sent: the PC only says which track plays where ("music" in the status, "local" when the
+// sound it sends leaves it out), and the phone plays the same track in step with it.
+const tunes = { worker: null, ready: new Map(), asked: new Set(), voice: null, want: null, at: 0, failed: false };
+function tuneWorker() {
+  if (!tunes.worker && !tunes.failed) {
+    try {
+      tunes.worker = new Worker("/music.js");
+      tunes.worker.onmessage = (e) => {
+        const { id, pcm } = e.data;
+        tunes.asked.delete(id);
+        if (!pcm || !audioCtx) return;
+        const n = pcm.length >> 1, buf = audioCtx.createBuffer(2, n, 44100);
+        const l = buf.getChannelData(0), r = buf.getChannelData(1);
+        for (let i = 0; i < n; i++) { l[i] = pcm[2 * i] / 32768; r[i] = pcm[2 * i + 1] / 32768; }
+        tunes.ready.set(id, buf);
+        syncTunes();
+      };
+      tunes.worker.onerror = () => { tunes.failed = true; tunes.worker = null; };
+    } catch (e) { tunes.failed = true; }
+  }
+  return tunes.worker;
+}
+function askTune(id) {
+  if (!id || tunes.ready.has(id) || tunes.asked.has(id) || !tuneWorker()) return;
+  tunes.asked.add(id);
+  tunes.worker.postMessage({ id });
+}
+/** Where the PC's music is now, in seconds. */
+function tunePos(m) { return m.pos + (performance.now() - tunes.at) / 1000; }
+function startTune(id, offset, fade, volume, when) {
+  const buf = tunes.ready.get(id);
+  const src = audioCtx.createBufferSource(), gain = audioCtx.createGain();
+  src.buffer = buf; src.loop = true;                  // like the PC: a track loops until another follows
+  src.connect(gain); gain.connect(audioCtx.destination);
+  offset = ((offset % buf.duration) + buf.duration) % buf.duration;
+  gain.gain.setValueAtTime(fade ? 0 : volume, when);
+  if (fade) gain.gain.linearRampToValueAtTime(volume, when + fade);
+  src.start(when, offset);
+  return { id, src, gain, t0: when - offset, dur: buf.duration, next: null, switchAt: 0 };
+}
+function stopTune(v, fade) {
+  if (!v) return;
+  const now = audioCtx.currentTime, g = v.gain.gain;
+  g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(0, now + fade);
+  try { v.src.stop(now + fade + 0.05); } catch (e) {}
+  if (v.next) stopTune(v.next, fade);
+}
+function syncTunes() {
+  const m = tunes.want;
+  const play = m && m.local && m.on && soundOn && !document.hidden && audioCtx && audioCtx.state === "running" ? m : null;
+  let v = tunes.voice;
+  if (!play) {                                        // off, a game runs, or the PC sends the music itself
+    if (v) stopTune(v, 0.6);
+    tunes.voice = null;
+  } else {
+    askTune(play.id);
+    if (play.next) askTune(play.next);
+    const now = audioCtx.currentTime;
+    if (v && v.next && now >= v.switchAt) tunes.voice = v = v.next;   // the next mix segment took over
+    if (v && v.id !== play.id && !(v.next && v.next.id === play.id)) { stopTune(v, 0.6); tunes.voice = v = null; }
+    if (!v) {
+      if (tunes.ready.has(play.id)) tunes.voice = v = startTune(play.id, tunePos(play), 1.5, play.volume, now);
+    } else if (v.id === play.id) {
+      // keep in step with the PC: start again where it is if more than 0.3 s apart
+      let d = ((now - v.t0 - tunePos(play)) % v.dur + v.dur) % v.dur;
+      if (d > v.dur / 2) d -= v.dur;
+      if (Math.abs(d) > 0.3) {
+        stopTune(v, 0.15);
+        tunes.voice = v = startTune(play.id, tunePos(play), 0.15, play.volume, now);
+      } else if (!v.next) {
+        v.gain.gain.setTargetAtTime(play.volume, now, 0.1);
+      }
+      // the Extended Mix: the next segment follows this one where it ends, as on the PC
+      if (!v.next && play.next && play.next.startsWith("mix:") && tunes.ready.has(play.next)) {
+        const end = v.t0 + Math.ceil((now - v.t0 + 0.05) / v.dur) * v.dur;
+        v.src.stop(end);
+        v.next = startTune(play.next, 0, 0, play.volume, end);
+        v.switchAt = end;
+      }
+    }
+  }
+  // keep only what plays or comes next
+  const keep = new Set([v && v.id, v && v.next && v.next.id, m && m.id, m && m.next]);
+  for (const id of [...tunes.ready.keys()]) if (!keep.has(id)) tunes.ready.delete(id);
+}
 // the phone may pause audio (call, other app); any tap brings it back. After a reload, the first
 // tap turns sound back on if it was on before (phones need a tap for that).
 document.addEventListener("pointerdown", (e) => {

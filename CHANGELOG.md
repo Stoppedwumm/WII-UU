@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.26 (2026-10-03)
+The phone makes the menu music itself.
+- On the Mac, the GamePad page now makes WII-UU's menu music itself, with the same synthesizer as
+  WII-UU (it sounds exactly the same), and plays the track WII-UU plays, in step with it. Only
+  which track plays, where, and how loud travels over the network, so the music can't stutter or
+  lag. The Extended Mix carries on from one track to the next on the phone too.
+- A track takes a few seconds to make on the phone when it changes; the music fades in once it's
+  ready.
+- Your own music files, and the menu's sound effects, still come from WII-UU.
+
 ## 1.9.25 (2026-10-03)
 - On the Mac, the menu music and sound effects now go to the phone straight from WII-UU's own
   mixer instead of being recorded from the speakers, so they arrive clean. The recording of
