@@ -1,0 +1,55 @@
+name: Mac sound library
+
+# Builds the macOS sound library (native/mac/wiiuu_audio.m, Objective-C, called from Java with JNI)
+# for Apple Silicon and Intel on a Mac runner, checks that both load in a JVM and that starting a
+# capture fails cleanly instead of crashing (CI Macs have no Screen Recording permission), and keeps
+# the library as an artifact. Commit it as resources/mac/libwiiuu-audio.dylib to ship it in the jar.
+on:
+  push:
+    paths: ["native/mac/**", "src/wiiuu/screen/MacAudio.java", ".github/workflows/mac-native.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          architecture: aarch64
+
+      - name: Build (arm64 + x86_64)
+        run: |
+          chmod +x native/mac/build.sh
+          native/mac/build.sh build/libwiiuu-audio.dylib
+          javac --release 17 -d build/t src/wiiuu/screen/MacAudio.java
+
+      - name: Load on Apple Silicon
+        run: java -cp build/t wiiuu.screen.MacAudio --check build/libwiiuu-audio.dylib
+
+      - name: Start a capture (expected to stop with a permission message, not a crash)
+        run: |
+          set +e
+          perl -e 'alarm 30; exec @ARGV' java -cp build/t wiiuu.screen.MacAudio 48000 build/libwiiuu-audio.dylib > build/pcm.raw 2> build/err.txt
+          code=$?
+          echo "exit code $code, $(wc -c < build/pcm.raw) bytes of sound"; cat build/err.txt
+          # 0/1: ran or stopped with a message; 142: still capturing after 30 s (SIGALRM). A crash is 134 or 139.
+          case "$code" in 0|1|142) exit 0 ;; *) exit 1 ;; esac
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          architecture: x64
+
+      - name: Load on Intel (Rosetta)
+        run: java -cp build/t wiiuu.screen.MacAudio --check build/libwiiuu-audio.dylib
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libwiiuu-audio
+          path: build/libwiiuu-audio.dylib
+          if-no-files-found: error

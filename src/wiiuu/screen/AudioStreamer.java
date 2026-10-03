@@ -19,8 +19,9 @@ import wiiuu.core.Config;
  *
  * <p>Like the picture, the phone pulls: it asks for everything newer than the last chunk it has,
  * so sound never queues up in the network. Capture runs only while someone listens.
- * Sources: the ScreenCaptureKit helper on macOS 13+, the PulseAudio / PipeWire monitor of the
- * default output on Linux ({@code parec}, or ffmpeg), and ffmpeg + a loopback device on Windows.
+ * Sources: ScreenCaptureKit on macOS 13+ (the Objective-C library shipped in the jar, see
+ * {@link MacAudio}, else the Swift helper built on the Mac), the PulseAudio / PipeWire monitor of
+ * the default output on Linux ({@code parec}, or ffmpeg), and ffmpeg + a loopback device on Windows.
  */
 public final class AudioStreamer {
     public static final int RATE = 48000, CHANNELS = 2;
@@ -39,6 +40,7 @@ public final class AudioStreamer {
     private Thread capture;
     private volatile Process process;
     private volatile String problem;      // why there is no sound, for the phone
+    private int nativeFailures;           // the Mac library gave no sound this many times in a row
 
     public AudioStreamer(Config config, Supplier<Path> macHelper) {
         this.config = config;
@@ -105,6 +107,10 @@ public final class AudioStreamer {
             }
             long started = System.currentTimeMillis();
             boolean any = pump(cmd);
+            if (cmd.contains(MacAudio.class.getName())) {
+                nativeFailures = any ? 0 : nativeFailures + 1;
+                if (nativeFailures == 2) System.err.println("[audio] the Mac sound library gave no sound twice: trying the Swift helper");
+            }
             if (any) {
                 problem = null;
                 failures = 0;
@@ -174,9 +180,16 @@ public final class AudioStreamer {
         String custom = config.get("audio.command", "").trim();
         if (!custom.isEmpty()) return List.of("sh", "-c", custom);
         if (OS.contains("mac")) {
+            // the library from the jar first (no compiler needed); the Swift helper if it keeps failing
+            if (nativeFailures < 2) {
+                List<String> lib = MacAudio.command(config.home().resolve("bin"), RATE);
+                if (lib != null) return lib;
+            }
             Path helper = macHelper.get();
             if (helper == null) {
-                problem = "Sound on the Mac needs macOS 13+ and the Xcode Command Line Tools; its helper may still be building (see ~/.wiiuu/logs/audio-build.log).";
+                problem = nativeFailures >= 2
+                        ? "No sound from the Mac: " + lastLine() + " (allow WII-UU, or Java / Terminal, under System Settings > Privacy & Security > Screen Recording)"
+                        : "Sound on the Mac needs macOS 13 (Ventura) or newer.";
                 return null;
             }
             return List.of(helper.toString(), Integer.toString(RATE));
