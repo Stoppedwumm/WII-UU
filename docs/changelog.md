@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.25 (2026-10-03)
+- On the Mac, the menu music and sound effects now go to the phone straight from WII-UU's own
+  mixer instead of being recorded from the speakers, so they arrive clean. The recording of
+  other apps and games leaves WII-UU out, so nothing is heard twice.
+
 ## 1.9.24 (2026-10-03)
 - On the Mac, WII-UU's own menu music now plays on the phone too, not only the sound of other
   apps and games.
