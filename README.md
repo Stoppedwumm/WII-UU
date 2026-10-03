@@ -383,17 +383,20 @@ Tap **🔇 Sound** on the phone to hear the PC's sound there as well. Phones onl
 tap, so after reloading the page the first tap turns it back on. The phone keeps about 0.1 s of
 sound buffered, so the sound runs slightly behind the picture.
 
-* **macOS 13 or newer:** a second small ScreenCaptureKit helper (`resources/mac/audio.swift`)
-  records the sound. It is compiled on first start like the picture helper, but kept separate, so
-  a problem with sound never affects the picture. It uses the same *Screen Recording*
-  permission. The Mac keeps playing the sound too.
+* **macOS 13 or newer:** ScreenCaptureKit records the sound, in a small Objective-C library
+  that ships in `wiiuu.jar` (`native/mac/wiiuu_audio.m`, called from Java with JNI). GitHub
+  Actions builds it for Apple Silicon and Intel, so sound needs no Xcode Command Line Tools. It
+  runs in a small Java process of its own, so a problem with sound never affects WII-UU or the
+  picture. It uses the same *Screen Recording* permission, and the Mac keeps playing the sound
+  too. If it gives no sound twice, WII-UU falls back to the older Swift helper
+  (`resources/mac/audio.swift`), compiled on first start when the Command Line Tools are there.
 * **Linux:** records the default output's monitor with `parec`, from `pulseaudio-utils`
   (PulseAudio or PipeWire), or with ffmpeg.
 * **Windows:** needs ffmpeg and a loopback recording device. Turn on *Stereo Mix* under Sound
   settings → Recording, or install a virtual cable. Set `audio.device` to pick a device by name.
 * **iPhone:** with the silent switch on, only iOS 17 and newer play the sound.
 * **If there's no sound:** the phone shows why, and details are in `~/.wiiuu/logs/audio.log`
-  (macOS helper build: `audio-build.log`).
+  (macOS Swift helper build: `audio-build.log`).
   `audio.enabled=false` turns sound off, and `audio.command` replaces the recorder. The command
   must write raw 48 kHz 16-bit stereo PCM to its output.
 
