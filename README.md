@@ -179,12 +179,15 @@ wiiuu-emulators --releases-only
 
 ## Use
 
-**First start:** a setup guide walks through the basics on the TV, steered like the menu (phone,
+**First start:** after the start-up animation, an eight-second intro cuts through the menu on a
+beat (the home screen, your consoles' games, the GamePad screen, consoles flashing by, a tunnel of
+tiles), then a setup guide walks through the basics on the TV, steered like the menu (phone,
 controller, keyboard or mouse): the look (light, dark or automatic), menu music and sounds, the
 phone as GamePad (scan the code, it shows when the phone connects), where games go (and RetroArch
 mode), and controllers. Every choice applies straight away. *Settings → General → Show the setup
 guide* brings it back any time, and *Restart into the setup guide* restarts WII-UU so it starts
-with the guide, start-up animation included, like the very first time.
+with the guide, start-up animation and intro included, like the very first time. Any button skips
+the intro; `ui.firstBootIntro=false` leaves it out.
 
 1. Copy games into `~/WiiUU/roms/<system>/`. The folder names are `nes snes gb n64 gba gc nds wii 3ds wiiu
    switch sms genesis saturn dc ps1 ps2 psp ps3 ps4`.

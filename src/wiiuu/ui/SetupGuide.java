@@ -282,12 +282,53 @@ final class SetupGuide {
             p[5] += p[4];
             if (p[1] > 1.2f * 2000) confetti.remove(i);
         }
+        boolean moving = false;
         for (Item it : current) {
             if (!it.kind.equals("switch")) continue;
             float goal = selected(it) ? 1 : 0;
-            it.knob = it.knob < 0 ? goal : it.knob + (goal - it.knob) * 0.3f;
+            float was = it.knob;
+            it.knob = it.knob < 0 ? goal : Math.abs(goal - it.knob) < 0.01f ? goal : it.knob + (goal - it.knob) * 0.3f;
+            moving |= it.knob != was;
         }
+        if (frameGoal != null) {
+            for (int i = 0; i < 4; i++) {
+                float d = frameGoal[i] - frame[i];
+                if (Math.abs(d) > 0.4f) {
+                    frame[i] += d * 0.3f;
+                    moving = true;
+                } else frame[i] = frameGoal[i];
+            }
+        }
+        // only ask for frames while something moves: the guide is otherwise a still picture
+        long sinceOpen = now - opened, sinceStep = now - changed;
+        needsFrame = moving || closing != 0 || sinceOpen < OPEN_MS + 50 || sinceStep < SLIDE_MS + 50 || !confetti.isEmpty()
+                || (step == Step.WELCOME && (sinceOpen < 1600 || shining(now)))
+                || (step == Step.DONE && sinceStep < 1300)
+                || (step == Step.GAMEPAD && (view.padCount() == 0 ? (++ringTick & 1) == 0 : now - connectedAt < 700))
+                || (step == Step.CONTROLLERS && (now / 450) != lastLit);
+        lastLit = now / 450;
         return true;
+    }
+
+    private boolean needsFrame = true;
+    private float[] frameGoal;
+    private int ringTick;
+    private long lastLit;
+
+    /** Whether the next frame differs from the last one (the menu repaints only then). */
+    boolean needsFrame() {
+        return needsFrame;
+    }
+
+    /** Whether the guide hides the whole screen (fully open): the menu below needn't be drawn. */
+    boolean covers() {
+        return closing == 0 && System.currentTimeMillis() - opened > OPEN_MS;
+    }
+
+    /** The welcome logo's shine, which sweeps across every four seconds. */
+    private boolean shining(long now) {
+        double since = (now - opened) / 1000.0;
+        return since > 1.0 && ((since - 1.0) % 4.0) < 1.0;
     }
 
     private void burst() {
@@ -322,7 +363,7 @@ final class SetupGuide {
         Composite base = g.getComposite();
         g.setComposite(AlphaComposite.SrcOver.derive((float) fade));
 
-        paintBackdrop(g, w, h, now);
+        g.drawImage(backdrop(g, w, h), 0, 0, null);
 
         float cw = (float) Math.min(w * 0.74, 1120), ch = (float) Math.min(h * 0.76, 700);
         float cx = (w - cw) / 2, cy = (h - ch) / 2 - h * 0.02f;
@@ -333,12 +374,7 @@ final class SetupGuide {
         g.translate(-w / 2.0, -h / 2.0);
 
         RoundRectangle2D card = new RoundRectangle2D.Float(cx, cy, cw, ch, 44, 44);
-        for (int i = 6; i >= 1; i--) {                  // soft shadow
-            g.setColor(new Color(0, 0, 0, MenuView.dark ? 22 : 12));
-            g.fill(new RoundRectangle2D.Float(cx - i * 2, cy - i * 2 + 10, cw + i * 4, ch + i * 4, 44 + i * 4, 44 + i * 4));
-        }
-        g.setColor(MenuView.CARD);
-        g.fill(card);
+        g.drawImage(cardImage(g, cw, ch), Math.round(cx) - CARD_MARGIN, Math.round(cy) - CARD_MARGIN, null);
         java.awt.Shape clip = g.getClip();
         g.clip(card);
 
@@ -356,21 +392,60 @@ final class SetupGuide {
         g.dispose();
     }
 
-    private void paintBackdrop(Graphics2D g, int w, int h, long now) {
+    // ---- cached pictures (drawn once, then just copied: the Pi can't afford gradients every frame)
+
+    private static final int CARD_MARGIN = 24;
+    private java.awt.image.BufferedImage backdropImg, cardImg, qrImg;
+    private String backdropKey, cardKey;
+    private QrCode qrFor;
+
+    private java.awt.image.BufferedImage backdrop(Graphics2D g, int w, int h) {
+        String key = w + "x" + h + MenuView.dark;
+        if (key.equals(backdropKey)) return backdropImg;
+        java.awt.image.BufferedImage img = compatible(g, w, h, false);
+        Graphics2D b = img.createGraphics();
+        b.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        b.setPaint(new GradientPaint(0, 0, MenuView.dark ? new Color(10, 14, 20) : new Color(236, 244, 250),
+                0, h, MenuView.dark ? new Color(16, 32, 44) : new Color(214, 234, 246)));
+        b.fillRect(0, 0, w, h);
         Color a = MenuView.ACCENT;
-        g.setPaint(new GradientPaint(0, 0, MenuView.dark ? new Color(10, 14, 20, 236) : new Color(236, 244, 250, 240),
-                0, h, MenuView.dark ? new Color(16, 32, 44, 240) : new Color(214, 234, 246, 244)));
-        g.fillRect(0, 0, w, h);
-        // slow, soft bubbles drifting up
-        double s = now / 1000.0;
-        for (int i = 0; i < 14; i++) {
-            double phase = i * 1.7;
-            double x = (0.5 + 0.45 * Math.sin(s * 0.11 + phase)) * w;
-            double y = h - ((s * (14 + i * 3) + i * 137) % (h + 300)) + 150;
-            double r = 30 + (i * 37 % 90);
-            g.setColor(new Color(a.getRed(), a.getGreen(), a.getBlue(), MenuView.dark ? 20 : 26));
-            g.fill(new Ellipse2D.Double(x - r, y - r, r * 2, r * 2));
+        b.setColor(new Color(a.getRed(), a.getGreen(), a.getBlue(), MenuView.dark ? 20 : 26));
+        for (int i = 0; i < 14; i++) {                  // soft bubbles
+            double x = (0.5 + 0.45 * Math.sin(i * 1.7)) * w, y = (i * 0.37 % 1.0) * h, r = 30 + (i * 37 % 90);
+            b.fill(new Ellipse2D.Double(x - r, y - r, r * 2, r * 2));
         }
+        b.dispose();
+        backdropImg = img;
+        backdropKey = key;
+        return img;
+    }
+
+    private java.awt.image.BufferedImage cardImage(Graphics2D g, float cw, float ch) {
+        int w = Math.round(cw), h = Math.round(ch);
+        String key = w + "x" + h + MenuView.dark;
+        if (key.equals(cardKey)) return cardImg;
+        java.awt.image.BufferedImage img = compatible(g, w + CARD_MARGIN * 2, h + CARD_MARGIN * 2, true);
+        Graphics2D b = img.createGraphics();
+        b.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        float m = CARD_MARGIN;
+        for (int i = 6; i >= 1; i--) {                  // soft shadow
+            b.setColor(new Color(0, 0, 0, MenuView.dark ? 22 : 12));
+            b.fill(new RoundRectangle2D.Float(m - i * 2, m - i * 2 + 10, w + i * 4, h + i * 4 - 10, 44 + i * 4, 44 + i * 4));
+        }
+        b.setColor(MenuView.CARD);
+        b.fill(new RoundRectangle2D.Float(m, m, w, h, 44, 44));
+        b.dispose();
+        cardImg = img;
+        cardKey = key;
+        return img;
+    }
+
+    private static java.awt.image.BufferedImage compatible(Graphics2D g, int w, int h, boolean translucent) {
+        java.awt.GraphicsConfiguration gc = g.getDeviceConfiguration();
+        if (gc != null) return gc.createCompatibleImage(Math.max(1, w), Math.max(1, h),
+                translucent ? java.awt.Transparency.TRANSLUCENT : java.awt.Transparency.OPAQUE);
+        return new java.awt.image.BufferedImage(Math.max(1, w), Math.max(1, h),
+                translucent ? java.awt.image.BufferedImage.TYPE_INT_ARGB : java.awt.image.BufferedImage.TYPE_INT_RGB);
     }
 
     private void paintDots(Graphics2D g, float cx, float y, float cw, long now) {
@@ -489,10 +564,9 @@ final class SetupGuide {
             System.arraycopy(goal, 0, frame, 0, 4);
             frameSet = true;
         }
-        for (int i = 0; i < 4; i++) frame[i] += (goal[i] - frame[i]) * 0.3f;
-        float pulse = (float) (0.5 + 0.5 * Math.sin(now / 260.0));
+        frameGoal = goal;                                // tick() glides the frame there
         g.setColor(MenuView.ACCENT);
-        g.setStroke(new BasicStroke(3.5f + pulse * 1.5f));
+        g.setStroke(new BasicStroke(4.5f));
         float r = Math.min(frame[3], h * 0.1f);
         g.draw(new RoundRectangle2D.Float(frame[0], frame[1], frame[2], frame[3], r, r));
         g.setStroke(new BasicStroke(1));
@@ -559,11 +633,19 @@ final class SetupGuide {
         g.setColor(Color.WHITE);
         g.fill(new RoundRectangle2D.Float(x - 10, y - 10, size + 20, size + 20, 24, 24));
         if (qr != null) {
-            float cell = size / (qr.size + 2);
-            g.setColor(new Color(0x202225));
-            for (int yy = 0; yy < qr.size; yy++)
-                for (int xx = 0; xx < qr.size; xx++)
-                    if (qr.get(xx, yy)) g.fill(new Rectangle2D.Float(x + (xx + 1) * cell, y + (yy + 1) * cell, cell + 0.5f, cell + 0.5f));
+            int px = Math.round(size);
+            if (qr != qrFor || qrImg == null || qrImg.getWidth() != px) {
+                qrImg = compatible(g, px, px, true);
+                Graphics2D b = qrImg.createGraphics();
+                float cell = size / (qr.size + 2);
+                b.setColor(new Color(0x202225));
+                for (int yy = 0; yy < qr.size; yy++)
+                    for (int xx = 0; xx < qr.size; xx++)
+                        if (qr.get(xx, yy)) b.fill(new Rectangle2D.Float((xx + 1) * cell, (yy + 1) * cell, cell + 0.5f, cell + 0.5f));
+                b.dispose();
+                qrFor = qr;
+            }
+            g.drawImage(qrImg, Math.round(x), Math.round(y), null);
         } else {
             g.setColor(new Color(0x80868B));
             center(g, "GamePad server is off", Font.PLAIN, size * 0.07f, x + size / 2, y + size / 2, size * 0.9f);

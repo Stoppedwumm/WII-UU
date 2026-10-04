@@ -84,8 +84,11 @@ final class Sfx {
         return pcm;
     }
 
+    /** A thread that renders menu pictures (the first-boot intro's shots) and must stay silent. */
+    static volatile Thread quiet;
+
     private static void play(double[] notes, double noteSeconds, double volume) {
-        if (!enabled) return;
+        if (!enabled || Thread.currentThread() == quiet) return;
         int perNote = (int) (RATE * noteSeconds);
         short[] pcm = new short[perNote * notes.length];
         int i = 0;

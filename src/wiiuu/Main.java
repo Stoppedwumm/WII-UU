@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.35";
+    public static final String VERSION = "1.9.36";
 
     private final Config config;
     private final Library library;
@@ -220,7 +220,9 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         boolean startServer = !noServer && config.getBool("server.enabled", true);
         SwingUtilities.invokeAndWait(app::createWindow);
-        if (firstRun || guideAsked) SwingUtilities.invokeLater(app.view::startGuide);
+        // the first boot (or a restart into the guide): the fast-cut intro, then the setup guide
+        if ((firstRun || guideAsked) && config.getBool("ui.firstBootIntro", true)) SwingUtilities.invokeLater(app.view::startFirstBoot);
+        else if (firstRun || guideAsked) SwingUtilities.invokeLater(app.view::startGuide);
         app.library.addListener(s -> SwingUtilities.invokeLater(() -> app.view.setSnapshot(s)));
         app.library.rescanAsync();
         app.openBased.refreshAsync();

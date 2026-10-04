@@ -235,7 +235,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private final Config config;
     private final Actions actions;
-    private Library.Snapshot snap = new Library.Snapshot(0, Map.of());
+    private volatile Library.Snapshot snap = new Library.Snapshot(0, Map.of());
     private Screen screen = Screen.HOME;
     private GameSystem openSystem;
     private int homeSel;
@@ -306,11 +306,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private long toastUntil;
     private Game playing;
     private int pads;
-    private String padUrl = "";
+    private volatile String padUrl = "";
     private String padCode = "";
     private boolean padNeedsCode = true;
-    private QrCode qr;
-    private boolean serverOn;
+    private volatile QrCode qr;
+    private volatile boolean serverOn;
 
     private final Map<Path, BufferedImage> covers = new ConcurrentHashMap<>();
     private final Set<Path> loading = ConcurrentHashMap.newKeySet();
@@ -338,6 +338,26 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     });
     private boolean syncSprites; // snapshots render inline
     private String topKey, dockKey;
+
+    /**
+     * A menu that is only drawn into pictures (the first-boot intro's shots): no sound, input,
+     * timer or music, and the theme as it is.
+     */
+    MenuView(Config config, boolean preview) {
+        this.config = config;
+        this.actions = new Actions() {
+            @Override public void launch(Game game) { }
+            @Override public void openSettings() { }
+            @Override public void quit() { }
+            @Override public void refresh() { }
+            @Override public void power(String action) { }
+            @Override public void closeGame() { }
+        };
+        setOpaque(true);
+        booting = false;
+        revealed = true;
+        musicEnabled = false;
+    }
 
     public MenuView(Config config, Actions actions) {
         this.config = config;
@@ -406,6 +426,133 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         padNeedsCode = needsCode;
         qr = pairingUrl == null ? null : QrCode.encode(pairingUrl);
         repaint();
+    }
+
+    // ---- first boot: fast-cut intro, then the setup guide ------------------------------------
+
+    private FirstBootIntro intro;
+    private boolean introPending;
+    private volatile BufferedImage[] introShots;
+    private volatile short[] introJingle;
+    private boolean shotsStarted;
+    private long bootEndedAt;
+
+    /** The first boot: the intro after the start-up animation, then the setup guide. */
+    public void startFirstBoot() {
+        introPending = true;
+        guidePending = true;
+        updateMusic();
+        repaint();
+    }
+
+    /** Advances the intro; true while it owns the screen (the menu then does nothing else). */
+    private boolean tickIntro() {
+        if (introPending && !shotsStarted && getWidth() > 0 && isShowing()) {
+            shotsStarted = true;
+            renderIntroShots(getWidth(), getHeight());
+        }
+        if (introPending && !booting) {
+            if (bootEndedAt == 0) bootEndedAt = System.currentTimeMillis();
+            // wait for the menu pictures and the beat, but never long
+            if (introShots == null && System.currentTimeMillis() - bootEndedAt < 4000) return false;
+            introPending = false;
+            intro = new FirstBootIntro(introShots != null ? introShots : new BufferedImage[4]);
+            short[] beat = introJingle;
+            if (beat != null) MenuAudio.get().play(beat, 0.9f);
+        }
+        if (intro == null) return false;
+        if (intro.done()) {
+            intro = null;
+            introShots = null;
+            updateMusic();
+            repaint();
+            return false;
+        }
+        repaint();
+        return true;
+    }
+
+    /** Any button during the intro skips to the setup guide. */
+    private boolean skipIntro() {
+        if (intro == null) return false;
+        intro.skip();
+        MenuAudio.get().stopEffects();
+        repaint();
+        return true;
+    }
+
+    /**
+     * Takes the intro's pictures of the menu in the background, while the start-up animation runs:
+     * the home screen, the console with the most games, the GamePad screen and page two (or the
+     * power menu), drawn by a silent copy of the menu; and makes the intro's beat.
+     */
+    private void renderIntroShots(int w, int h) {
+        java.awt.GraphicsConfiguration conf = getGraphicsConfiguration();
+        Thread t = new Thread(() -> {
+            Sfx.quiet = Thread.currentThread();
+            MenuView v = new MenuView(config, true);
+            try {
+                Thread.sleep(1500);                         // let the library scan and the GamePad server start first
+                v.setSize(w, h);
+                v.setSnapshot(snap);
+                v.serverOn = serverOn;
+                v.padUrl = padUrl;
+                v.padCode = padCode;
+                v.padNeedsCode = padNeedsCode;
+                v.qr = qr;
+                BufferedImage[] shots = new BufferedImage[4];
+                shots[0] = v.shot(conf);
+                int best = -1, most = 0;
+                for (int i = 0; i < v.tiles.size(); i++) {
+                    if (v.tiles.get(i).count > most) {
+                        most = v.tiles.get(i).count;
+                        best = i;
+                    }
+                }
+                if (best >= 0) {
+                    v.sel = best;
+                    v.activate();
+                    Thread.sleep(500);                       // covers load in the background
+                    shots[1] = v.shot(conf);
+                    v.back();
+                }
+                if (v.serverOn && v.qr != null) {            // without the server the cut flashes a console instead
+                    v.toggleGamepadInfo();
+                    shots[2] = v.shot(conf);
+                    v.toggleGamepadInfo();
+                }
+                if (v.pageCount() > 1) v.page(1);
+                else v.showPowerMenu();
+                shots[3] = v.shot(conf);
+                FirstBootIntro plan = new FirstBootIntro(shots);
+                introJingle = Tunes.introJingle(FirstBootIntro.BPM, plan.impactBeat(), plan.cutBeats());
+                introShots = shots;
+            } catch (Exception | OutOfMemoryError e) {
+                System.err.println("[intro] " + e);
+            } finally {
+                v.shutdownPreview();
+                Sfx.quiet = null;
+            }
+        }, "intro-shots");
+        t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
+        t.start();
+    }
+
+    /** The menu as it looks now (settled), as a picture for the intro. */
+    private BufferedImage shot(java.awt.GraphicsConfiguration conf) {
+        settle();
+        int w = getWidth(), h = getHeight();
+        BufferedImage img = conf != null ? conf.createCompatibleImage(w, h) : new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        paint(g);
+        g.dispose();
+        return img;
+    }
+
+    private void shutdownPreview() {
+        coverLoader.shutdownNow();
+        spriteRenderer.shutdownNow();
     }
 
     // ---- setup guide ---------------------------------------------------------------------
@@ -561,7 +708,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private void updateMusic() {
-        MenuAudio.get().musicOn(musicEnabled && revealed && playing == null);
+        // not while the first boot's intro (with its own beat) is pending or playing
+        MenuAudio.get().musicOn(musicEnabled && revealed && playing == null && intro == null && !introPending);
     }
 
     private void buildHomeTiles() {
@@ -590,6 +738,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void navigate(int dx, int dy) {
         if (skipBoot()) return;
+        if (skipIntro()) return;
         if (guide != null) {
             guide.navigate(dx, dy);
             repaint();
@@ -661,6 +810,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void activate() {
         if (skipBoot()) return;
+        if (skipIntro()) return;
         if (guide != null) {
             guide.activate();
             repaint();
@@ -721,6 +871,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void back() {
         if (skipBoot()) return;
+        if (skipIntro()) return;
         if (guide != null) {
             guide.back();
             repaint();
@@ -757,6 +908,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void page(int delta) {
         if (skipBoot()) return;
+        if (skipIntro()) return;
         if (guide != null) {
             guide.page(delta);
             repaint();
@@ -778,6 +930,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void toggleGamepadInfo() {
         if (skipBoot()) return;
+        if (skipIntro()) return;
         if (guide != null) return;
         if (playing != null || confirmQuit) return;
         showPad = !showPad;
@@ -833,6 +986,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             public void mousePressed(MouseEvent e) {
                 requestFocusInWindow();
                 if (skipBoot()) return;
+                if (skipIntro()) return;
                 if (guide != null) {
                     guide.click(e.getX(), e.getY());
                     repaint();
@@ -893,10 +1047,20 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private void tick() {
         boolean dirty = tickBoot();
+        if (tickIntro()) return;
         if (guide != null) {
-            if (!guide.tick()) guide = null;
+            if (!guide.tick()) {
+                guide = null;
+                repaint();
+                return;
+            }
+            if (guide.covers()) {
+                // the guide hides the menu: nothing below needs frames, and the guide only while it moves
+                if (guide.needsFrame()) repaint();
+                return;
+            }
             dirty = true;
-        } else if (guidePending && !booting && playing == null && isShowing()) {
+        } else if (guidePending && !introPending && intro == null && !booting && playing == null && isShowing()) {
             guidePending = false;
             guide = new SetupGuide(this, config, () -> { });
             dirty = true;
@@ -1301,6 +1465,34 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     protected void paintComponent(Graphics g0) {
+        long paintStart = FPS_DEBUG ? System.nanoTime() : 0;
+        try {
+            paintFrame(g0);
+        } finally {
+            if (FPS_DEBUG) countFrame(System.nanoTime() - paintStart);
+        }
+    }
+
+    /** -Dwiiuu.fps=true: frames per second and paint time in the log, every two seconds. */
+    private static final boolean FPS_DEBUG = Boolean.getBoolean("wiiuu.fps");
+    private long fpsSince, fpsNanos;
+    private int fpsFrames;
+
+    private void countFrame(long nanos) {
+        long now = System.currentTimeMillis();
+        if (fpsSince == 0) fpsSince = now;
+        fpsFrames++;
+        fpsNanos += nanos;
+        if (now - fpsSince >= 2000) {
+            System.out.printf(java.util.Locale.ROOT, "[fps] %.1f frames/s, %.1f ms per frame%s%n", fpsFrames * 1000.0 / (now - fpsSince),
+                    fpsNanos / 1e6 / fpsFrames, guide != null ? " (setup guide)" : "");
+            fpsSince = now;
+            fpsFrames = 0;
+            fpsNanos = 0;
+        }
+    }
+
+    private void paintFrame(Graphics g0) {
         Graphics2D g = (Graphics2D) g0.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -1312,6 +1504,19 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (booting && !revealed) {
             // the boot screen covers the menu completely: don't spend time drawing the menu too
             paintBoot(g, L);
+            g.dispose();
+            Toolkit.getDefaultToolkit().sync();
+            return;
+        }
+        if (intro != null && !booting) {
+            intro.paint(g, getWidth(), getHeight());
+            g.dispose();
+            Toolkit.getDefaultToolkit().sync();
+            return;
+        }
+        if (guide != null && !booting && guide.covers()) {
+            // the guide covers the whole screen: don't spend time drawing the menu under it
+            guide.paint(g, getWidth(), getHeight());
             g.dispose();
             Toolkit.getDefaultToolkit().sync();
             return;

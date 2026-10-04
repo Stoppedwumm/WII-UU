@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.36 (2026-10-04)
+A first boot to remember, and a smooth setup guide.
+- The first start (and Restart into the setup guide) now opens with an eight-second intro on its
+  own beat: the logo slams in, then fast cuts through your real menu (the home screen, a console's
+  games, the GamePad screen, your games), consoles flashing by in their colours, a tunnel of
+  tiles, and the logo again before the setup guide. Any button skips it.
+- The setup guide no longer lags: it used to redraw the whole screen, menu included, about 60
+  times a second even when nothing moved. Now it only draws while something moves and reuses
+  its background, card and QR code, using about 15 times less CPU on a still step.
+
 ## 1.9.35 (2026-10-04)
 - Settings → General → Restart into the setup guide: WII-UU restarts and starts with the setup
   guide, start-up animation and all, like the very first time. Your settings and games are kept.

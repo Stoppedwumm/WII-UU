@@ -52,6 +52,13 @@ final class MenuAudio {
 
     private MenuAudio() {}
 
+    /** Stops every effect playing (a skipped intro's jingle). */
+    void stopEffects() {
+        synchronized (lock) {
+            voices.clear();
+        }
+    }
+
     /** Plays a mono effect once. */
     void play(short[] mono, float gain) {
         synchronized (lock) {

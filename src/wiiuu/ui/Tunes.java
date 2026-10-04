@@ -664,6 +664,50 @@ final class Tunes {
         return out;
     }
 
+    // ---- the first-boot intro's jingle ----------------------------------------------------------
+
+    /**
+     * The beat under the first-boot intro ({@link FirstBootIntro}): {@code beats} beats at
+     * {@code bpm}, four on the floor with claps and hats, a chord stab on every cut ({@code cuts},
+     * in beats), a riser and snare roll over the last four beats, then an impact with a long chord
+     * and a crash on the beat after. Mono, for the menu's mixer.
+     */
+    static short[] introJingle(double bpm, int beats, double[] cuts) {
+        double beat = 60.0 / bpm;
+        int frames = (int) Math.round((beats + 4) * beat * RATE);
+        float[] l = new float[frames], r = new float[frames];
+        Random noise = new Random(21);
+        int build = Math.max(0, beats - 4);
+        for (int b = 0; b < beats; b++) {
+            double at = b * beat;
+            if (b < build) {
+                houseKick(l, r, at);
+                if (b % 2 == 1) clap(l, r, at, noise);
+                for (int s = 0; s < 4; s++) hat16(l, r, at + s * beat / 4, s, 0.7, noise);
+                sub(l, r, at + beat / 2, beat * 0.4, hz(29 + (b / 4 % 2 == 0 ? 0 : 3)), 0.22);
+            }
+        }
+        // the build: a riser and a snare roll getting faster and louder
+        noiseSweep(l, r, build * beat, 4 * beat, 400, 11000, 0, 0.3, noise);
+        for (int k = 0; k < 8; k++) houseSnare(l, r, (build + k * 0.5) * beat, 0.15 + 0.03 * k, noise);
+        for (int k = 0; k < 8; k++) houseSnare(l, r, (build + 2 + k * 0.25) * beat, 0.35 + 0.03 * k, noise);
+        // a stab on every cut (F major, bright), and the impact
+        int[] chord = {53, 57, 60, 65};
+        for (double c : cuts) {
+            if (c >= beats) continue;
+            for (int n : chord) synth(l, r, c * beat, beat * 0.22, n + 12, 0.07, STAB, x -> 4200);
+        }
+        double end = beats * beat;
+        houseKick(l, r, end);
+        crash(l, r, end, noise);
+        sub(l, r, end, beat * 3, hz(29), 0.3);
+        for (int n : chord) synth(l, r, end, beat * 3, n, 0.1, LEAD, x -> 3000);
+        short[] st = finish(l, r, 0.85f);
+        short[] mono = new short[frames];
+        for (int i = 0; i < frames; i++) mono[i] = (short) ((st[i * 2] + st[i * 2 + 1]) / 2);
+        return mono;
+    }
+
     // ---- extended versions, for the Extended Mix --------------------------------------------
 
     /** Bars of drums and bass before and after an extended version: the DJ's room to blend. */
