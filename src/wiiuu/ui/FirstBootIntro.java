@@ -28,7 +28,8 @@ import wiiuu.core.Systems;
  * Any button skips it.
  *
  * <p>Cheap to draw: every cut is one picture copied with a transform, a few rectangles and a word;
- * a white flash hides each cut.
+ * a white flash hides each cut. Sizes follow the frame's height: MenuView draws it smaller than the
+ * screen and enlarges it.
  */
 final class FirstBootIntro {
     static final double BPM = 128, BEAT = 60.0 / BPM;
@@ -118,7 +119,8 @@ final class FirstBootIntro {
         // a quick shake right on the cut
         double kick = Math.max(0, 1 - (t - cut.start()) * 6);
         AffineTransform base = g.getTransform();
-        g.translate((random.nextDouble() - 0.5) * 18 * kick, (random.nextDouble() - 0.5) * 18 * kick);
+        double shake = h / 60.0 * kick;                 // drawn at any size (MenuView draws it small)
+        g.translate((random.nextDouble() - 0.5) * shake, (random.nextDouble() - 0.5) * shake);
         switch (cut.kind()) {
             case SLAM -> paintSlam(g, w, h, p, cut.word());
             case SHOT -> paintShot(g, w, h, p, cut);
@@ -177,9 +179,10 @@ final class FirstBootIntro {
         float cw = (float) (w * 0.42 * z), ch = (float) (cw * 0.62);
         float cx = (w - cw) / 2, cy = (h - ch) / 2 - h * 0.03f;
         g.setColor(new Color(255, 255, 255, 34));
-        g.fill(new RoundRectangle2D.Float(cx - 14, cy - 14, cw + 28, ch + 28, 48, 48));
+        float m = h / 77f, r = h / 30f;
+        g.fill(new RoundRectangle2D.Float(cx - m, cy - m, cw + m * 2, ch + m * 2, r * 1.33f, r * 1.33f));
         g.setColor(c);
-        g.fill(new RoundRectangle2D.Float(cx, cy, cw, ch, 36, 36));
+        g.fill(new RoundRectangle2D.Float(cx, cy, cw, ch, r, r));
         g.setColor(new Color(255, 255, 255, 210));
         g.setFont(MenuView.font(Font.BOLD, ch * 0.09f));
         g.drawString(s.maker().toUpperCase(java.util.Locale.ROOT), cx + cw * 0.06f, cy + ch * 0.14f);
@@ -221,7 +224,7 @@ final class FirstBootIntro {
             int a = (int) Math.max(0, 120 * (1 - r));
             Color c = MenuView.ACCENT;
             g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), a));
-            g.setStroke(new BasicStroke(6));
+            g.setStroke(new BasicStroke(Math.max(2, h / 180f)));
             g.draw(new java.awt.geom.Ellipse2D.Float(w / 2f - rad, h * 0.48f - rad, rad * 2, rad * 2));
         }
         g.setStroke(new BasicStroke(1));
@@ -241,7 +244,7 @@ final class FirstBootIntro {
     /** Speed streaks across the picture, faster at the start of the cut. */
     private void streaks(Graphics2D g, int w, int h, double p, Color c) {
         g.setColor(c);
-        g.setStroke(new BasicStroke(2));
+        g.setStroke(new BasicStroke(Math.max(1, h / 540f)));
         Random r = new Random(7);
         for (int i = 0; i < 18; i++) {
             float y = r.nextFloat() * h, len = w * (0.1f + r.nextFloat() * 0.25f);
@@ -258,7 +261,8 @@ final class FirstBootIntro {
     private static void bigWord(Graphics2D g, String word, double cx, double y, double size, Color main, Color shadow, int offset) {
         Font f = MenuView.font(Font.BOLD, (float) size);
         FontMetrics fm = g.getFontMetrics(f);
-        double maxW = g.getDeviceConfiguration() == null ? 2000 : g.getDeviceConfiguration().getBounds().width * 0.9;
+        java.awt.Rectangle area = g.getDeviceConfiguration() == null ? new java.awt.Rectangle(1920, 1080) : g.getDeviceConfiguration().getBounds();
+        double maxW = area.width * 0.9, px = Math.max(0.5, area.height / 1080.0);      // the shadow offset in 1080p pixels
         while (fm.stringWidth(word) > maxW && size > 12) {
             size *= 0.92;
             f = MenuView.font(Font.BOLD, (float) size);
@@ -268,7 +272,7 @@ final class FirstBootIntro {
         float x = (float) (cx - fm.stringWidth(word) / 2.0);
         if (offset > 0) {
             g.setColor(shadow);
-            g.drawString(word, x + offset * 2, (float) y + offset * 2);
+            g.drawString(word, (float) (x + offset * 2 * px), (float) (y + offset * 2 * px));
         }
         if (word.equals("WII-UU")) {
             g.setColor(main);

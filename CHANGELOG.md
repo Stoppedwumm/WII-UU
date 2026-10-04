@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.40 (2026-10-04)
+- The first-boot intro runs smoothly on a Raspberry Pi, also on a 4K TV: it took up to half a
+  second per frame (2-4 frames per second). It is now drawn at 960 pixels wide or less and
+  enlarged, and goes down to 640 if the computer still can't keep up.
+- `wiiuu --fps` says which screen each line is about (start-up, intro, setup guide, menu), and
+  at what size the intro is drawn.
+
 ## 1.9.39 (2026-10-04)
 - `wiiuu --setup` starts WII-UU with the setup guide, after the first-boot intro, without
   having to go through Settings. Add `--no-intro` to go straight to the guide.

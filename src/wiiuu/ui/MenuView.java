@@ -471,6 +471,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (intro.done()) {
             intro = null;
             introShots = null;
+            introBuf = null;
             updateMusic();
             repaint();
             return false;
@@ -1485,22 +1486,66 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
     }
 
-    /** -Dwiiuu.fps=true: frames per second and paint time in the log, every two seconds. */
+    /**
+     * -Dwiiuu.fps=true (wiiuu --fps): frames per second and paint time in the log, every two
+     * seconds and whenever the screen changes (start-up, intro, setup guide, menu).
+     */
     private static final boolean FPS_DEBUG = Boolean.getBoolean("wiiuu.fps");
     private long fpsSince, fpsNanos;
     private int fpsFrames;
+    private String fpsPhase;
 
     private void countFrame(long nanos) {
         long now = System.currentTimeMillis();
+        String phase = booting ? "start-up" : intro != null ? "intro" : guide != null ? "setup guide" : "menu";
+        if (!phase.equals(fpsPhase) && fpsFrames > 0) printFps(now);
+        fpsPhase = phase;
         if (fpsSince == 0) fpsSince = now;
         fpsFrames++;
         fpsNanos += nanos;
-        if (now - fpsSince >= 2000) {
-            System.out.printf(java.util.Locale.ROOT, "[fps] %.1f frames/s, %.1f ms per frame%s%n", fpsFrames * 1000.0 / (now - fpsSince),
-                    fpsNanos / 1e6 / fpsFrames, guide != null ? " (setup guide)" : "");
-            fpsSince = now;
-            fpsFrames = 0;
-            fpsNanos = 0;
+        if (now - fpsSince >= 2000) printFps(now);
+    }
+
+    private void printFps(long now) {
+        System.out.printf(java.util.Locale.ROOT, "[fps] %.1f frames/s, %.1f ms per frame (%s%s)%n",
+                fpsFrames * 1000.0 / Math.max(1, now - fpsSince), fpsNanos / 1e6 / fpsFrames, fpsPhase,
+                "intro".equals(fpsPhase) && introBuf != null ? ", drawn at " + introBuf.getWidth() + "x" + introBuf.getHeight() : "");
+        fpsSince = now;
+        fpsFrames = 0;
+        fpsNanos = 0;
+    }
+
+    /** The intro is drawn this many times smaller, then enlarged pixel by pixel (0: not chosen yet). */
+    private int introDiv;
+    private BufferedImage introBuf;
+    /** recent intro drawing times, in ms (smoothed), and frames since the size last changed */
+    private double introMs;
+    private int introFrames;
+
+    /**
+     * The first-boot intro, drawn small and enlarged: drawing it at full size (4K on a TV) took a
+     * Raspberry Pi a third of a second per frame. It starts at no more than 960 pixels wide and
+     * gets smaller (not below 640) while frames still take too long. The enlarging is pixel doubling (smooth
+     * enlarging costs more than drawing the frame); the fast cuts hide the coarser pixels.
+     */
+    private void paintIntro(Graphics2D g, int w, int h) {
+        if (introDiv == 0) introDiv = Math.max(1, (int) Math.ceil(w / 960.0));
+        int bw = Math.max(1, (w + introDiv - 1) / introDiv), bh = Math.max(1, (h + introDiv - 1) / introDiv);
+        if (introBuf == null || introBuf.getWidth() != bw || introBuf.getHeight() != bh) {
+            introBuf = gc != null ? gc.createCompatibleImage(bw, bh) : new BufferedImage(bw, bh, BufferedImage.TYPE_INT_RGB);
+        }
+        long start = System.nanoTime();
+        Graphics2D b = introBuf.createGraphics();
+        intro.paint(b, bw, bh);
+        b.dispose();
+        double ms = (System.nanoTime() - start) / 1e6;
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        g.drawImage(introBuf, 0, 0, bw * introDiv, bh * introDiv, null);
+        // drawing it (not the enlarging, which costs the same at any size) still slow: smaller, down to 640 wide
+        introMs = introFrames == 0 ? ms : introMs * 0.8 + ms * 0.2;
+        if (++introFrames >= 6 && introMs > 16 && w / (introDiv + 1) >= 640) {
+            introDiv++;
+            introFrames = 0;
         }
     }
 
@@ -1521,7 +1566,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             return;
         }
         if (intro != null && !booting) {
-            intro.paint(g, getWidth(), getHeight());
+            paintIntro(g, getWidth(), getHeight());
             g.dispose();
             Toolkit.getDefaultToolkit().sync();
             return;
