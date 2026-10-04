@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.38";
+    public static final String VERSION = "1.9.39";
 
     private final Config config;
     private final Library library;
@@ -132,7 +132,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         Path home = Config.defaultHome();
         Boolean fullscreen = null;
         Integer port = null;
-        boolean noServer = false;
+        boolean noServer = false, setup = false, noIntro = false;
         String snapshot = null, snapshotView = "home";
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -186,6 +186,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --home DIR                  settings folder (default ~/.wiiuu)
                               --check-update / --upgrade  check for / install a newer version (with its notes)
                               --changelog [VERSION]       what changed (since VERSION)
+                              --setup                     start with the setup guide (after the first-boot intro)
+                              --no-intro                  with --setup: straight to the guide, no intro
                               --fps                       print the menu's frame rate (every two seconds)
                               --install-virtual-display   Windows: install the virtual display (split DS/3DS screens)
                               --virtual-display-off       Windows: switch the virtual display off (split screens)
@@ -193,6 +195,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                                   F11 fullscreen, Ctrl+Q closes a running game.""".formatted(VERSION));
                     return;
                 }
+                case "--setup" -> setup = true;
+                case "--no-intro" -> noIntro = true;
                 case "--fps" -> System.setProperty("wiiuu.fps", "true");
                 default -> {
                     // -Dname=value after "wiiuu" (the launcher passes it here, not to Java)
@@ -211,8 +215,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         // never ran before (install.sh may already have written settings): the setup guide
         firstRun = config.get("app.lastVersion", null) == null && !config.getBool("ui.setupDone", false);
         // Settings > General > Restart into the setup guide
-        boolean guideAsked = config.getBool("ui.setupNext", false);
-        if (guideAsked) {
+        boolean guideAsked = config.getBool("ui.setupNext", false) || setup;
+        if (config.getBool("ui.setupNext", false)) {
             config.set("ui.setupNext", null);
             config.save();
         }
@@ -229,7 +233,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         boolean startServer = !noServer && config.getBool("server.enabled", true);
         SwingUtilities.invokeAndWait(app::createWindow);
         // the first boot (or a restart into the guide): the fast-cut intro, then the setup guide
-        if ((firstRun || guideAsked) && config.getBool("ui.firstBootIntro", true)) SwingUtilities.invokeLater(app.view::startFirstBoot);
+        if ((firstRun || guideAsked) && !noIntro && config.getBool("ui.firstBootIntro", true)) SwingUtilities.invokeLater(app.view::startFirstBoot);
         else if (firstRun || guideAsked) SwingUtilities.invokeLater(app.view::startGuide);
         app.library.addListener(s -> SwingUtilities.invokeLater(() -> app.view.setSnapshot(s)));
         app.library.rescanAsync();
@@ -570,10 +574,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         // updated from a version that didn't keep track: this version's notes
         java.util.List<wiiuu.core.Changelog.Entry> notes = before == null && all.size() > 1 ? all.subList(0, 1) : all;
         if (notes.isEmpty()) return;
-        // after the start-up animation, so it doesn't cover it
+        // after the start-up animation and the setup guide (--setup), so it doesn't cover them
         javax.swing.Timer wait = new javax.swing.Timer(500, null);
         wait.addActionListener(e -> {
-            if (view.isBooting()) return;
+            if (view.isBooting() || view.guideShowing()) return;
             wait.stop();
             if (!config.getBool("ui.whatsNew", true)) {
                 view.showToast("Updated to WII-UU " + VERSION + " - what's new: Settings (F1) > General");

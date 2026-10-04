@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.39 (2026-10-04)
+- `wiiuu --setup` starts WII-UU with the setup guide, after the first-boot intro, without
+  having to go through Settings. Add `--no-intro` to go straight to the guide.
+- After an update, the What's new notes wait until the setup guide is closed instead of covering it.
+
 ## 1.9.38 (2026-10-04)
 - `wiiuu --fps` (or `wiiuu -Dwiiuu.fps=true`) prints the menu's frame rate and paint time every
   two seconds, to help track down stutter. Before, the `-D` setting was ignored when given
