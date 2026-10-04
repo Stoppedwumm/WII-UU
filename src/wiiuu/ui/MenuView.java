@@ -525,9 +525,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void buildHomeTiles() {
         tiles.clear();
         boolean hideEmpty = config.getBool("ui.hideEmpty", false);
-        for (GameSystem s : Systems.ALL) {
+        for (GameSystem s : Systems.MENU) {
             int n = snap.of(s).size();
             if (config.hidden(s) || (hideEmpty && n == 0)) continue;
+            if (s == Systems.OPENBASED && !wiiuu.core.OpenBased.configured(config)) continue;   // a channel once set up
             tiles.add(new Tile(s, null, n));
         }
     }
@@ -657,6 +658,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             scrollPage = 0;
             hlInit = false;
             if (tiles.isEmpty()) inDock = false;
+            String why = wiiuu.core.OpenBased.lastProblem();
+            if (t.system == Systems.OPENBASED && tiles.isEmpty() && why != null) showToast(why);
         } else {
             actions.launch(t.game);
         }
@@ -1592,8 +1595,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
         g.setColor(new Color(255, 255, 255, 190));
         g.setFont(font(Font.BOLD, h * 0.075f));
-        g.drawString(t.system.maker().toUpperCase(Locale.ROOT), x + w * 0.07f, y + h * 0.13f);
-        String yr = Integer.toString(t.system.year());
+        boolean channel = t.system == Systems.OPENBASED;
+        g.drawString(channel ? "MEDIA SERVER" : t.system.maker().toUpperCase(Locale.ROOT), x + w * 0.07f, y + h * 0.13f);
+        String yr = channel ? "" : Integer.toString(t.system.year());
         g.drawString(yr, x + w * 0.93f - g.getFontMetrics().stringWidth(yr), y + h * 0.13f);
 
         g.setColor(Color.WHITE);
@@ -1604,8 +1608,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         drawCentered(g, ellipsize(g, t.system.name(), w * 0.9f), x + w / 2, y + artH + h * 0.13f);
         g.setColor(t.count > 0 ? ACCENT : TEXT_DIM);
         g.setFont(font(Font.PLAIN, h * 0.07f));
-        drawCentered(g, t.count == 0 ? "No games yet" : t.count == 1 ? "1 game" : t.count + " games",
-                x + w / 2, y + artH + h * 0.24f);
+        String unit = t.system == Systems.OPENBASED ? "video" : "game";
+        String label = t.count == 0 ? (t.system == Systems.OPENBASED && wiiuu.core.OpenBased.lastProblem() != null
+                ? "Server not reachable" : "No " + unit + "s yet") : t.count == 1 ? "1 " + unit : t.count + " " + unit + "s";
+        drawCentered(g, label, x + w / 2, y + artH + h * 0.24f);
     }
 
     private void paintGameTile(Graphics2D g, Tile t, RoundRectangle2D card) {

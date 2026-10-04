@@ -81,6 +81,11 @@ public final class SettingsDialog extends JDialog {
     private final JCheckBox hideEmpty = new JCheckBox("Hide systems without games");
     private final JCheckBox minimize = new JCheckBox("Minimize menu while a game runs");
 
+    // OpenBased tab
+    private final JTextField obUrl = new JTextField(32);
+    private final javax.swing.JPasswordField obToken = new javax.swing.JPasswordField(32);
+    private final JTextField obPlayer = new JTextField(32);
+
     public SettingsDialog(Frame owner, Config config, Runnable onSaved) {
         super(owner, "WII-UU Settings", true);
         this.config = config;
@@ -91,6 +96,7 @@ public final class SettingsDialog extends JDialog {
         tabs.addTab("Systems & Emulators", systemsTab());
         tabs.addTab("GamePad Keys", keysTab());
         tabs.addTab("General", generalTab());
+        tabs.addTab("OpenBased", openBasedTab());
 
         JButton save = new JButton("Save");
         JButton cancel = new JButton("Cancel");
@@ -127,6 +133,8 @@ public final class SettingsDialog extends JDialog {
         for (int p = 1; p <= KeyMap.MAX_PLAYERS; p++)
             for (int b = 0; b < buttons.length; b++) keys[p - 1][b] = km.keyName(p, buttons[b]);
         romBase.setText(config.romBase().toString());
+        obUrl.setText(config.get("openbased.url", ""));
+        obPlayer.setText(config.get("openbased.player", ""));
         port.setValue(config.port());
         serverOn.setSelected(config.getBool("server.enabled", true));
         requireCode.setSelected(config.getBool("server.requireCode", true));
@@ -171,6 +179,11 @@ public final class SettingsDialog extends JDialog {
                 config.set("keys.p" + p + "." + buttons[b].name(), v.equals(KeyMap.defaultKey(p, buttons[b])) ? null : v);
             }
         }
+        String url = obUrl.getText().trim(), token = new String(obToken.getPassword()).trim();
+        config.set("openbased.url", url.isEmpty() ? null : url);
+        if (url.isEmpty()) config.set("openbased.token", null);
+        else if (!token.isEmpty()) config.set("openbased.token", token);     // blank: keep the one set
+        config.set("openbased.player", obPlayer.getText().isBlank() ? null : obPlayer.getText().trim());
         config.set("server.port", port.getValue().toString());
         config.set("server.enabled", Boolean.toString(serverOn.isSelected()));
         config.set("server.requireCode", Boolean.toString(requireCode.isSelected()));
@@ -524,6 +537,35 @@ public final class SettingsDialog extends JDialog {
 
     private java.nio.file.Path musicFolder() {
         return config.home().resolve("music");
+    }
+
+    /** OpenBased: a media server whose videos WII-UU lists as a channel and plays on the TV. */
+    private JComponent openBasedTab() {
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(6, 8, 6, 8);
+        c.anchor = GridBagConstraints.WEST;
+        int row = 0;
+        boolean hasToken = !config.get("openbased.token", "").isBlank();
+        obUrl.setToolTipText("For example http://192.168.1.20:8080");
+        obToken.setToolTipText(hasToken ? "A token is set; leave empty to keep it" : "ob_pat_...");
+        obPlayer.setToolTipText("Empty: mpv, else VLC, else ffplay. Your own: {url} {title} {start}");
+        row = addRow(p, c, row, "Server address", obUrl, null);
+        row = addRow(p, c, row, "Personal access token", obToken, new JLabel(hasToken ? "(set; empty keeps it)" : ""));
+        row = addRow(p, c, row, "Video player command", obPlayer, new JLabel("(empty: mpv, VLC or ffplay)"));
+        c.gridx = 0;
+        c.gridy = row;
+        c.gridwidth = 3;
+        c.weighty = 1;
+        c.anchor = GridBagConstraints.NORTHWEST;
+        p.add(new JLabel("<html><div style='width:620px'>Your OpenBased server's movies and episodes appear as a "
+                + "channel on the home screen, and play full screen on the TV (mpv works best: it resumes where you "
+                + "stopped and saves your progress to OpenBased).<br><br>Create the token in OpenBased (<i>POST /api/v1/tokens</i>, "
+                + "or its web UI) with the scopes media.read, media.stream, history.read and history.write. "
+                + "You can also set this up from the phone: GamePad page, Library, <i>OpenBased</i>.<br><br>"
+                + "GamePad: A / + pause, ◀ ▶ seek, ▲ ▼ jump a minute, ZL / ZR volume, Y mute, X subtitles. "
+                + "Home closes the video.</div></html>"), c);
+        return new JScrollPane(p);
     }
 
     private static int addRow(JPanel p, GridBagConstraints c, int row, String label, JComponent field, JComponent extra) {

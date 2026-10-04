@@ -46,6 +46,8 @@ public final class Library {
 
     private final Config config;
     private volatile Snapshot snapshot = new Snapshot(0, Map.of());
+    /** items from servers rather than folders (OpenBased), kept across rescans */
+    private final Map<GameSystem, List<Game>> remote = new java.util.concurrent.ConcurrentHashMap<>();
     private final List<Consumer<Snapshot>> listeners = new CopyOnWriteArrayList<>();
 
     public Library(Config config) {
@@ -78,9 +80,19 @@ public final class Library {
             }
             found.put(s, scan(s, dir));
         }
+        found.putAll(remote);
         snapshot = new Snapshot(snapshot.version() + 1, Map.copyOf(found));
         for (var l : listeners) l.accept(snapshot);
         return snapshot;
+    }
+
+    /** Replaces what a server lists for {@code system} (e.g. OpenBased) and tells the listeners. */
+    public synchronized void setRemote(GameSystem system, List<Game> games) {
+        remote.put(system, List.copyOf(games));
+        Map<GameSystem, List<Game>> all = new LinkedHashMap<>(snapshot.games());
+        all.put(system, List.copyOf(games));
+        snapshot = new Snapshot(snapshot.version() + 1, Map.copyOf(all));
+        for (var l : listeners) l.accept(snapshot);
     }
 
     static List<Game> scan(GameSystem system, Path dir) {

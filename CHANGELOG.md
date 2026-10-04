@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.27 (2026-10-04)
+OpenBased: watch your own movies and shows in WII-UU.
+- Connect an OpenBased media server (Settings → OpenBased, or on the phone: Library, + OpenBased)
+  and its movies and episodes appear as a channel on the home screen, with their posters, and play
+  full screen on the TV, in Console Mode too.
+- Videos you started come first, and with mpv they continue where you stopped; your progress is
+  saved to OpenBased, so continue watching works in your other OpenBased apps.
+- The GamePad controls the video: pause, seek, volume, subtitles. HOME closes it.
+- Console Mode installs mpv for this.
+
 ## 1.9.26 (2026-10-03)
 The phone makes the menu music itself.
 - On the Mac, the GamePad page now makes WII-UU's menu music itself, with the same synthesizer as

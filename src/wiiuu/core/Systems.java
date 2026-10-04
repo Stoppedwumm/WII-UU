@@ -91,7 +91,17 @@ public final class Systems {
                     "shadps4 -g {rom}", "shadPS4.exe -g {rom}", "open -W -a shadps4 --args -g {rom}")
     );
 
+    /**
+     * Videos from an OpenBased media server (see {@link OpenBased}): not a console, but listed and
+     * started like one. Its "emulator" is the video player.
+     */
+    public static final GameSystem OPENBASED = sys("openbased", "OpenBased", "OpenBased", "OpenBased", 2026, 0x6C4CE0,
+            "", "", "the video player", "", "", "");
+
+    /** What the menu and the phone list: OpenBased first (shown once set up), then every console. */
+    public static final List<GameSystem> MENU = java.util.stream.Stream.concat(java.util.stream.Stream.of(OPENBASED), ALL.stream()).toList();
+
     public static Optional<GameSystem> byId(String id) {
-        return ALL.stream().filter(s -> s.id().equals(id)).findFirst();
+        return MENU.stream().filter(s -> s.id().equals(id)).findFirst();
     }
 }

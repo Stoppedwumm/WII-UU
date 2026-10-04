@@ -172,6 +172,11 @@ install_packages() {
     command -v apt-get >/dev/null && want+=(lightdm-gtk-greeter) || true
     command -v pacman >/dev/null && want+=(lightdm-gtk-greeter) || true
   fi
+  # the video player for OpenBased videos; on its own, as some distributions keep it in an extra repository
+  if ! command -v mpv >/dev/null; then
+    command -v apt-get >/dev/null && apt-get update -qq || true
+    pkg_install mpv || warn "could not install mpv (for OpenBased videos) - install it yourself"
+  fi
   [ ${#want[@]} -eq 0 ] && return 0
   say "Installing: ${want[*]}"
   command -v apt-get >/dev/null && apt-get update -qq || true

@@ -84,10 +84,21 @@ public final class Launcher {
         return inRetroArch && isRunning();
     }
 
+    /** Plays OpenBased videos (in a video player rather than an emulator), once set. */
+    private volatile OpenBased openBased;
+
+    public void setOpenBased(OpenBased openBased) {
+        this.openBased = openBased;
+    }
+
     public synchronized void launch(Game game) throws LaunchException {
         if (isRunning()) throw new LaunchException(current.name() + " is already running");
         List<String> cmd = null;
-        if (retroArch.handles(game.system())) {
+        boolean video = OpenBased.handles(game);
+        if (video) {
+            if (openBased == null) throw new LaunchException("OpenBased isn't available");
+            cmd = openBased.command(game);
+        } else if (retroArch.handles(game.system())) {
             try {
                 // after downloading a missing core, start the game by itself
                 java.awt.Rectangle where = split.apply(game);
@@ -102,7 +113,7 @@ public final class Launcher {
                 throw new LaunchException(d.getMessage());
             }
         }
-        boolean viaRetroArch = cmd != null;
+        boolean viaRetroArch = cmd != null && !video;
         if (cmd == null) {
             String template = config.command(game.system());
             cmd = expand(template, game);
@@ -111,7 +122,7 @@ public final class Launcher {
             cmd = mupenFillsScreen(cmd, screenPixels());
         }
         InputPatch patch = null;
-        if (!viaRetroArch && typesKeys.test(game)) {
+        if (!viaRetroArch && !video && typesKeys.test(game)) {
             for (InputPatch ip : inputPatches) {
                 if (ip.applies(game, cmd)) {
                     patch = ip;
@@ -130,7 +141,7 @@ public final class Launcher {
         Path log = config.logDir().resolve(game.system().id() + ".log");
         ProcessBuilder pb = new ProcessBuilder(cmd);
         Path dir = game.path().getParent();
-        if (dir != null) pb.directory(dir.toFile());
+        if (dir != null && Files.isDirectory(dir)) pb.directory(dir.toFile());
         pb.redirectErrorStream(true);
         try {
             Files.createDirectories(log.getParent());
@@ -143,6 +154,8 @@ public final class Launcher {
             p = pb.start();
         } catch (IOException e) {
             if (applied != null) applied.after();
+            if (video) throw new LaunchException("The video player didn't start (\"" + cmd.get(LINUX && cmd.get(0).equals("setsid") ? 1 : 0)
+                    + "\"): " + e.getMessage());
             throw new LaunchException(game.system().emulator() + " is not installed (\"" + cmd.get(LINUX && cmd.get(0).equals("setsid") ? 1 : 0)
                     + "\"). " + (LINUX ? "Run: wiiuu-emulators --only " + EMU_DIRS.getOrDefault(game.system().emulator(), "?") + "  or set" : "Set")
                     + " the emulator in Settings (F1).");

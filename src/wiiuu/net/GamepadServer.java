@@ -72,6 +72,16 @@ public final class GamepadServer {
         void closeGame();
 
         void padsChanged(int connected);
+
+        /** OpenBased, for its state and setup from the phone; null without it. */
+        default wiiuu.core.OpenBased openBased() {
+            return null;
+        }
+
+        /** Saves the OpenBased server and token (a blank token keeps the one set) and loads the list: null, or what's wrong. */
+        default String setUpOpenBased(String url, String token) {
+            return "OpenBased isn't available";
+        }
     }
 
     private static final long STALE_MS = 5000;
@@ -372,6 +382,12 @@ public final class GamepadServer {
                             host.closeGame();
                             json(ex, 200, new Json().obj().kv("ok", true).endObj());
                         }
+                        case "/api/openbased" -> {
+                            if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
+                            Map<String, String> f = form(body(ex));
+                            String err = host.setUpOpenBased(f.getOrDefault("url", ""), f.getOrDefault("token", ""));
+                            json(ex, err == null ? 200 : 422, err == null ? new Json().obj().kv("ok", true).endObj() : error(err));
+                        }
                         default -> json(ex, 404, error("unknown endpoint"));
                     }
                 }
@@ -532,6 +548,12 @@ public final class GamepadServer {
         j.key("game");
         if (g == null) j.val((String) null);
         else j.obj().kv("name", g.name()).kv("system", g.system().name()).kv("color", g.system().hexColor()).endObj();
+        // OpenBased: set up or not (never the token), how many videos, what's wrong
+        wiiuu.core.OpenBased ob = host.openBased();
+        j.key("openbased");
+        if (ob == null) j.val((String) null);
+        else j.obj().kv("configured", wiiuu.core.OpenBased.configured(config)).kv("url", config.get("openbased.url", ""))
+                .kv("count", ob.count()).kv("problem", ob.problem()).endObj();
         // the menu music, for phones that make it themselves (web/music.js); "local" when the sound
         // they get leaves it out
         wiiuu.screen.OwnSound.Music m = wiiuu.screen.OwnSound.music();
@@ -545,7 +567,7 @@ public final class GamepadServer {
     private Json libraryJson() {
         Library.Snapshot snap = library.snapshot();
         Json j = new Json().obj().kv("version", snap.version()).key("systems").arr();
-        for (GameSystem s : wiiuu.core.Systems.ALL) {
+        for (GameSystem s : wiiuu.core.Systems.MENU) {
             List<Game> games = snap.of(s);
             if (config.hidden(s) || games.isEmpty()) continue;
             j.obj().kv("id", s.id()).kv("name", s.name()).kv("short", s.shortName()).kv("color", s.hexColor())

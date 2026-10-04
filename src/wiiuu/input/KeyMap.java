@@ -78,6 +78,10 @@ public final class KeyMap {
      * Users can override any entry with keys.&lt;profile&gt;.&lt;BUTTON&gt;=KEY.
      */
     private static final Map<String, Map<PadButton, String>> PROFILES = Map.of(
+            // video players (OpenBased): mpv, VLC and ffplay all pause on Space; in mpv and ffplay the
+            // arrows seek (5-10 s, 1 min), 9/0 are volume, M mutes, J switches subtitles, PgUp/PgDn chapters
+            "media", profile("A=SPACE PLUS=SPACE LEFT=LEFT RIGHT=RIGHT UP=UP DOWN=DOWN LS_LEFT=LEFT LS_RIGHT=RIGHT "
+                    + "LS_UP=UP LS_DOWN=DOWN ZL=9 ZR=0 X=J Y=M L=PAGE_DOWN R=PAGE_UP"),
             // Dolphin Wii Remote + Nunchuk as written by DolphinInput (macOS): A=X B=Z 1=C 2=S -=N +=Return Home=M,
             // D-pad arrows, Nunchuk C=Q Z=W, Nunchuk stick TFGH
             "dolphin-wii", profile("A=X B=Z X=C Y=S MINUS=N PLUS=ENTER HOME=M UP=UP DOWN=DOWN LEFT=LEFT RIGHT=RIGHT "
@@ -116,6 +120,7 @@ public final class KeyMap {
 
     /** Which built-in layout fits the emulator in this command (null = the generic defaults). */
     public static String profileFor(String systemId, String command) {
+        if ("openbased".equals(systemId)) return "media";
         String c = command == null ? "" : command.toLowerCase(java.util.Locale.ROOT);
         if (c.contains("dolphin")) return "gc".equals(systemId) ? "dolphin" : "wii".equals(systemId) ? "dolphin-wii" : null;
         for (String p : new String[]{"ppsspp", "mgba", "melonds", "duckstation", "ryujinx", "azahar"}) {

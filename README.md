@@ -83,6 +83,30 @@ sudo wiiuu-console uninstall         # back to a normal desktop login
 
 The session's log is in `$XDG_RUNTIME_DIR/wiiuu-session.log`.
 
+## OpenBased videos
+
+WII-UU can show the movies and episodes on an [OpenBased](https://github.com/Stoppedwumm/openbased)
+media server as a channel on the home screen, and play them full screen on the TV, in Console Mode
+as on a desktop.
+
+1. In OpenBased, create a personal access token (`POST /api/v1/tokens`) with the scopes
+   `media.read media.stream history.read history.write`.
+2. Enter the server address and the token in *Settings → OpenBased*, or on the phone: GamePad page,
+   Library, **+ OpenBased** (handy in Console Mode, where there's no keyboard).
+
+The **OpenBased** tile then comes first on the home screen, with your server's posters as covers and
+what you started but didn't finish at the front. The phone's Library lists the videos too.
+
+* **Player:** mpv if it is installed (Console Mode installs it), else VLC, else ffplay, or your own
+  command in `openbased.player` (`{url}`, `{title}`, `{start}` in seconds).
+* **Resume:** with mpv, a video starts where you stopped, and the position is saved to OpenBased every
+  few seconds, so *continue watching* works across all your OpenBased apps.
+* **GamePad:** A or + pause, left/right seek, up/down jump a minute, ZL/ZR volume, Y mute, X subtitles,
+  L/R chapters. HOME → Close stops the video.
+* **The token stays on this computer:** OpenBased never accepts personal tokens in links, so the
+  player gets a link to a small proxy on `127.0.0.1` that adds the token (seeking works through it).
+  The phone never sees the token.
+
 ## Installing emulators (Linux, Raspberry Pi)
 
 `emulators.sh` (installed as `wiiuu-emulators`) sets up the emulators and points WII-UU's system

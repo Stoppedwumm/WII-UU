@@ -41,11 +41,12 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.26";
+    public static final String VERSION = "1.9.27";
 
     private final Config config;
     private final Library library;
     private final Launcher launcher;
+    private final wiiuu.core.OpenBased openBased;
     /** split screens for DS/3DS in RetroArch mode: top on the TV, bottom on the phone */
     private final wiiuu.screen.DualScreen dual;
     /** reasons for no split screens already shown this session (each once) */
@@ -65,6 +66,9 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.config = config;
         this.library = new Library(config);
         this.launcher = new Launcher(config);
+        this.openBased = new wiiuu.core.OpenBased(config, library);
+        launcher.setOpenBased(openBased);
+        launcher.addListener(openBased);
         this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
         // type each emulator's own default keys (Dolphin, PPSSPP, mGBA, melonDS, ...), so nothing needs mapping
         router.setKeyProfile(() -> {
@@ -98,6 +102,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     /** Whether WII-UU types keys into this game's emulator (else the phone is a virtual controller or DSU). */
     private boolean typesKeysFor(Game g) {
         if (g == null) return true;
+        // video players only know keys
+        if (wiiuu.core.OpenBased.handles(g)) return config.getBool("system.openbased.keys", true);
         if (wiiuu.core.Buzz.active(config, g)) return true;       // PCSX2's Buzz! buzzers are bound to keys
         String perSystem = config.get("system." + g.system().id() + ".keys", null);
         if (perSystem != null) return Boolean.parseBoolean(perSystem.trim());
@@ -196,6 +202,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         SwingUtilities.invokeAndWait(app::createWindow);
         app.library.addListener(s -> SwingUtilities.invokeLater(() -> app.view.setSnapshot(s)));
         app.library.rescanAsync();
+        app.openBased.refreshAsync();
         if (startServer) app.startServer();
         if (config.getBool("update.check", true)) app.checkForUpdateQuietly();
         app.showWhatsNewAfterUpdate();
@@ -326,6 +333,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             view.setThemeMode(config.get("ui.theme", "auto"));
             view.showToast("Settings saved");
             library.rescanAsync();
+            openBased.refreshAsync();
         }).withUpdater(new Updater(config, VERSION), this::quit).setVisible(true);
         view.requestFocusInWindow();
     }
@@ -342,6 +350,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     @Override
     public void refresh() {
         library.rescanAsync();
+        openBased.refreshAsync();
     }
 
     /**
@@ -383,6 +392,45 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             }
         });
         return result.join();
+    }
+
+    @Override
+    public wiiuu.core.OpenBased openBased() {
+        return openBased;
+    }
+
+    @Override
+    public String setUpOpenBased(String url, String token) {
+        url = url.trim();
+        if (url.isEmpty()) {
+            config.set("openbased.url", null);
+            config.set("openbased.token", null);
+            config.save();
+            openBased.refresh();
+            return null;
+        }
+        if (!token.isBlank() && !token.trim().startsWith("ob_pat_")) {
+            return "That isn't an OpenBased personal access token (they start with ob_pat_)";
+        }
+        String oldUrl = config.get("openbased.url", null), oldToken = config.get("openbased.token", null);
+        config.set("openbased.url", url);
+        if (!token.isBlank()) config.set("openbased.token", token.trim());
+        if (!wiiuu.core.OpenBased.configured(config)) {
+            config.set("openbased.url", oldUrl);
+            return "Enter a personal access token too";
+        }
+        openBased.refresh();
+        String why = openBased.problem();
+        if (why != null && oldUrl != null && oldToken != null) {
+            // keep what worked before
+            config.set("openbased.url", oldUrl);
+            config.set("openbased.token", oldToken);
+            openBased.refreshAsync();
+            return why;
+        }
+        config.save();
+        if (why == null) SwingUtilities.invokeLater(() -> view.showToast("OpenBased: " + openBased.count() + " videos"));
+        return why;
     }
 
     @Override
