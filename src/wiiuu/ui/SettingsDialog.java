@@ -85,6 +85,13 @@ public final class SettingsDialog extends JDialog {
     private static wiiuu.core.OpenBased openBased;
     private static java.util.function.Supplier<String> gamepadBase = () -> null;
 
+    private static Runnable guide = () -> { };
+
+    /** Shows the setup guide on the TV (Settings > General > Show the setup guide). */
+    public static void setGuide(Runnable showGuide) {
+        guide = showGuide;
+    }
+
     /** For signing in to OpenBased from here: the client, and the GamePad server's address (null when off). */
     public static void setOpenBased(wiiuu.core.OpenBased ob, java.util.function.Supplier<String> base) {
         openBased = ob;
@@ -386,6 +393,13 @@ public final class SettingsDialog extends JDialog {
             }
         });
         row = addRow(p, c, row, "ROM base folder", romBase, browse);
+        JButton showGuide = new JButton("Show the setup guide\u2026");
+        showGuide.setToolTipText("The welcome and setup screens from WII-UU's first start, on the TV");
+        showGuide.addActionListener(e -> {
+            dispose();
+            guide.run();
+        });
+        row = addRow(p, c, row, "Setup guide", showGuide, null);
         row = addRow(p, c, row, "GamePad server port", port, null);
         row = addRow(p, c, row, "Theme", theme, null);
         musicTrack.setRenderer(new javax.swing.DefaultListCellRenderer() {

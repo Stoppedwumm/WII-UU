@@ -197,7 +197,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private static final int COLS = 5, ROWS = 3, PER_PAGE = COLS * ROWS;
-    private static final String FONT = pickFont();
+    static final String FONT = pickFont();
     /** Sprites are drawn at the selected (largest) size so zooming in never upsamples. */
     private static final float SPRITE_SCALE = 1.06f;
     private static final Map<Long, Font> FONTS = new ConcurrentHashMap<>();
@@ -408,6 +408,48 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }
 
+    // ---- setup guide ---------------------------------------------------------------------
+
+    private SetupGuide guide;
+    private boolean guidePending;
+
+    /** Shows the setup guide (once the start-up animation is over); first start, or Settings. */
+    public void startGuide() {
+        guidePending = true;
+        repaint();
+    }
+
+    /** Whether the setup guide is on screen (or about to be). */
+    public boolean guideShowing() {
+        return guide != null || guidePending;
+    }
+
+    int padCount() {
+        return pads;
+    }
+
+    QrCode pairingQr() {
+        return serverOn ? qr : null;
+    }
+
+    String pairingUrl() {
+        return serverOn ? padUrl : "";
+    }
+
+    String pairingCode() {
+        return padCode;
+    }
+
+    boolean pairingNeedsCode() {
+        return padNeedsCode;
+    }
+
+    int gameCount() {
+        int n = 0;
+        for (var e : snap.games().entrySet()) if (e.getKey() != Systems.OPENBASED) n += e.getValue().size();
+        return n;
+    }
+
     /** True while the start-up animation plays. */
     public boolean isBooting() {
         return booting;
@@ -548,6 +590,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void navigate(int dx, int dy) {
         if (skipBoot()) return;
+        if (guide != null) {
+            guide.navigate(dx, dy);
+            repaint();
+            return;
+        }
         if (confirmQuit) {
             int n = powerItems().size(), step = dy != 0 ? dy : dx;
             int next = Math.max(0, Math.min(n - 1, powerSel + step));
@@ -614,6 +661,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void activate() {
         if (skipBoot()) return;
+        if (guide != null) {
+            guide.activate();
+            repaint();
+            return;
+        }
         if (vizFull) {
             back();
             return;
@@ -669,6 +721,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void back() {
         if (skipBoot()) return;
+        if (guide != null) {
+            guide.back();
+            repaint();
+            return;
+        }
         if (vizFull) {
             vizFull = false;
             repaint();
@@ -700,6 +757,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void page(int delta) {
         if (skipBoot()) return;
+        if (guide != null) {
+            guide.page(delta);
+            repaint();
+            return;
+        }
         if (modal() || tiles.isEmpty()) return;
         int pages = pageCount();
         int p = page() + delta;
@@ -716,6 +778,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public void toggleGamepadInfo() {
         if (skipBoot()) return;
+        if (guide != null) return;
         if (playing != null || confirmQuit) return;
         showPad = !showPad;
         if (showPad) Sfx.select();
@@ -770,6 +833,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             public void mousePressed(MouseEvent e) {
                 requestFocusInWindow();
                 if (skipBoot()) return;
+                if (guide != null) {
+                    guide.click(e.getX(), e.getY());
+                    repaint();
+                    return;
+                }
                 if (playing != null) return;
                 if (vizFull) {
                     back();
@@ -825,6 +893,14 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private void tick() {
         boolean dirty = tickBoot();
+        if (guide != null) {
+            if (!guide.tick()) guide = null;
+            dirty = true;
+        } else if (guidePending && !booting && playing == null && isShowing()) {
+            guidePending = false;
+            guide = new SetupGuide(this, config, () -> { });
+            dirty = true;
+        }
         long sec = System.currentTimeMillis() / 1000;
         if (sec != lastSecond) {
             lastSecond = sec;
@@ -1258,6 +1334,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             viz.paintFull(g, getWidth(), getHeight(), musicEnabled ? musicTitle : "Music is off",
                     !musicEnabled ? "Turn it on in Settings (F1) > General" : mix ? "WII-UU Extended Mix" : "Menu music");
         }
+        if (guide != null && !booting) guide.paint(g, getWidth(), getHeight());
         if (booting) paintBoot(g, L);
         g.dispose();
         Toolkit.getDefaultToolkit().sync(); // flush X11 so animation doesn't stutter on Linux
@@ -1974,7 +2051,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
     }
 
-    private static Font font(int style, float size) {
+    static Font font(int style, float size) {
         float sz = Math.max(8f, Math.round(size * 2) / 2f); // half-point buckets keep the cache small
         return FONTS.computeIfAbsent(((long) style << 32) | Float.floatToIntBits(sz),
                 k -> new Font(FONT, style, 1).deriveFont(style, sz));

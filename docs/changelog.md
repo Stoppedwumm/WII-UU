@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.34 (2026-10-04)
+A setup guide for the first start.
+- On its first start WII-UU now welcomes you with a setup guide on the TV: pick light or dark,
+  menu music and sounds, connect your phone as GamePad (it shows when the phone is connected),
+  see where your games go and turn on RetroArch mode, learn about controllers, done.
+- Animated like a console's own setup: the logo drops in, steps slide, switches glide, and the
+  last step ends with a tick and confetti.
+- Settings → General → Show the setup guide brings it back any time.
+
 ## 1.9.33 (2026-10-04)
 Controllers in the menu.
 - USB and Bluetooth controllers now work in WII-UU's own menu on Linux and Raspberry Pi, not only

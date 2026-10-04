@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.33";
+    public static final String VERSION = "1.9.34";
 
     private final Config config;
     private final Library library;
@@ -69,6 +69,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.openBased = new wiiuu.core.OpenBased(config, library);
         launcher.setOpenBased(openBased);
         wiiuu.ui.SettingsDialog.setOpenBased(openBased, () -> server == null ? null : server.url());
+        wiiuu.ui.SettingsDialog.setGuide(() -> view.startGuide());
         launcher.addListener(openBased);
         this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
         // type each emulator's own default keys (Dolphin, PPSSPP, mGBA, melonDS, ...), so nothing needs mapping
@@ -189,6 +190,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         if (fullscreen != null) config.set("ui.fullscreen", fullscreen.toString());
         freshInstall = !Files.exists(home.resolve("config.properties"));
         if (freshInstall) config.save();
+        // never ran before (install.sh may already have written settings): the setup guide
+        firstRun = config.get("app.lastVersion", null) == null && !config.getBool("ui.setupDone", false);
 
         Main app = new Main(config);
         if (snapshot != null) {
@@ -201,6 +204,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         boolean startServer = !noServer && config.getBool("server.enabled", true);
         SwingUtilities.invokeAndWait(app::createWindow);
+        if (firstRun) SwingUtilities.invokeLater(app.view::startGuide);
         app.library.addListener(s -> SwingUtilities.invokeLater(() -> app.view.setSnapshot(s)));
         app.library.rescanAsync();
         app.openBased.refreshAsync();
@@ -528,14 +532,14 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
      * The first start after an update shows what changed since the version that ran before
      * (ui.whatsNew=false: only a toast).
      */
-    private static boolean freshInstall;
+    private static boolean freshInstall, firstRun;
 
     private void showWhatsNewAfterUpdate() {
         String before = config.get("app.lastVersion", null);
         if (VERSION.equals(before)) return;
         config.set("app.lastVersion", VERSION);
         config.save();
-        if (freshInstall || (before != null && !Updater.newer(VERSION, before))) return;     // first install, or a downgrade
+        if (freshInstall || firstRun || (before != null && !Updater.newer(VERSION, before))) return;     // first install, or a downgrade
         java.util.List<wiiuu.core.Changelog.Entry> all = wiiuu.core.Changelog.bundled().between(before, VERSION);
         // updated from a version that didn't keep track: this version's notes
         java.util.List<wiiuu.core.Changelog.Entry> notes = before == null && all.size() > 1 ? all.subList(0, 1) : all;
