@@ -90,7 +90,8 @@ media server as a channel on the home screen, and play them full screen on the T
 as on a desktop.
 
 1. **Once, on the OpenBased server:** add WII-UU as a client under `openbased.clients` in its
-   `application.yml` and restart it. WII-UU shows the exact entry (*Settings → OpenBased*, or on the
+   `application.yml` (`/etc/openbased/application.yml` when installed as a systemd service) and restart
+   it (`sudo systemctl restart openbased`). WII-UU shows the exact entry (*Settings → OpenBased*, or on the
    phone under *Server setup*); it looks like this, with your WII-UU's GamePad address:
    ```yaml
    - client-id: wiiuu
@@ -102,13 +103,16 @@ as on a desktop.
 2. **Sign in:** on the phone (GamePad page → Library → **+ OpenBased**, handy in Console Mode, where
    there's no keyboard) or in *Settings → OpenBased*, enter the server address and press **Sign in
    with OpenBased**. OpenBased's own sign-in page opens; after you sign in it sends you back to WII-UU.
+   Use the address that is OpenBased's `issuer`.
 
 Signing in is OAuth 2 (Authorization Code with PKCE; WII-UU never sees your password). OpenBased only
 gives such apps access tokens for 15 minutes and no refresh tokens, so WII-UU uses its sign-in once
 to create its own personal access token in your account ("WII-UU (computer name)", valid a year,
 scopes `media.read media.stream history.read history.write profile`). Signing in again replaces it,
-and **Sign out** revokes it. You can still paste a token you made yourself instead ("Use a token
-instead"). If the GamePad address changes, update the redirect URI in OpenBased (or set
+and **Sign out** revokes it; it also shows on OpenBased's **API tokens** page, where you can revoke
+it too. You can still paste a token you made yourself instead ("Use a token instead", which links to
+that page): tick `media.read media.stream history.read history.write`, plus `profile` so Sign out
+can revoke it, and choose 1 year. If the GamePad address changes, update the redirect URI in OpenBased (or set
 `openbased.redirectUri` in WII-UU to a fixed name).
 
 The **OpenBased** tile then comes first on the home screen, with your server's posters as covers and

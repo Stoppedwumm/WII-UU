@@ -595,8 +595,11 @@ public final class SettingsDialog extends JDialog {
                 + "stopped and saves your progress to OpenBased).<br><br><b>Sign in</b> opens OpenBased's sign-in page in "
                 + "your browser (OAuth); WII-UU then makes its own access token in your account. You can also sign in from "
                 + "the phone: GamePad page, Library, <i>OpenBased</i>.<br><br>Once, OpenBased has to know WII-UU: add this under "
-                + "<i>openbased.clients</i> in its application.yml and restart it:<pre>" + snippet.replace("&", "&amp;").replace("<", "&lt;")
-                + "</pre>"
+                + "<i>openbased.clients</i> in its application.yml (<i>/etc/openbased/application.yml</i> when installed as a "
+                + "service; then <i>sudo systemctl restart openbased</i>). Enter the server address that is OpenBased's "
+                + "<i>issuer</i>.<pre>" + snippet.replace("&", "&amp;").replace("<", "&lt;")
+                + "</pre>Or paste a token from OpenBased's <b>API tokens</b> page (its web UI): tick media.read, media.stream, "
+                + "history.read, history.write and profile, and choose 1 year.<br><br>"
                 + "GamePad: A / + pause, ◀ ▶ seek, ▲ ▼ jump a minute, ZL / ZR volume, Y mute, X subtitles. "
                 + "Home closes the video.</div></html>"), c);
         return new JScrollPane(p);
