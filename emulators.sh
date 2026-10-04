@@ -61,7 +61,7 @@ done
 CATALOGUE="fceux|nes|light|any|bin/fceux|{rom}
 snes9x|snes|light|any|bin/snes9x-gtk|{rom}
 mgba|gb gba|light|any|bin/mgba-qt|-f {rom}
-mupen64plus|n64|light|any|bin/mupen64plus|--fullscreen --corelib @E@/lib/libmupen64plus.so.2 --plugindir @E@/lib/mupen64plus --datadir @E@/share/mupen64plus {rom}
+mupen64plus|n64|light|any|bin/mupen64plus|--fullscreen --corelib @E@/lib/libmupen64plus.so.2 --plugindir @E@/lib/mupen64plus --datadir @E@/share/mupen64plus @GFX@{rom}
 mednafen|sms genesis saturn ps1|light|any|bin/mednafen|{rom}
 melonds|nds|light|any|bin/melonDS|-f {rom}
 ppsspp|psp|light|any|PPSSPPSDL|--fullscreen {rom}
@@ -164,7 +164,7 @@ apt_deps() {
     fceux) echo "qtbase5-dev libqt5opengl5-dev libsdl2-dev zlib1g-dev libminizip-dev libarchive-dev liblua5.1-0-dev" ;;
     snes9x) echo "libgtkmm-3.0-dev libsdl2-dev libepoxy-dev libminizip-dev libx11-dev libxrandr-dev libxext-dev libpulse-dev libasound2-dev portaudio19-dev libwayland-dev gettext python3" ;;
     mgba) echo "qtbase5-dev qtmultimedia5-dev qttools5-dev qttools5-dev-tools libsdl2-dev libzip-dev zipcmp zipmerge ziptool libedit-dev libelf-dev libpng-dev libsqlite3-dev libepoxy-dev" ;;
-    mupen64plus) echo "libsdl2-dev libpng-dev zlib1g-dev libfreetype-dev libgl-dev libglu1-mesa-dev libspeexdsp-dev libsamplerate0-dev nasm" ;;
+    mupen64plus) echo "libsdl2-dev libpng-dev zlib1g-dev libfreetype-dev libgl-dev libglu1-mesa-dev libgles-dev libegl-dev libspeexdsp-dev libsamplerate0-dev nasm" ;;
     mednafen) echo "libsdl2-dev zlib1g-dev libasound2-dev libsndfile1-dev libflac-dev libvorbis-dev libzstd-dev" ;;
     melonds) echo "qt6-base-dev qt6-base-private-dev qt6-multimedia-dev libqt6svg6-dev libqt6opengl6-dev libsdl2-dev libarchive-dev libenet-dev libzstd-dev libfaad-dev extra-cmake-modules" ;;
     ppsspp) echo "libsdl3-dev libsdl3-ttf-dev libfreetype-dev libwayland-dev libxkbcommon-dev libdecor-0-dev libsdl2-dev libsdl2-ttf-dev libgl1-mesa-dev libglu1-mesa-dev libvulkan-dev libfontconfig1-dev libcurl4-openssl-dev python3" ;;
@@ -299,18 +299,40 @@ build_mgba() {
   cmake --install "$SRC/mgba/build"
 }
 
+# OpenGL ES for the N64 emulator on ARM boards (Raspberry Pi 4/5 and the like): their drivers offer
+# desktop OpenGL only as an old compatibility profile (2.1 on a Pi 5), where Mupen64Plus' picture
+# stays black while the game runs. N64_GLES=1 / N64_GLES=0 forces it either way.
+n64_gles() {
+  case "${N64_GLES:-auto}" in 1|yes|on) return 0 ;; 0|no|off) return 1 ;; esac
+  [[ "$ARCH" == aarch64 || "$ARCH" == arm* ]]
+}
+
 build_mupen64plus() {
-  local m nd=""
-  [ "$ARCH" = aarch64 ] && nd="NEW_DYNAREC=1"   # mupen64plus' ARM64 recompiler
+  local m flags=()
+  [ "$ARCH" = aarch64 ] && flags+=(NEW_DYNAREC=1)   # mupen64plus' ARM64 recompiler
+  n64_gles && flags+=(USE_GLES=1)                     # every part, the core included (it creates the GL context)
   for m in core rsp-hle audio-sdl input-sdl video-rice ui-console; do
     fetch_git "mupen64plus-$m" "https://github.com/mupen64plus/mupen64plus-$m.git"
-    # shellcheck disable=SC2086
-    make -C "$SRC/mupen64plus-$m/projects/unix" -j"$JOBS" all $nd \
+    # a build of the other GL flavour must not be reused
+    make -C "$SRC/mupen64plus-$m/projects/unix" clean >/dev/null 2>&1 || true
+    make -C "$SRC/mupen64plus-$m/projects/unix" -j"$JOBS" all "${flags[@]}" \
       APIDIR="$SRC/mupen64plus-core/src/api" PREFIX="$E"
-    # shellcheck disable=SC2086
-    make -C "$SRC/mupen64plus-$m/projects/unix" install $nd \
+    make -C "$SRC/mupen64plus-$m/projects/unix" install "${flags[@]}" \
       APIDIR="$SRC/mupen64plus-core/src/api" PREFIX="$E" LDCONFIG=true
   done
+  # GLideN64, the video plugin most N64 setups use (RetroPie too): far better and faster than Rice.
+  # Without the high-res texture pack loader (NOHQ), which needs nothing more and isn't used here.
+  local g=(-DMUPENPLUSAPI=On -DNOHQ=On) so
+  n64_gles && g+=(-DMESA=On -DEGL=On)
+  case "$ARCH" in aarch64) g+=(-DNEON_OPT=On -DCRC_ARMV8=On) ;; x86_64) g+=(-DCRC_OPT=On) ;; esac
+  rm -f "$E/lib/mupen64plus/mupen64plus-video-GLideN64.so"
+  if fetch_git GLideN64 https://github.com/gonetz/GLideN64.git \
+     && rm -rf "$SRC/GLideN64/build" && cmake_build "$SRC/GLideN64/src" "$SRC/GLideN64/build" "${g[@]}" \
+     && so="$(find "$SRC/GLideN64/build" -name mupen64plus-video-GLideN64.so | head -1)" && [ -n "$so" ]; then
+    install -m 644 "$so" "$E/lib/mupen64plus/"
+  else
+    echo "GLideN64 did not build; N64 games use the Rice video plugin"
+  fi
 }
 
 build_mednafen() {
@@ -642,6 +664,9 @@ for n in $TODO; do
   write_launcher "$n" "$bin"
   echo "$how $(date +%Y-%m-%d)" > "$E/.built"
   args="$(field "$n" 6)"; args="${args//@E@/$E}"
+  # mupen64plus: GLideN64 when it was built, else its default (Rice)
+  gfx=""; [ -f "$E/lib/mupen64plus/mupen64plus-video-GLideN64.so" ] && gfx="--gfx mupen64plus-video-GLideN64.so "
+  args="${args//@GFX@/$gfx}"
   for s in $(field "$n" 2); do set_conf "system.$s.command" "$E/run $args"; done
   RESULT[$n]="ok $how ($(( ($(date +%s) - t0) / 60 )) min)"
   ok "$n ($how) -> $(field "$n" 2)"

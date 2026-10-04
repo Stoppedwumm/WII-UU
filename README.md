@@ -156,6 +156,10 @@ wiiuu-emulators --releases-only
     mGBA, Snes9x, FCEUX, and on x86-64 also PCSX2 and shadPS4. Whether an ARM64 build exists is
     up to each project.
   * Always built from source: Mupen64Plus, Mednafen and Dolphin, which publish no Linux binaries.
+  * **Mupen64Plus** comes with the GLideN64 video plugin, which N64 games then use. On ARM boards
+    (Raspberry Pi 4/5) everything is built for OpenGL ES, like RetroPie does: built for desktop
+    OpenGL, the Pi only gets an old OpenGL 2.1 context and the game runs with sound but a black
+    picture. `N64_GLES=1` or `N64_GLES=0` forces either kind of build.
 * **Build details:** source builds install their apt dependencies only when needed, and pick the
   number of parallel jobs from your RAM. Heavy builds can take hours on a Pi and need about 4 GB
   of swap on boards with under 6 GB of RAM.

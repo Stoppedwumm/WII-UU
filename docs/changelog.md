@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.31 (2026-10-04)
+N64 games show a picture on the Raspberry Pi.
+- Mupen64Plus built by wiiuu-emulators ran N64 games with sound but a black screen on a Raspberry
+  Pi: it was built for desktop OpenGL, which the Pi only offers in an old version. On ARM boards it
+  is now built for OpenGL ES, like RetroPie does.
+- It now also comes with GLideN64, the better video plugin most N64 setups use, and WII-UU starts
+  N64 games with it.
+- Already built it? Run "wiiuu-emulators --only mupen64plus" once after updating.
+
 ## 1.9.30 (2026-10-04)
 Phones work as controllers in RetroArch on Linux and Raspberry Pi.
 - RetroArch kept saying "Microsoft X-Box 360 pad ... not configured" and ignored the phone: its
