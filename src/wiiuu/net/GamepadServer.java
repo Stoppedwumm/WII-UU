@@ -347,6 +347,7 @@ public final class GamepadServer {
                 case "/", "/index.html" -> send(ex, 200, "text/html; charset=utf-8", page());
                 case "/manifest.json" -> send(ex, 200, "application/manifest+json", manifest());
                 case "/music.js" -> send(ex, 200, "text/javascript; charset=utf-8", musicScript());
+                case "/openbased/callback" -> openBasedCallback(ex);
                 case "/icon.png" -> send(ex, 200, "image/png", icon());
                 case "/api/hello" -> hello(ex);
                 default -> {
@@ -385,6 +386,28 @@ public final class GamepadServer {
                         case "/api/openbased" -> {
                             if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
                             Map<String, String> f = form(body(ex));
+                            wiiuu.core.OpenBased ob = host.openBased();
+                            String action = f.getOrDefault("action", "");
+                            if (ob != null && action.equals("signin")) {
+                                // OAuth: the phone opens OpenBased's sign-in page, which comes back to /openbased/callback
+                                String url = f.getOrDefault("url", "").trim();
+                                if (!url.isEmpty()) {
+                                    config.set("openbased.url", url);
+                                    config.save();
+                                }
+                                try {
+                                    String login = ob.loginUrl(ob.redirectUri(url()), f.get("back"));
+                                    json(ex, 200, new Json().obj().kv("login", login).endObj());
+                                } catch (IOException e) {
+                                    json(ex, 422, error(e.getMessage()));
+                                }
+                                return;
+                            }
+                            if (ob != null && action.equals("signout")) {
+                                ob.signOut();
+                                json(ex, 200, new Json().obj().kv("ok", true).endObj());
+                                return;
+                            }
                             String err = host.setUpOpenBased(f.getOrDefault("url", ""), f.getOrDefault("token", ""));
                             json(ex, err == null ? 200 : 422, err == null ? new Json().obj().kv("ok", true).endObj() : error(err));
                         }
@@ -553,7 +576,8 @@ public final class GamepadServer {
         j.key("openbased");
         if (ob == null) j.val((String) null);
         else j.obj().kv("configured", wiiuu.core.OpenBased.configured(config)).kv("url", config.get("openbased.url", ""))
-                .kv("count", ob.count()).kv("problem", ob.problem()).endObj();
+                .kv("count", ob.count()).kv("problem", ob.problem()).kv("user", ob.user())
+                .kv("clientConfig", ob.clientConfig(ob.redirectUri(url()))).endObj();
         // the menu music, for phones that make it themselves (web/music.js); "local" when the sound
         // they get leaves it out
         wiiuu.screen.OwnSound.Music m = wiiuu.screen.OwnSound.music();
@@ -592,6 +616,37 @@ public final class GamepadServer {
             }
         }
         return pageCache;
+    }
+
+    /**
+     * Where OpenBased's sign-in page sends the browser back to (OAuth2 redirect): the state ties it to
+     * a sign-in WII-UU started, so this needs no pairing.
+     */
+    private void openBasedCallback(HttpExchange ex) throws IOException {
+        wiiuu.core.OpenBased ob = host.openBased();
+        Map<String, String> q = query(ex);
+        wiiuu.core.OpenBased.Login r = ob == null ? new wiiuu.core.OpenBased.Login("OpenBased isn't available", null, null)
+                : ob.finishLogin(q.get("state"), q.get("code"), q.get("error"), q.get("error_description"));
+        String back = r.back() != null && r.back().matches("https?://[A-Za-z0-9.:\\[\\]-]+/?") ? r.back() : "/";
+        String title = r.error() == null ? "Signed in to OpenBased" : "Not signed in";
+        String text = r.error() == null
+                ? (r.user() != null ? "WII-UU is signed in as " + r.user() + ". " : "WII-UU is signed in. ")
+                  + "Your videos are on the home screen."
+                : r.error();
+        String page = "<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+                + "<title>" + html(title) + "</title><style>body{font-family:system-ui,sans-serif;background:#eef1f4;color:#2b3036;"
+                + "display:flex;min-height:100vh;margin:0;align-items:center;justify-content:center;text-align:center}"
+                + "main{background:#fff;border-radius:16px;padding:28px 32px;max-width:420px;box-shadow:0 6px 24px #0002}"
+                + "h1{font-size:20px;margin:0 0 10px;color:" + (r.error() == null ? "#6c4ce0" : "#c62828") + "}"
+                + "a{display:inline-block;margin-top:18px;padding:10px 22px;border-radius:99px;background:#009ac7;color:#fff;"
+                + "text-decoration:none;font-weight:700}</style></head><body><main><h1>" + html(title) + "</h1><p>" + html(text)
+                + "</p><a href='" + html(back) + "'>Back to the GamePad</a></main></body></html>";
+        send(ex, r.error() == null ? 200 : 400, "text/html; charset=utf-8", page.getBytes(StandardCharsets.UTF_8));
+        if (r.error() == null && r.user() != null) notice("OpenBased: signed in as " + r.user());
+    }
+
+    private static String html(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("'", "&#39;").replace("\"", "&quot;");
     }
 
     /** The menu music's synthesizer, for phones that make the music themselves. */

@@ -134,10 +134,15 @@
   .sheet { position: absolute; inset: 0; background: rgba(244,246,248,.94); display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 12px; }
   .sheet h3 { margin: 0; }
-  .sheet input.field { width: min(420px, 80vw); font: inherit; font-size: 14px; padding: 7px 10px; border: 1px solid #c9ced4;
+  .sheet input.field { width: min(420px, 90%); box-sizing: border-box; font: inherit; font-size: 14px; padding: 7px 10px; border: 1px solid #c9ced4;
     border-radius: 8px; background: #fff; }
   .sheet .err { color: #c62828; font-size: 12px; font-weight: 700; min-height: 1em; text-align: center; max-width: 90vw; }
   .chip.tool { background: transparent; box-shadow: 0 0 0 1px #c9ced4 inset; }
+  #obSheet { overflow-y: auto; justify-content: flex-start; padding: 14px 0; }
+  .obmore { font-size: 12px; color: #6f7780; max-width: 92%; text-align: center; }
+  .obmore summary { cursor: pointer; font-weight: 700; margin-bottom: 6px; }
+  .obmore pre { text-align: left; background: #fff; border: 1px solid #c9ced4; border-radius: 8px; padding: 8px 10px;
+    font-size: 11px; user-select: all; -webkit-user-select: all; overflow-x: auto; margin: 6px auto; }
 
   /* GamePad screen: live picture from the PC (second screen or TV mirror), touchable */
   body.big #pad { grid-template-columns: .78fr 2.4fr .78fr; }
@@ -268,15 +273,21 @@
         </div>
         <form class="sheet hidden" id="obSheet">
           <h3>OpenBased</h3>
-          <p>Watch your OpenBased server's movies and episodes on the TV. Create a personal access token in
-             OpenBased (scopes media.read, media.stream, history.read, history.write) and paste it here.</p>
+          <p id="obWho">Watch your OpenBased server's movies and episodes on the TV.</p>
           <input class="field" id="obUrl" placeholder="Server address, e.g. http://192.168.1.20:8080" autocapitalize="off" autocorrect="off">
-          <input class="field" id="obToken" type="password" placeholder="Personal access token (ob_pat_…)" autocomplete="off">
+          <details class="obmore"><summary>Use a token instead</summary>
+            <input class="field" id="obToken" type="password" placeholder="Personal access token (ob_pat_…)" autocomplete="off">
+          </details>
           <div class="err" id="obErr"></div>
           <div class="row">
             <button class="bigbtn grey" type="button" id="obCancel">Cancel</button>
-            <button class="bigbtn" type="submit" id="obSave">Save</button>
+            <button class="bigbtn grey hidden" type="button" id="obOut">Sign out</button>
+            <button class="bigbtn" type="submit" id="obSave">Sign in with OpenBased</button>
           </div>
+          <details class="obmore"><summary>Server setup (once)</summary>
+            <p>OpenBased needs to know WII-UU. Add this under <b>openbased.clients</b> in its application.yml, then restart it:</p>
+            <pre id="obClient"></pre>
+          </details>
         </form>
         <div class="sheet hidden" id="gyroSheet">
           <h3>Motion controls</h3>
@@ -867,20 +878,42 @@ async function launch(sys, g) {
 }
 
 function openObSheet() {
-  $("obUrl").value = (S.ob && S.ob.url) || "";
+  const ob = S.ob || {};
+  $("obUrl").value = ob.url || "";
   $("obToken").value = "";
-  $("obToken").placeholder = S.ob && S.ob.configured ? "Token set (leave empty to keep it)" : "Personal access token (ob_pat_…)";
-  $("obErr").textContent = S.ob && S.ob.problem ? S.ob.problem : "";
+  $("obToken").placeholder = ob.configured ? "Token set (leave empty to keep it)" : "Personal access token (ob_pat_…)";
+  $("obWho").textContent = ob.configured ? (ob.user ? "Signed in as " + ob.user + "." : "Connected with a token.")
+    + (ob.count ? " " + ob.count + " videos." : "") : "Watch your OpenBased server's movies and episodes on the TV.";
+  $("obOut").classList.toggle("hidden", !ob.configured);
+  $("obClient").textContent = ob.clientConfig || "";
+  $("obErr").textContent = ob.problem || "";
   $("obSheet").classList.remove("hidden");
 }
 $("obCancel").onclick = () => $("obSheet").classList.add("hidden");
+$("obOut").onclick = async () => {
+  try {
+    await api("/api/openbased", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                  body: form({ action: "signout" }) });
+    $("obSheet").classList.add("hidden"); toast("Signed out of OpenBased"); loadLibrary(); poll();
+  } catch (e) { $("obErr").textContent = "Not connected to WII-UU"; }
+};
 $("obSheet").onsubmit = async (e) => {
   e.preventDefault();
+  const token = $("obToken").value.trim();
   $("obErr").textContent = "Connecting…";
   $("obSave").disabled = true;
   try {
+    if (!token) {
+      // OAuth: sign in on OpenBased's own page; it comes back to WII-UU, which then links back here
+      const r = await api("/api/openbased", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                              body: form({ action: "signin", url: $("obUrl").value.trim(), back: location.origin + "/" }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.login) { $("obErr").textContent = j.error || ("Error " + r.status); return; }
+      location.href = j.login;
+      return;
+    }
     const r = await api("/api/openbased", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                                            body: form({ url: $("obUrl").value.trim(), token: $("obToken").value.trim() }) });
+                                            body: form({ url: $("obUrl").value.trim(), token }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { $("obErr").textContent = j.error || ("Error " + r.status); return; }
     $("obSheet").classList.add("hidden");

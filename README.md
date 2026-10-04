@@ -89,10 +89,27 @@ WII-UU can show the movies and episodes on an [OpenBased](https://github.com/Sto
 media server as a channel on the home screen, and play them full screen on the TV, in Console Mode
 as on a desktop.
 
-1. In OpenBased, create a personal access token (`POST /api/v1/tokens`) with the scopes
-   `media.read media.stream history.read history.write`.
-2. Enter the server address and the token in *Settings → OpenBased*, or on the phone: GamePad page,
-   Library, **+ OpenBased** (handy in Console Mode, where there's no keyboard).
+1. **Once, on the OpenBased server:** add WII-UU as a client under `openbased.clients` in its
+   `application.yml` and restart it. WII-UU shows the exact entry (*Settings → OpenBased*, or on the
+   phone under *Server setup*); it looks like this, with your WII-UU's GamePad address:
+   ```yaml
+   - client-id: wiiuu
+     name: WII-UU
+     redirect-uris:
+       - http://192.168.1.50:8080/openbased/callback
+     grant-types: [authorization_code]
+   ```
+2. **Sign in:** on the phone (GamePad page → Library → **+ OpenBased**, handy in Console Mode, where
+   there's no keyboard) or in *Settings → OpenBased*, enter the server address and press **Sign in
+   with OpenBased**. OpenBased's own sign-in page opens; after you sign in it sends you back to WII-UU.
+
+Signing in is OAuth 2 (Authorization Code with PKCE; WII-UU never sees your password). OpenBased only
+gives such apps access tokens for 15 minutes and no refresh tokens, so WII-UU uses its sign-in once
+to create its own personal access token in your account ("WII-UU (computer name)", valid a year,
+scopes `media.read media.stream history.read history.write profile`). Signing in again replaces it,
+and **Sign out** revokes it. You can still paste a token you made yourself instead ("Use a token
+instead"). If the GamePad address changes, update the redirect URI in OpenBased (or set
+`openbased.redirectUri` in WII-UU to a fixed name).
 
 The **OpenBased** tile then comes first on the home screen, with your server's posters as covers and
 what you started but didn't finish at the front. The phone's Library lists the videos too.

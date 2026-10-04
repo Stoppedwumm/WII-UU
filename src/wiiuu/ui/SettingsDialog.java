@@ -82,6 +82,15 @@ public final class SettingsDialog extends JDialog {
     private final JCheckBox minimize = new JCheckBox("Minimize menu while a game runs");
 
     // OpenBased tab
+    private static wiiuu.core.OpenBased openBased;
+    private static java.util.function.Supplier<String> gamepadBase = () -> null;
+
+    /** For signing in to OpenBased from here: the client, and the GamePad server's address (null when off). */
+    public static void setOpenBased(wiiuu.core.OpenBased ob, java.util.function.Supplier<String> base) {
+        openBased = ob;
+        gamepadBase = base;
+    }
+
     private final JTextField obUrl = new JTextField(32);
     private final javax.swing.JPasswordField obToken = new javax.swing.JPasswordField(32);
     private final JTextField obPlayer = new JTextField(32);
@@ -182,7 +191,11 @@ public final class SettingsDialog extends JDialog {
         String url = obUrl.getText().trim(), token = new String(obToken.getPassword()).trim();
         config.set("openbased.url", url.isEmpty() ? null : url);
         if (url.isEmpty()) config.set("openbased.token", null);
-        else if (!token.isEmpty()) config.set("openbased.token", token);     // blank: keep the one set
+        else if (!token.isEmpty()) {                                       // blank: keep the one set
+            config.set("openbased.token", token);
+            config.set("openbased.tokenId", null);
+            config.set("openbased.user", null);
+        }
         config.set("openbased.player", obPlayer.getText().isBlank() ? null : obPlayer.getText().trim());
         config.set("server.port", port.getValue().toString());
         config.set("server.enabled", Boolean.toString(serverOn.isSelected()));
@@ -550,22 +563,65 @@ public final class SettingsDialog extends JDialog {
         obUrl.setToolTipText("For example http://192.168.1.20:8080");
         obToken.setToolTipText(hasToken ? "A token is set; leave empty to keep it" : "ob_pat_...");
         obPlayer.setToolTipText("Empty: mpv, else VLC, else ffplay. Your own: {url} {title} {start}");
+        JButton signIn = new JButton("Sign in with OpenBased\u2026");
+        JLabel who = new JLabel(openBased != null && openBased.user() != null ? "Signed in as " + openBased.user()
+                : hasToken ? "Connected with a token" : "Not signed in");
+        signIn.addActionListener(e -> signInToOpenBased(who));
+        JButton signOut = new JButton("Sign out");
+        signOut.setEnabled(hasToken && openBased != null);
+        signOut.addActionListener(e -> {
+            openBased.signOut();
+            who.setText("Not signed in");
+            signOut.setEnabled(false);
+        });
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        buttons.add(signIn);
+        buttons.add(signOut);
+        buttons.add(who);
         row = addRow(p, c, row, "Server address", obUrl, null);
-        row = addRow(p, c, row, "Personal access token", obToken, new JLabel(hasToken ? "(set; empty keeps it)" : ""));
+        row = addRow(p, c, row, "Account", buttons, null);
+        row = addRow(p, c, row, "Or a personal access token", obToken, new JLabel(hasToken ? "(set; empty keeps it)" : ""));
         row = addRow(p, c, row, "Video player command", obPlayer, new JLabel("(empty: mpv, VLC or ffplay)"));
         c.gridx = 0;
         c.gridy = row;
         c.gridwidth = 3;
         c.weighty = 1;
         c.anchor = GridBagConstraints.NORTHWEST;
+        String base = gamepadBase.get();
+        String snippet = openBased == null || base == null ? "(turn on the GamePad server first)"
+                : openBased.clientConfig(openBased.redirectUri(base));
         p.add(new JLabel("<html><div style='width:620px'>Your OpenBased server's movies and episodes appear as a "
                 + "channel on the home screen, and play full screen on the TV (mpv works best: it resumes where you "
-                + "stopped and saves your progress to OpenBased).<br><br>Create the token in OpenBased (<i>POST /api/v1/tokens</i>, "
-                + "or its web UI) with the scopes media.read, media.stream, history.read and history.write. "
-                + "You can also set this up from the phone: GamePad page, Library, <i>OpenBased</i>.<br><br>"
+                + "stopped and saves your progress to OpenBased).<br><br><b>Sign in</b> opens OpenBased's sign-in page in "
+                + "your browser (OAuth); WII-UU then makes its own access token in your account. You can also sign in from "
+                + "the phone: GamePad page, Library, <i>OpenBased</i>.<br><br>Once, OpenBased has to know WII-UU: add this under "
+                + "<i>openbased.clients</i> in its application.yml and restart it:<pre>" + snippet.replace("&", "&amp;").replace("<", "&lt;")
+                + "</pre>"
                 + "GamePad: A / + pause, ◀ ▶ seek, ▲ ▼ jump a minute, ZL / ZR volume, Y mute, X subtitles. "
                 + "Home closes the video.</div></html>"), c);
         return new JScrollPane(p);
+    }
+
+    /** Saves the address, then opens OpenBased's sign-in page; WII-UU's GamePad server takes the answer. */
+    private void signInToOpenBased(JLabel who) {
+        String base = gamepadBase.get();
+        if (openBased == null || base == null) {
+            JOptionPane.showMessageDialog(this, "Signing in comes back through the GamePad server: turn it on (General) first.");
+            return;
+        }
+        String url = obUrl.getText().trim();
+        if (url.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Enter the OpenBased server address first.");
+            return;
+        }
+        config.set("openbased.url", url);
+        config.save();
+        try {
+            Desktop.getDesktop().browse(java.net.URI.create(openBased.loginUrl(openBased.redirectUri(base), null)));
+            who.setText("Finish signing in in your browser\u2026");
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Could not open the browser: " + ex.getMessage());
+        }
     }
 
     private static int addRow(JPanel p, GridBagConstraints c, int row, String label, JComponent field, JComponent extra) {

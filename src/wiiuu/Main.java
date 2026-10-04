@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.27";
+    public static final String VERSION = "1.9.28";
 
     private final Config config;
     private final Library library;
@@ -68,6 +68,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.launcher = new Launcher(config);
         this.openBased = new wiiuu.core.OpenBased(config, library);
         launcher.setOpenBased(openBased);
+        wiiuu.ui.SettingsDialog.setOpenBased(openBased, () -> server == null ? null : server.url());
         launcher.addListener(openBased);
         this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
         // type each emulator's own default keys (Dolphin, PPSSPP, mGBA, melonDS, ...), so nothing needs mapping
@@ -414,7 +415,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         String oldUrl = config.get("openbased.url", null), oldToken = config.get("openbased.token", null);
         config.set("openbased.url", url);
-        if (!token.isBlank()) config.set("openbased.token", token.trim());
+        if (!token.isBlank()) {
+            // a token made by hand: not WII-UU's own (which it would revoke on sign-out)
+            config.set("openbased.token", token.trim());
+            config.set("openbased.tokenId", null);
+            config.set("openbased.user", null);
+        }
         if (!wiiuu.core.OpenBased.configured(config)) {
             config.set("openbased.url", oldUrl);
             return "Enter a personal access token too";

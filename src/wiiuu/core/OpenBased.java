@@ -39,15 +39,25 @@ import com.sun.net.httpserver.HttpServer;
  * are listed like games ({@link Systems#OPENBASED}), with their posters as covers, and play full
  * screen on the TV in a video player (mpv, else VLC or ffplay), in Console Mode as on a desktop.
  *
- * <p>WII-UU signs in with a personal access token ({@code ob_pat_...}, created in OpenBased with
- * {@code POST /api/v1/tokens} or its web UI) and needs the scopes media.read, media.stream, and
- * history.read / history.write for resuming. OpenBased never accepts a personal token in a URL, so
+ * <p>Signing in is OAuth2 Authorization Code with PKCE ({@link #loginUrl}, {@link #finishLogin}): the
+ * user signs in on OpenBased's own page, on the phone or in a browser, which sends them back to
+ * WII-UU's GamePad server (/openbased/callback). OpenBased gives public clients only short-lived
+ * access tokens and no refresh tokens, so WII-UU uses the fresh access token once, to create its own
+ * personal access token ({@code ob_pat_...}, a year if the server allows it) with just the scopes it
+ * needs: media.read, media.stream, history.read and history.write, plus profile so that Sign out can
+ * revoke it. Signing in again replaces it and revokes the old one. A token made by hand can still be
+ * pasted instead.
+ *
+ * <p>OpenBased must know WII-UU as a client (client id openbased.clientId, default "wiiuu"), with the
+ * redirect URI {@link #redirectUri}; {@link #clientConfig} is the snippet for its application.yml.
+ * OpenBased never accepts a personal token in a URL, so
  * the player is given a link to a small proxy on 127.0.0.1 that adds the token to each request
  * (with Range, so seeking works). With mpv, playback starts where it was left, and the position is
  * saved back to OpenBased (continue watching in every other OpenBased app too).
  *
- * <p>Settings: openbased.url, openbased.token, and openbased.player for a player command of one's
- * own ({url}, {title} and {start} in seconds are filled in).
+ * <p>Settings: openbased.url, openbased.token (with openbased.tokenId and openbased.user when WII-UU
+ * made it), openbased.clientId, openbased.redirectUri (else the GamePad server's address), and
+ * openbased.player for a player command of one's own ({url}, {title} and {start} in seconds).
  */
 public final class OpenBased implements Launcher.Listener {
     private static final int MAX_ITEMS = 2000;
@@ -104,6 +114,199 @@ public final class OpenBased implements Launcher.Listener {
 
     private String token() {
         return config.get("openbased.token", "").trim();
+    }
+
+    // ---- signing in (OAuth2 Authorization Code + PKCE) -----------------------------------------
+
+    /** Scopes WII-UU's own token gets; "profile" lets it revoke itself when you sign out. */
+    private static final String SCOPES = "media.read media.stream history.read history.write profile";
+    private static final long LOGIN_MS = 10 * 60 * 1000;
+
+    private record Pending(String verifier, String redirect, String back, long created) {}
+
+    private final Map<String, Pending> logins = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public String clientId() {
+        String id = config.get("openbased.clientId", "").trim();
+        return id.isEmpty() ? "wiiuu" : id;
+    }
+
+    /** Where OpenBased sends the browser back to: WII-UU's GamePad server, unless set otherwise. */
+    public String redirectUri(String gamepadBase) {
+        String custom = config.get("openbased.redirectUri", "").trim();
+        if (!custom.isEmpty()) return custom;
+        String b = gamepadBase;
+        while (b.endsWith("/")) b = b.substring(0, b.length() - 1);
+        return b + "/openbased/callback";
+    }
+
+    /** The client entry OpenBased needs in its application.yml (under openbased.clients). */
+    public String clientConfig(String redirectUri) {
+        return "- client-id: " + clientId() + "\n  name: WII-UU\n  redirect-uris:\n    - " + redirectUri
+                + "\n  grant-types: [authorization_code]\n";
+    }
+
+    /** Who WII-UU is signed in as (when it made its token itself), or null. */
+    public String user() {
+        String u = config.get("openbased.user", "").trim();
+        return u.isEmpty() || !configured(config) ? null : u;
+    }
+
+    /**
+     * Starts a sign-in: the OpenBased page to open in a browser. {@code back} is where the "done"
+     * page links to (the GamePad page the phone came from), or null.
+     */
+    public String loginUrl(String redirectUri, String back) throws IOException {
+        if (base().isEmpty()) throw new IOException("Enter the OpenBased server address first");
+        long now = System.currentTimeMillis();
+        logins.values().removeIf(p -> now - p.created() > LOGIN_MS);
+        SecureRandom random = new SecureRandom();
+        byte[] v = new byte[32], s = new byte[16];
+        random.nextBytes(v);
+        random.nextBytes(s);
+        String verifier = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(v);
+        String state = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(s);
+        String challenge;
+        try {
+            challenge = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IOException(e);
+        }
+        logins.put(state, new Pending(verifier, redirectUri, back, now));
+        return base() + "/oauth2/authorize?response_type=code"
+                + "&client_id=" + enc(clientId())
+                + "&redirect_uri=" + enc(redirectUri)
+                + "&scope=" + enc("openid " + SCOPES)
+                + "&state=" + enc(state)
+                + "&code_challenge=" + enc(challenge) + "&code_challenge_method=S256";
+    }
+
+    /** Result of a sign-in: what went wrong (or null), who signed in, and where "back" goes. */
+    public record Login(String error, String user, String back) {}
+
+    /**
+     * Completes a sign-in at the redirect: trades the code for an access token, makes WII-UU's own
+     * token with it, and loads the list.
+     */
+    public synchronized Login finishLogin(String state, String code, String error, String errorDescription) {
+        Pending p = state == null ? null : logins.remove(state);
+        if (p == null || System.currentTimeMillis() - p.created() > LOGIN_MS) {
+            return new Login("This sign-in has expired or was already used. Start it again from WII-UU.", null, null);
+        }
+        if (error != null) {
+            return new Login("OpenBased said: " + (errorDescription != null ? errorDescription : error), null, p.back());
+        }
+        if (code == null || code.isBlank()) return new Login("OpenBased sent no code", null, p.back());
+        try {
+            // the code, for a short-lived access token
+            HttpURLConnection c = (HttpURLConnection) URI.create(base() + "/oauth2/token").toURL().openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(20000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            c.setRequestProperty("Accept", "application/json");
+            String form = "grant_type=authorization_code&code=" + enc(code) + "&redirect_uri=" + enc(p.redirect())
+                    + "&client_id=" + enc(clientId()) + "&code_verifier=" + enc(p.verifier());
+            try (OutputStream out = c.getOutputStream()) {
+                out.write(form.getBytes(StandardCharsets.UTF_8));
+            }
+            int status = c.getResponseCode();
+            if (status != 200) {
+                String why = null;
+                try (InputStream err = c.getErrorStream()) {
+                    if (err != null) {
+                        Map<String, Object> e = MiniJson.object(MiniJson.parse(new String(err.readAllBytes(), StandardCharsets.UTF_8)));
+                        why = MiniJson.string(e.get("error_description"));
+                        if (why == null) why = MiniJson.string(e.get("error"));
+                    }
+                } catch (RuntimeException ignored) {
+                    // not JSON
+                }
+                throw new IOException("the sign-in was refused (" + (why != null ? why : "HTTP " + status) + ")");
+            }
+            Map<String, Object> tokens;
+            try (InputStream in = c.getInputStream()) {
+                tokens = MiniJson.object(MiniJson.parse(new String(in.readAllBytes(), StandardCharsets.UTF_8)));
+            }
+            String access = MiniJson.string(tokens.get("access_token"));
+            if (access == null) throw new IOException("OpenBased sent no access token");
+
+            // who signed in, then WII-UU's own token (a year if allowed, else the server's default)
+            String user = null;
+            try {
+                Map<String, Object> me = MiniJson.object(call("GET", "/api/v1/users/me", null, access));
+                user = MiniJson.string(me.get("displayName"));
+                if (user == null || user.isBlank()) user = MiniJson.string(me.get("username"));
+            } catch (IOException ignored) {
+                // the name is only for show
+            }
+            String name = "WII-UU (" + hostName() + ")";
+            String scopes = "[\"" + SCOPES.replace(" ", "\",\"") + "\"]";
+            Map<String, Object> made;
+            try {
+                made = MiniJson.object(call("POST", "/api/v1/tokens", "{\"name\":" + quote(name) + ",\"scopes\":" + scopes
+                        + ",\"expiresIn\":" + 365L * 24 * 3600 + "}", access));
+            } catch (IOException tooLong) {
+                made = MiniJson.object(call("POST", "/api/v1/tokens", "{\"name\":" + quote(name) + ",\"scopes\":" + scopes + "}", access));
+            }
+            String token = MiniJson.string(made.get("token"));
+            if (token == null) throw new IOException("OpenBased made no token");
+
+            // replace the token WII-UU made before (revoked, so it can't be used any more)
+            String oldId = config.get("openbased.tokenId", "").trim(), oldToken = token();
+            config.set("openbased.token", token);
+            config.set("openbased.tokenId", MiniJson.string(made.get("id")));
+            config.set("openbased.user", user);
+            config.save();
+            if (!oldId.isEmpty() && !oldToken.isEmpty()) {
+                try {
+                    call("DELETE", "/api/v1/tokens/" + enc(oldId), null, access);      // the sign-in may revoke it
+                } catch (IOException ignored) {
+                    // already expired or revoked
+                }
+            }
+            refresh();
+            System.out.println("[openbased] signed in" + (user != null ? " as " + user : ""));
+            return new Login(problem, user, p.back());
+        } catch (IOException | RuntimeException e) {
+            return new Login("Signing in didn't work: " + e.getMessage(), null, p.back());
+        }
+    }
+
+    /** Revokes the token WII-UU made (if it did) and forgets it. */
+    public synchronized void signOut() {
+        String id = config.get("openbased.tokenId", "").trim(), token = token();
+        if (!id.isEmpty() && !token.isEmpty()) {
+            try {
+                call("DELETE", "/api/v1/tokens/" + enc(id), null, token);
+            } catch (IOException e) {
+                System.err.println("[openbased] could not revoke WII-UU's token: " + e.getMessage());
+            }
+        }
+        config.set("openbased.token", null);
+        config.set("openbased.tokenId", null);
+        config.set("openbased.user", null);
+        config.save();
+        refresh();
+    }
+
+    private static String hostName() {
+        try {
+            String h = InetAddress.getLocalHost().getHostName();
+            return h == null || h.isBlank() ? "this computer" : h;
+        } catch (IOException e) {
+            return "this computer";
+        }
+    }
+
+    private static String quote(String s) {
+        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    private static String enc(String s) {
+        return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 
     // ---- the list -------------------------------------------------------------------------------
@@ -221,13 +424,36 @@ public final class OpenBased implements Launcher.Listener {
     // ---- HTTP -----------------------------------------------------------------------------------
 
     private HttpURLConnection open(String path, String method) throws IOException {
+        return open(path, method, token());
+    }
+
+    private HttpURLConnection open(String path, String method, String bearer) throws IOException {
         HttpURLConnection c = (HttpURLConnection) URI.create(base() + path).toURL().openConnection();
         c.setRequestMethod(method);
         c.setConnectTimeout(8000);
         c.setReadTimeout(20000);
-        c.setRequestProperty("Authorization", "Bearer " + token());
+        c.setRequestProperty("Authorization", "Bearer " + bearer);
         c.setRequestProperty("Accept", "application/json");
         return c;
+    }
+
+    /** One API call with {@code bearer}: the JSON answer (null for none). */
+    private Object call(String method, String path, String json, String bearer) throws IOException {
+        HttpURLConnection c = open(path, method, bearer);
+        if (json != null) {
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            try (OutputStream out = c.getOutputStream()) {
+                out.write(json.getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        int code = c.getResponseCode();
+        if (code / 100 != 2) throw new IOException(failure(c, code));
+        if (code == 204) return null;
+        try (InputStream in = c.getInputStream()) {
+            String body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            return body.isBlank() ? null : MiniJson.parse(body);
+        }
     }
 
     private Object get(String path) throws IOException {

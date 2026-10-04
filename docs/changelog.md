@@ -3,6 +3,14 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.28 (2026-10-04)
+Sign in to OpenBased instead of pasting a token.
+- Press Sign in with OpenBased (on the phone, or in Settings → OpenBased): OpenBased's own sign-in
+  page opens, and after you sign in, WII-UU is connected. No token to copy.
+- WII-UU then keeps its own access token in your OpenBased account for a year. Signing in again
+  replaces it, and Sign out revokes it.
+- OpenBased needs to know WII-UU once: WII-UU shows the lines to add to OpenBased's settings.
+
 ## 1.9.27 (2026-10-04)
 OpenBased: watch your own movies and shows in WII-UU.
 - Connect an OpenBased media server (Settings → OpenBased, or on the phone: Library, + OpenBased)
