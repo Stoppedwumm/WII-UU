@@ -87,6 +87,13 @@ public final class SettingsDialog extends JDialog {
 
     private static Runnable guide = () -> { };
 
+    private static Runnable restartIntoGuide = () -> { };
+
+    /** Restarts WII-UU, which then starts with the setup guide (after its start-up animation). */
+    public static void setRestartIntoGuide(Runnable restart) {
+        restartIntoGuide = restart;
+    }
+
     /** Shows the setup guide on the TV (Settings > General > Show the setup guide). */
     public static void setGuide(Runnable showGuide) {
         guide = showGuide;
@@ -399,7 +406,16 @@ public final class SettingsDialog extends JDialog {
             dispose();
             guide.run();
         });
-        row = addRow(p, c, row, "Setup guide", showGuide, null);
+        JButton restartGuide = new JButton("Restart into the setup guide\u2026");
+        restartGuide.setToolTipText("Restarts WII-UU, which then starts with the setup guide, like on its first start");
+        restartGuide.addActionListener(e -> {
+            int ok = JOptionPane.showConfirmDialog(this, "WII-UU restarts now (a running game is closed) and starts with the setup guide.\n"
+                    + "Your settings and games are kept.", "Restart into the setup guide", JOptionPane.OK_CANCEL_OPTION);
+            if (ok != JOptionPane.OK_OPTION) return;
+            dispose();
+            restartIntoGuide.run();
+        });
+        row = addRow(p, c, row, "Setup guide", showGuide, restartGuide);
         row = addRow(p, c, row, "GamePad server port", port, null);
         row = addRow(p, c, row, "Theme", theme, null);
         musicTrack.setRenderer(new javax.swing.DefaultListCellRenderer() {

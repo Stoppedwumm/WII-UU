@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.34";
+    public static final String VERSION = "1.9.35";
 
     private final Config config;
     private final Library library;
@@ -70,6 +70,16 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         launcher.setOpenBased(openBased);
         wiiuu.ui.SettingsDialog.setOpenBased(openBased, () -> server == null ? null : server.url());
         wiiuu.ui.SettingsDialog.setGuide(() -> view.startGuide());
+        wiiuu.ui.SettingsDialog.setRestartIntoGuide(() -> {
+            config.set("ui.setupNext", "true");
+            config.save();
+            try {
+                Updater.restartAfterExit();
+            } catch (IOException e) {
+                System.err.println("[restart] could not start WII-UU again: " + e.getMessage());
+            }
+            quit();
+        });
         launcher.addListener(openBased);
         this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
         // type each emulator's own default keys (Dolphin, PPSSPP, mGBA, melonDS, ...), so nothing needs mapping
@@ -192,6 +202,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         if (freshInstall) config.save();
         // never ran before (install.sh may already have written settings): the setup guide
         firstRun = config.get("app.lastVersion", null) == null && !config.getBool("ui.setupDone", false);
+        // Settings > General > Restart into the setup guide
+        boolean guideAsked = config.getBool("ui.setupNext", false);
+        if (guideAsked) {
+            config.set("ui.setupNext", null);
+            config.save();
+        }
 
         Main app = new Main(config);
         if (snapshot != null) {
@@ -204,7 +220,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         boolean startServer = !noServer && config.getBool("server.enabled", true);
         SwingUtilities.invokeAndWait(app::createWindow);
-        if (firstRun) SwingUtilities.invokeLater(app.view::startGuide);
+        if (firstRun || guideAsked) SwingUtilities.invokeLater(app.view::startGuide);
         app.library.addListener(s -> SwingUtilities.invokeLater(() -> app.view.setSnapshot(s)));
         app.library.rescanAsync();
         app.openBased.refreshAsync();

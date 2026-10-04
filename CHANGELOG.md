@@ -3,6 +3,10 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.35 (2026-10-04)
+- Settings → General → Restart into the setup guide: WII-UU restarts and starts with the setup
+  guide, start-up animation and all, like the very first time. Your settings and games are kept.
+
 ## 1.9.34 (2026-10-04)
 A setup guide for the first start.
 - On its first start WII-UU now welcomes you with a setup guide on the TV: pick light or dark,

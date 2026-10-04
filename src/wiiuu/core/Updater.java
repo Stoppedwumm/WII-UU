@@ -132,15 +132,7 @@ public final class Updater {
                     : System.getenv("LOCALAPPDATA") + "\\WII-UU\\wiiuu.jar") + "\"'";
             cmd = List.of("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", ps);
         } else {
-            String relaunch = jar != null ? "\"" + java + "\" -Xmx384m -jar \"" + jar + "\"" : "\"$HOME/.local/bin/wiiuu\"";
-            String home = System.getProperty("java.home", "");
-            int app = home.indexOf(".app/Contents/");
-            if (OS.contains("mac") && app > 0) {
-                // native WII-UU.app: start it through macOS so its permissions (screen, keys) apply
-                relaunch = "open \"" + home.substring(0, app + 4) + "\"";
-            } else if (OS.contains("mac")) {
-                relaunch = "open \"$HOME/Applications/WII-UU.app\" || " + relaunch;
-            }
+            String relaunch = relaunchCommand(java, jar);
             String done = "";
             if ("1".equals(System.getenv("WIIUU_CONSOLE"))) {
                 // console mode: the session starts WII-UU again itself, once this flag is gone
@@ -153,6 +145,44 @@ public final class Updater {
             String sh = "while kill -0 " + pid + " 2>/dev/null; do sleep 0.5; done; "
                     + "bash \"" + release.resolve("install.sh") + "\" --yes > \"" + log + "\" 2>&1 < /dev/null; "
                     + done + "( " + relaunch + " ) >/dev/null 2>&1";
+            cmd = List.of("nohup", "bash", "-c", sh);
+        }
+        new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectInput(ProcessBuilder.Redirect.PIPE).start().getOutputStream().close();
+    }
+
+    /** The shell command that starts WII-UU again (macOS: through its app, so its permissions apply). */
+    private static String relaunchCommand(String java, String jar) {
+        String relaunch = jar != null ? "\"" + java + "\" -Xmx384m -jar \"" + jar + "\"" : "\"$HOME/.local/bin/wiiuu\"";
+        String home = System.getProperty("java.home", "");
+        int app = home.indexOf(".app/Contents/");
+        if (OS.contains("mac") && app > 0) {
+            // native WII-UU.app: start it through macOS so its permissions (screen, keys) apply
+            relaunch = "open \"" + home.substring(0, app + 4) + "\"";
+        } else if (OS.contains("mac")) {
+            relaunch = "open \"$HOME/Applications/WII-UU.app\" || " + relaunch;
+        }
+        return relaunch;
+    }
+
+    /**
+     * Starts WII-UU again once this process has exited (Settings: restart into the setup guide).
+     * In console mode the session restarts it by itself, so nothing is started here. The caller
+     * should exit right after.
+     */
+    public static void restartAfterExit() throws IOException {
+        if ("1".equals(System.getenv("WIIUU_CONSOLE"))) return;
+        long pid = ProcessHandle.current().pid();
+        String java = Path.of(System.getProperty("java.home"), "bin", OS.contains("win") ? "javaw.exe" : "java").toString();
+        String jar = runningJar();
+        List<String> cmd;
+        if (OS.contains("win")) {
+            String ps = "Wait-Process -Id " + pid + " -ErrorAction SilentlyContinue; "
+                    + "Start-Process '" + java + "' -ArgumentList '-Xmx384m','-jar','\"" + (jar != null ? jar
+                    : System.getenv("LOCALAPPDATA") + "\\WII-UU\\wiiuu.jar") + "\"'";
+            cmd = List.of("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", ps);
+        } else {
+            String sh = "while kill -0 " + pid + " 2>/dev/null; do sleep 0.3; done; ( " + relaunchCommand(java, jar) + " ) >/dev/null 2>&1";
             cmd = List.of("nohup", "bash", "-c", sh);
         }
         new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
