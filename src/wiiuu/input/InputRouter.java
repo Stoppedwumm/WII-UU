@@ -150,6 +150,8 @@ public final class InputRouter {
             held.clear();
             lastModeGame = game;
         }
+        // real controllers (LocalPads, negative players) only steer the menu: in a game the emulator reads them
+        if (game && player < 0) return;
         Set<PadButton> set = held.computeIfAbsent(player, p -> EnumSet.noneOf(PadButton.class));
         if (down == set.contains(b)) return; // duplicate edge
         if (down) set.add(b);

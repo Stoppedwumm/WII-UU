@@ -3,6 +3,14 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.33 (2026-10-04)
+Controllers in the menu.
+- USB and Bluetooth controllers now work in WII-UU's own menu on Linux and Raspberry Pi, not only
+  in games: stick or d-pad to move, the bottom button to open, the right one to go back, the
+  shoulders and triggers to turn the page, Start for the GamePad info, Select to refresh.
+  Controllers plugged in while WII-UU runs work too.
+- Nintendo-style controllers: set input.padConfirm=east to open with the right button instead.
+
 ## 1.9.32 (2026-10-04)
 - N64 (Mupen64Plus): the phone's buttons were mixed up (N64 A on the phone's B, nothing on A).
   WII-UU now gives Mupen64Plus the phone's layout: A and B as on the phone, ZL = Z, L / R (and ZR)

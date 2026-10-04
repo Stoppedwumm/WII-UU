@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.32";
+    public static final String VERSION = "1.9.33";
 
     private final Config config;
     private final Library library;
@@ -268,6 +268,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         view = new MenuView(config, this);
         router.setMenu(view);
+        // real USB / Bluetooth controllers in the menu too (Linux)
+        if (config.getBool("input.localPads", true)) {
+            new wiiuu.input.LocalPads(router, "east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())).start();
+        }
         frame = new JFrame("WII-UU");
         frame.setIconImages(appIcons());          // every size, so Windows' taskbar and Alt+Tab never rescale
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);

@@ -59,6 +59,11 @@ sudo wiiuu-console install                                                    # 
 * **Power → Desktop Mode** logs you into your normal desktop. The **Return to WII-UU** icon on the
   desktop, or in the app menu, goes back.
 * **Power** also offers Restart and Shut Down, so a keyboard is never needed.
+* **Controllers:** besides the phones, USB and Bluetooth controllers work in the menu (on Linux):
+  the stick or d-pad moves, the bottom button opens and the right one goes back
+  (`input.padConfirm=east` swaps them, Nintendo style), the shoulders and triggers turn the page,
+  Start shows the GamePad info and Select refreshes. In a game the emulator reads the controller
+  itself. `input.localPads=false` turns this off.
 * **Every boot** starts in console mode again, like on a Steam Deck.
 * **If WII-UU crashes,** it is started again. If it fails three times in a row, the computer switches
   to the desktop, so you can never get locked out.
