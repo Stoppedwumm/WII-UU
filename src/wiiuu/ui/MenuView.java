@@ -443,6 +443,13 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         guidePending = true;
         updateMusic();
         repaint();
+        // the beat first, before the start-up animation gets going (it doesn't depend on the pictures)
+        Thread t = new Thread(() -> {
+            FirstBootIntro plan = new FirstBootIntro(new BufferedImage[4]);
+            introJingle = Tunes.introJingle(FirstBootIntro.BPM, plan.impactBeat(), plan.cutBeats());
+        }, "intro-beat");
+        t.setDaemon(true);
+        t.start();
     }
 
     /** Advances the intro; true while it owns the screen (the menu then does nothing else). */
@@ -493,7 +500,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             MenuView v = new MenuView(config, true);
             try {
                 Thread.sleep(1500);                         // let the library scan and the GamePad server start first
-                v.setSize(w, h);
+                while (introJingle == null) Thread.sleep(100);
+                // at most 960 wide: a quarter of the work at 1080p (a sixteenth at 4K) and little memory,
+                // so the start-up animation keeps running smoothly; the intro zooms through them quickly
+                double scale = Math.min(1, 960.0 / w);
+                v.setSize((int) Math.round(w * scale), (int) Math.round(h * scale));
                 v.setSnapshot(snap);
                 v.serverOn = serverOn;
                 v.padUrl = padUrl;
@@ -502,6 +513,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 v.qr = qr;
                 BufferedImage[] shots = new BufferedImage[4];
                 shots[0] = v.shot(conf);
+                Thread.sleep(250);                           // breathers: the start-up animation runs meanwhile
                 int best = -1, most = 0;
                 for (int i = 0; i < v.tiles.size(); i++) {
                     if (v.tiles.get(i).count > most) {
@@ -514,18 +526,18 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     v.activate();
                     Thread.sleep(500);                       // covers load in the background
                     shots[1] = v.shot(conf);
+                    Thread.sleep(250);
                     v.back();
                 }
                 if (v.serverOn && v.qr != null) {            // without the server the cut flashes a console instead
                     v.toggleGamepadInfo();
                     shots[2] = v.shot(conf);
                     v.toggleGamepadInfo();
+                    Thread.sleep(250);
                 }
                 if (v.pageCount() > 1) v.page(1);
                 else v.showPowerMenu();
                 shots[3] = v.shot(conf);
-                FirstBootIntro plan = new FirstBootIntro(shots);
-                introJingle = Tunes.introJingle(FirstBootIntro.BPM, plan.impactBeat(), plan.cutBeats());
                 introShots = shots;
             } catch (Exception | OutOfMemoryError e) {
                 System.err.println("[intro] " + e);

@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.37 (2026-10-04)
+- The start-up animation no longer stutters on the first boot (or a restart into the setup guide):
+  getting the intro ready while it played was too much for a Raspberry Pi, especially on a 4K TV.
+  Its pictures of the menu are now taken at a quarter of the size or less, one at a time with
+  pauses, and its beat is made before the animation gets going. The intro looks the same.
+
 ## 1.9.36 (2026-10-04)
 A first boot to remember, and a smooth setup guide.
 - The first start (and Restart into the setup guide) now opens with an eight-second intro on its
