@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.32 (2026-10-04)
+- N64 (Mupen64Plus): the phone's buttons were mixed up (N64 A on the phone's B, nothing on A).
+  WII-UU now gives Mupen64Plus the phone's layout: A and B as on the phone, ZL = Z, L / R (and ZR)
+  = L / R, + = Start, the right stick for the C buttons (X = C-up, Y = C-left too) and the left
+  stick for the N64 stick, for every phone that's connected. With a real controller plugged in,
+  Mupen64Plus sets it up itself as before.
+
 ## 1.9.31 (2026-10-04)
 N64 games show a picture on the Raspberry Pi.
 - Mupen64Plus built by wiiuu-emulators ran N64 games with sound but a black screen on a Raspberry

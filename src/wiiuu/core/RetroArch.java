@@ -384,34 +384,12 @@ public final class RetroArch {
         return cfg.toString();
     }
 
-    /**
-     * Joysticks other than WII-UU's virtual ones (real USB / Bluetooth pads), from
-     * /proc/bus/input/devices; their buttons are numbered differently, so they keep RetroArch's profiles.
-     */
     static List<String> otherJoysticks() {
-        try {
-            return otherJoysticks(Files.readString(Path.of("/proc/bus/input/devices")));
-        } catch (IOException | RuntimeException e) {
-            return List.of();                                      // not Linux, or unreadable: assume only the phones
-        }
+        return Joysticks.others();
     }
 
-    static List<String> otherJoysticks(String all) {
-        List<String> out = new ArrayList<>();
-        {
-            for (String block : all.split("\n\\s*\n")) {
-                String name = null, sysfs = "", handlers = "";
-                for (String line : block.split("\n")) {
-                    if (line.startsWith("N: Name=")) name = line.substring(8).replace("\"", "").trim();
-                    else if (line.startsWith("S: Sysfs=")) sysfs = line.substring(9).trim();
-                    else if (line.startsWith("H: Handlers=")) handlers = " " + line.substring(12).trim() + " ";
-                }
-                if (name == null || !handlers.matches(".*\\sjs\\d+\\s.*")) continue;
-                boolean ours = sysfs.startsWith("/devices/virtual/") && name.startsWith("Microsoft X-Box 360 pad");
-                if (!ours) out.add(name);
-            }
-        }
-        return out;
+    static List<String> otherJoysticks(String devices) {
+        return Joysticks.parse(devices, false);
     }
 
     /** AWT key name (as in keys.pN.X) to RetroArch's key name; "nul" when unmapped. */

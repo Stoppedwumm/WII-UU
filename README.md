@@ -160,6 +160,10 @@ wiiuu-emulators --releases-only
     (Raspberry Pi 4/5) everything is built for OpenGL ES, like RetroPie does: built for desktop
     OpenGL, the Pi only gets an old OpenGL 2.1 context and the game runs with sound but a black
     picture. `N64_GLES=1` or `N64_GLES=0` forces either kind of build.
+  * **N64 controls (phones as virtual controllers):** WII-UU gives Mupen64Plus the phone layout:
+    A and B as on the phone, ZL = Z, L and R (ZR too) = L and R, + = Start, the right stick = C
+    buttons (X = C-up, Y = C-left as well), the left stick = the N64 stick. With a real controller
+    plugged in, Mupen64Plus sets up the controllers itself. `mupen.padBinds=false` turns this off.
 * **Build details:** source builds install their apt dependencies only when needed, and pick the
   number of parallel jobs from your RAM. Heavy builds can take hours on a Pi and need about 4 GB
   of swap on boards with under 6 GB of RAM.

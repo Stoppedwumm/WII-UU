@@ -84,11 +84,14 @@ public final class Launcher {
         return inRetroArch && isRunning();
     }
 
+    private volatile java.util.function.BooleanSupplier virtualPads = () -> false;
+
     /** Plays OpenBased videos (in a video player rather than an emulator), once set. */
     private volatile OpenBased openBased;
 
     /** Tells RetroArch mode whether the phones are virtual controllers (so it binds their layout). */
     public void setVirtualPads(java.util.function.BooleanSupplier virtualPads) {
+        this.virtualPads = virtualPads;
         retroArch.setVirtualPads(virtualPads);
     }
 
@@ -125,6 +128,13 @@ public final class Launcher {
             if (cmd.isEmpty()) throw new LaunchException("No emulator command set for " + game.system().name());
             cmd = resolve(cmd, game.system());
             cmd = mupenFillsScreen(cmd, screenPixels());
+            if (virtualPads.getAsBoolean() && !typesKeys.test(game) && config.getBool("mupen.padBinds", true)) {
+                List<String> others = Joysticks.others();
+                cmd = mupenPads(cmd, others.isEmpty() ? Math.max(1, Joysticks.own()) : 0);
+                if (!others.isEmpty() && isMupen(cmd)) {
+                    System.out.println("[n64] controllers besides the phones (" + String.join(", ", others) + "): Mupen64Plus sets them up itself");
+                }
+            }
         }
         InputPatch patch = null;
         if (!viaRetroArch && !video && typesKeys.test(game)) {
@@ -370,6 +380,57 @@ public final class Launcher {
      * game sat small in a corner or in a little window. Unless the command sets a size, give it
      * the screen's: {@code --resolution WxH} right after the program.
      */
+    /** Whether this runs Mupen64Plus (its program, not one of its libraries or folders). */
+    static boolean isMupen(List<String> cmd) {
+        for (String arg : cmd) {
+            String name = arg.substring(Math.max(arg.lastIndexOf('/'), arg.lastIndexOf('\\')) + 1).toLowerCase(java.util.Locale.ROOT);
+            if (name.equals("mupen64plus") || name.equals("mupen64plus.exe") || name.startsWith("mupen64plus-ui-console")) return true;
+            if (arg.endsWith("/mupen64plus/run") || arg.endsWith("\\mupen64plus\\run")) return true;   // wiiuu-emulators' wrapper
+        }
+        return false;
+    }
+
+    /**
+     * The phones' layout for Mupen64Plus' SDL input plugin, as --set options before the ROM: WII-UU's
+     * virtual pad is an Xbox 360 pad with buttons by position (A east, B south, X north, Y west), so
+     * the plugin's own "Microsoft X-Box 360 pad" profile, made for a real one, puts N64 A on the
+     * phone's B and nothing on its A. SDL numbers the pad's buttons in key-code order (south 0, east
+     * 1, north 2, west 3, L 4, R 5, - 6, + 7, home 8, L3 9, R3 10) and its axes X 0, Y 1, ZL 2, RX 3,
+     * RY 4, ZR 5; the triggers rest at the negative end.
+     *
+     * <p>N64 A / B on the phone's A / B, Z on ZL, L / R on L / R (and ZR), Start on +, the C buttons on
+     * the right stick and also C-up on X and C-left on Y, the analog stick on the left stick.
+     * {@code pads} = 0: another controller is plugged in, so the plugin goes back to setting up
+     * every controller itself (the settings are saved, so a layout from an earlier game would stay).
+     */
+    static List<String> mupenPads(List<String> cmd, int pads) {
+        if (!isMupen(cmd) || cmd.isEmpty()) return cmd;
+        List<String> set = new ArrayList<>();
+        for (int n = 1; n <= 4; n++) {
+            String s = "Input-SDL-Control" + n;
+            if (pads == 0) {
+                set.addAll(List.of("--set", s + "[mode]=2"));
+                continue;
+            }
+            boolean on = n <= pads;
+            String[][] p = {
+                    {"version", "2"}, {"mode", "0"}, {"device", on ? Integer.toString(n - 1) : "-1"}, {"name", ""},
+                    {"plugged", on ? "True" : "False"}, {"plugin", "2"}, {"mouse", "False"},
+                    {"AnalogDeadzone", "4096,4096"}, {"AnalogPeak", "32768,32768"},
+                    {"DPad R", "hat(0 Right)"}, {"DPad L", "hat(0 Left)"}, {"DPad D", "hat(0 Down)"}, {"DPad U", "hat(0 Up)"},
+                    {"Start", "button(7)"}, {"Z Trig", "axis(2+)"}, {"A Button", "button(1)"}, {"B Button", "button(0)"},
+                    {"C Button R", "axis(3+,24000)"}, {"C Button L", "button(3) axis(3-,24000)"},
+                    {"C Button D", "axis(4+,24000)"}, {"C Button U", "button(2) axis(4-,24000)"},
+                    {"R Trig", "button(5) axis(5+)"}, {"L Trig", "button(4)"},
+                    {"Mempak switch", ""}, {"Rumblepak switch", ""},
+                    {"X Axis", "axis(0-,0+)"}, {"Y Axis", "axis(1-,1+)"}};
+            for (String[] kv : p) set.addAll(List.of("--set", s + "[" + kv[0] + "]=" + kv[1]));
+        }
+        List<String> out = new ArrayList<>(cmd);
+        out.addAll(out.size() - 1, set);                          // the ROM stays last
+        return out;
+    }
+
     static List<String> mupenFillsScreen(List<String> cmd, java.awt.Dimension screen) {
         if (screen == null || cmd.contains("--resolution")) return cmd;
         for (int i = 0; i < cmd.size(); i++) {
