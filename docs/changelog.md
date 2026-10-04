@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.38 (2026-10-04)
+- `wiiuu --fps` (or `wiiuu -Dwiiuu.fps=true`) prints the menu's frame rate and paint time every
+  two seconds, to help track down stutter. Before, the `-D` setting was ignored when given
+  after `wiiuu`; WII-UU now takes any `-Dname=value` setting there.
+
 ## 1.9.37 (2026-10-04)
 - The start-up animation no longer stutters on the first boot (or a restart into the setup guide):
   getting the intro ready while it played was too much for a Raspberry Pi, especially on a 4K TV.

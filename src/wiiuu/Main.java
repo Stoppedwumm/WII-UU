@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.37";
+    public static final String VERSION = "1.9.38";
 
     private final Config config;
     private final Library library;
@@ -186,13 +186,21 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --home DIR                  settings folder (default ~/.wiiuu)
                               --check-update / --upgrade  check for / install a newer version (with its notes)
                               --changelog [VERSION]       what changed (since VERSION)
+                              --fps                       print the menu's frame rate (every two seconds)
                               --install-virtual-display   Windows: install the virtual display (split DS/3DS screens)
                               --virtual-display-off       Windows: switch the virtual display off (split screens)
                             Keys: arrows move, Enter opens, Esc back, F1 settings, F2 GamePad, F5 refresh,
                                   F11 fullscreen, Ctrl+Q closes a running game.""".formatted(VERSION));
                     return;
                 }
-                default -> System.err.println("Ignoring unknown option " + args[i]);
+                case "--fps" -> System.setProperty("wiiuu.fps", "true");
+                default -> {
+                    // -Dname=value after "wiiuu" (the launcher passes it here, not to Java)
+                    int eq = args[i].indexOf('=');
+                    if (args[i].startsWith("-D") && eq > 2) System.setProperty(args[i].substring(2, eq), args[i].substring(eq + 1));
+                    else if (args[i].startsWith("-D") && args[i].length() > 2) System.setProperty(args[i].substring(2), "true");
+                    else System.err.println("Ignoring unknown option " + args[i]);
+                }
             }
         }
         Config config = new Config(home);
