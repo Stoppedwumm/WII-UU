@@ -260,6 +260,12 @@ Wii U, Switch, PS3 and PS4 have no cores, so they keep their standalone emulator
 * **Cores:** WII-UU uses the best core it finds in RetroArch's core folder or your distribution's
   libretro packages. If none is installed, it downloads one from the libretro buildbot on first
   launch, then starts the game by itself.
+* **Phones as controllers (Linux):** when the phones are WII-UU's virtual Xbox 360 controllers, WII-UU
+  tells RetroArch their button layout itself, because many RetroArch packages (Debian, Ubuntu,
+  Raspberry Pi OS) come without controller profiles and would only say "Microsoft X-Box 360 pad …
+  not configured". If a real controller is plugged in as well, WII-UU leaves the layout to
+  RetroArch's own profiles (install them with *Online Updater → Update Controller Profiles*).
+  `retroarch.padBinds=false` turns this off.
   * If that fails, it falls back to the standalone emulator.
   * `retroarch.core.<system>=snes9x` (or a path) picks a core.
   * `retroarch.download=false` turns downloads off.

@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.30 (2026-10-04)
+Phones work as controllers in RetroArch on Linux and Raspberry Pi.
+- RetroArch kept saying "Microsoft X-Box 360 pad ... not configured" and ignored the phone: its
+  package on Raspberry Pi OS, Debian and Ubuntu has no controller profiles. WII-UU now tells
+  RetroArch the layout of the phone's virtual controller itself, and those messages are gone.
+- With a real controller plugged in too, RetroArch's own profiles are used as before.
+
 ## 1.9.29 (2026-10-04)
 - OpenBased: "Use a token instead" now links to OpenBased's new API tokens page and says which
   boxes to tick. The setup help covers OpenBased installed as a Linux service

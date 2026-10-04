@@ -60,6 +60,13 @@ public final class RetroArch {
     /** systems whose core download was already tried this session (so a failed one isn't retried forever) */
     private final java.util.Set<String> triedDownload = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
+    /** Whether the phones are WII-UU's virtual controllers (Linux uinput) right now. */
+    private volatile java.util.function.BooleanSupplier virtualPads = () -> false;
+
+    public void setVirtualPads(java.util.function.BooleanSupplier virtualPads) {
+        this.virtualPads = virtualPads;
+    }
+
     public RetroArch(Config config) {
         this.config = config;
     }
@@ -321,6 +328,15 @@ public final class RetroArch {
         cfg.append("pause_nonactive = \"false\"\n");
         cfg.append("quit_press_twice = \"false\"\n");
         cfg.append("input_enable_hotkey = \"").append(config.get("retroarch.hotkeyEnable", "rctrl")).append("\"\n");
+        if (virtualPads.getAsBoolean() && config.getBool("retroarch.padBinds", true)) {
+            List<String> others = otherJoysticks();
+            if (others.isEmpty()) {
+                cfg.append(padBinds());
+            } else {
+                System.out.println("[retroarch] controllers besides the phones (" + String.join(", ", others)
+                        + "): leaving the controller layout to RetroArch's own profiles");
+            }
+        }
         KeyMap keys = new KeyMap(config);
         for (int player = 1; player <= KeyMap.MAX_PLAYERS; player++) {
             for (Map.Entry<PadButton, String> e : RA_BUTTONS.entrySet()) {
@@ -337,6 +353,65 @@ public final class RetroArch {
             System.err.println("[retroarch] could not write " + file + ": " + e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * The layout of WII-UU's virtual controller (vpad.py: an Xbox 360 pad, buttons by position), bound
+     * for every port. RetroArch would otherwise need its autoconfig profile for "Microsoft X-Box 360
+     * pad", which many packages (Debian, Ubuntu, Raspberry Pi OS) don't ship: it then says "... not
+     * configured" for every phone and ignores its buttons. RetroArch's udev driver numbers buttons in
+     * key-code order (BTN_SOUTH 0, BTN_EAST 1, BTN_NORTH 2, BTN_WEST 3, TL 4, TR 5, SELECT 6, START 7,
+     * MODE 8, THUMBL 9, THUMBR 10) and axes in axis-code order (X 0, Y 1, Z 2, RX 3, RY 4, RZ 5); the
+     * d-pad is hat 0, and the triggers rest at the negative end.
+     */
+    static String padBinds() {
+        StringBuilder cfg = new StringBuilder();
+        // the "not configured" notices are moot now; real controllers are not bound here (see otherJoysticks)
+        cfg.append("notification_show_autoconfig = \"false\"\n");
+        String[][] binds = {
+                {"a_btn", "1"}, {"b_btn", "0"}, {"x_btn", "2"}, {"y_btn", "3"},
+                {"l_btn", "4"}, {"r_btn", "5"}, {"select_btn", "6"}, {"start_btn", "7"},
+                {"l3_btn", "9"}, {"r3_btn", "10"},
+                {"up_btn", "h0up"}, {"down_btn", "h0down"}, {"left_btn", "h0left"}, {"right_btn", "h0right"},
+                {"l2_axis", "+2"}, {"r2_axis", "+5"},
+                {"l_x_minus_axis", "-0"}, {"l_x_plus_axis", "+0"}, {"l_y_minus_axis", "-1"}, {"l_y_plus_axis", "+1"},
+                {"r_x_minus_axis", "-3"}, {"r_x_plus_axis", "+3"}, {"r_y_minus_axis", "-4"}, {"r_y_plus_axis", "+4"}};
+        for (int player = 1; player <= KeyMap.MAX_PLAYERS; player++) {
+            for (String[] b : binds) {
+                cfg.append("input_player").append(player).append('_').append(b[0]).append(" = \"").append(b[1]).append("\"\n");
+            }
+        }
+        return cfg.toString();
+    }
+
+    /**
+     * Joysticks other than WII-UU's virtual ones (real USB / Bluetooth pads), from
+     * /proc/bus/input/devices; their buttons are numbered differently, so they keep RetroArch's profiles.
+     */
+    static List<String> otherJoysticks() {
+        try {
+            return otherJoysticks(Files.readString(Path.of("/proc/bus/input/devices")));
+        } catch (IOException | RuntimeException e) {
+            return List.of();                                      // not Linux, or unreadable: assume only the phones
+        }
+    }
+
+    static List<String> otherJoysticks(String all) {
+        List<String> out = new ArrayList<>();
+        {
+            for (String block : all.split("\n\\s*\n")) {
+                String name = null, sysfs = "", handlers = "";
+                for (String line : block.split("\n")) {
+                    if (line.startsWith("N: Name=")) name = line.substring(8).replace("\"", "").trim();
+                    else if (line.startsWith("S: Sysfs=")) sysfs = line.substring(9).trim();
+                    else if (line.startsWith("H: Handlers=")) handlers = " " + line.substring(12).trim() + " ";
+                }
+                if (name == null || !handlers.matches(".*\\sjs\\d+\\s.*")) continue;
+                boolean ours = sysfs.startsWith("/devices/virtual/") && name.startsWith("Microsoft X-Box 360 pad");
+                if (!ours) out.add(name);
+            }
+        }
+        return out;
     }
 
     /** AWT key name (as in keys.pN.X) to RetroArch's key name; "nul" when unmapped. */

@@ -87,6 +87,11 @@ public final class Launcher {
     /** Plays OpenBased videos (in a video player rather than an emulator), once set. */
     private volatile OpenBased openBased;
 
+    /** Tells RetroArch mode whether the phones are virtual controllers (so it binds their layout). */
+    public void setVirtualPads(java.util.function.BooleanSupplier virtualPads) {
+        retroArch.setVirtualPads(virtualPads);
+    }
+
     public void setOpenBased(OpenBased openBased) {
         this.openBased = openBased;
     }

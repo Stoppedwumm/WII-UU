@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.29";
+    public static final String VERSION = "1.9.30";
 
     private final Config config;
     private final Library library;
@@ -245,6 +245,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             if (v.start(config.home())) {
                 vpads = v;
                 server.setVirtualPads(v);
+                launcher.setVirtualPads(v::usable);
                 System.out.println("[input] phones appear as virtual Xbox 360 controllers");
             } else {
                 System.out.println("[input] virtual controllers unavailable (" + v.problem() + "); typing keys instead");
