@@ -1,0 +1,16 @@
+theme "Paper"
+by "WII-UU"
+base light
+
+# black ink on white paper, nothing else; the consoles in shades of grey
+accent = #111111
+text = #111111
+text-dim = #6B6B6B
+card = white
+button = #F0F0F0
+background = #FAFAFA
+stripes = none
+glow = none
+accent-glow = none
+outline = alpha(black, 18%)
+consoles = darken(grey(it), 10%)

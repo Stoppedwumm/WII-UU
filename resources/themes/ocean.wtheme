@@ -1,0 +1,30 @@
+theme "Ocean"
+by "WII-UU"
+# follows the computer: a sunny sea by day, the deep at night
+base auto
+
+let sea = #0097A7
+
+accent = sea
+consoles = mix(it, sea, 15%)
+
+when light {
+    background = gradient(#E6FAFC, #B9E8EF)
+    card = #FAFFFF
+    text = #0C3B44
+    text-dim = mix(text, card, 45%)
+    accent-glow = alpha(#00BFA5, 20%)
+    button = #E0F4F6
+}
+
+when dark {
+    accent = #26E0F0
+    background = gradient(#06323D, #021317)
+    card = #0A2E36
+    button = #10404A
+    divider = #165560
+    text = #DDF9FC
+    text-dim = #7FB5BD
+    accent-glow = alpha(#26E0F0, 22%)
+    stripes = alpha(#26E0F0, 3%)
+}

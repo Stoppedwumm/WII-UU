@@ -1,0 +1,35 @@
+theme "Game Boy"
+by "WII-UU"
+base light
+
+# the four greens of the 1989 Game Boy screen
+let lightest = #9BBC0F
+let light = #8BAC0F
+let dark = #306230
+let darkest = #0F380F
+
+accent = darkest
+text = darkest
+text-dim = dark
+card = light
+button = mix(light, dark, 20%)
+divider = dark
+dot = mix(light, dark, 50%)
+icon = darkest
+background = lightest
+stripes = alpha(darkest, 7%)
+glow = none
+accent-glow = none
+shelf = alpha(lightest, 30%)
+outline = alpha(darkest, 40%)
+shadow = darkest
+dim = alpha(lightest, 88%)
+toast = darkest
+boot = lightest
+boot-fade = light
+
+# every console in Game Boy green, a little lighter or darker after its own colour
+consoles = mix(dark, grey(it), 30%)
+console gb = darkest
+console gba = mix(dark, light, 30%)
+font "Noto Sans Mono", "DejaVu Sans Mono", "Liberation Mono"

@@ -182,7 +182,7 @@ final class FirstBootIntro {
     }
 
     private void paintTile(Graphics2D g, int w, int h, double p, GameSystem s) {
-        Color c = s.color();
+        Color c = MenuView.colorOf(s);
         g.setPaint(new GradientPaint(0, 0, c.brighter(), 0, h, c.darker()));
         g.fillRect(0, 0, w, h);
         // a tile card rushing towards the camera
@@ -212,7 +212,7 @@ final class FirstBootIntro {
         for (int i = 0; i < all.size(); i++) {
             double a = i * 2 * Math.PI / all.size() + beats * 0.9;
             boolean on = i < all.size() * Math.min(1, p * 1.6);       // they light up as the number counts
-            Color c = all.get(i).color();
+            Color c = MenuView.colorOf(all.get(i));
             g.setColor(on ? c : new Color(c.getRed(), c.getGreen(), c.getBlue(), 50));
             float d = on ? dot : dot * 0.6f;
             g.fill(new java.awt.geom.Ellipse2D.Float((float) (w / 2.0 + Math.cos(a) * ring * 1.35 - d / 2),
@@ -235,7 +235,7 @@ final class FirstBootIntro {
             double dist = Math.pow(life, 2.2) * w * 0.75;
             double size = 10 + life * life * h * 0.2;
             float x = (float) (w / 2.0 + Math.cos(angle) * dist - size / 2), y = (float) (h / 2.0 + Math.sin(angle) * dist * 0.62 - size * 0.31);
-            Color c = all.get(i % all.size()).color();
+            Color c = MenuView.colorOf(all.get(i % all.size()));
             g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), (int) (255 * Math.min(1, life * 3))));
             g.fill(new RoundRectangle2D.Float(x, y, (float) size, (float) (size * 0.62), (float) size * 0.18f, (float) size * 0.18f));
         }

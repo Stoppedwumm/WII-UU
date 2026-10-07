@@ -1,0 +1,8 @@
+# the themes that come with WII-UU (resources/themes/<id>.wtheme), in the order Settings lists them
+sunset
+midnight-arcade
+gameboy
+famicom
+ocean
+paper
+tutorial

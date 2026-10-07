@@ -71,8 +71,9 @@ public final class SettingsDialog extends JDialog {
     private final JCheckBox music = new JCheckBox("Background music");
     private final JCheckBox visualizer = new JCheckBox("Music visualizer behind the menu (V: full screen)");
     private final javax.swing.JComboBox<MenuTracks.Track> musicTrack = new javax.swing.JComboBox<>();
-    private final javax.swing.JComboBox<String> theme = new javax.swing.JComboBox<>(
-            new String[]{"Auto (follow the system)", "Light", "Dark"});
+    private final javax.swing.JComboBox<String> theme = new javax.swing.JComboBox<>();
+    /** ui.theme for each entry of the theme list */
+    private final java.util.List<String> themeIds = new java.util.ArrayList<>();
     private final JCheckBox boot = new JCheckBox("Start-up animation");
     private final JCheckBox eight = new JCheckBox("8-player mode: up to 8 phones at once (instead of 4)");
     private final JCheckBox buzzMode = new JCheckBox("Buzz! mode: phones become Buzz! buzzers in PS2 Buzz! games");
@@ -95,6 +96,23 @@ public final class SettingsDialog extends JDialog {
     }
 
     /** Shows the setup guide on the TV (Settings > General > Show the setup guide). */
+    /** The theme list: the built-in looks, then every theme file (refreshed after making the folder). */
+    private void fillThemes(String selected) {
+        theme.removeAllItems();
+        themeIds.clear();
+        String[][] own = {{"auto", "Auto (follow the system)"}, {"light", "Light"}, {"dark", "Dark"}};
+        for (String[] o : own) {
+            themeIds.add(o[0]);
+            theme.addItem(o[1]);
+        }
+        for (Themes.Entry e : Themes.list(config)) {
+            themeIds.add(e.id());
+            theme.addItem(e.name() + (e.builtIn() ? "" : " (yours)"));
+        }
+        int at = themeIds.indexOf(selected);
+        theme.setSelectedIndex(Math.max(0, at));
+    }
+
     public static void setGuide(Runnable showGuide) {
         guide = showGuide;
     }
@@ -172,8 +190,7 @@ public final class SettingsDialog extends JDialog {
         musicTrack.addItem(new MenuTracks.Track(MenuTracks.ALL, "All of them, taking turns"));
         visualizer.setSelected(config.getBool("ui.visualizer", true));
         for (int i = 0; i < musicTrack.getItemCount(); i++) if (musicTrack.getItemAt(i).id().equals(track)) musicTrack.setSelectedIndex(i);
-        String t = config.get("ui.theme", "auto").trim().toLowerCase();
-        theme.setSelectedIndex(t.equals("light") ? 1 : t.equals("dark") ? 2 : 0);
+        fillThemes(config.get("ui.theme", "auto").trim().toLowerCase());
         boot.setSelected(config.getBool("ui.bootAnimation", true));
         eight.setSelected(config.getInt("server.maxPlayers", 4) > 4);
         buzzMode.setSelected(config.getBool("buzz.enabled", true));
@@ -222,7 +239,7 @@ public final class SettingsDialog extends JDialog {
         config.set("ui.visualizer", visualizer.isSelected() ? null : "false");
         MenuTracks.Track track = (MenuTracks.Track) musicTrack.getSelectedItem();
         config.set("ui.musicTrack", track == null || track.id().equals(MenuTracks.DEFAULT) ? null : track.id());
-        config.set("ui.theme", new String[]{"auto", "light", "dark"}[Math.max(0, theme.getSelectedIndex())]);
+        config.set("ui.theme", themeIds.get(Math.max(0, theme.getSelectedIndex())));
         config.set("ui.bootAnimation", Boolean.toString(boot.isSelected()));
         config.set("server.maxPlayers", eight.isSelected() ? "8" : null);
         config.set("buzz.enabled", buzzMode.isSelected() ? null : "false");
@@ -417,7 +434,22 @@ public final class SettingsDialog extends JDialog {
         });
         row = addRow(p, c, row, "Setup guide", showGuide, restartGuide);
         row = addRow(p, c, row, "GamePad server port", port, null);
-        row = addRow(p, c, row, "Theme", theme, null);
+        JButton themeFolder = new JButton("Make your own…");
+        themeFolder.setToolTipText("Opens the themes folder, with a theme to start from and the reference of the theme language");
+        themeFolder.addActionListener(e -> {
+            try {
+                Path dir = Themes.prepareFolder(config);
+                fillThemes(themeIds.get(Math.max(0, theme.getSelectedIndex())));
+                try {
+                    Desktop.getDesktop().open(dir.toFile());
+                } catch (IOException | UnsupportedOperationException ex) {
+                    JOptionPane.showMessageDialog(this, "Your themes go in " + dir);
+                }
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, "Could not make the themes folder: " + ex.getMessage());
+            }
+        });
+        row = addRow(p, c, row, "Theme", theme, themeFolder);
         musicTrack.setRenderer(new javax.swing.DefaultListCellRenderer() {
             @Override
             public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,

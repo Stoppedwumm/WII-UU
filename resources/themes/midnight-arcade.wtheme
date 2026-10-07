@@ -1,0 +1,29 @@
+theme "Midnight Arcade"
+by "WII-UU"
+base dark
+
+let neon = #00F0FF
+let magenta = #FF2BD6
+let void = #07060F
+
+accent = neon
+text = #E8F7FF
+text-dim = #8C9BB8
+card = #12102A
+button = #1C1840
+divider = #2B2660
+dot = #3A3478
+icon = magenta
+background = gradient(#140F33, void)
+stripes = alpha(neon, 5%)
+glow = alpha(magenta, 16%)
+accent-glow = alpha(neon, 24%)
+outline = alpha(neon, 28%)
+shelf = alpha(white, 8%)
+toast = alpha(#1C1840, 95%)
+boot = gradient(#140F33, void)
+boot-fade = void
+
+# every console glows in neon: its own hue, as bright and colourful as it gets
+consoles = saturate(mix(it, magenta, 18%), 30%)
+font "Noto Sans Mono", "DejaVu Sans Mono", "Liberation Mono"

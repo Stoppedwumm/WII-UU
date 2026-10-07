@@ -1,0 +1,36 @@
+# A tour of WII-UU's theme language. Copy this file, change things, save:
+# while it is the theme in use, WII-UU redraws within a second.
+# Everything there is to set is in REFERENCE.txt next to your themes (or: wiiuu --theme-reference).
+
+theme "Tutorial"
+by "WII-UU"
+
+# Start from WII-UU's own light colours (or dark, or auto to follow the computer).
+base light
+
+# Name the colours you use more than once.
+let brand = #7C4DFF               # #RRGGBB, #RGB, or #RRGGBBAA with opacity
+let paper = #FBF8FF
+
+# Then set what you want; everything else stays as WII-UU's.
+accent = brand
+card = paper
+background = gradient(#F3EEFF, #DCD3F5)       # top, bottom
+text = #2D2640
+text-dim = mix(text, card, 45%)               # 45% of the way from text to card
+accent-glow = alpha(brand, 15%)               # the same colour, mostly see-through
+divider = darken(card, 10%)
+button = lighten(brand, 88%)
+
+# Console tiles: all of them at once ("it" is each console's own colour) ...
+consoles = mix(it, brand, 15%)
+# ... or one by one.
+console n64 = spin(brand, 120)                # 120 degrees round the colour wheel
+
+# Fonts: the first one this computer has is used.
+font "Nunito", "Ubuntu", "DejaVu Sans"
+
+# Parts that only apply in dark or light mode (useful with base auto):
+when dark {
+    card = #2A2338
+}

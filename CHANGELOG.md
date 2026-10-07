@@ -3,6 +3,17 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.42 (2026-10-07)
+- Themes, with their own language: small `.wtheme` text files that recolour the whole menu, with
+  variables (`let`), colour functions (`mix`, `lighten`, `alpha`, `spin`, `gradient` …), console
+  tile colours (one by one, or all at once from their own colours), fonts, and parts for light and
+  dark mode. Pick one in Settings > General > Theme; *Make your own…* opens your themes folder with
+  a theme to start from and the full reference. WII-UU redraws as soon as you save a theme, and
+  says exactly where a mistake is (with "did you mean …?").
+- Six themes come with WII-UU: Sunset, Midnight Arcade, Game Boy, Famicom, Ocean and Paper.
+- `wiiuu --theme-check FILE` shows a theme's colours (as swatches in the terminal) or its mistake;
+  `wiiuu --theme-reference` prints everything the language knows.
+
 ## 1.9.41 (2026-10-07)
 - The setup guide's controller step is now a live controller test: a GamePad on screen lights up
   every button, shoulder, trigger and d-pad direction you press, its sticks lean the way you push

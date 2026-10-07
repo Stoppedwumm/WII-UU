@@ -1,0 +1,27 @@
+theme "Famicom"
+by "WII-UU"
+base light
+
+let cream = #F2EBDC
+let maroon = #8E1B22
+let gold = #C9A44A
+
+accent = maroon
+text = #3A2A24
+text-dim = mix(text, cream, 45%)
+card = lighten(cream, 50%)
+button = darken(cream, 4%)
+divider = darken(cream, 14%)
+dot = darken(cream, 22%)
+icon = maroon
+background = gradient(cream, darken(cream, 8%))
+stripes = alpha(maroon, 4%)
+accent-glow = alpha(gold, 22%)
+boot = gradient(lighten(cream, 50%), cream)
+boot-fade = cream
+
+# Nintendo's consoles in the Famicom's red and gold, the others a little warmer
+consoles = mix(it, gold, 12%)
+console nes = maroon
+console snes = mix(maroon, #5B4A9B, 60%)
+console n64 = gold

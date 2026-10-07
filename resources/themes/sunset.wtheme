@@ -1,0 +1,27 @@
+theme "Sunset"
+by "WII-UU"
+base dark
+
+let sun = #FF7A3D
+let dusk = #2A1846
+let night = #120A24
+
+accent = sun
+text = #FFF1E6
+text-dim = mix(text, dusk, 45%)
+card = lighten(dusk, 6%)
+button = lighten(dusk, 14%)
+divider = lighten(dusk, 20%)
+dot = lighten(dusk, 25%)
+icon = #FFC9A8
+background = gradient(#3B1D52, night)
+stripes = alpha(sun, 3%)
+glow = alpha(#FF4F81, 14%)
+accent-glow = alpha(sun, 22%)
+outline = alpha(sun, 12%)
+toast = alpha(lighten(dusk, 10%), 94%)
+dim = alpha(night, 85%)
+boot = gradient(#3B1D52, night)
+boot-fade = dusk
+
+consoles = mix(it, #FF4F81, 22%)

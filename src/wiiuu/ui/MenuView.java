@@ -93,100 +93,259 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         applyTheme(false);
     }
 
+    /** WII-UU's own colours, light or dark, by theme setting name (see ThemeScript.PROPERTIES). */
+    static Map<String, Color> builtInColours(boolean darkTheme) {
+        Map<String, Color> c = new java.util.LinkedHashMap<>();
+        if (!darkTheme) {
+            c.put("accent", new Color(0x00A8E8));
+            c.put("text", new Color(0x3C4043));
+            c.put("text-dim", new Color(0x8A9099));
+            c.put("card", Color.WHITE);
+            c.put("divider", new Color(0xD5D9DE));
+            c.put("dot", new Color(0xC3C8CE));
+            c.put("icon", new Color(0x6B7178));
+            c.put("button", new Color(0xEEF0F2));
+            c.put("background-top", new Color(0xF7F8FA));
+            c.put("background-bottom", new Color(0xE2E6EA));
+            c.put("stripes", new Color(0, 0, 0, 9));
+            c.put("glow", new Color(255, 255, 255, 170));
+            c.put("accent-glow", new Color(0, 168, 232, 26));
+            c.put("shelf", new Color(255, 255, 255, 120));
+            c.put("outline", new Color(0, 0, 0, 22));
+            c.put("shadow", new Color(40, 50, 60));
+            c.put("dim", new Color(235, 238, 241, 215));
+            c.put("toast", new Color(40, 44, 50, 225));
+            c.put("boot-top", Color.WHITE);
+            c.put("boot-bottom", new Color(0xEEF2F5));
+            c.put("boot-fade", new Color(0xF6F8FA));
+        } else {
+            c.put("accent", new Color(0x26B9F2));
+            c.put("text", new Color(0xE6E9EC));
+            c.put("text-dim", new Color(0x9AA3AD));
+            c.put("card", new Color(0x262B31));
+            c.put("divider", new Color(0x3C434B));
+            c.put("dot", new Color(0x4A525B));
+            c.put("icon", new Color(0xAEB6BF));
+            c.put("button", new Color(0x343A42));
+            c.put("background-top", new Color(0x1C2025));
+            c.put("background-bottom", new Color(0x0F1113));
+            c.put("stripes", new Color(255, 255, 255, 6));
+            c.put("glow", new Color(255, 255, 255, 16));
+            c.put("accent-glow", new Color(38, 185, 242, 30));
+            c.put("shelf", new Color(255, 255, 255, 16));
+            c.put("outline", new Color(255, 255, 255, 18));
+            c.put("shadow", new Color(0, 0, 0));
+            c.put("dim", new Color(12, 14, 16, 215));
+            c.put("toast", new Color(58, 64, 72, 240));
+            c.put("boot-top", new Color(0x1B1F24));
+            c.put("boot-bottom", new Color(0x0F1113));
+            c.put("boot-fade", new Color(0x16191D));
+        }
+        return c;
+    }
+
     /** Switches every colour of the menu between the light and the dark set. */
     static void applyTheme(boolean darkTheme) {
+        usePalette(builtInColours(darkTheme), darkTheme, Map.of(), List.of());
+    }
+
+    /** a theme's own tile colours by console id (empty with the built-in themes) */
+    private static volatile Map<String, Color> consoleColours = Map.of();
+    /** bumped whenever the colours change, for pictures cached elsewhere (the setup guide) */
+    static volatile int themeVersion;
+    /** whether a theme file (not the built-in light / dark) is in use */
+    static volatile boolean customTheme;
+
+    private static void usePalette(Map<String, Color> c, boolean darkTheme, Map<String, Color> consoles, List<String> fonts) {
         dark = darkTheme;
-        if (!darkTheme) {
-            ACCENT = new Color(0x00A8E8);
-            TEXT = new Color(0x3C4043);
-            TEXT_DIM = new Color(0x8A9099);
-            CARD = Color.WHITE;
-            DIVIDER = new Color(0xD5D9DE);
-            DOT_OFF = new Color(0xC3C8CE);
-            ICON = new Color(0x6B7178);
-            BUTTON = new Color(0xEEF0F2);
-            BG_TOP = new Color(0xF7F8FA);
-            BG_BOTTOM = new Color(0xE2E6EA);
-            STRIPE = new Color(0, 0, 0, 9);
-            BLOOM = new Color(255, 255, 255, 170);
-            BLOOM_ACCENT = new Color(0, 168, 232, 26);
-            SHELF = new Color(255, 255, 255, 120);
-            OUTLINE = new Color(0, 0, 0, 22);
-            SHADOW_RGB = new Color(40, 50, 60);
-            shadowBoost = 1;
-            DIM = new Color(235, 238, 241, 215);
-            TOAST = new Color(40, 44, 50, 225);
-            BOOT_TOP = Color.WHITE;
-            BOOT_BOTTOM = new Color(0xEEF2F5);
-            BOOT_FADE = new Color(0xF6F8FA);
-        } else {
-            ACCENT = new Color(0x26B9F2);
-            TEXT = new Color(0xE6E9EC);
-            TEXT_DIM = new Color(0x9AA3AD);
-            CARD = new Color(0x262B31);
-            DIVIDER = new Color(0x3C434B);
-            DOT_OFF = new Color(0x4A525B);
-            ICON = new Color(0xAEB6BF);
-            BUTTON = new Color(0x343A42);
-            BG_TOP = new Color(0x1C2025);
-            BG_BOTTOM = new Color(0x0F1113);
-            STRIPE = new Color(255, 255, 255, 6);
-            BLOOM = new Color(255, 255, 255, 16);
-            BLOOM_ACCENT = new Color(38, 185, 242, 30);
-            SHELF = new Color(255, 255, 255, 16);
-            OUTLINE = new Color(255, 255, 255, 18);
-            SHADOW_RGB = new Color(0, 0, 0);
-            shadowBoost = 3;
-            DIM = new Color(12, 14, 16, 215);
-            TOAST = new Color(58, 64, 72, 240);
-            BOOT_TOP = new Color(0x1B1F24);
-            BOOT_BOTTOM = new Color(0x0F1113);
-            BOOT_FADE = new Color(0x16191D);
+        ACCENT = c.get("accent");
+        TEXT = c.get("text");
+        TEXT_DIM = c.get("text-dim");
+        CARD = c.get("card");
+        DIVIDER = c.get("divider");
+        DOT_OFF = c.get("dot");
+        ICON = c.get("icon");
+        BUTTON = c.get("button");
+        BG_TOP = c.get("background-top");
+        BG_BOTTOM = c.get("background-bottom");
+        STRIPE = c.get("stripes");
+        BLOOM = c.get("glow");
+        BLOOM_ACCENT = c.get("accent-glow");
+        SHELF = c.get("shelf");
+        OUTLINE = c.get("outline");
+        SHADOW_RGB = c.get("shadow");
+        shadowBoost = darkTheme ? 3 : 1;
+        DIM = c.get("dim");
+        TOAST = c.get("toast");
+        BOOT_TOP = c.get("boot-top");
+        BOOT_BOTTOM = c.get("boot-bottom");
+        BOOT_FADE = c.get("boot-fade");
+        consoleColours = consoles;
+        if (FONT != null) {                              // (not yet while the class itself starts up)
+            String family = FONT;
+            for (String f : fonts) {
+                if (fontInstalled(f)) {
+                    family = f;
+                    break;
+                }
+            }
+            if (!family.equals(fontFamily)) {
+                fontFamily = family;
+                FONTS.clear();
+            }
         }
+        themeVersion++;
+    }
+
+    static Color bgTop() {
+        return BG_TOP;
+    }
+
+    static Color bgBottom() {
+        return BG_BOTTOM;
+    }
+
+    /** A console's tile colour: the theme's, or the console's own. */
+    static Color colorOf(GameSystem s) {
+        Color c = consoleColours.get(s.id());
+        return c != null ? c : s.color();
     }
 
     private volatile String themeMode = "";
     private Thread themeWatcher;
+    /** the theme file in use, and when it was last changed (for reloading it when it's saved) */
+    private volatile Themes.Entry themeEntry;
+    private volatile long themeStamp;
+    private volatile boolean themeFollowsSystem;
+    private volatile String themeProblem;
 
     /**
-     * ui.theme: "light", "dark", or "auto" to follow the system's appearance (checked again every
-     * 15 seconds, so switching the Mac or PC to dark mode switches WII-UU too).
+     * ui.theme: "light", "dark", "auto" to follow the system's appearance (checked again every
+     * 15 seconds, so switching the Mac or PC to dark mode switches WII-UU too), or a theme's id
+     * (see {@link Themes}): a theme file, which WII-UU reloads within a second of it being saved.
      */
     public void setThemeMode(String mode) {
         mode = mode == null ? "auto" : mode.trim().toLowerCase(Locale.ROOT);
         themeMode = mode;
+        themeEntry = null;
         switch (mode) {
             case "dark" -> setTheme(true);
             case "light" -> setTheme(false);
+            case "auto", "" -> setTheme(SystemTheme.isDark());
             default -> {
-                setTheme(SystemTheme.isDark());
-                if (themeWatcher == null) {
-                    themeWatcher = new Thread(() -> {
-                        while (true) {
-                            try {
-                                Thread.sleep(15_000);
-                            } catch (InterruptedException e) {
-                                return;
-                            }
-                            if (!themeMode.equals("dark") && !themeMode.equals("light")) {
-                                boolean d = SystemTheme.isDark();
-                                SwingUtilities.invokeLater(() -> {
-                                    if (!themeMode.equals("dark") && !themeMode.equals("light")) setTheme(d);
-                                });
-                            }
-                        }
-                    }, "theme-watch");
-                    themeWatcher.setDaemon(true);
-                    themeWatcher.start();
+                Themes.Entry e = Themes.find(config, mode);
+                if (e == null) {
+                    toastWhenShown("There is no theme \"" + mode + "\" - using the system's look");
+                    setTheme(SystemTheme.isDark());
+                } else {
+                    themeEntry = e;
+                    loadTheme(e, false);
                 }
             }
         }
+        if (themeWatcher == null) {
+            themeWatcher = new Thread(this::watchTheme, "theme-watch");
+            themeWatcher.setDaemon(true);
+            themeWatcher.start();
+        }
+    }
+
+    /** Follows the system's dark mode (every 15 s) and the theme file being saved (every second). */
+    private void watchTheme() {
+        long lastSystem = 0;
+        while (true) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                return;
+            }
+            Themes.Entry e = themeEntry;
+            if (e != null && e.file() != null && stamp(e.file()) != themeStamp) {
+                SwingUtilities.invokeLater(() -> {
+                    if (themeEntry == e) loadTheme(e, true);
+                });
+                continue;
+            }
+            long now = System.currentTimeMillis();
+            if (now - lastSystem < 15_000) continue;
+            lastSystem = now;
+            String mode = themeMode;
+            boolean follows = mode.equals("auto") || mode.isEmpty() || e != null && themeFollowsSystem;
+            if (!follows) continue;
+            boolean d = SystemTheme.isDark();
+            SwingUtilities.invokeLater(() -> {
+                if (!themeMode.equals(mode)) return;
+                if (themeEntry != null) {
+                    if (d != dark) loadTheme(themeEntry, false);
+                } else {
+                    setTheme(d);
+                }
+            });
+        }
+    }
+
+    private static long stamp(java.nio.file.Path f) {
+        try {
+            return java.nio.file.Files.getLastModifiedTime(f).toMillis() ^ java.nio.file.Files.size(f);
+        } catch (java.io.IOException e) {
+            return -1;
+        }
+    }
+
+    /** Uses a theme file; on a mistake keeps the colours as they are and says what's wrong. */
+    private void loadTheme(Themes.Entry e, boolean reloaded) {
+        if (e.file() != null) themeStamp = stamp(e.file());
+        try {
+            ThemeScript.Result r = Themes.evaluate(Themes.read(e), e.id(), SystemTheme.isDark());
+            themeFollowsSystem = r.followsSystem();
+            themeProblem = null;
+            customTheme = true;
+            usePalette(r.colours(), r.dark(), r.consoles(), r.fonts());
+            redrawAll();
+            for (String w : r.warnings()) System.out.println("[theme] " + e.id() + ": " + w);
+            if (reloaded) showToast("Theme \"" + r.name() + "\" reloaded");
+        } catch (ThemeScript.Error err) {
+            themeProblem = (e.file() != null ? e.file().getFileName() : e.id()) + ", " + err;
+            System.err.println("[theme] " + themeProblem);
+            // the short version on screen (the whole message is in the log and from wiiuu --theme-check)
+            String why = err.getMessage().replaceFirst("(: use |: [a-z]+\\().*$", "");
+            String toast = (e.file() != null ? e.file().getFileName() : e.id()) + " line " + err.line + ": " + why;
+            toastWhenShown(toast.length() > 86 ? toast.substring(0, 85) + "…" : toast);
+            if (!customTheme && !reloaded) setTheme(SystemTheme.isDark());
+        } catch (java.io.IOException err) {
+            showToast("Can't read the theme: " + err.getMessage());
+        }
+    }
+
+    /** A toast now, or (while WII-UU is still starting) once the menu is on screen. */
+    private void toastWhenShown(String text) {
+        if (isShowing() && !booting) {
+            showToast(text, 8000);
+            return;
+        }
+        javax.swing.Timer wait = new javax.swing.Timer(500, null);
+        wait.addActionListener(ev -> {
+            if (!isShowing() || booting) return;
+            wait.stop();
+            showToast(text, 8000);
+        });
+        wait.start();
+    }
+
+    /** What's wrong with the theme in use, or null (for Settings). */
+    public String themeProblem() {
+        return themeProblem;
     }
 
     /** Switches the theme while running: every cached picture is redrawn in the new colours. */
     public void setTheme(boolean darkTheme) {
-        if (darkTheme == dark) return;
+        if (darkTheme == dark && !customTheme) return;
+        customTheme = false;
         applyTheme(darkTheme);
+        redrawAll();
+    }
+
+    private void redrawAll() {
         synchronized (sprites) {
             sprites.clear();
             spriteBytes = 0;
@@ -198,6 +357,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private static final int COLS = 5, ROWS = 3, PER_PAGE = COLS * ROWS;
     static final String FONT = pickFont();
+    /** the font in use: WII-UU's choice, or the theme's */
+    private static volatile String fontFamily = FONT;
     /** Sprites are drawn at the selected (largest) size so zooming in never upsamples. */
     private static final float SPRITE_SCALE = 1.06f;
     private static final Map<Long, Font> FONTS = new ConcurrentHashMap<>();
@@ -646,8 +807,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     public void showToast(String text) {
+        showToast(text, 3200);
+    }
+
+    private void showToast(String text, long ms) {
         toast = text;
-        toastUntil = System.currentTimeMillis() + 3200;
+        toastUntil = System.currentTimeMillis() + ms;
         repaint();
     }
 
@@ -1934,7 +2099,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.fill(new RoundRectangle2D.Double(r.getX(), r.getY() + 3, r.getWidth(), r.getHeight(), rad, rad));
         g.setColor(CARD);
         g.fill(new RoundRectangle2D.Double(r.getX(), r.getY(), r.getWidth(), r.getHeight(), rad, rad));
-        g.setColor(t.game == null ? t.system.color() : vary(t.system.color(), t.game.name()));
+        g.setColor(t.game == null ? colorOf(t.system) : vary(colorOf(t.system), t.game.name()));
         g.fill(new RoundRectangle2D.Double(r.getX(), r.getY(), r.getWidth(), r.getHeight() * 0.72, rad, rad));
         g.fill(new Rectangle2D.Double(r.getX(), r.getY() + rad, r.getWidth(), r.getHeight() * 0.72 - rad));
     }
@@ -1966,7 +2131,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         float artH = h * 0.7f;
         Shape oldClip = g.getClip();
         g.clip(card);
-        Color c = t.system.color();
+        Color c = colorOf(t.system);
         g.setPaint(new GradientPaint(x, y, brighter(c, 0.18f), x, y + artH, darker(c, 0.12f)));
         g.fill(new Rectangle2D.Float(x, y, w, artH));
         // glossy sheen
@@ -2012,7 +2177,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             drawCentered(g, ellipsize(g, t.game.name(), w * 0.9f), x + w / 2, y + h * 0.92f);
             return;
         }
-        Color c = vary(t.system.color(), t.game.name());
+        Color c = vary(colorOf(t.system), t.game.name());
         float artH = h * 0.72f;
         g.setPaint(new GradientPaint(x, y, brighter(c, 0.3f), x + w, y + artH, c));
         g.fill(new Rectangle2D.Float(x, y, w, artH));
@@ -2191,7 +2356,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.fill(card);
         Shape old = g.getClip();
         g.clip(card);
-        Color c = playing.system().color();
+        Color c = colorOf(playing.system());
         g.setPaint(new GradientPaint(cx, cy, brighter(c, 0.2f), cx + cw, cy, c));
         g.fill(new Rectangle2D.Float(cx, cy, cw, ch * 0.3f));
         g.setClip(old);
@@ -2358,7 +2523,16 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     static Font font(int style, float size) {
         float sz = Math.max(8f, Math.round(size * 2) / 2f); // half-point buckets keep the cache small
         return FONTS.computeIfAbsent(((long) style << 32) | Float.floatToIntBits(sz),
-                k -> new Font(FONT, style, 1).deriveFont(style, sz));
+                k -> new Font(fontFamily, style, 1).deriveFont(style, sz));
+    }
+
+    private static Set<String> installedFonts;
+
+    private static boolean fontInstalled(String family) {
+        if (GraphicsEnvironment.isHeadless()) return false;
+        if (installedFonts == null) installedFonts = Set.copyOf(Arrays.asList(
+                GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames()));
+        return installedFonts.contains(family);
     }
 
     private static String pickFont() {

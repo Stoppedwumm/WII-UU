@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsDialog;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.41";
+    public static final String VERSION = "1.9.42";
 
     private final Config config;
     private final Library library;
@@ -173,6 +173,13 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                     System.out.println(wiiuu.core.Changelog.text(wiiuu.core.Changelog.bundled().between(since, null)));
                     return;
                 }
+                case "--theme-check" -> {
+                    System.exit(themeCheck(new Config(home), i + 1 < args.length ? args[++i] : null));
+                }
+                case "--theme-reference" -> {
+                    System.out.print(wiiuu.ui.Themes.reference());
+                    return;
+                }
                 case "--version" -> {
                     System.out.println("WII-UU " + VERSION);
                     return;
@@ -188,6 +195,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --changelog [VERSION]       what changed (since VERSION)
                               --setup                     start with the setup guide (after the first-boot intro)
                               --no-intro                  with --setup: straight to the guide, no intro
+                              --theme-check FILE|NAME     check a theme (.wtheme) and show its colours
+                              --theme-reference           everything the theme language knows
                               --fps                       print the menu's frame rate (every two seconds)
                               --install-virtual-display   Windows: install the virtual display (split DS/3DS screens)
                               --virtual-display-off       Windows: switch the virtual display off (split screens)
@@ -608,6 +617,65 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     }
 
     /** {@code wiiuu --upgrade} / {@code --check-update} from a terminal. */
+    /** wiiuu --theme-check: works a theme out and prints its colours (as swatches), or what's wrong with it. */
+    private static int themeCheck(Config config, String what) {
+        if (what == null) {
+            System.err.println("wiiuu --theme-check FILE.wtheme (or the name of an installed theme)");
+            return 2;
+        }
+        String text, name;
+        try {
+            Path f = Paths.get(what);
+            if (Files.isRegularFile(f)) {
+                text = Files.readString(f);
+                name = f.getFileName().toString().replaceFirst("\\.wtheme$", "");
+            } else {
+                wiiuu.ui.Themes.Entry e = wiiuu.ui.Themes.find(config, what);
+                if (e == null) {
+                    System.err.println("No theme file or installed theme called " + what);
+                    return 2;
+                }
+                text = wiiuu.ui.Themes.read(e);
+                name = e.id();
+            }
+        } catch (IOException e) {
+            System.err.println("Can't read " + what + ": " + e.getMessage());
+            return 2;
+        }
+        boolean colour = System.console() != null && System.getenv("NO_COLOR") == null;
+        for (boolean systemDark : new boolean[]{false, true}) {
+            try {
+                wiiuu.ui.ThemeScript.Result r = wiiuu.ui.Themes.evaluate(text, name, systemDark);
+                if (systemDark && !r.followsSystem()) break;          // the same either way
+                System.out.println(r.name() + (r.author() != null ? " by " + r.author() : "") + " - "
+                        + (r.dark() ? "dark" : "light") + (r.followsSystem() ? " (when the computer is " + (systemDark ? "dark)" : "light)") : ""));
+                for (var e : r.colours().entrySet()) System.out.println("  " + swatch(e.getValue(), colour) + " " + String.format("%-18s %s", e.getKey(), hex(e.getValue())));
+                for (var e : r.consoles().entrySet()) System.out.println("  " + swatch(e.getValue(), colour) + " " + String.format("console %-10s %s", e.getKey(), hex(e.getValue())));
+                if (!r.fonts().isEmpty()) System.out.println("  font: " + String.join(", ", r.fonts()));
+                for (String w : r.warnings()) System.out.println("  warning: " + w);
+            } catch (wiiuu.ui.ThemeScript.Error e) {
+                String[] lines = text.split("\n", -1);
+                System.err.println(name + ".wtheme, " + e);
+                if (e.line - 1 < lines.length) {
+                    System.err.println("  " + lines[e.line - 1].replace('\t', ' '));
+                    System.err.println("  " + " ".repeat(Math.max(0, e.column - 1)) + "^");
+                }
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    private static String swatch(java.awt.Color c, boolean ansi) {
+        if (!ansi) return "";
+        return "\u001b[48;2;" + c.getRed() + ";" + c.getGreen() + ";" + c.getBlue() + "m    \u001b[0m";
+    }
+
+    private static String hex(java.awt.Color c) {
+        return c.getAlpha() == 255 ? String.format("#%06X", c.getRGB() & 0xFFFFFF)
+                : String.format("#%06X%02X", c.getRGB() & 0xFFFFFF, c.getAlpha());
+    }
+
     private static int cliUpgrade(Config config, boolean install) {
         Updater u = new Updater(config, VERSION);
         try {

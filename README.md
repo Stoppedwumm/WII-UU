@@ -255,6 +255,47 @@ so convert those first.
 follows the system's appearance on macOS, Windows and GNOME/KDE, and switches along when you
 change it.
 
+## Themes
+
+*Settings → General → Theme* also lists themes: Sunset, Midnight Arcade, Game Boy, Famicom,
+Ocean (light by day, deep sea in dark mode), Paper, and any you write yourself. Themes are small
+text files in WII-UU's own theme language. *Make your own…* opens `~/.wiiuu/themes` with a
+commented theme to start from (`my-theme.wtheme`) and the full reference (`REFERENCE.txt`,
+also `wiiuu --theme-reference`). Pick your theme in Settings, then edit it: **WII-UU redraws
+within a second every time you save the file.**
+
+```
+theme "Sunset"
+by "You"
+base dark                          # start from the light or dark colours, or auto (follow the computer)
+
+let sun = #FF7A3D                  # a name for a colour you use more than once
+accent = sun
+card = lighten(#2A1846, 6%)
+text-dim = mix(text, card, 45%)    # any colour can build on another
+background = gradient(#3B1D52, #120A24)
+stripes = none
+
+consoles = mix(it, #FF4F81, 22%)   # every console tile ("it" = its own colour)
+console n64 = #00A651              # or one of them
+font "Nunito", "DejaVu Sans"       # the first one installed
+
+when dark { glow = alpha(sun, 10%) }   # only in dark mode
+```
+
+- **Colours:** `#RGB`, `#RRGGBB`, `#RRGGBBAA`, names (`white`, `teal`, `none` …), a `let`, any
+  setting (`text`, `card` …) or a console id (`accent = n64`).
+- **Functions:** `mix`, `lighten`, `darken`, `alpha`, `saturate`, `desaturate`, `grey`,
+  `invert`, `spin` (round the colour wheel), `contrast` (black or white, whichever reads
+  better), `rgb`, `hsl`, `gradient`.
+- **Settings:** `accent`, `text`, `text-dim`, `card`, `button`, `divider`, `dot`, `icon`,
+  `background` (or `-top` / `-bottom`), `stripes`, `glow`, `accent-glow`, `shelf`, `outline`,
+  `shadow`, `dim`, `toast`, `boot` (or `-top` / `-bottom`), `boot-fade`.
+- **Mistakes** show on screen with the line and a suggestion ("there is no function 'lightn' -
+  did you mean 'lighten'?"), and the last working colours stay. Hard-to-read text gets a warning.
+- `wiiuu --theme-check FILE` (or a theme's name) checks a theme from the terminal and shows all
+  its colours as swatches, or points at the mistake.
+
 ## RetroArch mode
 
 Turn on *Settings → General → RetroArch mode* (`retroarch.enabled=true`) to run every system that has
@@ -629,7 +670,7 @@ ui.musicTrack=wiiuu         # wiiuu | korobeiniki | mountainking | odetojoy | fu
                             # | all | file:<name> (in ~/.wiiuu/music)
 ui.visualizer=true          # frequency bars behind the menu while music plays (V: full screen)
 ui.bootAnimation=true       # start-up animation and chime
-ui.theme=auto               # auto (follow the system) | light | dark
+ui.theme=auto               # auto (follow the system) | light | dark | a theme's file name (sunset, my-theme …)
 retroarch.enabled=false     # RetroArch mode; retroarch.path, retroarch.core.<id>, retroarch.download
 ```
 

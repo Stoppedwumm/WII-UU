@@ -494,12 +494,13 @@ final class SetupGuide {
     private QrCode qrFor;
 
     private java.awt.image.BufferedImage backdrop(Graphics2D g, int w, int h) {
-        String key = w + "x" + h + MenuView.dark;
+        String key = w + "x" + h + MenuView.dark + MenuView.themeVersion;
         if (key.equals(backdropKey)) return backdropImg;
         java.awt.image.BufferedImage img = compatible(g, w, h, false);
         Graphics2D b = img.createGraphics();
         b.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-        b.setPaint(new GradientPaint(0, 0, MenuView.dark ? new Color(10, 14, 20) : new Color(236, 244, 250),
+        if (MenuView.customTheme) b.setPaint(new GradientPaint(0, 0, MenuView.bgTop(), 0, h, MenuView.bgBottom()));
+        else b.setPaint(new GradientPaint(0, 0, MenuView.dark ? new Color(10, 14, 20) : new Color(236, 244, 250),
                 0, h, MenuView.dark ? new Color(16, 32, 44) : new Color(214, 234, 246)));
         b.fillRect(0, 0, w, h);
         Color a = MenuView.ACCENT;
@@ -516,7 +517,7 @@ final class SetupGuide {
 
     private java.awt.image.BufferedImage cardImage(Graphics2D g, float cw, float ch) {
         int w = Math.round(cw), h = Math.round(ch);
-        String key = w + "x" + h + MenuView.dark;
+        String key = w + "x" + h + MenuView.dark + MenuView.themeVersion;
         if (key.equals(cardKey)) return cardImg;
         java.awt.image.BufferedImage img = compatible(g, w + CARD_MARGIN * 2, h + CARD_MARGIN * 2, true);
         Graphics2D b = img.createGraphics();
