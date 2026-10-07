@@ -35,6 +35,15 @@ public final class InputRouter {
         void toggleGamepadInfo();
 
         void refresh();
+
+        /**
+         * Every menu button press and release, before it does anything; true keeps it from doing its
+         * usual thing (the setup guide's controller test). Players below 0 are real controllers
+         * ({@link LocalPads#name}), the others phones.
+         */
+        default boolean pressed(int player, PadButton b, boolean down) {
+            return false;
+        }
     }
 
     private static final float STICK_ON = 0.5f;
@@ -204,6 +213,7 @@ public final class InputRouter {
         MenuActions m = menu;
         if (m == null) return;
         if (b.isDirection()) {
+            SwingUtilities.invokeLater(() -> m.pressed(player, b, down));
             if (down) {
                 fireDirection(m, b);
                 stopRepeat(player);
@@ -214,18 +224,18 @@ public final class InputRouter {
             }
             return;
         }
-        if (!down) return;
-        switch (b) {
-            case A -> SwingUtilities.invokeLater(m::activate);
-            case B -> SwingUtilities.invokeLater(m::back);
-            case L, ZL -> SwingUtilities.invokeLater(() -> m.page(-1));
-            case R, ZR -> SwingUtilities.invokeLater(() -> m.page(1));
-            case PLUS -> SwingUtilities.invokeLater(m::toggleGamepadInfo);
-            case BUZZ_RED -> SwingUtilities.invokeLater(m::activate);      // a buzzer can still pick a game
-            case BUZZ_YELLOW -> SwingUtilities.invokeLater(m::back);
-            case MINUS -> SwingUtilities.invokeLater(m::refresh);
-            default -> { }
-        }
+        SwingUtilities.invokeLater(() -> {
+            if (m.pressed(player, b, down) || !down) return;
+            switch (b) {
+                case A, BUZZ_RED -> m.activate();           // a buzzer can still pick a game
+                case B, BUZZ_YELLOW -> m.back();
+                case L, ZL -> m.page(-1);
+                case R, ZR -> m.page(1);
+                case PLUS -> m.toggleGamepadInfo();
+                case MINUS -> m.refresh();
+                default -> { }
+            }
+        });
     }
 
     private void stopRepeat(int player) {

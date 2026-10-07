@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.41 (2026-10-07)
+- The setup guide's controller step is now a live controller test: a GamePad on screen lights up
+  every button, shoulder, trigger and d-pad direction you press, its sticks lean the way you push
+  them, and it says which controller or phone it came from. + (Start) goes on.
+- Changing the look in the setup guide wipes the new theme in, in a circle growing from your choice.
+- The first-boot intro has a new cut, a counter racing up to how many consoles WII-UU knows, and
+  says how many games you have ("YOUR 37 GAMES").
+- A secret: press ↑ ↑ ↓ ↓ ← → ← → B A in the menu.
+- Controllers' top and left buttons count as X and Y (as on the GamePad).
+
 ## 1.9.40 (2026-10-04)
 - The first-boot intro runs smoothly on a Raspberry Pi, also on a 4K TV: it took up to half a
   second per frame (2-4 frames per second). It is now drawn at 960 pixels wide or less and

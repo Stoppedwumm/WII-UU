@@ -187,7 +187,8 @@ phone as GamePad (scan the code, it shows when the phone connects), where games 
 mode), and controllers. Every choice applies straight away. *Settings → General → Show the setup
 guide* brings it back any time, and *Restart into the setup guide* restarts WII-UU so it starts
 with the guide, start-up animation and intro included, like the very first time. From a terminal,
-`wiiuu --setup` does the same (`wiiuu --setup --no-intro` goes straight to the guide). Any button skips
+`wiiuu --setup` does the same (`wiiuu --setup --no-intro` goes straight to the guide). The guide's
+controller step is a live test: every button you press lights up on an on-screen GamePad. Any button skips
 the intro; `ui.firstBootIntro=false` leaves it out.
 
 1. Copy games into `~/WiiUU/roms/<system>/`. The folder names are `nes snes gb n64 gba gc nds wii 3ds wiiu

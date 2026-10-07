@@ -443,13 +443,42 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         guidePending = true;
         updateMusic();
         repaint();
-        // the beat first, before the start-up animation gets going (it doesn't depend on the pictures)
+        makeIntroBeat();     // first, before the start-up animation gets going (it doesn't depend on the pictures)
+    }
+
+    private void makeIntroBeat() {
+        if (introJingle != null) return;
         Thread t = new Thread(() -> {
-            FirstBootIntro plan = new FirstBootIntro(new BufferedImage[4]);
+            FirstBootIntro plan = new FirstBootIntro(new BufferedImage[4], 0);
             introJingle = Tunes.introJingle(FirstBootIntro.BPM, plan.impactBeat(), plan.cutBeats());
         }, "intro-beat");
         t.setDaemon(true);
         t.start();
+    }
+
+    /** ↑ ↑ ↓ ↓ ← → ← → B A in the menu: the first-boot intro once more (without the guide after it). */
+    private static final String SECRET = "UUDDLRLRBA";
+    private final StringBuilder secretSoFar = new StringBuilder();
+    private long introShotDelay = 1500;
+
+    /** Notes one menu input towards the secret code; true when it completes it. */
+    private boolean secret(char c) {
+        if (booting || intro != null || introPending || guide != null || playing != null) return false;
+        secretSoFar.append(c);
+        if (secretSoFar.length() > SECRET.length()) secretSoFar.deleteCharAt(0);
+        if (!secretSoFar.toString().equals(SECRET)) return false;
+        secretSoFar.setLength(0);
+        Sfx.chime();
+        showToast("★ Secret found! Here's the intro once more ★");
+        introPending = true;
+        shotsStarted = false;
+        bootEndedAt = 0;
+        introShots = null;
+        introShotDelay = 0;                              // nothing else is starting up now
+        makeIntroBeat();
+        updateMusic();
+        repaint();
+        return true;
     }
 
     /** Advances the intro; true while it owns the screen (the menu then does nothing else). */
@@ -463,7 +492,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             // wait for the menu pictures and the beat, but never long
             if (introShots == null && System.currentTimeMillis() - bootEndedAt < 4000) return false;
             introPending = false;
-            intro = new FirstBootIntro(introShots != null ? introShots : new BufferedImage[4]);
+            intro = new FirstBootIntro(introShots != null ? introShots : new BufferedImage[4], gameCount());
+            if (!guidePending) intro.tagline("Have fun playing.");
             short[] beat = introJingle;
             if (beat != null) MenuAudio.get().play(beat, 0.9f);
         }
@@ -500,7 +530,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             Sfx.quiet = Thread.currentThread();
             MenuView v = new MenuView(config, true);
             try {
-                Thread.sleep(1500);                         // let the library scan and the GamePad server start first
+                Thread.sleep(introShotDelay);               // let the library scan and the GamePad server start first
                 while (introJingle == null) Thread.sleep(100);
                 // at most 960 wide: a quarter of the work at 1080p (a sixteenth at 4K) and little memory,
                 // so the start-up animation keeps running smoothly; the intro zooms through them quickly
@@ -752,6 +782,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void navigate(int dx, int dy) {
         if (skipBoot()) return;
         if (skipIntro()) return;
+        secret(dy < 0 ? 'U' : dy > 0 ? 'D' : dx < 0 ? 'L' : 'R');
         if (guide != null) {
             guide.navigate(dx, dy);
             repaint();
@@ -824,6 +855,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void activate() {
         if (skipBoot()) return;
         if (skipIntro()) return;
+        if (secret('A')) return;
         if (guide != null) {
             guide.activate();
             repaint();
@@ -885,6 +917,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void back() {
         if (skipBoot()) return;
         if (skipIntro()) return;
+        secret('B');
         if (guide != null) {
             guide.back();
             repaint();
@@ -938,6 +971,15 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         sel = Math.min(tiles.size() - 1, p * PER_PAGE + sel % PER_PAGE);
         Sfx.move();
         repaint();
+    }
+
+    /** Every phone / controller button: the setup guide's controller test sees them all. */
+    @Override
+    public boolean pressed(int player, wiiuu.input.PadButton b, boolean down) {
+        if (guide == null || booting || intro != null) return false;
+        boolean used = guide.pressed(player, b, down);
+        if (used) repaint();
+        return used;
     }
 
     @Override

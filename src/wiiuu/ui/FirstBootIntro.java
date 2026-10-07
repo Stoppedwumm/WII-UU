@@ -24,7 +24,8 @@ import wiiuu.core.Systems;
  * seconds of fast cuts on a 128 BPM beat (Tunes.introJingle), like a console's launch trailer:
  * a logo slam, the camera rushing through pictures of the real menu (the home screen, a console's
  * games, the GamePad screen, page two; taken while the start-up animation ran), consoles flashing
- * by in their colours, big words, a tunnel of tiles, and the logo again before the guide appears.
+ * by in their colours, a counter racing up to how many consoles it knows, big words (with how many
+ * games you have), a tunnel of tiles, and the logo again before the guide appears.
  * Any button skips it.
  *
  * <p>Cheap to draw: every cut is one picture copied with a transform, a few rectangles and a word;
@@ -35,7 +36,7 @@ final class FirstBootIntro {
     static final double BPM = 128, BEAT = 60.0 / BPM;
 
     /** What a cut shows. */
-    private enum Kind { SLAM, SHOT, TILE, TUNNEL, FINAL }
+    private enum Kind { SLAM, SHOT, TILE, COUNT, TUNNEL, FINAL }
 
     private record Cut(double start, double beats, Kind kind, int shot, String word, GameSystem system,
                        double zoomFrom, double zoomTo, double panX, double panY) {}
@@ -46,12 +47,15 @@ final class FirstBootIntro {
     private final double length;
     private final Random random = new Random(3);
     private boolean skipped;
+    /** the line under the final logo (the setup guide comes next, unless it's the secret replay) */
+    private String tagline = "Let's set you up.";
 
     /**
      * @param shots pictures of the menu: home, a console's games, the GamePad screen, page two
      *              (any may be null; those cuts become console flashes)
+     * @param games how many games the library has (0: not mentioned)
      */
-    FirstBootIntro(BufferedImage[] shots) {
+    FirstBootIntro(BufferedImage[] shots, int games) {
         this.shots = shots;
         double t = 0;
         t = add(t, 1, Kind.SLAM, -1, "WII-UU", null, 1, 1, 0, 0);
@@ -60,7 +64,9 @@ final class FirstBootIntro {
         t = add(t, 1, Kind.SHOT, 1, "EVERYTHING", null, 1.25, 1.05, 0.08, 0);
         t = add(t, 1, Kind.SHOT, 2, "YOUR PHONE IS THE GAMEPAD", null, 1.4, 1.0, 0, -0.03);
         for (String id : new String[]{"ps1", "switch", "gba", "dc"}) t = add(t, 0.5, Kind.TILE, -1, null, sys(id), 1, 1, 0, 0);
-        t = add(t, 1, Kind.SHOT, 3, "YOUR GAMES", null, 1.05, 1.3, 0.05, -0.05);
+        t = add(t, 1, Kind.COUNT, -1, "CONSOLES", null, 1, 1, 0, 0);
+        t = add(t, 1, Kind.SHOT, 3, games > 0 ? "YOUR " + games + (games == 1 ? " GAME" : " GAMES") : "YOUR GAMES",
+                null, 1.05, 1.3, 0.05, -0.05);
         t = add(t, 2, Kind.TUNNEL, -1, "ONE CONSOLE.", null, 1, 1, 0, 0);
         t = add(t, 3, Kind.FINAL, -1, "WII-UU", null, 1, 1, 0, 0);
         length = t * BEAT;
@@ -105,6 +111,10 @@ final class FirstBootIntro {
         skipped = true;
     }
 
+    void tagline(String line) {
+        tagline = line;
+    }
+
     // ---- painting ---------------------------------------------------------------------------------
 
     void paint(Graphics2D g0, int w, int h) {
@@ -125,6 +135,7 @@ final class FirstBootIntro {
             case SLAM -> paintSlam(g, w, h, p, cut.word());
             case SHOT -> paintShot(g, w, h, p, cut);
             case TILE -> paintTile(g, w, h, p, cut.system());
+            case COUNT -> paintCount(g, w, h, p, cut.word(), t);
             case TUNNEL -> paintTunnel(g, w, h, p, cut.word(), t);
             case FINAL -> paintFinal(g, w, h, p, t - cut.start());
         }
@@ -192,6 +203,27 @@ final class FirstBootIntro {
         streaks(g, w, h, p, new Color(255, 255, 255, 50));
     }
 
+    /** A number racing up to how many consoles WII-UU knows, inside a spinning ring of their colours. */
+    private void paintCount(Graphics2D g, int w, int h, double p, String word, double beats) {
+        g.setColor(new Color(0x0B0E13));
+        g.fillRect(0, 0, w, h);
+        List<GameSystem> all = Systems.ALL;
+        float ring = h * 0.36f, dot = h * 0.03f;
+        for (int i = 0; i < all.size(); i++) {
+            double a = i * 2 * Math.PI / all.size() + beats * 0.9;
+            boolean on = i < all.size() * Math.min(1, p * 1.6);       // they light up as the number counts
+            Color c = all.get(i).color();
+            g.setColor(on ? c : new Color(c.getRed(), c.getGreen(), c.getBlue(), 50));
+            float d = on ? dot : dot * 0.6f;
+            g.fill(new java.awt.geom.Ellipse2D.Float((float) (w / 2.0 + Math.cos(a) * ring * 1.35 - d / 2),
+                    (float) (h * 0.5 + Math.sin(a) * ring - d / 2), d, d));
+        }
+        int n = (int) Math.round(all.size() * (1 - Math.pow(1 - Math.min(1, p * 1.6), 3)));
+        double pop = n == all.size() ? 1 + 0.12 * Math.max(0, 1 - (p - 0.62) * 6) : 1;
+        bigWord(g, Integer.toString(n), w / 2.0, h * 0.56, h * 0.26 * pop, MenuView.ACCENT, new Color(255, 255, 255, 40), 3);
+        bigWord(g, word, w / 2.0, h * 0.7, h * 0.07, Color.WHITE, MenuView.ACCENT, 1);
+    }
+
     private void paintTunnel(Graphics2D g, int w, int h, double p, String word, double beats) {
         g.setColor(new Color(0x0B0E13));
         g.fillRect(0, 0, w, h);
@@ -235,7 +267,7 @@ final class FirstBootIntro {
             g.setComposite(AlphaComposite.SrcOver.derive(a));
             g.setColor(MenuView.TEXT_DIM);
             g.setFont(MenuView.font(Font.PLAIN, h * 0.045f));
-            String line = "Let's set you up.";
+            String line = tagline;
             g.drawString(line, (w - g.getFontMetrics().stringWidth(line)) / 2f, h * 0.66f);
             g.setComposite(AlphaComposite.SrcOver);
         }

@@ -25,11 +25,12 @@ import wiiuu.core.Joysticks;
  *
  * <p>The bottom button confirms and the right one goes back, as on most controllers;
  * input.padConfirm=east swaps them (Nintendo style). Shoulders and triggers change the page,
- * Start shows the GamePad info, Select refreshes.
+ * Start shows the GamePad info, Select refreshes. The top and left buttons are X and Y (as on the
+ * GamePad), which only the setup guide's controller test shows.
  */
 public final class LocalPads {
     private static final int EV_KEY = 1, EV_ABS = 3;
-    private static final int BTN_SOUTH = 0x130, BTN_EAST = 0x131, BTN_TL = 0x136, BTN_TR = 0x137;
+    private static final int BTN_SOUTH = 0x130, BTN_EAST = 0x131, BTN_NORTH = 0x133, BTN_WEST = 0x134, BTN_TL = 0x136, BTN_TR = 0x137;
     private static final int BTN_TL2 = 0x138, BTN_TR2 = 0x139, BTN_SELECT = 0x13a, BTN_START = 0x13b;
     private static final int BTN_DPAD_UP = 0x220, BTN_DPAD_DOWN = 0x221, BTN_DPAD_LEFT = 0x222, BTN_DPAD_RIGHT = 0x223;
     private static final int ABS_HAT0X = 0x10, ABS_HAT0Y = 0x11;
@@ -42,6 +43,19 @@ public final class LocalPads {
     private final Set<String> open = ConcurrentHashMap.newKeySet();
     /** players handed out per controller (by its event node), -1, -2, ... */
     private final ConcurrentHashMap<String, Integer> players = new ConcurrentHashMap<>();
+
+    /** controller names by player (-1, -2, ...), for the setup guide's controller test */
+    private static final ConcurrentHashMap<Integer, String> NAMES = new ConcurrentHashMap<>();
+
+    /** The name of the real controller playing as {@code player} (below 0), or null. */
+    public static String name(int player) {
+        return NAMES.get(player);
+    }
+
+    /** The names of the real controllers connected now. */
+    public static java.util.List<String> names() {
+        return NAMES.values().stream().sorted().toList();
+    }
 
     public LocalPads(InputRouter router, boolean confirmEast) {
         this.router = router;
@@ -81,11 +95,13 @@ public final class LocalPads {
         Path node = Path.of("/dev/input", d.event());
         try (InputStream in = Files.newInputStream(node)) {
             System.out.println("[input] " + d.name() + " controls the menu");
+            NAMES.put(player, d.name());
             pumpEvents(in, player, EVENT_SIZE);
         } catch (IOException e) {
             if (Files.exists(node)) System.err.println("[input] can't read " + d.name() + " (" + node + "): " + e.getMessage());
         } finally {
             router.releaseAll(player);
+            NAMES.remove(player);
             open.remove(d.event());
         }
     }
@@ -154,6 +170,8 @@ public final class LocalPads {
         return switch (code) {
             case BTN_SOUTH -> confirmEast ? PadButton.B : PadButton.A;
             case BTN_EAST -> confirmEast ? PadButton.A : PadButton.B;
+            case BTN_NORTH -> PadButton.X;      // by position, as on the GamePad; nothing in the menu, the guide shows them
+            case BTN_WEST -> PadButton.Y;
             case BTN_TL, BTN_TL2 -> PadButton.L;
             case BTN_TR, BTN_TR2 -> PadButton.R;
             case BTN_START -> PadButton.PLUS;

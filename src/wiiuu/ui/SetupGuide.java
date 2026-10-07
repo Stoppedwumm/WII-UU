@@ -17,8 +17,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.awt.image.BufferedImage;
 
 import wiiuu.core.Config;
+import wiiuu.input.LocalPads;
+import wiiuu.input.PadButton;
 import wiiuu.net.QrCode;
 
 /**
@@ -30,7 +33,9 @@ import wiiuu.net.QrCode;
  *
  * <p>Animated throughout: the card pops in, steps slide past each other, the focus frame glides,
  * switches slide, the logo's letters drop in under a shine, a ring pulses while waiting for a
- * phone, and the last step draws a tick and throws confetti.
+ * phone, and the last step draws a tick and throws confetti. Changing the look wipes the new theme
+ * in from the chosen row in a growing circle, and the controller step is a live test: a GamePad
+ * whose buttons, sticks and shoulders light up as they are pressed, on any phone or controller.
  */
 final class SetupGuide {
     private enum Step { WELCOME, LOOK, SOUND, GAMEPAD, GAMES, CONTROLLERS, DONE }
@@ -210,6 +215,36 @@ final class SetupGuide {
         Sfx.select();
     }
 
+    /**
+     * A button on a phone or controller (MenuView passes them all on). On the controller step it
+     * lights up on the test pad, and only + (Start) goes on: the other buttons are there to try.
+     * True when the guide used it up.
+     */
+    boolean pressed(int player, PadButton b, boolean down) {
+        if (closing != 0 || step != Step.CONTROLLERS || System.currentTimeMillis() - changed < SLIDE_MS) return false;
+        long now = System.currentTimeMillis();
+        if (down) {
+            held.add(b);
+            if (!tried) Sfx.select();
+            tried = true;
+            String name = player < 0 ? LocalPads.name(player) : null;
+            who = name != null ? name : "Phone " + player;
+        } else {
+            held.remove(b);
+            released.put(b, now);
+        }
+        if (b.isDirection()) return false;            // still moves between Back and Next
+        if (b == PadButton.PLUS && down) next();
+        if (b == PadButton.MINUS && down) back();
+        if (down && b != PadButton.PLUS && b != PadButton.MINUS) Sfx.move();
+        return true;
+    }
+
+    private final java.util.Set<PadButton> held = java.util.EnumSet.noneOf(PadButton.class);
+    private final java.util.Map<PadButton, Long> released = new java.util.EnumMap<>(PadButton.class);
+    private boolean tried;
+    private String who;
+
     void page(int delta) {
         if (closing != 0) return;
         if (delta < 0) back();
@@ -242,10 +277,33 @@ final class SetupGuide {
     }
 
     private void setTheme(String mode) {
+        boolean wasDark = MenuView.dark;
+        BufferedImage before = null;
+        if (lastW > 0 && !mode.equals(theme())) {
+            // the guide as it looks now, to wipe away from the chosen row
+            before = new BufferedImage(lastW, lastH, BufferedImage.TYPE_INT_RGB);
+            Graphics2D b = before.createGraphics();
+            b.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            b.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            paintAll(b, lastW, lastH);
+            b.dispose();
+        }
         config.set("ui.theme", mode);
         config.save();
         view.setThemeMode(mode);
+        if (before != null && MenuView.dark != wasDark) {
+            Rectangle2D r = current.get(focus).rect;
+            wipeX = r == null ? lastW / 2f : (float) r.getCenterX();
+            wipeY = r == null ? lastH / 2f : (float) r.getCenterY();
+            wipeFrom = before;
+            wipeAt = System.currentTimeMillis();
+        }
     }
+
+    private BufferedImage wipeFrom;
+    private long wipeAt;
+    private float wipeX, wipeY;
+    private int lastW, lastH;
 
     private void save(String key, boolean value) {
         config.set(key, Boolean.toString(value));
@@ -305,10 +363,20 @@ final class SetupGuide {
                 || (step == Step.WELCOME && (sinceOpen < 1600 || shining(now)))
                 || (step == Step.DONE && sinceStep < 1300)
                 || (step == Step.GAMEPAD && (view.padCount() == 0 ? (++ringTick & 1) == 0 : now - connectedAt < 700))
-                || (step == Step.CONTROLLERS && (now / 450) != lastLit);
+                || (step == Step.CONTROLLERS && (tried ? fading(now) : (now / 450) != lastLit))
+                || wipeFrom != null;
         lastLit = now / 450;
         return true;
     }
+
+    /** Whether a test-pad button is lit or still fading out. */
+    private boolean fading(long now) {
+        if (!held.isEmpty()) return true;
+        for (long t : released.values()) if (now - t < FADE_MS + 40) return true;
+        return false;
+    }
+
+    private static final long FADE_MS = 350, WIPE_MS = 650;
 
     private boolean needsFrame = true;
     private float[] frameGoal;
@@ -356,6 +424,32 @@ final class SetupGuide {
     // ---- painting -------------------------------------------------------------------------------
 
     void paint(Graphics2D g0, int w, int h) {
+        lastW = w;
+        lastH = h;
+        paintAll(g0, w, h);
+        if (wipeFrom == null) return;
+        double t = (System.currentTimeMillis() - wipeAt) / (double) WIPE_MS;
+        if (t >= 1 || wipeFrom.getWidth() != w || wipeFrom.getHeight() != h) {
+            wipeFrom = null;
+            return;
+        }
+        // the old look outside a circle that grows from the chosen row
+        float far = (float) Math.hypot(Math.max(wipeX, w - wipeX), Math.max(wipeY, h - wipeY));
+        float rad = (float) (ease(t) * far);
+        Ellipse2D circle = new Ellipse2D.Float(wipeX - rad, wipeY - rad, rad * 2, rad * 2);
+        java.awt.geom.Area outside = new java.awt.geom.Area(new Rectangle2D.Float(0, 0, w, h));
+        outside.subtract(new java.awt.geom.Area(circle));
+        Graphics2D g = (Graphics2D) g0.create();
+        g.clip(outside);
+        g.drawImage(wipeFrom, 0, 0, null);
+        g.setClip(null);
+        g.setColor(MenuView.ACCENT);
+        g.setStroke(new BasicStroke(Math.max(3, h / 200f)));
+        g.draw(circle);
+        g.dispose();
+    }
+
+    private void paintAll(Graphics2D g0, int w, int h) {
         Graphics2D g = (Graphics2D) g0.create();
         long now = System.currentTimeMillis();
         double open = ease((now - opened) / (double) OPEN_MS);
@@ -502,7 +596,16 @@ final class SetupGuide {
             }
             if (s == Step.GAMEPAD) paintPairing(g, x + w - pad - h * 0.42f, top + h * 0.02f, h * 0.42f, left, ty, now);
             if (s == Step.GAMES) paintGames(g, left, ty + h * 0.01f, inner, h);
-            if (s == Step.CONTROLLERS) paintPad(g, x + w / 2, ty + h * 0.13f, h * 0.2f, now);
+            if (s == Step.CONTROLLERS) {
+                float top2 = ty + h * 0.03f, bottom = y + h * 0.8f;
+                float size = Math.min((bottom - top2) / 1.35f, w * 0.3f);
+                paintPad(g, x + w / 2, top2 + size * 0.3f + size / 2, size, now);
+                g.setColor(MenuView.TEXT_DIM);
+                g.setFont(MenuView.font(Font.PLAIN, h * 0.03f));
+                String line = who != null ? "Pressed on: " + who : controllersLine();
+                fit(g, line, Font.PLAIN, h * 0.03f, w * 0.4f);
+                g.drawString(line, left, y + h - h * 0.07f - h * 0.09f * 0.36f);
+            }
         }
         paintItems(g, items, x, y, w, h, live, now);
         g.setComposite(c);
@@ -518,9 +621,9 @@ final class SetupGuide {
                             + "It becomes a GamePad with buttons, sticks, and the TV picture."};
             case GAMES -> new String[]{"Where your games go",
                     "Copy your own game files into the folder of their console. WII-UU finds them by itself."};
-            case CONTROLLERS -> new String[]{"Controllers",
-                    "Phones and USB or Bluetooth controllers both work in the menu and in games. "
-                            + "Press the GamePad's HOME button to close a game."};
+            case CONTROLLERS -> new String[]{"Try your controller",
+                    "Phones and USB or Bluetooth controllers work in the menu and in games. "
+                            + "Press any button to see it light up; + (Start) goes on."};
             case DONE -> new String[]{"You're all set!", "Have fun playing."};
         };
     }
@@ -716,18 +819,114 @@ final class SetupGuide {
                 : "RetroArch mode plays most consoles in RetroArch, if you use it.", x, y + bh + h * 0.05f);
     }
 
-    /** A little controller whose buttons light up in turn. */
-    private void paintPad(Graphics2D g, float cx, float cy, float size, long now) {
-        float w = size * 2.2f, h = size;
-        g.setColor(MenuView.dark ? new Color(255, 255, 255, 30) : new Color(0, 0, 0, 22));
-        g.fill(new RoundRectangle2D.Float(cx - w / 2, cy - h / 2, w, h, h * 0.8f, h * 0.8f));
-        int lit = (int) ((now / 450) % 6);
-        float[][] dots = {{-0.62f, 0}, {-0.5f, -0.18f}, {-0.5f, 0.18f}, {0.5f, -0.2f}, {0.62f, 0}, {0.5f, 0.2f}};
-        for (int i = 0; i < dots.length; i++) {
-            float d = size * 0.16f;
-            g.setColor(i == lit ? MenuView.ACCENT : MenuView.TEXT_DIM);
-            g.fill(new Ellipse2D.Float(cx + dots[i][0] * w / 2 * 1.2f - d / 2, cy + dots[i][1] * h * 1.4f - d / 2, d, d));
+    /** Who can play right now, for the controller step before anything is pressed. */
+    private String controllersLine() {
+        List<String> names = new ArrayList<>(LocalPads.names());
+        int phones = view.padCount();
+        if (phones > 0) names.add(0, phones == 1 ? "1 phone" : phones + " phones");
+        return names.isEmpty() ? "No controller yet: plug one in or connect a phone." : "Connected: " + String.join(", ", names);
+    }
+
+    /** How lit a test-pad button is: 1 while held, fading out after. Before anything is pressed, they light in turn. */
+    private float lit(PadButton b, long now) {
+        if (held.contains(b)) return 1;
+        Long t = released.get(b);
+        if (t != null) return (float) Math.max(0, 1 - (now - t) / (double) FADE_MS);
+        if (!tried) {
+            PadButton[] demo = {PadButton.A, PadButton.B, PadButton.Y, PadButton.X, PadButton.L, PadButton.R, PadButton.UP, PadButton.PLUS};
+            return demo[(int) ((now / 450) % demo.length)] == b ? 0.7f : 0;
         }
+        return 0;
+    }
+
+    /**
+     * The test pad: a GamePad-like controller (size = its body's height) with shoulders and
+     * triggers, two sticks that lean the way they are pushed, a d-pad, X / A / B / Y, and - / +.
+     */
+    private void paintPad(Graphics2D g, float cx, float cy, float s, long now) {
+        Color body = MenuView.dark ? new Color(58, 62, 68) : new Color(226, 230, 235);
+        Color part = MenuView.dark ? new Color(92, 98, 106) : new Color(176, 182, 190);
+        Color edge = MenuView.dark ? new Color(255, 255, 255, 40) : new Color(0, 0, 0, 30);
+        float bw = s * 2.3f;
+        // triggers and shoulders peek out above the body
+        float top = cy - s / 2;
+        shoulder(g, cx - bw * 0.33f, top - s * 0.27f, s * 0.42f, s * 0.13f, lit(PadButton.ZL, now), part, "ZL");
+        shoulder(g, cx + bw * 0.33f, top - s * 0.27f, s * 0.42f, s * 0.13f, lit(PadButton.ZR, now), part, "ZR");
+        shoulder(g, cx - bw * 0.3f, top - s * 0.14f, s * 0.6f, s * 0.14f, lit(PadButton.L, now), part, "L");
+        shoulder(g, cx + bw * 0.3f, top - s * 0.14f, s * 0.6f, s * 0.14f, lit(PadButton.R, now), part, "R");
+        RoundRectangle2D shape = new RoundRectangle2D.Float(cx - bw / 2, cy - s / 2, bw, s, s * 0.9f, s * 0.9f);
+        g.setColor(body);
+        g.fill(shape);
+        g.setColor(edge);
+        g.setStroke(new BasicStroke(Math.max(1.5f, s / 120)));
+        g.draw(shape);
+        // the screen in the middle, as on a Wii U GamePad
+        g.setColor(MenuView.dark ? new Color(24, 26, 30) : new Color(40, 44, 50));
+        g.fill(new RoundRectangle2D.Float(cx - s * 0.42f, cy - s * 0.32f, s * 0.84f, s * 0.56f, s * 0.06f, s * 0.06f));
+        g.setColor(MenuView.ACCENT);
+        g.setFont(MenuView.font(Font.BOLD, s * 0.1f));
+        String label = "WII-UU";
+        g.drawString(label, cx - g.getFontMetrics().stringWidth(label) / 2f, cy + s * 0.0f);
+        // sticks
+        stick(g, cx - bw * 0.36f, cy - s * 0.14f, s, PadButton.LS_LEFT, PadButton.LS_RIGHT, PadButton.LS_UP, PadButton.LS_DOWN, now, part);
+        stick(g, cx + bw * 0.36f, cy - s * 0.14f, s, PadButton.RS_LEFT, PadButton.RS_RIGHT, PadButton.RS_UP, PadButton.RS_DOWN, now, part);
+        // d-pad
+        float dx = cx - bw * 0.36f, dy = cy + s * 0.2f, arm = s * 0.085f, len = s * 0.1f;
+        g.setColor(part);
+        g.fill(new Rectangle2D.Float(dx - arm / 2, dy - arm / 2, arm, arm));
+        arm(g, dx, dy - arm / 2 - len / 2, arm, len, lit(PadButton.UP, now), part);
+        arm(g, dx, dy + arm / 2 + len / 2, arm, len, lit(PadButton.DOWN, now), part);
+        arm(g, dx - arm / 2 - len / 2, dy, len, arm, lit(PadButton.LEFT, now), part);
+        arm(g, dx + arm / 2 + len / 2, dy, len, arm, lit(PadButton.RIGHT, now), part);
+        // X / A / B / Y in a diamond
+        float fx = cx + bw * 0.36f, fy = cy + s * 0.2f, gap = s * 0.115f, r = s * 0.062f;
+        face(g, fx, fy - gap, r, "X", lit(PadButton.X, now), part);
+        face(g, fx + gap, fy, r, "A", lit(PadButton.A, now), part);
+        face(g, fx, fy + gap, r, "B", lit(PadButton.B, now), part);
+        face(g, fx - gap, fy, r, "Y", lit(PadButton.Y, now), part);
+        // - and +
+        face(g, cx - s * 0.62f, cy + s * 0.34f, r * 0.7f, "-", lit(PadButton.MINUS, now), part);
+        face(g, cx + s * 0.62f, cy + s * 0.34f, r * 0.7f, "+", lit(PadButton.PLUS, now), part);
+    }
+
+    /** A shoulder button or trigger: {@code h} of it shows above whatever is drawn next (it reaches further down). */
+    private void shoulder(Graphics2D g, float cx, float y, float w, float h, float lit, Color part, String name) {
+        float rise = h * 0.25f * lit;                    // pressed: pops up a little
+        g.setColor(mix(part, MenuView.ACCENT, lit));
+        g.fill(new RoundRectangle2D.Float(cx - w / 2, y - rise, w, h * 2 + rise, h * 0.9f, h * 0.9f));
+        g.setColor(lit > 0.5f ? Color.WHITE : MenuView.TEXT);
+        g.setFont(MenuView.font(Font.BOLD, h * 0.6f));
+        g.drawString(name, cx - g.getFontMetrics().stringWidth(name) / 2f, y - rise + h * 0.72f);
+    }
+
+    private void arm(Graphics2D g, float cx, float cy, float w, float h, float lit, Color part) {
+        g.setColor(mix(part, MenuView.ACCENT, lit));
+        g.fill(new RoundRectangle2D.Float(cx - w / 2, cy - h / 2, w, h, Math.min(w, h) * 0.3f, Math.min(w, h) * 0.3f));
+    }
+
+    private void face(Graphics2D g, float cx, float cy, float r, String name, float lit, Color part) {
+        float rr = r * (1 + 0.18f * lit);
+        if (lit > 0) {                                   // a glow around a pressed button
+            Color a = MenuView.ACCENT;
+            g.setColor(new Color(a.getRed(), a.getGreen(), a.getBlue(), (int) (70 * lit)));
+            g.fill(new Ellipse2D.Float(cx - rr * 1.6f, cy - rr * 1.6f, rr * 3.2f, rr * 3.2f));
+        }
+        g.setColor(mix(part, MenuView.ACCENT, lit));
+        g.fill(new Ellipse2D.Float(cx - rr, cy - rr, rr * 2, rr * 2));
+        g.setColor(lit > 0.5f ? Color.WHITE : MenuView.dark ? new Color(30, 32, 36) : Color.WHITE);
+        g.setFont(MenuView.font(Font.BOLD, rr * 1.1f));
+        g.drawString(name, cx - g.getFontMetrics().stringWidth(name) / 2f, cy + rr * 0.4f);
+    }
+
+    private void stick(Graphics2D g, float cx, float cy, float s, PadButton left, PadButton right, PadButton up, PadButton down,
+                       long now, Color part) {
+        float ox = (lit(right, now) - lit(left, now)) * s * 0.05f, oy = (lit(down, now) - lit(up, now)) * s * 0.05f;
+        float lit = Math.max(Math.max(lit(left, now), lit(right, now)), Math.max(lit(up, now), lit(down, now)));
+        float base = s * 0.13f, nub = s * 0.085f;
+        g.setColor(MenuView.dark ? new Color(30, 32, 36) : new Color(200, 205, 212));
+        g.fill(new Ellipse2D.Float(cx - base, cy - base, base * 2, base * 2));
+        g.setColor(mix(part, MenuView.ACCENT, lit));
+        g.fill(new Ellipse2D.Float(cx + ox - nub, cy + oy - nub, nub * 2, nub * 2));
     }
 
     /** The finishing tick, drawn in a circle that grows. */
