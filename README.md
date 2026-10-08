@@ -197,6 +197,16 @@ the intro; `ui.firstBootIntro=false` leaves it out.
    * Wii U: `.wua`, `.wud`, `.wux`, or the `code/*.rpx` of an unpacked game.
    * Covers: put `covers/<game name>.png` (or `.jpg`) in a system folder, or place the image next to the ROM
      with the same name. PS3 `ICON0.PNG` and PS4 `sce_sys/icon0.png` are used automatically.
+   * **Covers are found online** for games that have none: WII-UU looks them up in the
+     [libretro thumbnails](https://thumbnails.libretro.com) collection (matched by the ROM's name,
+     preferring USA / World / Europe releases and skipping betas and demos) and saves them as
+     `covers/<game name>.png`. This happens by itself after each scan, or with *Settings → Games →
+     Find covers online*, or `wiiuu --scrape` in a terminal. Covers you already have are never
+     replaced. *Find covers by itself* (`scraper.auto=false`) turns the automatic search off.
+     With a [ScreenScraper](https://www.screenscraper.fr) developer account (*Settings → Games →
+     ScreenScraper account*, `scraper.ss.devid` / `scraper.ss.devpassword`, optionally your own
+     `scraper.ss.user` / `scraper.ss.password`), WII-UU asks ScreenScraper first, which also knows
+     games by checksum. Without one it uses libretro only.
 2. Start WII-UU and open **Settings** (F1, or the dock). Under *Games → Consoles and emulators*,
    check each console's command, or use *Choose the emulator program* to pick it. In a command,
    `{rom}` is the game file, `{dir}` is its folder and `{name}` is its title.
@@ -392,7 +402,11 @@ and each one is assigned a player number (P1–P4).
 **When nobody plays,** WII-UU plays by itself: after 3 minutes without input in the menu it
 plays Tetris or Pong on the TV, or goes looking for free games on a very trustworthy (made-up)
 website and catches a "virus", or goes shopping on amazin.shop (made up too) and somehow ends up
-with 47 golden HDMI cables (all drawn: nothing is downloaded or bought; shuffled, never twice in a row), and the GamePad shows the WII-UU logo talking about
+with 47 golden HDMI cables (all drawn: nothing is downloaded or bought), or sits down at its
+computer to decorate the menu: it searches for box art, prints it, sorts the pages alphabetically
+and pins them onto a WII-UU menu on the wall. Those pictures are real: it looks up covers for
+your games that have none (see *Covers* above) and uses the covers you already have. The
+activities are shuffled, never twice in a row, and the GamePad shows the WII-UU logo talking about
 its own game in a speech bubble: "Damn!" when it messes up, "TETRIS!!" when it doesn't, "Don't
 mind me, just don't interrupt me while I'm still finishing the level." Without a phone the bubble
 is on the TV. It's a sore loser, though: when it's losing badly it looks around ("Nobody's
@@ -726,12 +740,14 @@ ui.musicTrack=wiiuu         # wiiuu | korobeiniki | mountainking | odetojoy | fu
 ui.visualizer=true          # frequency bars behind the menu while music plays (V: full screen)
 ui.bootAnimation=true       # start-up animation and chime
 ui.theme=auto               # auto (follow the system) | light | dark | a theme's file name (sunset, my-theme …)
-ui.idleGames=3              # minutes without input before WII-UU plays Tetris / Pong by itself (0 = never)
+ui.idleGames=3              # minutes without input before WII-UU plays or does something by itself (0 = never)
+scraper.auto=true           # find missing covers online after each scan (wiiuu --scrape does it once)
+scraper.ss.devid=           # optional ScreenScraper account: scraper.ss.devpassword, scraper.ss.user, scraper.ss.password
 ui.opengl=auto              # Linux: draw with the graphics chip (OpenGL) when there is one | true | false
 retroarch.enabled=false     # RetroArch mode; retroarch.path, retroarch.core.<id>, retroarch.download
 ```
 
-Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home DIR] [--check-update|--upgrade] [--changelog [VERSION]]`
+Command line: `wiiuu [--fullscreen|--windowed] [--port N] [--no-server] [--home DIR] [--check-update|--upgrade] [--changelog [VERSION]] [--scrape]`
 
 ## Trailer
 

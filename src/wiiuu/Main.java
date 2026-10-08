@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import javax.imageio.ImageIO;
@@ -41,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.51";
+    public static final String VERSION = "1.9.52";
 
     private final Config config;
     private final Library library;
@@ -69,6 +70,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.openBased = new wiiuu.core.OpenBased(config, library);
         launcher.setOpenBased(openBased);
         this.reactions = new wiiuu.core.Reactions(config, library);
+        this.scraper = new wiiuu.core.Scraper(config);
+        wiiuu.ui.IdleArt.setSource(this::idleArt);
         launcher.setReactions(reactions);
         launcher.addListener(reactions);
         launcher.addListener(openBased);
@@ -167,6 +170,9 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                 case "--theme-check" -> {
                     System.exit(themeCheck(new Config(home), i + 1 < args.length ? args[++i] : null));
                 }
+                case "--scrape" -> {
+                    System.exit(cliScrape(new Config(home)));
+                }
                 case "--theme-reference" -> {
                     System.out.print(wiiuu.ui.Themes.reference());
                     return;
@@ -186,6 +192,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --changelog [VERSION]       what changed (since VERSION)
                               --setup                     start with the setup guide (after the first-boot intro)
                               --no-intro                  with --setup: straight to the guide, no intro
+                              --scrape                    find covers online for the games that have none
                               --theme-check FILE|NAME     check a theme (.wtheme) and show its colours
                               --theme-reference           everything the theme language knows
                               --fps                       print the menu's frame rate (every two seconds)
@@ -237,6 +244,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         if ((firstRun || guideAsked) && !noIntro && config.getBool("ui.firstBootIntro", true)) SwingUtilities.invokeLater(app.view::startFirstBoot);
         else if (firstRun || guideAsked) SwingUtilities.invokeLater(app.view::startGuide);
         app.library.addListener(s -> SwingUtilities.invokeLater(() -> app.view.setSnapshot(s)));
+        // new games without covers: look for some (wiiuu --scrape, or Settings > Games, does it on request)
+        app.library.addListener(s -> {
+            if (app.scraper.automatic()) app.findCovers(false);
+        });
         app.library.rescanAsync();
         app.openBased.refreshAsync();
         app.reactions.refreshAsync();
@@ -383,11 +394,113 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             library.rescanAsync();
             openBased.refreshAsync();
             reactions.refreshAsync();
-        }));
+        }, scraper, () -> findCovers(true)));
         view.requestFocusInWindow();
     }
 
     private final wiiuu.core.Reactions reactions;
+    private final wiiuu.core.Scraper scraper;
+    /** games the automatic cover search tried already (this session): not again after every scan */
+    private final java.util.Set<Path> coversTried = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private List<Game> allGames() {
+        List<Game> all = new java.util.ArrayList<>();
+        for (var e : library.snapshot().games().entrySet()) all.addAll(e.getValue());
+        return all;
+    }
+
+    /**
+     * Looks for missing covers in the background (asked = from Settings: every game again, and it
+     * always says how it went; else after a scan, only games not tried yet, and only if it found some).
+     */
+    private void findCovers(boolean asked) {
+        if (scraper.running()) return;
+        List<Game> todo = allGames().stream().filter(wiiuu.core.Scraper::wantsCover)
+                .filter(g -> asked || !coversTried.contains(g.path())).toList();
+        if (todo.isEmpty()) {
+            if (asked) SwingUtilities.invokeLater(() -> view.showToast("Every game has a cover already"));
+            return;
+        }
+        Thread t = new Thread(() -> {
+            wiiuu.core.Scraper.Progress p = scraper.run(todo, pr -> {
+                if (pr.current() != null) coversTried.add(pr.current().path());
+            });
+            if (p.found() > 0) library.rescanAsync();
+            if (asked || p.found() > 0) {
+                String msg = p.found() == 0 ? "No covers found for " + p.total() + (p.total() == 1 ? " game" : " games")
+                        : "Found " + p.found() + (p.found() == 1 ? " cover" : " covers") + " (of " + p.total() + ")";
+                SwingUtilities.invokeLater(() -> view.showToast(msg));
+            }
+        }, "covers");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Pictures for the idle sketch where WII-UU decorates the menu: covers it finds right now for
+     * games that have none (when it may), then covers you have; their games' names and colours.
+     */
+    private List<wiiuu.ui.IdleArt.Art> idleArt(int count) {
+        List<wiiuu.ui.IdleArt.Art> out = new java.util.ArrayList<>();
+        List<Game> all = new java.util.ArrayList<>(allGames());
+        java.util.Collections.shuffle(all);
+        if (scraper.automatic() && !scraper.running()) {
+            int tries = 0, found = 0;
+            for (Game g : all) {
+                if (out.size() >= count || tries >= count * 2) break;
+                if (!wiiuu.core.Scraper.wantsCover(g) || coversTried.contains(g.path())) continue;
+                tries++;
+                coversTried.add(g.path());
+                try {
+                    Path p = scraper.find(g);
+                    if (p != null) {
+                        found++;
+                        wiiuu.ui.IdleArt.Art a = art(g, p);
+                        if (a != null) out.add(a);
+                    }
+                } catch (IOException | InterruptedException e) {
+                    break;                                  // offline: the ones it has will do
+                }
+            }
+            if (found > 0) library.rescanAsync();           // and they're really on the menu now
+        }
+        for (Game g : all) {
+            if (out.size() >= count) break;
+            if (g.system() == wiiuu.core.Systems.OPENBASED || g.system() == wiiuu.core.Systems.REACTIONS) continue;
+            for (Path c : g.covers()) {
+                if (!Files.isRegularFile(c)) continue;
+                wiiuu.ui.IdleArt.Art a = art(g, c);
+                if (a != null && out.stream().noneMatch(o -> o.title().equals(a.title()))) out.add(a);
+                break;
+            }
+        }
+        // games without a cover: drawn in their console's colour
+        for (Game g : all) {
+            if (out.size() >= count) break;
+            if (g.system() == wiiuu.core.Systems.OPENBASED || g.system() == wiiuu.core.Systems.REACTIONS) continue;
+            if (out.stream().noneMatch(o -> o.title().equals(g.name()))) out.add(new wiiuu.ui.IdleArt.Art(g.name(), g.system().shortName(), g.system().color(), null));
+        }
+        return out;
+    }
+
+    private static wiiuu.ui.IdleArt.Art art(Game g, Path cover) {
+        try {
+            java.awt.image.BufferedImage img = ImageIO.read(cover.toFile());
+            if (img == null) return null;
+            if (img.getHeight() > 260) {                        // small: it's printed on a little sheet
+                int w = Math.max(1, img.getWidth() * 260 / img.getHeight());
+                java.awt.image.BufferedImage small = new java.awt.image.BufferedImage(w, 260, java.awt.image.BufferedImage.TYPE_INT_RGB);
+                java.awt.Graphics2D gr = small.createGraphics();
+                gr.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                gr.drawImage(img, 0, 0, w, 260, null);
+                gr.dispose();
+                img = small;
+            }
+            return new wiiuu.ui.IdleArt.Art(g.name(), g.system().shortName(), g.system().color(), img);
+        } catch (IOException e) {
+            return null;
+        }
+    }
 
     /** Idle play, or a reaction video: what the GamePad's WII-UU logo says. */
     @Override
@@ -696,6 +809,23 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     }
 
     /** {@code wiiuu --upgrade} / {@code --check-update} from a terminal. */
+    /** wiiuu --scrape: looks for covers for every game without one, saying how it goes. */
+    private static int cliScrape(Config config) {
+        Library lib = new Library(config);
+        lib.rescan();
+        List<Game> all = new java.util.ArrayList<>();
+        for (var e : lib.snapshot().games().entrySet()) all.addAll(e.getValue());
+        wiiuu.core.Scraper s = new wiiuu.core.Scraper(config);
+        long missing = all.stream().filter(wiiuu.core.Scraper::wantsCover).count();
+        System.out.println(all.size() + " games, " + missing + " without a cover");
+        wiiuu.core.Scraper.Progress p = s.run(all, pr -> {
+            if (pr.current() != null) System.out.printf("[%d/%d] %-8s %-40s %s%n", pr.done(), pr.total(), pr.current().system().shortName(),
+                    pr.current().name(), pr.cover() != null ? "found" : "-");
+        });
+        System.out.println("Found " + p.found() + " of " + p.total() + " covers");
+        return 0;
+    }
+
     /** wiiuu --theme-check: works a theme out and prints its colours (as swatches), or what's wrong with it. */
     private static int themeCheck(Config config, String what) {
         if (what == null) {

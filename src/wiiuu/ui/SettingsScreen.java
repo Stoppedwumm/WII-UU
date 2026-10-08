@@ -53,7 +53,7 @@ public final class SettingsScreen {
     /** What the settings can do beyond the config file; Main fills it in. */
     public record Services(Config config, wiiuu.core.OpenBased openBased, Supplier<String> gamepadBase,
                     Runnable showGuide, Runnable restartIntoGuide, Updater updater, Runnable exitForUpgrade,
-                    Runnable onClosed) {}
+                    Runnable onClosed, wiiuu.core.Scraper scraper, Runnable findCovers) {}
 
     // ---- rows -----------------------------------------------------------------------------------
 
@@ -747,6 +747,25 @@ public final class SettingsScreen {
                     config.set("roms.base", p.toString());
                     config.save();
                 })));
+        r.add(new Header("Covers"));
+        r.add(new Action("Find covers online", "Box art for the games that have none (from libretro's thumbnails, or "
+                + "ScreenScraper when set up below). It never replaces a cover you have.", () -> {
+            if (sv.scraper().running()) {
+                say("Already looking");
+                return;
+            }
+            sv.findCovers().run();
+            say("Looking for covers... (WII-UU says when it's done)");
+        }, () -> sv.scraper().running() ? "looking..." : null, null));
+        r.add(new Toggle("Find covers by itself", "After finding new games, and in its idle time (it decorates the menu).",
+                sv.scraper()::automatic, on -> {
+            config.set("scraper.auto", on ? null : "false");
+            config.save();
+        }));
+        r.add(new Link("ScreenScraper account", "ScreenScraper.fr knows games by their files (and has more pictures). "
+                + "It needs a developer account for apps.", () -> config.get("scraper.ss.devid", "").isBlank() ? "not set" : "set",
+                this::screenScraperPage));
+        r.add(new Header("Consoles"));
         r.add(new Link("Consoles and emulators", "Which consoles show, where their games are, and the program that plays them.",
                 () -> Systems.ALL.size() + " consoles", this::systemsPage));
         r.add(new Header("Playing"));
@@ -806,6 +825,27 @@ public final class SettingsScreen {
             }, null, null));
             return r;
         });
+    }
+
+    private Page screenScraperPage() {
+        return new Page("ScreenScraper account", () -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info("ScreenScraper.fr only answers apps with a developer account (ask for one on screenscraper.fr, "
+                    + "forum: \"Demande d'identifiants API\"). Your own user account on top gives you more requests a day. "
+                    + "Without these, WII-UU uses libretro's thumbnails, which need no account."));
+            r.add(text("Developer id", "scraper.ss.devid", false, "not set"));
+            r.add(text("Developer password", "scraper.ss.devpassword", true, "not set"));
+            r.add(text("Your user name", "scraper.ss.user", false, "optional"));
+            r.add(text("Your password", "scraper.ss.password", true, "optional"));
+            return r;
+        });
+    }
+
+    private Text text(String label, String key, boolean secret, String empty) {
+        return new Text(label, null, () -> config.get(key, ""), v -> {
+            config.set(key, v.isBlank() ? null : v.trim());
+            config.save();
+        }, secret, empty);
     }
 
     private void setCommand(GameSystem s, String v) {

@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.52 (2026-10-08)
+- Covers are found online: games without a cover get one from the libretro thumbnails collection
+  (or from ScreenScraper, if you add a ScreenScraper account under *Settings → Games*). WII-UU looks
+  after every scan; *Settings → Games → Find covers online* and `wiiuu --scrape` do it on demand.
+  Covers you have are never replaced, and *Find covers by itself* turns the automatic search off.
+- A new idle activity: WII-UU sits down at its computer to decorate the menu. It searches the web
+  for box art ("Nope, that's fan art."), prints the pictures, sorts the pages alphabetically
+  ("Obviously.") and pins them one by one onto a WII-UU menu on the wall. The pictures are your
+  games' real covers, including any it just found.
+
 ## 1.9.51 (2026-10-08)
 - Another idle sketch: WII-UU goes online shopping on amazin.shop (made up, and only drawn: nothing
   is visited or bought). It picks the sponsored GOLD HDMI cable ($899.99, "1,000,000x better
