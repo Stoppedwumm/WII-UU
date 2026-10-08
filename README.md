@@ -321,7 +321,8 @@ any player), thumbnails and `reactions.json`; *Send to WII-UU* puts it straight 
 `~/.wiiuu/reactions` on the same computer. Projects save as `.wiireact`.
 
 In WII-UU, packs in `~/.wiiuu/reactions` are the **Reactions** channel on the home screen (press −
-to look for new ones). A video plays full screen (mpv best, VLC works) with the reactions as
+to look for new ones). WII-UU comes with one to try: *Minecraft Door* (`reactions.examples=false`
+hides it). A video plays full screen (mpv best, VLC works) with the reactions as
 captions, and the GamePad shows the WII-UU logo saying each line, in its mood, right on time (it
 follows mpv's position, also after pausing or skipping). Tap the phone to pause.
 

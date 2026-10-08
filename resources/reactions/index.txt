@@ -1,0 +1,2 @@
+# reaction packs that come with WII-UU (resources/reactions/<file>); reactions.examples=false hides them
+example-minecraft-door.zip

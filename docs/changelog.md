@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.49 (2026-10-08)
+- WII-UU comes with a reaction video to try: *Minecraft Door* is in the Reactions channel right
+  away, with WII-UU's six reactions ("alright, minecraft content!" ... "bruh"). Your own packs sit
+  next to it; `reactions.examples=false` hides it.
+- Reactions wait for the video to really start before the first one shows (some videos, like AV1
+  ones, take mpv a moment to open).
+
 ## 1.9.48 (2026-10-08)
 - Reaction mode: **WII-UU-Reactions.jar**, a new editor (in the zip and on the website). Drag
   videos in, play them with sound, and type on a timeline what WII-UU says when, with a mood and a

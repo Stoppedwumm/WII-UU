@@ -15,6 +15,8 @@ mkdir -p "dist/$NAME/source"
 cp build/wiiuu.jar build/WII-UU-Reactions.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"
 cp -r console "dist/$NAME/"
 cp -r src resources build.sh package.sh CHANGELOG.md "dist/$NAME/source/"
+# the example reaction video is in wiiuu.jar already (the source builds without it)
+rm -f "dist/$NAME/source/resources/reactions/"*.zip
 chmod +x "dist/$NAME/install.sh" "dist/$NAME/emulators.sh" "dist/$NAME/console/wiiuu-console" "dist/$NAME/source/build.sh" "dist/$NAME/source/package.sh"
 (cd dist && zip -qr -X "$NAME.zip" "$NAME")
 rm -rf "dist/$NAME"

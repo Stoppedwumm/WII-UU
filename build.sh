@@ -13,5 +13,7 @@ jar --create --file build/wiiuu.jar --manifest build/manifest.txt -C build/class
 echo "Built build/wiiuu.jar"
 # the reactions editor (reaction mode's videos): the same classes, its own start
 printf 'Main-Class: wiiuu.react.Editor\n' > build/manifest-reactions.txt
+# (without WII-UU's example reaction packs: the editor doesn't need them)
 jar --create --file build/WII-UU-Reactions.jar --manifest build/manifest-reactions.txt -C build/classes .
+zip -q -d build/WII-UU-Reactions.jar 'reactions/*' >/dev/null || true
 echo "Built build/WII-UU-Reactions.jar"

@@ -1,6 +1,7 @@
 package wiiuu.core;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -59,30 +60,76 @@ public final class Reactions implements Launcher.Listener {
     public synchronized void refresh() {
         videos.clear();
         List<Game> games = new ArrayList<>();
+        List<Path> packs = new ArrayList<>();
         Path dir = folder();
         if (Files.isDirectory(dir)) {
             try (Stream<Path> list = Files.list(dir)) {
-                for (Path p : list.sorted().toList()) {
-                    String n = p.getFileName().toString();
-                    if (n.startsWith(".")) continue;
-                    try {
-                        Path packDir = n.toLowerCase(Locale.ROOT).endsWith(".zip") ? unpack(p)
-                                : Files.isRegularFile(p.resolve("reactions.json")) ? p : null;
-                        if (packDir == null) continue;
-                        for (Video v : read(packDir)) {
-                            videos.put(v.file(), v);
-                            games.add(new Game(Systems.REACTIONS, v.title(), v.file(),
-                                    v.thumbnail() != null ? List.of(v.thumbnail()) : List.of()));
-                        }
-                    } catch (IOException | RuntimeException e) {
-                        System.err.println("[reactions] skipping " + n + ": " + e.getMessage());
-                    }
-                }
+                for (Path p : list.sorted().toList()) if (!p.getFileName().toString().startsWith(".")) packs.add(p);
             } catch (IOException e) {
                 System.err.println("[reactions] " + e.getMessage());
             }
         }
+        packs.addAll(builtIn(packs));
+        for (Path p : packs) {
+            String n = p.getFileName().toString();
+            try {
+                Path packDir = n.toLowerCase(Locale.ROOT).endsWith(".zip") ? unpack(p)
+                        : Files.isRegularFile(p.resolve("reactions.json")) ? p : null;
+                if (packDir == null) continue;
+                for (Video v : read(packDir)) {
+                    videos.put(v.file(), v);
+                    games.add(new Game(Systems.REACTIONS, v.title(), v.file(),
+                            v.thumbnail() != null ? List.of(v.thumbnail()) : List.of()));
+                }
+            } catch (IOException | RuntimeException e) {
+                System.err.println("[reactions] skipping " + n + ": " + e.getMessage());
+            }
+        }
         library.setRemote(Systems.REACTIONS, games);
+    }
+
+    /**
+     * The packs that come with WII-UU (resources/reactions), as files in .builtin (copied once):
+     * an example to start with. Left out with reactions.examples=false, and when the same pack
+     * (same size) is in the folder already.
+     */
+    private List<Path> builtIn(List<Path> own) {
+        if (!config.getBool("reactions.examples", true)) return List.of();
+        List<Path> out = new ArrayList<>();
+        String index;
+        try (InputStream in = Reactions.class.getResourceAsStream("/reactions/index.txt")) {
+            if (in == null) return out;
+            index = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return out;
+        }
+        java.util.Set<Long> sizes = new java.util.HashSet<>();
+        for (Path p : own) {
+            try {
+                if (Files.isRegularFile(p)) sizes.add(Files.size(p));
+            } catch (IOException ignored) {
+                // not comparable
+            }
+        }
+        Path dir = folder().resolve(".builtin");
+        for (String line : index.split("\n")) {
+            String name = line.trim();
+            if (name.isEmpty() || name.startsWith("#")) continue;
+            try (InputStream in = Reactions.class.getResourceAsStream("/reactions/" + name)) {
+                if (in == null) continue;
+                byte[] data = in.readAllBytes();
+                if (sizes.contains((long) data.length)) continue;                 // they have it already
+                Path f = dir.resolve(name);
+                if (!Files.isRegularFile(f) || Files.size(f) != data.length) {
+                    Files.createDirectories(dir);
+                    Files.write(f, data);
+                }
+                out.add(f);
+            } catch (IOException e) {
+                System.err.println("[reactions] example " + name + ": " + e.getMessage());
+            }
+        }
+        return out;
     }
 
     public void refreshAsync() {
@@ -288,8 +335,10 @@ public final class Reactions implements Launcher.Listener {
                 if (p != null) {
                     pos = p;
                     lastAsk = System.currentTimeMillis();
-                } else if (ipc == null || lastAsk == 0) {
-                    pos = (System.currentTimeMillis() - started) / 1000.0 - (ipc == null ? 1.0 : 2.0);   // the player takes a moment
+                } else if (ipc == null) {
+                    pos = (System.currentTimeMillis() - started) / 1000.0 - 1.0;   // no mpv: the clock (the player takes a moment)
+                } else if (lastAsk == 0) {
+                    pos = -1;                                      // mpv is still starting (an AV1 video can take a while)
                 }
                 // the latest reaction that has started and isn't over
                 int on = -1;
