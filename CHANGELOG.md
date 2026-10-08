@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.45 (2026-10-08)
+- On Linux, WII-UU now draws with the graphics chip (OpenGL) instead of the processor when there is
+  a driver for one, as on a Raspberry Pi: much less work for the processor on big TVs. Without a
+  graphics chip driver it keeps drawing as before (OpenGL done in software would be slower).
+  *Settings > System > Draw with the graphics chip* switches it on or off for good
+  (`ui.opengl`), in case a driver draws something wrong.
+
 ## 1.9.44 (2026-10-08)
 - The GamePad (phone) says **WII-UU is not running** when WII-UU closes, and why: closed, restarting,
   updating, or the computer going to the desktop or shutting down. If WII-UU disappears without a

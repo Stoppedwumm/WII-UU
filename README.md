@@ -621,6 +621,12 @@ CHANGELOG.md, and publishes the notes to the website with the download.
 
 ## Troubleshooting
 
+* **The menu stutters, looks wrong or stays black (Linux):** WII-UU draws with the graphics
+  chip through OpenGL when Linux has a driver for one (a Raspberry Pi does), which is much
+  smoother on big TVs. `wiiuu --fps` shows the frame rate, and the log says
+  `OpenGL pipeline enabled` when it's in use. If the picture is wrong, set *Settings → System →
+  Draw with the graphics chip* to *Off* (or `ui.opengl=false`; from a terminal:
+  `wiiuu -Dsun.java2d.opengl=false`).
 * **An emulator doesn't start:**
   * If the configured program isn't installed, WII-UU looks for the emulator under other
     names, in `wiiuu-emulators`, in Flatpak and in `~/Applications/*.AppImage`.
@@ -685,6 +691,7 @@ ui.musicTrack=wiiuu         # wiiuu | korobeiniki | mountainking | odetojoy | fu
 ui.visualizer=true          # frequency bars behind the menu while music plays (V: full screen)
 ui.bootAnimation=true       # start-up animation and chime
 ui.theme=auto               # auto (follow the system) | light | dark | a theme's file name (sunset, my-theme …)
+ui.opengl=auto              # Linux: draw with the graphics chip (OpenGL) when there is one | true | false
 retroarch.enabled=false     # RetroArch mode; retroarch.path, retroarch.core.<id>, retroarch.download
 ```
 

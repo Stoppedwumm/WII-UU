@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.44";
+    public static final String VERSION = "1.9.45";
 
     private final Config config;
     private final Library library;
@@ -205,6 +205,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             }
         }
         Config config = new Config(home);
+        useGraphicsCard(config);
         if (port != null) config.set("server.port", port.toString());
         if (fullscreen != null) config.set("ui.fullscreen", fullscreen.toString());
         freshInstall = !Files.exists(home.resolve("config.properties"));
@@ -630,6 +631,46 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }, "update-check");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * Linux: draws through OpenGL, on the graphics chip, instead of on the processor (X11 /
+     * XRender), which on a Raspberry Pi with a 4K TV is the difference between a smooth menu and a
+     * stuttering one. Java falls back to its usual drawing by itself where OpenGL can't be used.
+     *
+     * <p>ui.opengl: auto (the default) uses it when there is a graphics chip with a driver
+     * (/dev/dri/renderD*, or NVIDIA's own driver): without one, OpenGL is done in software and is
+     * slower than the usual drawing. true / false force it (Settings > System), as does
+     * -Dsun.java2d.opengl=... Has to happen before anything starts Java's graphics.
+     */
+    private static void useGraphicsCard(Config config) {
+        if (!System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("linux")) return;
+        if (System.getProperty("sun.java2d.opengl") != null) return;          // the user's own choice
+        String mode = config.get("ui.opengl", "auto").trim().toLowerCase(java.util.Locale.ROOT);
+        boolean on = switch (mode) {
+            case "true", "on", "yes" -> true;
+            case "false", "off", "no" -> false;
+            default -> graphicsChip();
+        };
+        if (on) System.setProperty("sun.java2d.opengl", "True");             // "True": says in the log whether it worked
+        else System.out.println("[graphics] drawing without OpenGL" + (mode.equals("auto") ? " (no graphics chip driver found)" : ""));
+    }
+
+    /** For Settings: whether automatic mode found a graphics chip. */
+    public static boolean graphicsChipFound() {
+        return graphicsChip();
+    }
+
+    /** Whether Linux has a graphics chip with a working driver (not just software OpenGL). */
+    static boolean graphicsChip() {
+        String sw = System.getenv("LIBGL_ALWAYS_SOFTWARE");
+        if (sw != null && !sw.isBlank() && !sw.equals("0")) return false;
+        if (Files.exists(Paths.get("/dev/nvidia0"))) return true;
+        try (var list = Files.list(Paths.get("/dev/dri"))) {
+            return list.anyMatch(p -> p.getFileName().toString().startsWith("renderD"));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /** {@code wiiuu --upgrade} / {@code --check-update} from a terminal. */

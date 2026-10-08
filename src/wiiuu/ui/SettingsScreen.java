@@ -951,6 +951,24 @@ public final class SettingsScreen {
                 + "the intro, then the guide. Settings and games are kept.", sv.restartIntoGuide(), null,
                 "Press A again to restart"));
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (os.contains("linux")) {
+            r.add(new Header("Graphics"));
+            List<String> glIds = List.of("auto", "true", "false");
+            List<String> glNames = List.of(wiiuu.Main.graphicsChipFound() ? "Automatic (graphics chip found: on)"
+                    : "Automatic (no graphics chip driver: off)", "On", "Off");
+            r.add(new Choice("Draw with the graphics chip (OpenGL)", "Much smoother on a Raspberry Pi and big TVs. "
+                    + "Turn it off if the menu looks wrong or stays black. From the next start.",
+                    () -> glNames,
+                    () -> Math.max(0, glIds.indexOf(switch (config.get("ui.opengl", "auto").trim().toLowerCase(Locale.ROOT)) {
+                        case "true", "on", "yes" -> "true";
+                        case "false", "off", "no" -> "false";
+                        default -> "auto";
+                    })),
+                    i -> {
+                        config.set("ui.opengl", i == 0 ? null : glIds.get(i));
+                        config.save();
+                    }));
+        }
         if (os.contains("win")) {
             r.add(new Header("Windows"));
             r.add(new Action("Install the virtual display", "For split DS / 3DS screens. Asks for administrator rights once.", () -> {
