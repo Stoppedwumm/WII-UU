@@ -547,7 +547,7 @@ function showIdle(st) {
   if (el.classList.contains("hidden")) { el.classList.remove("hidden"); S.idleLine = -1; }
   S.watching = !!st.watching;
   const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  $("idlePlaying").innerHTML = (st.watching ? "Watching <b>" : st.game === "the internet" ? "Surfing <b>" : st.game === "a shopping spree" ? "Going on <b>" : st.game === "the menu" ? "Decorating <b>" : st.game === "fan mail" ? "Reading <b>" : "Playing <b>") + esc(st.game) + "</b> on the TV"
+  $("idlePlaying").innerHTML = (st.watching ? "Watching <b>" : st.game === "the internet" ? "Surfing <b>" : st.game === "a shopping spree" ? "Going on <b>" : st.game === "the menu" ? "Decorating <b>" : st.game === "fan mail" ? "Reading <b>" : st.game === "fanfic.com" ? "Up late on <b>" : "Playing <b>") + esc(st.game) + "</b> on the TV"
     + (st.score ? " · " + st.score : "");
   document.querySelector("#idle .take").textContent = st.watching ? "Tap to pause or play" : "Tap anywhere to take over";
   $("idleSay").classList.toggle("quiet", !!st.watching && !st.line);

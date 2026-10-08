@@ -1,0 +1,15 @@
+welcome|Hi! I'm Wee you-you. I'll help you set up your console. It only takes a minute!
+look|First things first: light, or dark? I look good in both, honestly.
+light|Nice and bright!
+dark|Ooh. Mysterious.
+auto|Going with the flow. I like it.
+sound|I made the menu music myself. No pressure. But please, leave it on.
+musicoff|Ouch.
+musicon|Thank you!
+gamepad|Scan the code with your phone's camera, and your phone becomes a game pad. It's basically magic. Well, it's Wi-Fi.
+phone|There it is! Hi, phone!
+games|Put your games in the folder of their console. I'll find them. I'm very good at finding things.
+controllers|Now press some buttons! Any buttons. Don't worry, it doesn't hurt.
+tickle|Hehe! That tickles.
+done|You're all set! Have fun. I'll be in the menu, if you need me.
+later|Okay, later then! I'll be in the menu.

@@ -16,6 +16,7 @@ import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 import java.awt.image.BufferedImage;
 
@@ -77,6 +78,47 @@ final class SetupGuide {
         this.config = config;
         this.onClose = onClose;
         Sfx.chime();
+        voice.setEnabled(config.getBool("ui.guideVoice", true));
+        sayLater = "welcome";
+    }
+
+    // ---- the mascot -----------------------------------------------------------------------------
+
+    /** What the mascot says: the voice line's id and the text in its speech bubble. */
+    private static final Map<String, String> LINES = Map.ofEntries(
+            Map.entry("welcome", "Hi! I'm WII-UU. I'll help you set up your console. It only takes a minute!"),
+            Map.entry("look", "First things first: light, or dark? I look good in both, honestly."),
+            Map.entry("light", "Nice and bright!"),
+            Map.entry("dark", "Ooh. Mysterious."),
+            Map.entry("auto", "Going with the flow. I like it."),
+            Map.entry("sound", "I made the menu music myself. No pressure. But please, leave it on."),
+            Map.entry("musicoff", "Ouch."),
+            Map.entry("musicon", "Thank you!"),
+            Map.entry("gamepad", "Scan the code with your phone's camera, and your phone becomes a GamePad. It's basically magic. Well, it's Wi-Fi."),
+            Map.entry("phone", "There it is! Hi, phone!"),
+            Map.entry("games", "Put your games in the folder of their console. I'll find them. I'm very good at finding things."),
+            Map.entry("controllers", "Now press some buttons! Any buttons. Don't worry, it doesn't hurt."),
+            Map.entry("tickle", "Hehe! That tickles."),
+            Map.entry("done", "You're all set! Have fun. I'll be in the menu, if you need me."),
+            Map.entry("later", "Okay, later then! I'll be in the menu."));
+
+    private final GuideVoice voice = new GuideVoice();
+    private String saying, sayLater;
+    private long saidAt, hopAt;
+    private boolean voiced, tickled;
+
+    private void say(String id) {
+        saying = id;
+        saidAt = System.currentTimeMillis();
+        voiced = voice.say(id);
+        hopAt = saidAt;
+    }
+
+    /** How much of the bubble's text shows: in step with the voice, or typed out without one. */
+    private float typed(long now) {
+        if (voiced) return Math.min(1f, voice.progress() * 1.15f);
+        String text = LINES.get(saying);
+        return text == null ? 1 : Math.min(1f, (now - saidAt) / (text.length() * 30f));
     }
 
     // ---- what each step offers ------------------------------------------------------------------
@@ -135,6 +177,114 @@ final class SetupGuide {
         return config.get("ui.theme", "auto").trim().toLowerCase(Locale.ROOT);
     }
 
+    private static final long BLINK_MS = 4300;
+    private long bubbleDone;                         // when the bubble's text was all out
+
+    /**
+     * The mascot: the WII-UU card with googly eyes and little legs, standing below the card's left
+     * corner. It hops when it starts a line, bobs with its voice, watches the focus frame and
+     * blinks; its speech bubble types along with the voice and fades a few seconds after.
+     */
+    private void paintMascot(Graphics2D g, int w, int h, float cardX, float cardBottom, long now) {
+        float s = h * 0.056f;
+        float bodyW = s * 2.6f, bodyH = s;
+        float mx = Math.max(16 + bodyW / 2, cardX - s * 1.4f);
+        double in = ease((now - opened - 350) / 900.0);
+        mx -= (float) ((1 - in) * (mx + bodyW));
+        float feet = h - h * 0.02f;
+        float level = voice.level();
+        double hop = Math.min(1, (now - hopAt) / 380.0);
+        float lift = (float) (Math.sin(Math.PI * hop) * s * 0.45f) + level * s * 0.2f;
+        float my = feet - s * 0.95f - bodyH / 2 - lift;
+        // legs
+        g.setColor(MenuView.dark ? new Color(0xB0BEC5) : new Color(0x37474F));
+        g.setStroke(new BasicStroke(Math.max(2f, s * 0.12f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        float walk = in < 1 ? (float) Math.sin(now / 60.0) * s * 0.25f : 0;
+        g.drawLine((int) (mx - s * 0.4f), (int) (my + bodyH / 2), (int) (mx - s * 0.45f + walk), (int) (feet - lift * 0.3f));
+        g.drawLine((int) (mx + s * 0.4f), (int) (my + bodyH / 2), (int) (mx + s * 0.45f - walk), (int) (feet - lift * 0.3f));
+        g.setStroke(new BasicStroke(1));
+        // body, squashing a little as it talks
+        AffineTransform at = g.getTransform();
+        g.translate(mx, my);
+        g.scale(1 + level * 0.06, 1 - level * 0.06);
+        RoundRectangle2D body = new RoundRectangle2D.Float(-bodyW / 2, -bodyH / 2, bodyW, bodyH, bodyH * 0.6f, bodyH * 0.6f);
+        g.setColor(new Color(0, 0, 0, 50));
+        g.fill(new RoundRectangle2D.Float(-bodyW / 2 + 2, -bodyH / 2 + 4, bodyW, bodyH, bodyH * 0.6f, bodyH * 0.6f));
+        g.setColor(Color.WHITE);
+        g.fill(body);
+        g.setColor(new Color(0xCFD8DC));
+        g.draw(body);
+        g.setFont(MenuView.font(Font.BOLD, s * 0.55f));
+        FontMetrics fm = g.getFontMetrics();
+        float lx = -fm.stringWidth("WII-UU") / 2f, ly = fm.getAscent() * 0.38f;
+        g.setColor(new Color(0x2B2F36));
+        g.drawString("WII-", lx, ly);
+        g.setColor(MenuView.ACCENT);
+        g.drawString("UU", lx + fm.stringWidth("WII-"), ly);
+        g.setTransform(at);
+        // googly eyes, watching the focus frame
+        float fx = frame[0] + frame[2] / 2, fy = frame[1] + frame[3] / 2;
+        boolean blink = (now - opened) % BLINK_MS < 140;
+        for (int e = -1; e <= 1; e += 2) {
+            float ex = mx + e * s * 0.42f, ey = my - bodyH / 2 - s * 0.12f, er = s * 0.27f;
+            double dx = fx - ex, dy = fy - ey, d = Math.max(1, Math.hypot(dx, dy));
+            g.setColor(Color.WHITE);
+            g.fill(new Ellipse2D.Float(ex - er, ey - er, er * 2, er * 2));
+            g.setColor(new Color(0x2B2F36));
+            g.setStroke(new BasicStroke(Math.max(1.2f, s * 0.05f)));
+            g.draw(new Ellipse2D.Float(ex - er, ey - er, er * 2, er * 2));
+            if (blink) g.drawLine((int) (ex - er * 0.7f), (int) ey, (int) (ex + er * 0.7f), (int) ey);
+            else {
+                float px = ex + (float) (dx / d * er * 0.45f), py = ey + (float) (dy / d * er * 0.45f);
+                g.fill(new Ellipse2D.Float(px - er * 0.5f, py - er * 0.5f, er, er));
+            }
+        }
+        g.setStroke(new BasicStroke(1));
+        paintBubble(g, w, h, mx + bodyW / 2, my, s, now);
+    }
+
+    private void paintBubble(Graphics2D g, int w, int h, float fromX, float fromY, float s, long now) {
+        String text = saying == null ? null : LINES.get(saying);
+        if (text == null) return;
+        float typed = typed(now);
+        if (typed >= 1 && bubbleDone < saidAt) bubbleDone = now;
+        float alpha = typed < 1 ? 1 : (float) (1 - Math.max(0, Math.min(1, (now - bubbleDone - 5000) / 400.0)));
+        if (alpha <= 0) return;
+        Composite c = g.getComposite();
+        g.setComposite(AlphaComposite.SrcOver.derive(((AlphaComposite) c).getAlpha() * alpha));
+        g.setFont(MenuView.font(Font.PLAIN, h * 0.026f));
+        FontMetrics fm = g.getFontMetrics();
+        float maxW = Math.max(w * 0.18f, Math.min(w * 0.38f, w / 2f - 120 - fromX - s));
+        List<String> lines = wrap(g, text, maxW);
+        float textW = 0;
+        for (String l : lines) textW = Math.max(textW, fm.stringWidth(l));
+        float pad = h * 0.016f, lineH = fm.getHeight();
+        float bw = textW + pad * 2, bh = lines.size() * lineH + pad * 1.4f;
+        // beside its head, below the card as far as it fits
+        float bx = fromX + s * 0.7f, by = Math.min(fromY - bh / 2 - s * 0.3f, h - bh - h * 0.012f);
+        float tipY = fromY - s * 0.2f, mid = Math.max(by + bh * 0.25f, Math.min(by + bh * 0.75f, tipY));
+        Path2D tail = new Path2D.Float();
+        tail.moveTo(bx + 1, mid - s * 0.25f);
+        tail.lineTo(fromX + s * 0.1f, tipY);
+        tail.lineTo(bx + 1, mid + s * 0.25f);
+        tail.closePath();
+        g.setColor(new Color(0, 0, 0, 40));
+        g.fill(new RoundRectangle2D.Float(bx + 2, by + 4, bw, bh, h * 0.03f, h * 0.03f));
+        g.setColor(Color.WHITE);
+        g.fill(new RoundRectangle2D.Float(bx, by, bw, bh, h * 0.03f, h * 0.03f));
+        g.fill(tail);
+        g.setColor(new Color(0x2B2F36));
+        int shown = Math.round(text.length() * typed), done = 0;
+        float ty = by + pad * 0.7f + fm.getAscent();
+        for (String l : lines) {
+            int n = Math.max(0, Math.min(l.length(), shown - done));
+            if (n > 0) g.drawString(l.substring(0, n), bx + pad, ty);
+            done += l.length() + 1;
+            ty += lineH;
+        }
+        g.setComposite(c);
+    }
+
     // ---- input ----------------------------------------------------------------------------------
 
     void navigate(int dx, int dy) {
@@ -179,6 +329,7 @@ final class SetupGuide {
             case "Menu music" -> {
                 boolean on = !config.getBool("ui.music", true);
                 save("ui.music", on);
+                say(on ? "musicon" : "musicoff");
                 view.setMusicEnabled(on);
             }
             case "Menu sounds" -> {
@@ -227,6 +378,10 @@ final class SetupGuide {
             held.add(b);
             if (!tried) Sfx.select();
             tried = true;
+            if (!tickled && b != PadButton.PLUS && b != PadButton.MINUS && !b.isDirection()) {
+                tickled = true;
+                say("tickle");
+            }
             String name = player < 0 ? LocalPads.name(player) : null;
             who = name != null ? name : "Phone " + player;
         } else {
@@ -274,6 +429,7 @@ final class SetupGuide {
         focus = current.get(0).kind.equals("button") ? current.size() - 1 : 0;
         if (to == Step.GAMEPAD) connectedAt = view.padCount() > 0 ? 1 : 0;
         if (to == Step.DONE) burst();
+        say(to.name().toLowerCase(Locale.ROOT));
     }
 
     private void setTheme(String mode) {
@@ -288,6 +444,7 @@ final class SetupGuide {
             paintAll(b, lastW, lastH);
             b.dispose();
         }
+        if (!mode.equals(theme())) say(mode);
         config.set("ui.theme", mode);
         config.save();
         view.setThemeMode(mode);
@@ -314,6 +471,7 @@ final class SetupGuide {
         config.set("ui.setupDone", "true");
         config.save();
         closing = System.currentTimeMillis();
+        if (!done) say("later");                     // (it says "done" on the last step)
         if (done) Sfx.chime();
         else Sfx.back();
     }
@@ -323,6 +481,10 @@ final class SetupGuide {
     /** Advances the animation; false once the guide has faded out (the menu then drops it). */
     boolean tick() {
         long now = System.currentTimeMillis();
+        if (sayLater != null && now - opened > 900) {          // after the card has popped in
+            say(sayLater);
+            sayLater = null;
+        }
         if (closing != 0 && now - closing > CLOSE_MS) {
             onClose.run();
             return false;
@@ -330,6 +492,7 @@ final class SetupGuide {
         if (step == Step.GAMEPAD && connectedAt == 0 && view.padCount() > 0) {
             connectedAt = now;
             Sfx.chime();
+            say("phone");
         }
         for (int i = confetti.size() - 1; i >= 0; i--) {
             float[] p = confetti.get(i);
@@ -364,7 +527,10 @@ final class SetupGuide {
                 || (step == Step.DONE && sinceStep < 1300)
                 || (step == Step.GAMEPAD && (view.padCount() == 0 ? (++ringTick & 1) == 0 : now - connectedAt < 700))
                 || (step == Step.CONTROLLERS && (tried ? fading(now) : (now / 450) != lastLit))
-                || wipeFrom != null;
+                || wipeFrom != null
+                || voice.speaking() || (saying != null && typed(now) < 1) || now - hopAt < 700
+                || (now - opened) % BLINK_MS < 220 || now - opened < 1400
+                || (bubbleDone >= saidAt && now - bubbleDone > 4900 && now - bubbleDone < 5500);
         lastLit = now / 450;
         return true;
     }
@@ -480,6 +646,7 @@ final class SetupGuide {
         g.setClip(clip);
 
         paintDots(g, cx, cy + ch + h * 0.035f, cw, now);
+        paintMascot(g, w, h, cx, cy + ch, now);
         paintConfetti(g, w / 2f, cy + ch * 0.32f);
         g.setTransform(at);
         g.setComposite(base);

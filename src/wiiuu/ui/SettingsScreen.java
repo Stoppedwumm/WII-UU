@@ -999,6 +999,8 @@ public final class SettingsScreen {
         r.add(new Action("Restart into the setup guide", "Restarts WII-UU like on its first start: the start-up animation, "
                 + "the intro, then the guide. Settings and games are kept.", sv.restartIntoGuide(), null,
                 "Press A again to restart"));
+        r.add(toggle("WII-UU talks in the guide", "Its little helper in the setup guide says its lines out loud.",
+                "ui.guideVoice", true, null));
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("linux")) {
             r.add(new Header("Graphics"));

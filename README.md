@@ -191,6 +191,15 @@ with the guide, start-up animation and intro included, like the very first time.
 controller step is a live test: every button you press lights up on an on-screen GamePad. Any button skips
 the intro; `ui.firstBootIntro=false` leaves it out.
 
+WII-UU itself helps out in the guide: the little WII-UU card with googly eyes stands in the corner,
+watches what you pick and talks you through each step out loud ("Light or dark? I look good in
+both, honestly."). It reacts to your choices (turn the music off and it says "Ouch."), greets your
+phone when it connects, and giggles when you try your controller. It only talks in the guide; the
+voice is recorded ahead of time with [Piper](https://github.com/rhasspy/piper) (a voice trained on
+the public-domain LJ Speech recordings), so nothing is downloaded, and the music ducks under it.
+*Settings → System → WII-UU talks in the guide* (`ui.guideVoice=false`) keeps it quiet; its speech
+bubble still shows.
+
 1. Copy games into `~/WiiUU/roms/<system>/`. The folder names are `nes snes gb n64 gba gc nds wii 3ds wiiu
    switch sms genesis saturn dc ps1 ps2 psp ps3 ps4`.
    * PS3 and PS4 games are folders. WII-UU finds the `EBOOT.BIN`/`eboot.bin` inside each one.
@@ -408,7 +417,10 @@ and pins them onto a WII-UU menu on the wall. Those pictures are real: it looks 
 your games that have none (see *Covers* above) and uses the covers you already have. Or it reads
 its fan mail in its armchair: a letter from Timmy, a crayon drawing, a Crysis question (straight
 into the bin) and one made of cut-out magazine letters, which it reads in silence ("Oh, that's not a
-fan letter, that's a death threat.") and files in its very full THREATS drawer. The
+fan letter, that's a death threat.") and files in its very full THREATS drawer. Or, late at
+night, it sneaks onto its computer to read fanfic.com, which its (made-up) internet provider
+blocks for "reasons"; it tries secret mode and a VPN to Antarctica, and pretends to be asleep when
+the hallway light comes on. The
 activities are shuffled, never twice in a row, and the GamePad shows the WII-UU logo talking about
 its own game in a speech bubble: "Damn!" when it messes up, "TETRIS!!" when it doesn't, "Don't
 mind me, just don't interrupt me while I'm still finishing the level." Without a phone the bubble
@@ -742,6 +754,7 @@ ui.musicTrack=wiiuu         # wiiuu | korobeiniki | mountainking | odetojoy | fu
                             # | all | file:<name> (in ~/.wiiuu/music)
 ui.visualizer=true          # frequency bars behind the menu while music plays (V: full screen)
 ui.bootAnimation=true       # start-up animation and chime
+ui.guideVoice=true          # WII-UU talks you through the setup guide (its lines: scripts/make-voice.sh)
 ui.theme=auto               # auto (follow the system) | light | dark | a theme's file name (sunset, my-theme …)
 ui.idleGames=3              # minutes without input before WII-UU plays or does something by itself (0 = never)
 scraper.auto=true           # find missing covers online after each scan (wiiuu --scrape does it once)

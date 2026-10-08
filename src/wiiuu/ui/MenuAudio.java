@@ -48,7 +48,8 @@ final class MenuAudio {
     private boolean broken;
     private Thread thread;
 
-    private record Voice(short[] pcm, float gain, int[] pos) {}
+    private record Voice(short[] pcm, float gain, int[] pos, boolean duck) {}
+    private float duckGain = 1f;          // music under speech
 
     private MenuAudio() {}
 
@@ -63,8 +64,31 @@ final class MenuAudio {
     void play(short[] mono, float gain) {
         synchronized (lock) {
             if (broken) return;
-            voices.add(new Voice(mono, gain, new int[1]));
+            voices.add(new Voice(mono, gain, new int[1], false));
             wake();
+        }
+    }
+
+    /**
+     * Plays speech: like {@link #play}, but the music ducks under it. Returns its position (in
+     * samples, advanced as it plays), which also serves as the handle for {@link #stopSpeech};
+     * null without a sound card.
+     */
+    int[] speak(short[] mono, float gain) {
+        int[] pos = new int[1];
+        synchronized (lock) {
+            if (broken) return null;
+            voices.add(new Voice(mono, gain, pos, true));
+            wake();
+        }
+        return pos;
+    }
+
+    /** Cuts off speech started with {@link #speak}. */
+    void stopSpeech(int[] handle) {
+        synchronized (lock) {
+            voices.removeIf(v -> v.pos() == handle);
+            handle[0] = Integer.MAX_VALUE;
         }
     }
 
@@ -213,6 +237,7 @@ final class MenuAudio {
         } catch (Exception | LinkageError e) {
             synchronized (lock) {
                 broken = true;                                    // no audio device: stay quiet
+                for (Voice v : voices) v.pos()[0] = v.pcm().length;   // (speech counts as said)
                 voices.clear();
             }
         } finally {
@@ -222,7 +247,11 @@ final class MenuAudio {
 
     private void mixMusic(float[] mix) {
         if (music == null) return;
+        boolean speech = false;
+        for (Voice v : voices) speech |= v.duck();
+        float duckTo = speech ? 0.35f : 1f;
         for (int i = 0; i < BLOCK; i++) {
+            duckGain += (duckTo - duckGain) * (speech ? 0.0005f : 0.0001f);
             // ~1.5 s fade in, ~0.6 s fade out
             float target = pending != null ? 0f : musicTarget;
             if (musicGain < target) musicGain = Math.min(target, musicGain + 1f / (RATE * 1.5f));
@@ -238,7 +267,7 @@ final class MenuAudio {
                 scopePos = (scopePos + 1) % scope.length;
                 continue;
             }
-            float g = musicGain * musicGain * musicVolume / 32768f;
+            float g = musicGain * musicGain * musicVolume * duckGain / 32768f;
             float sl = music[musicPos * 2] * g, sr = music[musicPos * 2 + 1] * g;
             mix[i * 2] += sl;
             mix[i * 2 + 1] += sr;

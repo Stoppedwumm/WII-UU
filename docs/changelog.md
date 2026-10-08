@@ -3,6 +3,20 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.54 (2026-10-08)
+- WII-UU helps you through the setup guide: its googly-eyed card stands in the corner, watches what
+  you pick, and talks you through every step out loud, with a speech bubble that types along. It
+  reacts to your choices ("Ooh. Mysterious." for dark mode, "Ouch." when the music goes off),
+  says hi to your phone when it connects and giggles when you try your controller. It only talks
+  in the guide; the music ducks under it. *Settings → System → WII-UU talks in the guide* turns
+  the voice off.
+- A new idle activity, after bedtime: at 2:47 AM WII-UU sneaks onto its computer to read
+  fanfic.com, which SlowNet Broadband (made up) has blocked. "Reason: reasons." Then "still
+  reasons", then in secret mode "we can see you in there". A VPN to Antarctica (1 penguin online)
+  gets it to chapter 47 of "The GamePad and Me", until SlowNet blocks it again ("Since when do you
+  live in Antarctica?"). When the hallway light comes on, the screen goes off and WII-UU is very
+  much asleep. Zzz. All drawn: nothing is visited.
+
 ## 1.9.53 (2026-10-08)
 - A new idle activity: WII-UU reads its fan mail. Letters drop through the door, and it reads them
   one by one in its armchair: Timmy (9) thinks it's the best console ever ("Aww."), Mia drew it
