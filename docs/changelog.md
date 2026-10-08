@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.57 (2026-10-08)
+- WII-UU's Future House banger can be heard now: the menu music pauses for the music-making idle
+  activity, and you hear the track come together part by part as it appears on screen (kick,
+  clap, hats, sub bass, saw chords, vocal chops), stop for the piano roll, come back with the
+  "Mario" lead, build up with a snare roll and riser, and drop. Then the door bangs, sirens, the
+  KA-CHUNK of the stamp and one lonely note. All synthesized by WII-UU; the "Mario" lead is an
+  original tune, not Nintendo's. The menu music comes back when the scene ends or you take over,
+  and with menu music off the scene stays silent.
+
 ## 1.9.56 (2026-10-08)
 - A hidden Developer tab in Settings: press *System → Check for updates* 7 times in a row ("You're
   3 steps away from being a developer."). It starts any idle activity right away (Tetris, Pong, the

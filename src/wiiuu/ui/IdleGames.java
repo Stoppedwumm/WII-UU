@@ -94,6 +94,7 @@ final class IdleGames {
     }
 
     private void nextGame() {
+        if (game != null) game.stop();
         if (rotation.isEmpty()) {
             rotation.addAll(List.of("tetris", "pong", "web", "shop", "art", "mail", "night", "studio"));
             java.util.Collections.shuffle(rotation, random);
@@ -496,6 +497,27 @@ final class IdleGames {
         void cheatUndo();
 
         void cheatEnded(boolean busted);
+
+        /** Whether it brings its own music (the menu's pauses meanwhile). */
+        default boolean ownMusic() {
+            return false;
+        }
+
+        /** It's over or taken over: stop any sound it makes. */
+        default void stop() {
+        }
+    }
+
+    /** Whether the menu music is on (the studio sketch only plays its track then). */
+    static volatile boolean musicAllowed = true;
+
+    boolean ownMusic() {
+        return game != null && game.ownMusic();
+    }
+
+    /** Ends whatever plays now (its sound too). */
+    void stop() {
+        if (game != null) game.stop();
     }
 
     // ---- Tetris ----------------------------------------------------------------------------------

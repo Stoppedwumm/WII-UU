@@ -790,6 +790,17 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         return idleSnap;
     }
 
+    private boolean idleOwnMusic;                           // an idle sketch plays its own (the menu's pauses)
+
+    private void endIdle() {
+        idleGames.stop();
+        idleGames = null;
+        if (idleOwnMusic) {
+            idleOwnMusic = false;
+            updateMusic();
+        }
+    }
+
     private String idleNow;                                 // started from Settings > Developer
 
     /** Starts an idle activity right away (by its id; "" = the usual shuffle), once the menu is free. */
@@ -808,7 +819,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         lastInput = System.currentTimeMillis();
         if (idleGames == null) return false;
         String bye = idleGames.goodbye();
-        idleGames = null;
+        endIdle();
         idleSnap = null;
         idleBuf = null;
         Sfx.select();
@@ -823,7 +834,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (!canIdle()) {
             lastInput = now;                                 // a game, a dialog: the wait starts again afterwards
             if (idleGames != null) {
-                idleGames = null;
+                endIdle();
                 idleSnap = null;
                 repaint();
             }
@@ -839,7 +850,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             if (minutes <= 0 || now - lastInput < wait) return false;
             idleGames = new IdleGames();
         }
+        IdleGames.musicAllowed = musicEnabled;
         idleGames.step(now);
+        if (idleGames.ownMusic() != idleOwnMusic) {
+            idleOwnMusic = !idleOwnMusic;
+            updateMusic();
+        }
         IdleGames.Line l = idleGames.line();
         idleSnap = new wiiuu.net.GamepadServer.Idle(idleGames.gameName(), idleGames.score(), l.text(), l.id(), l.mood(),
                 idleGames.cheatPhase(), false);
@@ -1034,7 +1050,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private void updateMusic() {
         // not while the first boot's intro (with its own beat) is pending or playing
-        MenuAudio.get().musicOn(musicEnabled && revealed && playing == null && intro == null && !introPending);
+        MenuAudio.get().musicOn(musicEnabled && revealed && playing == null && intro == null && !introPending && !idleOwnMusic);
     }
 
     private void buildHomeTiles() {

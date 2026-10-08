@@ -18,8 +18,8 @@ import java.util.function.BiConsumer;
  * An idle-time sketch: WII-UU produces a Future House banger in "FL Stoodio" (made up), builds it
  * track by track, then has the idea of putting the Super Mario Bros. theme in it. Build-up, drop,
  * export, upload... copyright claim. Red and blue lights, and the COPYRIGHT S.W.A.T. team bursts in
- * with a giant TAKEDOWN stamp and leaves with its MIDI keyboard. All drawn and silent: no melody
- * is played.
+ * with a giant TAKEDOWN stamp and leaves with its MIDI keyboard. With its own music
+ * ({@link StudioTrack}; the menu's pauses meanwhile), whose "Mario" lead is an original tune.
  *
  * <p>Worked out from the time since it started, like {@link IdleWeb}: see {@link #SCRIPT}.
  */
@@ -27,7 +27,11 @@ final class IdleStudio implements IdleGames.Game {
 
     private static final double END = 58, BEAT = 60.0 / 128;
     private final BiConsumer<String, String> say;
-    private final long started = System.currentTimeMillis();
+    private long started = System.currentTimeMillis();
+    private final long created = started;
+    private volatile short[] track;                     // its music, rendered in the background
+    private int[] playing;                              // the mixer's handle while it plays
+    private boolean waited;
     private final List<String> spoken = new ArrayList<>();
     private double t;
     private boolean done;
@@ -35,6 +39,12 @@ final class IdleStudio implements IdleGames.Game {
 
     IdleStudio(BiConsumer<String, String> say) {
         this.say = say;
+        if (IdleGames.musicAllowed) {
+            Thread render = new Thread(() -> track = StudioTrack.render(), "idle-studio-music");
+            render.setDaemon(true);
+            render.setPriority(Thread.MIN_PRIORITY);
+            render.start();
+        } else waited = true;
     }
 
     private static final Object[][] SCRIPT = {
@@ -57,6 +67,20 @@ final class IdleStudio implements IdleGames.Game {
     @Override
     public void step(double dt, long now) {
         if (done) return;
+        if (!waited) {
+            // hold the first frame until the music is ready (a few seconds at most), so they stay in step
+            short[] pcm = track;
+            if (pcm == null && now - created < 5000) {
+                started = now;
+                return;
+            }
+            waited = true;
+            started = now;
+            if (pcm != null) {
+                float volume = MenuAudio.get().musicVolume();
+                playing = MenuAudio.get().playTrack(pcm, Math.max(0.15f, volume) * 1.1f);
+            }
+        }
         t = (now - started) / 1000.0;
         for (Object[] line : SCRIPT) {
             String text = (String) line[1];
@@ -67,6 +91,7 @@ final class IdleStudio implements IdleGames.Game {
         }
         if (t >= END) {
             done = true;
+            stop();
             doneAt = now;
         }
     }
@@ -102,6 +127,17 @@ final class IdleStudio implements IdleGames.Game {
 
     @Override
     public void cheatEnded(boolean busted) {
+    }
+
+    @Override
+    public boolean ownMusic() {
+        return !done && IdleGames.musicAllowed;
+    }
+
+    @Override
+    public void stop() {
+        if (playing != null) MenuAudio.get().stopSpeech(playing);
+        playing = null;
     }
 
     private static double clamp(double a) {
@@ -303,9 +339,10 @@ final class IdleStudio implements IdleGames.Game {
         g.setColor(new Color(0xFF8F00));
         g.setFont(MenuView.font(Font.BOLD, H * 0.024f));
         g.drawString("FL Stoodio", x + w * 0.02f, y + bar * 0.66f);
+        float after = x + w * 0.02f + g.getFontMetrics().stringWidth("FL Stoodio") + w * 0.03f;
         g.setColor(new Color(0xCFD8DC));
         g.setFont(MenuView.font(Font.PLAIN, H * 0.02f));
-        g.drawString(t < ROLL ? "banger.flp" : "WII-UU - Mario House (FINAL v2 REAL).flp", x + w * 0.2f, y + bar * 0.66f);
+        g.drawString(t < ROLL ? "banger.flp" : "Mario House (FINAL v2 REAL).flp", after, y + bar * 0.66f);
         g.setColor(new Color(0x80E27E));
         g.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(8, Math.round(H * 0.022f))));
         g.drawString("128.000", x + w * 0.84f, y + bar * 0.66f);

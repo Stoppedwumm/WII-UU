@@ -422,7 +422,9 @@ night, it sneaks onto its computer to read fanfic.com, which its (made-up) inter
 blocks for "reasons"; it tries secret mode and a VPN to Antarctica, and pretends to be asleep when
 the hallway light comes on. Or it produces a Future House banger in "FL Stoodio" (made up),
 puts the Super Mario Bros. theme in it, uploads it, and gets raided by the COPYRIGHT S.W.A.T.
-team (a giant TAKEDOWN stamp; they take its MIDI keyboard; nothing is played). The
+team (a giant TAKEDOWN stamp; they take its MIDI keyboard). That one has its own music: the
+menu music pauses while WII-UU's track builds up and drops (synthesized like the menu's; the
+"Mario" lead is an original tune, not Nintendo's). The
 activities are shuffled, never twice in a row, and the GamePad shows the WII-UU logo talking about
 its own game in a speech bubble: "Damn!" when it messes up, "TETRIS!!" when it doesn't, "Don't
 mind me, just don't interrupt me while I'm still finishing the level." Without a phone the bubble

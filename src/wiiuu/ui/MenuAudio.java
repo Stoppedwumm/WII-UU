@@ -84,7 +84,25 @@ final class MenuAudio {
         return pos;
     }
 
-    /** Cuts off speech started with {@link #speak}. */
+    /** Plays a long mono track (an idle sketch's own music) without ducking; stop it with {@link #stopSpeech}. */
+    int[] playTrack(short[] mono, float gain) {
+        int[] pos = new int[1];
+        synchronized (lock) {
+            if (broken) return null;
+            voices.add(new Voice(mono, gain, pos, false));
+            wake();
+        }
+        return pos;
+    }
+
+    /** The menu music's volume, 0..1. */
+    float musicVolume() {
+        synchronized (lock) {
+            return musicVolume;
+        }
+    }
+
+    /** Cuts off speech (or a track) started with {@link #speak} or {@link #playTrack}. */
     void stopSpeech(int[] handle) {
         synchronized (lock) {
             voices.removeIf(v -> v.pos() == handle);
