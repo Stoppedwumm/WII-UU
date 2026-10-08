@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.56 (2026-10-08)
+- A hidden Developer tab in Settings: press *System → Check for updates* 7 times in a row ("You're
+  3 steps away from being a developer."). It starts any idle activity right away (Tetris, Pong, the
+  ROM website, amazin.shop, decorating the menu, fan mail, fanfic.com, the Future House banger),
+  or all of them shuffled. *Hide the Developer tab* puts it away again.
+
 ## 1.9.55 (2026-10-08)
 - A new idle activity: WII-UU makes music. In "FL Stoodio" (made up) it builds a Future House
   track bar by bar (kick, clap, hats, sub bass, saw lead, vocal chops, sidechain on everything),

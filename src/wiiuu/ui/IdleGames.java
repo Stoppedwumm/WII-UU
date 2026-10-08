@@ -39,8 +39,16 @@ final class IdleGames {
     private final List<String> recent = new ArrayList<>();
 
     IdleGames() {
+        this(System.getProperty("wiiuu.idleFirst"));        // -Dwiiuu.idleFirst=night: for trying one out
+    }
+
+    /** Starts with this activity (tetris, pong, web, shop, art, mail, night, studio), then the usual shuffle. */
+    IdleGames(String first) {
+        this.first = first;
         nextGame();
     }
+
+    private final String first;
 
     /** The sketches say their own lines (no chatter, no "let's go" at the start). */
     private boolean scripted() {
@@ -90,7 +98,6 @@ final class IdleGames {
             rotation.addAll(List.of("tetris", "pong", "web", "shop", "art", "mail", "night", "studio"));
             java.util.Collections.shuffle(rotation, random);
             if (rotation.get(0).equals(lastKind)) rotation.add(rotation.remove(0));     // never the same twice in a row
-            String first = System.getProperty("wiiuu.idleFirst");                       // for trying one out: tetris, pong, web, shop, art, mail, night, studio
             if (lastKind.isEmpty() && first != null && rotation.remove(first)) rotation.add(0, first);
         }
         lastKind = rotation.remove(0);

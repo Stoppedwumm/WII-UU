@@ -790,6 +790,14 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         return idleSnap;
     }
 
+    private String idleNow;                                 // started from Settings > Developer
+
+    /** Starts an idle activity right away (by its id; "" = the usual shuffle), once the menu is free. */
+    void startIdle(String kind) {
+        idleNow = kind;
+        repaint();
+    }
+
     private boolean canIdle() {
         return !booting && intro == null && !introPending && guide == null && !guidePending && settings == null
                 && playing == null && !showPad && !confirmQuit && !vizFull && isShowing();
@@ -820,6 +828,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 repaint();
             }
             return false;
+        }
+        if (idleGames == null && idleNow != null) {
+            idleGames = new IdleGames(idleNow);
+            idleNow = null;
         }
         if (idleGames == null) {
             int minutes = config.getInt("ui.idleGames", 3);

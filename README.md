@@ -434,6 +434,11 @@ everything goes back as it was, and the computer gets a penalty point. Any butto
 else on the phone) takes over. *Settings → Look & sound → Plays by
 itself when idle* sets the wait or turns it off (`ui.idleGames`, in minutes; 0 = never).
 
+**Developer tab.** Press *Settings → System → Check for updates* 7 times in a row (it counts down
+from the third press) and a *Developer* category appears. It starts any of WII-UU's idle activities
+right away, without the wait, or all of them shuffled; *Hide the Developer tab* puts it away again
+(`dev.unlocked`).
+
 When WII-UU closes (from its power menu, a restart or an update, or Console Mode going to the
 desktop or shutting down), every phone shows **WII-UU is not running** and why. If WII-UU just
 disappears (a crash, the computer switched off), the phone notices within a few seconds. The page

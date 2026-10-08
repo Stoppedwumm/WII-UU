@@ -358,7 +358,7 @@ public final class SettingsScreen {
     private final long opened = System.currentTimeMillis();
     private long closing;
 
-    private final List<String> categories = List.of("Look & sound", "Games", "GamePad & players", "OpenBased", "System");
+    private final List<String> categories = new ArrayList<>(List.of("Look & sound", "Games", "GamePad & players", "OpenBased", "System"));
     private int category;
     private boolean inSidebar = true;
 
@@ -384,6 +384,7 @@ public final class SettingsScreen {
         this.view = view;
         this.sv = services;
         this.config = services.config();
+        if (config.getBool("dev.unlocked", false)) categories.add("Developer");
         showCategory(0);
         Sfx.select();
     }
@@ -601,7 +602,7 @@ public final class SettingsScreen {
             Sfx.back();
             return;
         }
-        for (int i = 0; i < categoryRects.length; i++) {
+        for (int i = 0; i < categories.size(); i++) {
             if (categoryRects[i] != null && categoryRects[i].contains(x, y)) {
                 if (i != category || !stack.isEmpty()) {
                     slideDir = i > category ? 1 : -1;
@@ -646,7 +647,8 @@ public final class SettingsScreen {
             case 1 -> new Page("Games", this::gameRows);
             case 2 -> new Page("GamePad & players", this::padRows);
             case 3 -> new Page("OpenBased", this::openBasedRows);
-            default -> new Page("System", this::systemRows);
+            case 4 -> new Page("System", this::systemRows);
+            default -> new Page("Developer", this::devRows);
         };
     }
 
@@ -980,7 +982,7 @@ public final class SettingsScreen {
     private List<Row> systemRows() {
         List<Row> r = new ArrayList<>();
         r.add(new Header("Updates"));
-        r.add(new Action("Check for updates", null, this::checkForUpdates, () -> updateStatus, null));
+        r.add(new Action("Check for updates", null, this::updatesPressed, () -> updateStatus, null));
         if (release != null) {
             r.add(new Action("Update to " + release.version(), "Your settings, games, paired phones and emulators are kept. "
                     + "WII-UU restarts when it's done.", this::upgrade, null, "Press A again to update now"));
@@ -1054,6 +1056,64 @@ public final class SettingsScreen {
             }
             return r;
         });
+    }
+
+    // ---- the Developer tab: press "Check for updates" 7 times in a row to unlock it ------------------
+
+    private int devPresses;
+    private long devPressAt;
+
+    private void updatesPressed() {
+        long now = System.currentTimeMillis();
+        devPresses = now - devPressAt < 1500 ? devPresses + 1 : 1;
+        devPressAt = now;
+        if (categories.contains("Developer")) {
+            if (devPresses >= 4) say("No need, you're already a developer.");
+        } else if (devPresses >= 7) {
+            config.set("dev.unlocked", "true");
+            config.save();
+            categories.add("Developer");
+            Sfx.chime();
+            say("You're a developer now! The Developer tab is unlocked.");
+        } else if (devPresses >= 3) {
+            int left = 7 - devPresses;
+            say("You're " + left + (left == 1 ? " step" : " steps") + " away from being a developer.");
+        }
+        checkForUpdates();
+    }
+
+    /** Every idle activity, by its rotation id and what it's called here. */
+    private static final String[][] IDLE = {
+            {"tetris", "Tetris"}, {"pong", "Pong"}, {"web", "Free games from a sketchy website"},
+            {"shop", "Shopping on amazin.shop"}, {"art", "Decorating the menu"}, {"mail", "Reading fan mail"},
+            {"night", "Up late on fanfic.com"}, {"studio", "Making a Future House banger"}};
+
+    private List<Row> devRows() {
+        List<Row> r = new ArrayList<>();
+        r.add(new Header("Idle activities"));
+        r.add(new Info("Starts one now, without waiting. Any button takes over again."));
+        for (String[] a : IDLE) {
+            r.add(new Action(a[1], null, () -> {
+                close();
+                view.startIdle(a[0]);
+            }, null, null));
+        }
+        r.add(new Action("All of them, shuffled", "The usual order, starting now.", () -> {
+            close();
+            view.startIdle("");
+        }, null, null));
+        r.add(new Header("Developer tab"));
+        r.add(new Action("Hide the Developer tab", "Press Check for updates 7 times to get it back.", () -> {
+            config.set("dev.unlocked", "false");
+            config.save();
+            categories.remove("Developer");
+            category = categories.size() - 1;
+            inSidebar = true;
+            page = categoryPage(category);
+            reload(true);
+            say("The Developer tab is hidden again.");
+        }, null, null));
+        return r;
     }
 
     private void checkForUpdates() {
@@ -1492,7 +1552,7 @@ public final class SettingsScreen {
     // ---- painting ---------------------------------------------------------------------------------
 
     private Rectangle2D closeRect, backRect;
-    private final Rectangle2D[] categoryRects = new Rectangle2D[5];
+    private final Rectangle2D[] categoryRects = new Rectangle2D[6];             // (the 6th: Developer)
     private BufferedImage backdropImg;
     private String backdropKey;
 
