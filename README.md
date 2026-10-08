@@ -420,7 +420,9 @@ into the bin) and one made of cut-out magazine letters, which it reads in silenc
 fan letter, that's a death threat.") and files in its very full THREATS drawer. Or, late at
 night, it sneaks onto its computer to read fanfic.com, which its (made-up) internet provider
 blocks for "reasons"; it tries secret mode and a VPN to Antarctica, and pretends to be asleep when
-the hallway light comes on. The
+the hallway light comes on. Or it produces a Future House banger in "FL Stoodio" (made up),
+puts the Super Mario Bros. theme in it, uploads it, and gets raided by the COPYRIGHT S.W.A.T.
+team (a giant TAKEDOWN stamp; they take its MIDI keyboard; nothing is played). The
 activities are shuffled, never twice in a row, and the GamePad shows the WII-UU logo talking about
 its own game in a speech bubble: "Damn!" when it messes up, "TETRIS!!" when it doesn't, "Don't
 mind me, just don't interrupt me while I'm still finishing the level." Without a phone the bubble

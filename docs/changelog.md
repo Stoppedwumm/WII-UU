@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.55 (2026-10-08)
+- A new idle activity: WII-UU makes music. In "FL Stoodio" (made up) it builds a Future House
+  track bar by bar (kick, clap, hats, sub bass, saw lead, vocal chops, sidechain on everything),
+  head-bangs along with its headphones on, and then has an idea: the Super Mario Bros. theme, but
+  Future House. Build-up, DROP!!, export, upload... "Copyright claim. A team is on its way to
+  you." Red and blue lights, BANG BANG, and the COPYRIGHT S.W.A.T. team bursts in. "It's a REMIX!
+  Fair use!" A giant stamp says TAKEDOWN (KA-CHUNK!), and they leave with its MIDI keyboard. "New
+  track. 100% original." One note. "Masterpiece." All drawn and silent: no melody is played.
+
 ## 1.9.54 (2026-10-08)
 - WII-UU helps you through the setup guide: its googly-eyed card stands in the corner, watches what
   you pick, and talks you through every step out loud, with a speech bubble that types along. It
