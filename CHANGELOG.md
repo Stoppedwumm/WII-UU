@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.60 (2026-10-08)
+- WII-UU keeps you company outside the setup guide too. In the menu's bottom-left corner it walks
+  in, says hello by the time of day, watches the selection with its googly eyes, now and then says
+  something about the console, game or dock button you rest on ("No N64 games yet. Copy some into
+  roms/n64 and press -."), reacts to the GamePad code ("Scan me! Well, the code.") and the power
+  menu ("Noooo, stay a little!"), welcomes you back after a game, and has something to say when
+  you click it. In Settings it stands under the categories with a line for each ("Careful in here.
+  This is where the serious stuff lives.") and reacts to switches ("Ouch." when the music goes off).
+  Only the setup guide gives it a voice. *Settings → Look & sound → WII-UU helper* turns it off.
+
 ## 1.9.59 (2026-10-08)
 - The music-making idle activity now really has Super Mario Bros. in it: the lead of WII-UU's
   Future House track plays the opening of the overworld theme as a square wave, and the piano roll

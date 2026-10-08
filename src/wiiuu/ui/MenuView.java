@@ -561,6 +561,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     public void setPlaying(Game g) {
+        if (g == null && playing != null) {
+            mascot.sayOne("Welcome back! How was it?", "Back already? Did you win?", "Welcome back! I kept your seat warm.");
+            mascotKey = null;
+        }
         playing = g;
         showPad = false;
         confirmQuit = false;
@@ -878,6 +882,95 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     // ---- settings ------------------------------------------------------------------------
+
+    // ---- WII-UU, the little helper in the corner -----------------------------------------------------
+
+    private final Mascot mascot = new Mascot();
+    private boolean greeted;
+    private long mascotFrom;                                // when it could first be seen
+    private Object mascotKey;                               // what's selected, and since when
+    private long mascotKeyAt;
+    private final java.util.Set<Object> mascotTalkedAbout = new java.util.HashSet<>();
+    private boolean mascotSawPad, mascotSawQuit;
+
+    private boolean mascotShown() {
+        return config.getBool("ui.mascot", true) && revealed && !booting && intro == null && guide == null
+                && playing == null && !vizFull && getWidth() > 0;
+    }
+
+    /** What it notices: hello, the GamePad code, the power menu, and what you rest on. True if it spoke. */
+    private boolean tickMascot() {
+        long now = System.currentTimeMillis();
+        if (mascotFrom == 0) mascotFrom = now;
+        if (!greeted && now - mascotFrom > 1500) {
+            greeted = true;
+            mascot.say(Mascot.greeting());
+            return true;
+        }
+        if (showPad != mascotSawPad) {
+            mascotSawPad = showPad;
+            if (showPad) mascot.sayOne("Point your phone's camera at the code!", "Scan me! Well, the code. Not me.");
+            return showPad;
+        }
+        if (confirmQuit != mascotSawQuit) {
+            mascotSawQuit = confirmQuit;
+            if (confirmQuit) mascot.sayOne("Leaving already?", "Noooo, stay a little!", "Okay... I'll be here.");
+            return confirmQuit;
+        }
+        if (showPad || confirmQuit || settings != null) return false;
+        Object key = inDock ? "dock" + dockSel : sel >= 0 && sel < tiles.size() ? tiles.get(sel).id() : null;
+        if (key == null) return false;
+        if (!key.equals(mascotKey)) {
+            mascotKey = key;
+            mascotKeyAt = now;
+            return false;
+        }
+        // rested on something for a moment, and it's been quiet a while: a word about it (once each)
+        if (now - mascotKeyAt < 1800 || mascot.quietFor() < 20000 || mascotTalkedAbout.contains(key)) return false;
+        mascotTalkedAbout.add(key);
+        String line = inDock ? dockLine(Dock.values()[dockSel]) : tileLine(tiles.get(sel));
+        if (line == null || random.nextInt(3) == 0) return false;          // not about everything
+        mascot.say(line);
+        return true;
+    }
+
+    private final java.util.Random random = new java.util.Random();
+
+    private String tileLine(Tile t) {
+        if (t.game != null) {
+            String name = t.game.name();
+            if (name.length() > 28) name = name.substring(0, 26) + "\u2026";
+            String[] lines = {name + "? Classic.", "Ooh, " + name + ". Good one.", name + "! Press A, you know you want to."};
+            return lines[random.nextInt(lines.length)];
+        }
+        if (t.system == null) return null;
+        String s = t.system.shortName();
+        if (t.system.id().equals("reactions")) return "Reaction videos! I'm in those, you know.";
+        if (t.system.id().equals("openbased")) return "OpenBased: videos, on a console. Fancy.";
+        if (t.count == 0) return "No " + s + " games yet. Copy some into roms/" + t.system.id() + " and press \u2212.";
+        String[] lines = {s + "! Good taste.", t.count == 1 ? "One " + s + " game. Quality over quantity." : t.count + " " + s + " games in there!",
+                "Ooh, " + s + ". I remember that one."};
+        return lines[random.nextInt(lines.length)];
+    }
+
+    private static String dockLine(Dock d) {
+        return switch (d) {
+            case GAMEPAD -> "Your phone can be the GamePad. Scan the code!";
+            case SETTINGS -> "Settings! I'll come with you.";
+            case REFRESH -> "Got new games? I'll go look for them.";
+            case POWER -> "Don't press that. Or do. I'm not your boss.";
+        };
+    }
+
+    private void paintMascot(Graphics2D g, Layout L) {
+        if (!mascotShown()) return;
+        float s = L.h * 0.046f;
+        float footX = Math.max(L.w * 0.03f + s * 1.4f, L.w * 0.07f), footY = L.h - L.dockH * 0.27f - s * 0.25f;
+        if (hlInit) mascot.look(hl[0] + hl[2] / 2, hl[1] + hl[3] / 2);
+        float shelfX = (float) (dockRect(L, 0).getX() - dockRect(L, 0).getWidth() * 0.9f);
+        float bubbleW = Math.max(L.w * 0.16f, shelfX - (footX + s * 1.8f) - s * 0.5f);
+        mascot.paint(g, footX, footY, s, false, bubbleW);
+    }
 
     private SettingsScreen settings;
 
@@ -1418,6 +1511,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     back();
                     return;
                 }
+                if (mascotShown() && !showPad && !confirmQuit && mascot.hit(e.getX(), e.getY())) {
+                    mascot.sayOne(Mascot.POKED);
+                    Sfx.select();
+                    repaint();
+                    return;
+                }
                 if (showPad || confirmQuit) {
                     if (confirmQuit) {
                         List<Rectangle2D> rs = powerRects();
@@ -1556,6 +1655,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         // the visualizer moves while music plays (about 30 frames a second)
         if ((vizFull || vizOn && playing == null && !booting) && (++vizTick & 1) == 0
                 && (vizFull || MenuAudio.get().musicAudible() || vizFading())) dirty = true;
+        if (mascotShown() && (tickMascot() || mascot.needsFrame())) dirty = true;
         if (dirty) repaint();
     }
 
@@ -2032,6 +2132,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (playing != null) paintNowPlaying(g, L);
         else if (showPad) paintPadOverlay(g, L);
         else if (confirmQuit) paintConfirm(g);
+        paintMascot(g, L);                                  // (on top: it reacts to those too)
         if (vizFull) {
             boolean mix = ExtendedMix.ID.equals(musicChoice);
             viz.paintFull(g, getWidth(), getHeight(), musicEnabled ? musicTitle : "Music is off",

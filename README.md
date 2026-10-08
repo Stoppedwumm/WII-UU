@@ -200,6 +200,14 @@ the public-domain LJ Speech recordings), so nothing is downloaded, and the music
 *Settings → System → WII-UU talks in the guide* (`ui.guideVoice=false`) keeps it quiet; its speech
 bubble still shows.
 
+It stays around after the guide, too: in the bottom-left corner of the menu it says hello by the
+time of day, now and then has a word about the console, game or dock button you rest on ("No N64
+games yet. Copy some into roms/n64"), reacts to the GamePad code and the power menu, welcomes you
+back after a game, and says something when you click it. In Settings it stands under the
+categories, with a line for each and a reaction when you flip a switch ("Ouch." for the music).
+It only talks out loud in the setup guide. *Settings → Look & sound → WII-UU helper*
+(`ui.mascot=false`) sends it away.
+
 1. Copy games into `~/WiiUU/roms/<system>/`. The folder names are `nes snes gb n64 gba gc nds wii 3ds wiiu
    switch sms genesis saturn dc ps1 ps2 psp ps3 ps4`.
    * PS3 and PS4 games are folders. WII-UU finds the `EBOOT.BIN`/`eboot.bin` inside each one.
@@ -764,6 +772,7 @@ ui.musicTrack=wiiuu         # wiiuu | korobeiniki | mountainking | odetojoy | fu
 ui.visualizer=true          # frequency bars behind the menu while music plays (V: full screen)
 ui.bootAnimation=true       # start-up animation and chime
 ui.guideVoice=true          # WII-UU talks you through the setup guide (its lines: scripts/make-voice.sh)
+ui.mascot=true              # the little WII-UU in the corner of the menu and of Settings
 ui.theme=auto               # auto (follow the system) | light | dark | a theme's file name (sunset, my-theme …)
 ui.idleGames=3              # minutes without input before WII-UU plays or does something by itself (0 = never)
 scraper.auto=true           # find missing covers online after each scan (wiiuu --scrape does it once)

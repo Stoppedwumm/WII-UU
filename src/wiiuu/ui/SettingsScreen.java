@@ -110,8 +110,10 @@ public final class SettingsScreen {
 
         @Override
         void activate() {
-            set.accept(!get.getAsBoolean());
+            boolean on = !get.getAsBoolean();
+            set.accept(on);
             Sfx.select();
+            mascotToggled(label, on);
         }
     }
 
@@ -390,6 +392,7 @@ public final class SettingsScreen {
     }
 
     private void showCategory(int c) {
+        if (c != category || page == null) mascotCategory(c);
         category = c;
         stack.clear();
         focusStack.clear();
@@ -698,6 +701,8 @@ public final class SettingsScreen {
                     config.save();
                 }));
         r.add(toggle("Start in fullscreen", "From the next start (F11 switches now).", "ui.fullscreen", false, null));
+        r.add(toggle("WII-UU helper", "The little WII-UU in the corner of the menu and of Settings (the setup guide always has it).",
+                "ui.mascot", true, null));
         r.add(new Header("Sound"));
         r.add(toggle("Menu music", "Music in the menu; it fades out while a game runs.", "ui.music", true,
                 () -> view.setMusicEnabled(config.getBool("ui.music", true))));
@@ -1058,6 +1063,40 @@ public final class SettingsScreen {
         });
     }
 
+    // ---- WII-UU, keeping you company in here ---------------------------------------------------------
+
+    private final Mascot mascot = new Mascot();
+
+    private boolean mascotOn() {
+        return config.getBool("ui.mascot", true) || mascot.talking();    // (it finishes saying goodbye)
+    }
+
+    private void mascotCategory(int c) {
+        if (c >= categories.size()) return;
+        switch (categories.get(c)) {
+            case "Look & sound" -> mascot.sayOne("Make me pretty!", "Dark mode? Light mode? I look good either way.");
+            case "Games" -> mascot.sayOne("Ooh, games! I can find covers for them too.", "Where do your games live? Tell me here.");
+            case "GamePad & players" -> mascot.sayOne("Phones become GamePads. Wild, right?", "Up to 8 players! I'll make snacks.");
+            case "OpenBased" -> mascot.say("OpenBased: videos on your console. I don't judge.");
+            case "System" -> mascot.sayOne("Careful in here. This is where the serious stuff lives.", "Updates, the setup guide... the boring-but-important corner.");
+            case "Developer" -> mascot.say("Oh, a developer! Fancy. Don't break anything.");
+            default -> { }
+        }
+    }
+
+    private long lastToggleLine;
+
+    private void mascotToggled(String label, boolean on) {
+        if (label.equals("Menu music")) mascot.say(on ? "Thank you!" : "Ouch.");
+        else if (label.equals("WII-UU helper")) {
+            if (!on) mascot.say("Fine. I'll be quiet. Bye!");
+        } else if (System.currentTimeMillis() - lastToggleLine > 8000) {
+            mascot.sayOne(on ? new String[]{"On it!", "Done!", "Switched on. I remember everything."}
+                    : new String[]{"Off it goes.", "Done!", "Switched off. Noted."});
+        } else return;
+        lastToggleLine = System.currentTimeMillis();
+    }
+
     // ---- the Developer tab: press "Check for updates" 7 times in a row to unlock it ------------------
 
     private int devPresses;
@@ -1074,6 +1113,7 @@ public final class SettingsScreen {
             config.save();
             categories.add("Developer");
             Sfx.chime();
+            mascot.say("Welcome to the club. We have snacks.");
             say("You're a developer now! The Developer tab is unlocked.");
         } else if (devPresses >= 3) {
             int left = 7 - devPresses;
@@ -1528,7 +1568,8 @@ public final class SettingsScreen {
         boolean caretBlink = editor != null && (now / 500) != lastBlink;
         lastBlink = now / 500;
         needsFrame = moving || closing != 0 || now - opened < OPEN_MS + 40 || now - changed < SLIDE_MS + 40
-                || caretBlink || note != null && now - noteAt > 3900 && now - noteAt < 4250 || stale;
+                || caretBlink || note != null && now - noteAt > 3900 && now - noteAt < 4250 || stale
+                || mascotOn() && mascot.needsFrame();
         stale = false;
         return true;
     }
@@ -1609,6 +1650,17 @@ public final class SettingsScreen {
             g.setFont(MenuView.font(on ? Font.BOLD : Font.PLAIN, u * 3.1f));
             fit(g, categories.get(i), on ? Font.BOLD : Font.PLAIN, u * 3.1f, (float) r.getWidth() - itemH * 0.8f);
             g.drawString(categories.get(i), (float) r.getX() + itemH * 0.45f, (float) r.getCenterY() + u * 1.1f);
+        }
+
+        // WII-UU, below the categories, with its bubble above it
+        if (mascotOn()) {
+            float s = u * 3.6f;
+            if (!inSidebar && frameSet) mascot.look(frame[0] + frame[2] / 2, frame[1] + frame[3] / 2);
+            else {
+                Rectangle2D cr = categoryRects[Math.min(category, categories.size() - 1)];
+                if (cr != null) mascot.look((float) cr.getCenterX(), (float) cr.getCenterY());
+            }
+            mascot.paint(g, pad + s * 1.6f, bottom - u * 0.5f, s, true, sideW - u * 2);
         }
 
         // the page: a card with the rows, sliding in when it changes
