@@ -305,6 +305,26 @@ when dark { glow = alpha(sun, 10%) }   # only in dark mode
 - `wiiuu --theme-check FILE` (or a theme's name) checks a theme from the terminal and shows all
   its colours as swatches, or points at the mistake.
 
+## Reaction mode
+
+Make videos that WII-UU reacts to. **WII-UU-Reactions.jar** (in the zip, or
+[from the website](https://wiiuu.stoppedwumm.net/download/WII-UU-Reactions.jar)) is an editor:
+start it with `java -jar WII-UU-Reactions.jar` (Java 17 and ffmpeg needed), drag videos in, play
+them with sound, and type what WII-UU says at each moment on the timeline. Each reaction has words,
+a mood (happy, sad, smug, nervous, focus, sneaky, shocked) and how long it stays. Drag a reaction to
+move it, drag its right edge to make it longer, double-click to edit; quick buttons add the usual
+suspects ("Damn!", "No way!", "Called it."). Keys: Space plays, ← → jump 5 seconds, Delete removes.
+The preview shows the caption and the GamePad's bubble as they will look.
+
+*Export pack…* writes a .zip with the videos, a WebVTT caption file for each (`WII-UU: ...`, for
+any player), thumbnails and `reactions.json`; *Send to WII-UU* puts it straight into
+`~/.wiiuu/reactions` on the same computer. Projects save as `.wiireact`.
+
+In WII-UU, packs in `~/.wiiuu/reactions` are the **Reactions** channel on the home screen (press −
+to look for new ones). A video plays full screen (mpv best, VLC works) with the reactions as
+captions, and the GamePad shows the WII-UU logo saying each line, in its mood, right on time (it
+follows mpv's position, also after pausing or skipping). Tap the phone to pause.
+
 ## RetroArch mode
 
 Turn on *Settings → Games → RetroArch mode* (`retroarch.enabled=true`) to run every system that has

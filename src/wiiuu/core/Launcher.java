@@ -99,11 +99,21 @@ public final class Launcher {
         this.openBased = openBased;
     }
 
+    private Reactions reactions;
+
+    /** Plays reaction videos (in the video player, like OpenBased's). */
+    public void setReactions(Reactions reactions) {
+        this.reactions = reactions;
+    }
+
     public synchronized void launch(Game game) throws LaunchException {
         if (isRunning()) throw new LaunchException(current.name() + " is already running");
         List<String> cmd = null;
-        boolean video = OpenBased.handles(game);
-        if (video) {
+        boolean video = OpenBased.handles(game) || Reactions.handles(game);
+        if (Reactions.handles(game)) {
+            if (reactions == null) throw new LaunchException("Reaction videos aren't available");
+            cmd = reactions.command(game);
+        } else if (video) {
             if (openBased == null) throw new LaunchException("OpenBased isn't available");
             cmd = openBased.command(game);
         } else if (retroArch.handles(game.system())) {

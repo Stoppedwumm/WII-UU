@@ -830,7 +830,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         idleGames.step(now);
         IdleGames.Line l = idleGames.line();
         idleSnap = new wiiuu.net.GamepadServer.Idle(idleGames.gameName(), idleGames.score(), l.text(), l.id(), l.mood(),
-                idleGames.cheatPhase());
+                idleGames.cheatPhase(), false);
         repaint();
         return true;
     }
@@ -902,7 +902,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     int gameCount() {
         int n = 0;
-        for (var e : snap.games().entrySet()) if (e.getKey() != Systems.OPENBASED) n += e.getValue().size();
+        for (var e : snap.games().entrySet()) if (e.getKey() != Systems.OPENBASED && e.getKey() != Systems.REACTIONS) n += e.getValue().size();
         return n;
     }
 
@@ -1032,6 +1032,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             int n = snap.of(s).size();
             if (config.hidden(s) || (hideEmpty && n == 0)) continue;
             if (s == Systems.OPENBASED && !wiiuu.core.OpenBased.configured(config)) continue;   // a channel once set up
+            if (s == Systems.REACTIONS && n == 0) continue;                                        // once there's a pack
             tiles.add(new Tile(s, null, n));
         }
     }
@@ -2347,8 +2348,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
         g.setColor(new Color(255, 255, 255, 190));
         g.setFont(font(Font.BOLD, h * 0.075f));
-        boolean channel = t.system == Systems.OPENBASED;
-        g.drawString(channel ? "MEDIA SERVER" : t.system.maker().toUpperCase(Locale.ROOT), x + w * 0.07f, y + h * 0.13f);
+        boolean channel = t.system == Systems.OPENBASED || t.system == Systems.REACTIONS;
+        g.drawString(t.system == Systems.REACTIONS ? "WII-UU REACTS" : channel ? "MEDIA SERVER" : t.system.maker().toUpperCase(Locale.ROOT),
+                x + w * 0.07f, y + h * 0.13f);
         String yr = channel ? "" : Integer.toString(t.system.year());
         g.drawString(yr, x + w * 0.93f - g.getFontMetrics().stringWidth(yr), y + h * 0.13f);
 
@@ -2360,7 +2362,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         drawCentered(g, ellipsize(g, t.system.name(), w * 0.9f), x + w / 2, y + artH + h * 0.13f);
         g.setColor(t.count > 0 ? ACCENT : TEXT_DIM);
         g.setFont(font(Font.PLAIN, h * 0.07f));
-        String unit = t.system == Systems.OPENBASED ? "video" : "game";
+        String unit = channel ? "video" : "game";
         String label = t.count == 0 ? (t.system == Systems.OPENBASED && wiiuu.core.OpenBased.lastProblem() != null
                 ? "Server not reachable" : "No " + unit + "s yet") : t.count == 1 ? "1 " + unit : t.count + " " + unit + "s";
         drawCentered(g, label, x + w / 2, y + artH + h * 0.24f);

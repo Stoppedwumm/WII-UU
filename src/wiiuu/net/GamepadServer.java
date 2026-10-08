@@ -95,7 +95,7 @@ public final class GamepadServer {
     }
 
     /** WII-UU playing by itself: the game, its score, and its latest remark (with an id and mood). */
-    public record Idle(String game, int score, String line, int lineId, String mood, String cheat) {}
+    public record Idle(String game, int score, String line, int lineId, String mood, String cheat, boolean watching) {}
 
     private static final long STALE_MS = 5000;
     /** paired phones are remembered (also across restarts) until unused for this long */
@@ -623,7 +623,7 @@ public final class GamepadServer {
         j.key("idle");
         if (idle == null) j.val((String) null);
         else j.obj().kv("game", idle.game()).kv("score", idle.score()).kv("line", idle.line())
-                .kv("lineId", idle.lineId()).kv("mood", idle.mood()).kv("cheat", idle.cheat()).endObj();
+                .kv("lineId", idle.lineId()).kv("mood", idle.mood()).kv("cheat", idle.cheat()).kv("watching", idle.watching()).endObj();
         wiiuu.screen.OwnSound.Music m = wiiuu.screen.OwnSound.music();
         j.key("music");
         if (m == null || m.id() == null) j.val((String) null);

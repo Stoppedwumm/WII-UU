@@ -120,7 +120,7 @@ public final class KeyMap {
 
     /** Which built-in layout fits the emulator in this command (null = the generic defaults). */
     public static String profileFor(String systemId, String command) {
-        if ("openbased".equals(systemId)) return "media";
+        if ("openbased".equals(systemId) || "reactions".equals(systemId)) return "media";
         String c = command == null ? "" : command.toLowerCase(java.util.Locale.ROOT);
         if (c.contains("dolphin")) return "gc".equals(systemId) ? "dolphin" : "wii".equals(systemId) ? "dolphin-wii" : null;
         for (String p : new String[]{"ppsspp", "mgba", "melonds", "duckstation", "ryujinx", "azahar"}) {

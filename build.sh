@@ -11,3 +11,7 @@ cp -r resources/. build/classes/
 printf 'Main-Class: wiiuu.Main\n' > build/manifest.txt
 jar --create --file build/wiiuu.jar --manifest build/manifest.txt -C build/classes .
 echo "Built build/wiiuu.jar"
+# the reactions editor (reaction mode's videos): the same classes, its own start
+printf 'Main-Class: wiiuu.react.Editor\n' > build/manifest-reactions.txt
+jar --create --file build/WII-UU-Reactions.jar --manifest build/manifest-reactions.txt -C build/classes .
+echo "Built build/WII-UU-Reactions.jar"

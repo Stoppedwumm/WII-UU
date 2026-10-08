@@ -174,6 +174,7 @@
   #idle .logo.happy b { animation: hop .5s 3 ease-out .08s; }
   #idle .logo.sad { animation: slump 1.6s forwards ease-out, shake .4s ease-in-out; }
   #idle .logo.smug { animation: tilt 2.4s infinite ease-in-out; }
+  #idle .logo.shocked { animation: hop .28s 2 ease-out, shake .3s ease-in-out .5s; }
   #idle .logo.nervous { animation: jitter .12s 14 linear; }
   @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
   @keyframes hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-4vh) scale(1.05); } }
@@ -187,6 +188,7 @@
     padding: 3.4vh 3.4vw; font-size: 5vh; font-weight: 800; line-height: 1.2; box-shadow: 0 2vh 5vh rgba(0,0,0,.45); }
   #idle .bubble::before { content: ""; position: absolute; left: -2.6vh; top: 50%; margin-top: -2.2vh;
     border-right: 3vh solid #fff; border-top: 2.2vh solid transparent; border-bottom: 2.2vh solid transparent; }
+  #idle .bubble.quiet { opacity: .3; transition: opacity .6s; }
   #idle .bubble.pop { animation: pop .32s cubic-bezier(.3,1.6,.5,1); }
   @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   /* cheating: it glances around, leaves for the TV (you can catch it), comes back innocently */
@@ -543,7 +545,12 @@ setInterval(poll, 1000);
 function showIdle(st) {
   const el = $("idle");
   if (el.classList.contains("hidden")) { el.classList.remove("hidden"); S.idleLine = -1; }
-  $("idlePlaying").innerHTML = "Playing <b>" + st.game + "</b> on the TV" + (st.score ? " · " + st.score : "");
+  S.watching = !!st.watching;
+  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  $("idlePlaying").innerHTML = (st.watching ? "Watching <b>" : "Playing <b>") + esc(st.game) + "</b> on the TV"
+    + (st.score ? " · " + st.score : "");
+  document.querySelector("#idle .take").textContent = st.watching ? "Tap to pause or play" : "Tap anywhere to take over";
+  $("idleSay").classList.toggle("quiet", !!st.watching && !st.line);
   const cheat = st.cheat || null, logo = $("idleLogo");
   if (cheat !== S.cheat) {
     const was = S.cheat;
@@ -602,7 +609,7 @@ $("idleCatch").addEventListener("pointerdown", async (e) => {
 
 $("idle").addEventListener("pointerdown", (e) => {
   e.preventDefault();
-  hideIdle();
+  if (S.watching) toast("⏯"); else hideIdle();          // a reaction video: A pauses it
   api("/api/input", { method: "POST", headers: { "Content-Type": "text/plain" }, body: "b A 1\nb A 0" }).catch(() => {});
 });
 

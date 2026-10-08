@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.48 (2026-10-08)
+- Reaction mode: **WII-UU-Reactions.jar**, a new editor (in the zip and on the website). Drag
+  videos in, play them with sound, and type on a timeline what WII-UU says when, with a mood and a
+  length; drag reactions around, use quick reactions, and see the caption and the GamePad's bubble
+  in the preview. It exports a .zip pack with the videos, captions (.vtt) and thumbnails, or sends
+  it straight to WII-UU.
+- Packs in `~/.wiiuu/reactions` are the new **Reactions** channel on the home screen. Their videos
+  play full screen with WII-UU's reactions as captions, while the GamePad shows the WII-UU logo
+  saying each one, in sync with the video. Tap the phone to pause.
+
 ## 1.9.47 (2026-10-08)
 - WII-UU is a sore loser: when it's losing badly at its idle games it looks around on the GamePad
   ("Nobody's looking, right?"), leaves the phone, and turns up on the TV with googly eyes to cheat.

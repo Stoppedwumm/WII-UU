@@ -722,7 +722,7 @@ public final class OpenBased implements Launcher.Listener {
     // ---- helpers --------------------------------------------------------------------------------
 
     /** A program on the PATH, or the first of {@code paths} that exists. */
-    private static String find(String name, String... paths) {
+    static String find(String name, String... paths) {
         String path = System.getenv("PATH");
         if (path != null) {
             for (String d : path.split(java.io.File.pathSeparator)) {

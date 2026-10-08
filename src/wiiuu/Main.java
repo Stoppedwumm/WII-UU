@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.47";
+    public static final String VERSION = "1.9.48";
 
     private final Config config;
     private final Library library;
@@ -68,6 +68,9 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.launcher = new Launcher(config);
         this.openBased = new wiiuu.core.OpenBased(config, library);
         launcher.setOpenBased(openBased);
+        this.reactions = new wiiuu.core.Reactions(config, library);
+        launcher.setReactions(reactions);
+        launcher.addListener(reactions);
         launcher.addListener(openBased);
         this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
         // type each emulator's own default keys (Dolphin, PPSSPP, mGBA, melonDS, ...), so nothing needs mapping
@@ -103,7 +106,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     private boolean typesKeysFor(Game g) {
         if (g == null) return true;
         // video players only know keys
-        if (wiiuu.core.OpenBased.handles(g)) return config.getBool("system.openbased.keys", true);
+        if (wiiuu.core.OpenBased.handles(g) || wiiuu.core.Reactions.handles(g)) return config.getBool("system.openbased.keys", true);
         if (wiiuu.core.Buzz.active(config, g)) return true;       // PCSX2's Buzz! buzzers are bound to keys
         String perSystem = config.get("system." + g.system().id() + ".keys", null);
         if (perSystem != null) return Boolean.parseBoolean(perSystem.trim());
@@ -236,6 +239,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         app.library.addListener(s -> SwingUtilities.invokeLater(() -> app.view.setSnapshot(s)));
         app.library.rescanAsync();
         app.openBased.refreshAsync();
+        app.reactions.refreshAsync();
         if (startServer) app.startServer();
         if (config.getBool("update.check", true)) app.checkForUpdateQuietly();
         app.showWhatsNewAfterUpdate();
@@ -378,12 +382,18 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             view.setMusicEnabled(config.getBool("ui.music", true));
             library.rescanAsync();
             openBased.refreshAsync();
+            reactions.refreshAsync();
         }));
         view.requestFocusInWindow();
     }
 
+    private final wiiuu.core.Reactions reactions;
+
+    /** Idle play, or a reaction video: what the GamePad's WII-UU logo says. */
     @Override
     public GamepadServer.Idle idle() {
+        wiiuu.core.Reactions.Now now = reactions.now();
+        if (now != null) return new GamepadServer.Idle(now.title(), 0, now.text(), now.id(), now.mood(), null, true);
         return view == null ? null : view.idleState();
     }
 
@@ -424,6 +434,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     public void refresh() {
         library.rescanAsync();
         openBased.refreshAsync();
+        reactions.refreshAsync();
     }
 
     /**
@@ -507,6 +518,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             config.set("openbased.url", oldUrl);
             config.set("openbased.token", oldToken);
             openBased.refreshAsync();
+            reactions.refreshAsync();
             return why;
         }
         config.save();
