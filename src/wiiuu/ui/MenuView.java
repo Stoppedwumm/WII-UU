@@ -851,6 +851,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             idleGames = new IdleGames();
         }
         IdleGames.musicAllowed = musicEnabled;
+        StudioTrack.leadFolder = config.home().resolve("studio");
         idleGames.step(now);
         if (idleGames.ownMusic() != idleOwnMusic) {
             idleOwnMusic = !idleOwnMusic;

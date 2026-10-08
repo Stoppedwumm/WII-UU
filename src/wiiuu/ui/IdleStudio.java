@@ -30,6 +30,7 @@ final class IdleStudio implements IdleGames.Game {
     private long started = System.currentTimeMillis();
     private final long created = started;
     private volatile short[] track;                     // its music, rendered in the background
+    private volatile StudioTrack.Lead lead;             // the lead it plays (and draws in the piano roll)
     private int[] playing;                              // the mixer's handle while it plays
     private boolean waited;
     private final List<String> spoken = new ArrayList<>();
@@ -40,7 +41,11 @@ final class IdleStudio implements IdleGames.Game {
     IdleStudio(BiConsumer<String, String> say) {
         this.say = say;
         if (IdleGames.musicAllowed) {
-            Thread render = new Thread(() -> track = StudioTrack.render(), "idle-studio-music");
+            Thread render = new Thread(() -> {
+                StudioTrack.Lead l = StudioTrack.lead();
+                lead = l;
+                track = StudioTrack.render(l);
+            }, "idle-studio-music");
             render.setDaemon(true);
             render.setPriority(Thread.MIN_PRIORITY);
             render.start();
@@ -414,15 +419,26 @@ final class IdleStudio implements IdleGames.Game {
             g.setColor(new Color(0x2C3136));
             g.drawLine((int) (x + keys), (int) (y + r * h / rows), (int) (x + w), (int) (y + r * h / rows));
         }
-        // a bouncy little tune (drawn, never played)
-        int[][] notes = {{0, 3}, {1, 3}, {3, 3}, {5, 5}, {6, 3}, {8, 1}, {10, 8}, {12, 5}, {14, 2}, {16, 6},
-                {17, 4}, {19, 3}, {21, 7}, {22, 6}, {24, 5}, {26, 4}, {27, 3}, {29, 6}, {31, 8}};
+        // the lead's first two bars, filling in
+        StudioTrack.Lead l = lead != null ? lead : StudioTrack.lead();
+        lead = l;
+        List<StudioTrack.Note> notes = new ArrayList<>();
+        int low = 127, high = 0;
+        for (StudioTrack.Note n : l.notes()) {
+            if (n.beat() >= 8) break;
+            notes.add(n);
+            low = Math.min(low, n.pitch());
+            high = Math.max(high, n.pitch());
+        }
         float step = (w - keys) / 34;
-        int count = (int) Math.max(0, Math.min(notes.length, (t - ROLL - 1.2) * 10));
+        int span = Math.max(1, high - low);
+        int count = (int) Math.max(0, Math.min(notes.size(), (t - ROLL - 1.2) * 12));
         for (int i = 0; i < count; i++) {
-            float nx = x + keys + notes[i][0] * step, ny = y + (rows - 1 - notes[i][1] - 2) * h / rows;
+            StudioTrack.Note n = notes.get(i);
+            float row = (float) (n.pitch() - low) / span * (rows - 3);
+            float nx = x + keys + (float) (n.beat() * 4) * step, ny = y + (rows - 2 - row) * h / rows;
             g.setColor(new Color(0xE53935));
-            g.fill(new RoundRectangle2D.Float(nx, ny + 1, step * 1.6f, h / rows - 2, 4, 4));
+            g.fill(new RoundRectangle2D.Float(nx, ny + 1, (float) Math.max(1, Math.min(n.length(), 1) * 4) * step, h / rows - 2, 4, 4));
         }
         // the file being dragged in
         if (t < ROLL + 1.6) {
@@ -432,7 +448,7 @@ final class IdleStudio implements IdleGames.Game {
             g.fillRect((int) fx, (int) fy, (int) (w * 0.42f), (int) (h * 0.12f));
             g.setColor(new Color(0x212121));
             g.setFont(MenuView.font(Font.BOLD, H * 0.02f));
-            g.drawString("super_mario_bros_theme.mid", fx + 6, fy + h * 0.08f);
+            g.drawString(lead != null && lead.file() != null ? lead.file() : "super_mario_bros_theme.mid", fx + 6, fy + h * 0.08f);
         }
     }
 

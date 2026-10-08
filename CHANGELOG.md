@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.58 (2026-10-08)
+- Your own tune for the music-making idle activity: put a MIDI file into `~/.wiiuu/studio/` and
+  WII-UU plays its melody as the lead of its Future House track (the highest of the file's busier
+  tracks, fitted to 128 BPM), shows it in the piano roll, and drags in a file with its name.
+  Without one it plays its own tune. Settings > Developer shows where the folder is.
+
 ## 1.9.57 (2026-10-08)
 - WII-UU's Future House banger can be heard now: the menu music pauses for the music-making idle
   activity, and you hear the track come together part by part as it appears on screen (kick,
