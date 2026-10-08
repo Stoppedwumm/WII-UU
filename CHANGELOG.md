@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.53 (2026-10-08)
+- A new idle activity: WII-UU reads its fan mail. Letters drop through the door, and it reads them
+  one by one in its armchair: Timmy (9) thinks it's the best console ever ("Aww."), Mia drew it
+  ("I look amazing. Framing this one."), someone asks whether it can run Crysis ("No. Next.", into
+  the bin). The last one is made of cut-out magazine letters. WII-UU reads it in silence, stares,
+  sweats a little: "Oh, that's not a fan letter, that's a death threat. Oh, welp. Another one to
+  add to my collection." Then it files it in its overflowing THREATS (2) drawer. "Anyway! Great fan
+  mail today."
+
 ## 1.9.52 (2026-10-08)
 - Covers are found online: games without a cover get one from the libretro thumbnails collection
   (or from ScreenScraper, if you add a ScreenScraper account under *Settings → Games*). WII-UU looks

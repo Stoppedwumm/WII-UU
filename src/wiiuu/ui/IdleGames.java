@@ -44,12 +44,13 @@ final class IdleGames {
 
     /** The sketches say their own lines (no chatter, no "let's go" at the start). */
     private boolean scripted() {
-        return game instanceof IdleWeb || game instanceof IdleShop || game instanceof IdleArt;
+        return game instanceof IdleWeb || game instanceof IdleShop || game instanceof IdleArt
+                || game instanceof IdleMail;
     }
 
     String gameName() {
         return game instanceof Tetris ? "Tetris" : game instanceof Pong ? "Pong" : game instanceof IdleShop ? "a shopping spree"
-                : game instanceof IdleArt ? "the menu" : "the internet";
+                : game instanceof IdleArt ? "the menu" : game instanceof IdleMail ? "fan mail" : "the internet";
     }
 
     int score() {
@@ -83,10 +84,10 @@ final class IdleGames {
 
     private void nextGame() {
         if (rotation.isEmpty()) {
-            rotation.addAll(List.of("tetris", "pong", "web", "shop", "art"));
+            rotation.addAll(List.of("tetris", "pong", "web", "shop", "art", "mail"));
             java.util.Collections.shuffle(rotation, random);
             if (rotation.get(0).equals(lastKind)) rotation.add(rotation.remove(0));     // never the same twice in a row
-            String first = System.getProperty("wiiuu.idleFirst");                       // for trying one out: tetris, pong, web, shop
+            String first = System.getProperty("wiiuu.idleFirst");                       // for trying one out: tetris, pong, web, shop, art, mail
             if (lastKind.isEmpty() && first != null && rotation.remove(first)) rotation.add(0, first);
         }
         lastKind = rotation.remove(0);
@@ -95,6 +96,7 @@ final class IdleGames {
             case "pong" -> game = new Pong();
             case "shop" -> game = new IdleShop((text, mood) -> say(text, mood, true));
             case "art" -> game = new IdleArt((text, mood) -> say(text, mood, true));
+            case "mail" -> game = new IdleMail((text, mood) -> say(text, mood, true));
             default -> game = new IdleWeb((text, mood) -> say(text, mood, true));   // it has its own lines
         }
         if (!scripted()) say(pick(game instanceof Tetris ? START_TETRIS : START_PONG), "smug", true);
@@ -411,7 +413,8 @@ final class IdleGames {
         g.setColor(new Color(255, 255, 255, 150));
         String who = game instanceof IdleWeb ? "WII-UU is browsing the internet"
                 : game instanceof IdleShop ? "WII-UU is shopping online"
-                : game instanceof IdleArt ? "WII-UU is decorating the menu" : "WII-UU is playing " + gameName();
+                : game instanceof IdleArt ? "WII-UU is decorating the menu"
+                : game instanceof IdleMail ? "WII-UU is reading its fan mail" : "WII-UU is playing " + gameName();
         g.drawString(who, w * 0.03f, h * 0.075f);
         g.setFont(MenuView.font(Font.PLAIN, h * 0.035f));
         g.setColor(new Color(255, 255, 255, 90));

@@ -405,7 +405,10 @@ website and catches a "virus", or goes shopping on amazin.shop (made up too) and
 with 47 golden HDMI cables (all drawn: nothing is downloaded or bought), or sits down at its
 computer to decorate the menu: it searches for box art, prints it, sorts the pages alphabetically
 and pins them onto a WII-UU menu on the wall. Those pictures are real: it looks up covers for
-your games that have none (see *Covers* above) and uses the covers you already have. The
+your games that have none (see *Covers* above) and uses the covers you already have. Or it reads
+its fan mail in its armchair: a letter from Timmy, a crayon drawing, a Crysis question (straight
+into the bin) and one made of cut-out magazine letters, which it reads in silence ("Oh, that's not a
+fan letter, that's a death threat.") and files in its very full THREATS drawer. The
 activities are shuffled, never twice in a row, and the GamePad shows the WII-UU logo talking about
 its own game in a speech bubble: "Damn!" when it messes up, "TETRIS!!" when it doesn't, "Don't
 mind me, just don't interrupt me while I'm still finishing the level." Without a phone the bubble
