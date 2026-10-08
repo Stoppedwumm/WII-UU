@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.50 (2026-10-08)
+- A new idle sketch, between Tetris and Pong: WII-UU goes looking for free games on
+  free-roms-totally-legit.biz (made up, and only drawn: nothing is visited or downloaded). It clicks
+  the big fake DOWNLOAD buttons, closes pop-ups, downloads `Super_Mario_64_FULL_GAME_100%_REAL.zip.exe`
+  at 3 KB/s and opens it: the screen glitches, pop-ups multiply and a VIRUS.EXE bug eats the page,
+  until WII-UU flies in with a fly swatter and splats it. The GamePad comments all the way ("Wait,
+  why does it end in .exe?", "CTRL+ALT+DELETE!", "That never happened.").
+- The idle activities come in a shuffled order, never the same one twice in a row.
+
 ## 1.9.49 (2026-10-08)
 - WII-UU comes with a reaction video to try: *Minecraft Door* is in the Reactions channel right
   away, with WII-UU's six reactions ("alright, minecraft content!" ... "bruh"). Your own packs sit
