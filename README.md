@@ -372,7 +372,12 @@ and each one is assigned a player number (P1–P4).
 plays Tetris or Pong on the TV (taking turns), and the GamePad shows the WII-UU logo talking about
 its own game in a speech bubble: "Damn!" when it messes up, "TETRIS!!" when it doesn't, "Don't
 mind me, just don't interrupt me while I'm still finishing the level." Without a phone the bubble
-is on the TV. Any button (or a tap on the phone) takes over. *Settings → Look & sound → Plays by
+is on the TV. It's a sore loser, though: when it's losing badly it looks around ("Nobody's
+looking, right?"), leaves the GamePad and turns up on the TV to cheat: it scrubs its Pong score off
+the scoreboard and writes 9999999, or pulls blocks out of its Tetris pile and fixes its score. While
+it's gone the phone shows a **Catch it cheating!** button: catch it in the act and it's BUSTED,
+everything goes back as it was, and the computer gets a penalty point. Any button (or a tap anywhere
+else on the phone) takes over. *Settings → Look & sound → Plays by
 itself when idle* sets the wait or turns it off (`ui.idleGames`, in minutes; 0 = never).
 
 When WII-UU closes (from its power menu, a restart or an update, or Console Mode going to the

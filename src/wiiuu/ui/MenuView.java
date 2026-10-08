@@ -767,6 +767,24 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private long lastInput = System.currentTimeMillis();
     private volatile wiiuu.net.GamepadServer.Idle idleSnap;
 
+    /**
+     * The phone caught WII-UU cheating (from the GamePad server's thread): busts it on the TV.
+     * Not a button press: the idle game goes on.
+     */
+    public boolean catchCheat() {
+        java.util.concurrent.CompletableFuture<Boolean> caught = new java.util.concurrent.CompletableFuture<>();
+        SwingUtilities.invokeLater(() -> {
+            IdleGames g = idleGames;
+            caught.complete(g != null && g.catchCheat());
+            repaint();
+        });
+        try {
+            return caught.get(2, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /** For the GamePad page: what WII-UU is playing and saying, or null. */
     public wiiuu.net.GamepadServer.Idle idleState() {
         return idleSnap;
@@ -811,7 +829,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
         idleGames.step(now);
         IdleGames.Line l = idleGames.line();
-        idleSnap = new wiiuu.net.GamepadServer.Idle(idleGames.gameName(), idleGames.score(), l.text(), l.id(), l.mood());
+        idleSnap = new wiiuu.net.GamepadServer.Idle(idleGames.gameName(), idleGames.score(), l.text(), l.id(), l.mood(),
+                idleGames.cheatPhase());
         repaint();
         return true;
     }

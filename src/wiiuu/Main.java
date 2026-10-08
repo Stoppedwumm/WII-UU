@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.46";
+    public static final String VERSION = "1.9.47";
 
     private final Config config;
     private final Library library;
@@ -385,6 +385,11 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     @Override
     public GamepadServer.Idle idle() {
         return view == null ? null : view.idleState();
+    }
+
+    @Override
+    public boolean idleCatch() {
+        return view != null && view.catchCheat();
     }
 
     /** Why WII-UU is about to quit, for the phones ("WII-UU is restarting", ...). */

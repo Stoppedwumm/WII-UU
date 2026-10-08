@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.47 (2026-10-08)
+- WII-UU is a sore loser: when it's losing badly at its idle games it looks around on the GamePad
+  ("Nobody's looking, right?"), leaves the phone, and turns up on the TV with googly eyes to cheat.
+  In Pong it scrubs its score off the scoreboard and writes 9999999 ("WII-UU WINS (LEGIT)"); in
+  Tetris it pulls blocks off its pile, flings them away and fixes its score. Then it goes back:
+  "What? I didn't do anything."
+- While it's away the phone shows **Catch it cheating!**: catch it in the act and it's BUSTED (on
+  the TV and the phone), everything is put back, the computer gets a penalty point, and WII-UU
+  sulks back to the GamePad. Catching it doesn't stop it playing.
+
 ## 1.9.46 (2026-10-08)
 - When nobody uses it for 3 minutes, WII-UU plays by itself on the TV: Tetris (good, but not
   perfect, and more careless as it speeds up) and Pong against the computer, taking turns. The

@@ -189,6 +189,24 @@
     border-right: 3vh solid #fff; border-top: 2.2vh solid transparent; border-bottom: 2.2vh solid transparent; }
   #idle .bubble.pop { animation: pop .32s cubic-bezier(.3,1.6,.5,1); }
   @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  /* cheating: it glances around, leaves for the TV (you can catch it), comes back innocently */
+  #idle .logo.sneaky { animation: glance 1.3s 2 ease-in-out; }
+  #idle .logo.leaving { animation: leave .7s forwards cubic-bezier(.5,-0.4,.8,.4); }
+  #idle .logo.returning { animation: comeback .8s ease-out; }
+  @keyframes glance { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3vw) rotate(-4deg); } 75% { transform: translateX(3vw) rotate(4deg); } }
+  @keyframes leave { 0% { transform: translateY(0); } 25% { transform: translateY(2vh) scale(1.05, .9); } 100% { transform: translateY(-80vh) rotate(-12deg); opacity: 0; } }
+  @keyframes comeback { from { transform: translateY(-70vh) rotate(10deg); } 70% { transform: translateY(1.5vh); } to { transform: translateY(0); } }
+  #idleGone { width: 34vw; height: 17vh; border: .6vh dashed #4a5561; border-radius: 3vh; display: flex; align-items: center;
+    justify-content: center; text-align: center; color: #7f8a95; font-size: 2.6vh; padding: 0 2vw; }
+  #idleCatch { position: absolute; left: 50%; bottom: 10vh; transform: translateX(-50%); border: 0; border-radius: 99px;
+    padding: 2.6vh 6vw; font-size: 4.2vh; font-weight: 900; color: #fff; background: #e53935;
+    box-shadow: 0 1vh 0 #8e1a17, 0 2vh 5vh rgba(0,0,0,.5); animation: alarm .7s infinite ease-in-out; z-index: 2; }
+  #idleCatch:active { transform: translateX(-50%) translateY(.8vh); box-shadow: 0 .2vh 0 #8e1a17; }
+  @keyframes alarm { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
+  #idleBusted { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 3; }
+  #idleBusted span { font-size: 16vh; font-weight: 900; color: #e53935; border: 1.2vh solid #e53935; border-radius: 3vh; padding: 0 4vw;
+    transform: rotate(-12deg); background: rgba(10,12,16,.6); animation: stamp .35s cubic-bezier(.2,1.6,.5,1); }
+  @keyframes stamp { from { transform: rotate(-12deg) scale(2.4); opacity: 0; } to { transform: rotate(-12deg) scale(1); opacity: 1; } }
   #idle .take { position: absolute; bottom: 4vh; left: 0; right: 0; text-align: center; font-size: 2.6vh; color: #6f7a85; }
   /* WII-UU closed or gone: the whole GamePad says so until it is back */
   #down { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; align-items: center;
@@ -369,10 +387,13 @@
 <div id="idle" class="hidden">
   <div class="me">
     <div class="logo focus" id="idleLogo">WII-<b>UU</b></div>
+    <div id="idleGone" class="hidden">WII-UU left the GamePad… check the TV</div>
     <div class="playing" id="idlePlaying">Playing on the TV</div>
   </div>
   <div class="bubble" id="idleSay">…</div>
   <div class="take">Tap anywhere to take over</div>
+  <button id="idleCatch" class="hidden">Catch it cheating!</button>
+  <div id="idleBusted" class="hidden"><span>BUSTED!</span></div>
 </div>
 <div id="down" class="hidden">
   <div class="logo">WII-<b>UU</b></div>
@@ -460,7 +481,11 @@ async function poll() {
     S.fails = 0;
     hideDown();
     setOnline(true);
-    if (j.idle) showIdle(j.idle); else hideIdle();
+    if (j.idle) {
+      showIdle(j.idle);
+      // while it plays, look more often (so catching it cheating is quick)
+      if (!S.fastPoll) S.fastPoll = setTimeout(() => { S.fastPoll = null; poll(); }, 400);
+    } else hideIdle();
     tunes.at = (asked + performance.now()) / 2;      // about when the PC said where its music is
     tunes.want = j.music || null;
     syncTunes();
@@ -519,19 +544,61 @@ function showIdle(st) {
   const el = $("idle");
   if (el.classList.contains("hidden")) { el.classList.remove("hidden"); S.idleLine = -1; }
   $("idlePlaying").innerHTML = "Playing <b>" + st.game + "</b> on the TV" + (st.score ? " · " + st.score : "");
+  const cheat = st.cheat || null, logo = $("idleLogo");
+  if (cheat !== S.cheat) {
+    const was = S.cheat;
+    S.cheat = cheat;
+    $("idleCatch").classList.toggle("hidden", cheat !== "away");
+    if (cheat === "look") setLogo("sneaky");
+    else if (cheat === "away") {
+      setLogo("leaving");
+      setTimeout(() => { if (S.cheat === "away") { logo.classList.add("hidden"); $("idleGone").classList.remove("hidden"); } }, 650);
+    } else {
+      $("idleGone").classList.add("hidden");
+      logo.classList.remove("hidden");
+      if (cheat === "back") setLogo("returning");
+      else if (cheat === "busted") {
+        setLogo("returning sad");
+        $("idleBusted").classList.remove("hidden");
+        if (navigator.vibrate) navigator.vibrate([90, 50, 90, 50, 200]);
+        setTimeout(() => $("idleBusted").classList.add("hidden"), 2600);
+      } else if (was) setLogo("focus");
+    }
+  }
   if (st.lineId !== S.idleLine && st.line) {
     S.idleLine = st.lineId;
-    const say = $("idleSay"), logo = $("idleLogo");
+    const say = $("idleSay");
     say.textContent = st.line;
     say.classList.remove("pop"); void say.offsetWidth; say.classList.add("pop");
-    logo.className = "logo"; void logo.offsetWidth; logo.className = "logo " + (st.mood || "focus");
+    if (!cheat) setLogo(st.mood || "focus");
     if ((st.mood === "sad" || st.mood === "happy") && navigator.vibrate) navigator.vibrate(st.mood === "sad" ? [60, 40, 60] : 30);
   }
 }
 
+function setLogo(cls) {
+  const logo = $("idleLogo");
+  logo.className = "logo"; void logo.offsetWidth; logo.className = "logo " + cls;
+}
+
 function hideIdle() {
   $("idle").classList.add("hidden");
+  S.cheat = null;
+  $("idleGone").classList.add("hidden");
+  $("idleCatch").classList.add("hidden");
+  $("idleLogo").classList.remove("hidden");
 }
+
+// caught in the act: tell WII-UU (this doesn't take over, the game goes on)
+$("idleCatch").addEventListener("pointerdown", async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  $("idleCatch").classList.add("hidden");
+  try {
+    const j = await (await api("/api/idle", { method: "POST" })).json();
+    toast(j.caught ? "Caught it red-handed!" : "Too late, it got away…");
+  } catch (err) {}
+  poll();
+});
 
 $("idle").addEventListener("pointerdown", (e) => {
   e.preventDefault();

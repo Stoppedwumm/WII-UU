@@ -56,7 +56,17 @@ final class IdleGames {
     void step(long now) {
         long dt = Math.min(100, now - last);
         last = now;
+        stepFlying(dt / 1000.0);
+        if (cheat != null) {
+            cheat.step(now);
+            return;                                        // the game waits while it cheats
+        }
         game.step(dt / 1000.0, now);
+        if (game.wantsToCheat() && !game.over()) {
+            cheat = new Cheat(now);
+            say(pick(CHEAT_LOOK), "sneaky", true);
+            return;
+        }
         if (game.over() && now - game.overAt() > 3500) nextGame();
         if (now > nextChatter) {
             say(pick(CHATTER), "focus", false);
@@ -76,7 +86,7 @@ final class IdleGames {
     private void say(String text, String mood, boolean important) {
         long now = System.currentTimeMillis();
         long since = now - lineAt;
-        if (since < (important ? 1200 : 3500)) return;
+        if (since < (important ? 1200 : 3500) && cheat == null) return;     // while cheating every word counts
         line = new Line(text, mood, line.id() + 1);
         lineAt = now;
         nextChatter = now + 22_000 + random.nextInt(18_000);
@@ -98,6 +108,277 @@ final class IdleGames {
         return pick(WAKE);
     }
 
+    // ---- cheating ---------------------------------------------------------------------------------
+
+    /**
+     * One thing to do on the TV while cheating: where (in the picture, given its size), how long
+     * it takes, what it does then, and what the logo is up to meanwhile (erase, write, pull).
+     */
+    private record Job(java.util.function.BiFunction<Integer, Integer, float[]> where, double seconds,
+                       java.util.function.DoubleConsumer progress, Runnable done, String kind, String remark) {}
+
+    private Cheat cheat;
+    /** -Dwiiuu.idleCheat=true: cheats early in every game (for trying it out) */
+    private static final boolean CHEAT_SOON = Boolean.getBoolean("wiiuu.idleCheat");
+    /** blocks it threw away: x, y (fractions of the picture), vx, vy, angle, spin, colour */
+    private final List<float[]> flying = new ArrayList<>();
+
+    /** The phone's view of a cheat: look (glancing around), away (on the TV), back, busted; null: none. */
+    String cheatPhase() {
+        if (cheat == null) return null;
+        return switch (cheat.phase) {
+            case LOOK -> "look";
+            case BACK -> "back";
+            case BUSTED, SULK -> "busted";
+            default -> "away";
+        };
+    }
+
+    /** The phone caught it: true if it was cheating on the TV just then. */
+    boolean catchCheat() {
+        if (cheat == null || !cheat.onTv() || cheat.phase == CheatPhase.BUSTED || cheat.phase == CheatPhase.SULK) return false;
+        cheat.bust(System.currentTimeMillis());
+        return true;
+    }
+
+    private enum CheatPhase { LOOK, TRAVEL, WORK, RETURN, BACK, BUSTED, SULK }
+
+    /**
+     * Losing badly, the logo cheats: it looks around on the GamePad, leaves it (so the phone shows
+     * where it was), turns up on the TV, does its jobs, and goes back as if nothing happened. If the
+     * phone catches it while it's on the TV, everything is put back, with a penalty.
+     */
+    private final class Cheat {
+        CheatPhase phase = CheatPhase.LOOK;
+        long at;
+        final List<Job> jobs;
+        int job = -1;
+        float fx, fy, tx, ty;                              // the logo flies from f to t (fractions of the picture)
+        float x = 0.5f, y = 1.3f;
+        double progress;
+
+        Cheat(long now) {
+            at = now;
+            jobs = game.cheatJobs();
+        }
+
+        boolean onTv() {
+            return phase == CheatPhase.TRAVEL || phase == CheatPhase.WORK || phase == CheatPhase.RETURN;
+        }
+
+        double t(long now) {
+            return (now - at) / 1000.0;
+        }
+
+        void step(long now) {
+            double t = t(now);
+            switch (phase) {
+                case LOOK -> {
+                    if (t > 2.6) {
+                        say(pick(CHEAT_LEAVE), "sneaky", true);
+                        nextJob(now);
+                    }
+                }
+                case TRAVEL -> {
+                    double e = ease(t / 0.9);
+                    x = (float) (fx + (tx - fx) * e);
+                    y = (float) (fy + (ty - fy) * e);
+                    if (t > 0.9) {
+                        phase = CheatPhase.WORK;
+                        at = now;
+                        Job j = jobs.get(job);
+                        if (j.remark() != null) say(j.remark(), "sneaky", true);
+                    }
+                }
+                case WORK -> {
+                    Job j = jobs.get(job);
+                    progress = Math.min(1, t / j.seconds());
+                    if (j.progress() != null) j.progress().accept(progress);
+                    if (t > j.seconds()) {
+                        j.done().run();
+                        nextJob(now);
+                    }
+                }
+                case RETURN -> {
+                    double e = ease(t / 1.0);
+                    x = (float) (fx + (0.5f - fx) * e);
+                    y = (float) (fy + (1.3f - fy) * e);
+                    if (t > 1.0) {
+                        phase = CheatPhase.BACK;
+                        at = now;
+                        say(pick(CHEAT_BACK), "smug", true);
+                    }
+                }
+                case BACK -> {
+                    if (t > 2.5) end(false);
+                }
+                case BUSTED -> {
+                    if (t > 2.6) {
+                        phase = CheatPhase.SULK;
+                        at = now;
+                        fx = x;
+                        fy = y;
+                        say(pick(CHEAT_SORRY), "sad", true);
+                    }
+                }
+                case SULK -> {
+                    double e = ease(t / 1.2);
+                    x = (float) (fx + (0.5f - fx) * e);
+                    y = (float) (fy + (1.3f - fy) * e);
+                    if (t > 3.2) end(true);
+                }
+            }
+        }
+
+        void nextJob(long now) {
+            job++;
+            at = now;
+            fx = x;
+            fy = y;
+            if (job >= jobs.size()) {
+                phase = CheatPhase.RETURN;
+                return;
+            }
+            phase = CheatPhase.TRAVEL;
+            progress = 0;
+            // the target in fractions of the picture (worked out at the size it's drawn: 640 wide)
+            float[] p = jobs.get(job).where().apply(640, 360);
+            tx = p[0] / 640f;
+            ty = p[1] / 360f;
+        }
+
+        void bust(long now) {
+            phase = CheatPhase.BUSTED;
+            at = now;
+            game.cheatUndo();
+            line = new Line("BUSTED!", "sad", line.id() + 1);
+            lineAt = now;
+        }
+
+        void end(boolean busted) {
+            cheat = null;
+            game.cheatEnded(busted);
+        }
+    }
+
+    private static double ease(double t) {
+        t = Math.max(0, Math.min(1, t));
+        return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    }
+
+    private void fling(float x, float y, Color c) {
+        flying.add(new float[]{x, y, (random.nextFloat() - 0.5f) * 0.9f, -0.6f - random.nextFloat() * 0.5f, 0,
+                (random.nextFloat() - 0.5f) * 14, c.getRGB()});
+    }
+
+    private void stepFlying(double dt) {
+        for (int i = flying.size() - 1; i >= 0; i--) {
+            float[] f = flying.get(i);
+            f[0] += f[2] * dt;
+            f[1] += f[3] * dt;
+            f[3] += 2.2f * dt;
+            f[4] += f[5] * dt;
+            if (f[1] > 1.3f) flying.remove(i);
+        }
+    }
+
+    /** The logo, in person: a little white card with googly eyes (and an eraser, a pen or a block). */
+    private void paintSneak(Graphics2D g, int w, int h, long now) {
+        Cheat c = cheat;
+        float s = h * 0.085f, cx = c.x * w, cy = c.y * h;
+        boolean busted = c.phase == CheatPhase.BUSTED;
+        Job j = c.job >= 0 && c.job < c.jobs.size() ? c.jobs.get(c.job) : null;
+        if (c.phase == CheatPhase.WORK && j != null) {
+            if (j.kind().equals("erase")) cx += (float) Math.sin(now / 45.0) * s * 0.5f;       // scrubbing
+            if (j.kind().equals("write")) cy += (float) Math.abs(Math.sin(now / 90.0)) * -s * 0.2f;
+        }
+        if (busted) cx += (float) Math.sin(now / 30.0) * s * 0.12f;
+        java.awt.geom.AffineTransform at = g.getTransform();
+        g.translate(cx, cy);
+        if (c.phase == CheatPhase.SULK) g.rotate(-0.15);
+        float cw = s * 2.7f, ch = s;
+        g.setColor(new Color(0, 0, 0, 90));
+        g.fill(new RoundRectangle2D.Float(-cw / 2 + s * 0.08f, -ch / 2 + s * 0.12f, cw, ch, ch * 0.6f, ch * 0.6f));
+        g.setColor(Color.WHITE);
+        g.fill(new RoundRectangle2D.Float(-cw / 2, -ch / 2, cw, ch, ch * 0.6f, ch * 0.6f));
+        g.setFont(MenuView.font(Font.BOLD, s * 0.55f));
+        FontMetrics fm = g.getFontMetrics();
+        float tx = -fm.stringWidth("WII-UU") / 2f, ty = fm.getAscent() * 0.38f;
+        g.setColor(new Color(0x2B2F36));
+        g.drawString("WII-", tx, ty);
+        g.setColor(MenuView.ACCENT);
+        g.drawString("UU", tx + fm.stringWidth("WII-"), ty);
+        // googly eyes on top, looking where it's going (or around, nervously)
+        float look = c.phase == CheatPhase.TRAVEL ? Math.signum(c.tx - c.fx) : (float) Math.sin(now / 300.0);
+        for (int e = -1; e <= 1; e += 2) {
+            float ex = e * s * 0.42f, ey = -ch / 2 - s * 0.12f, er = s * 0.26f;
+            g.setColor(Color.WHITE);
+            g.fill(new java.awt.geom.Ellipse2D.Float(ex - er, ey - er, er * 2, er * 2));
+            g.setColor(new Color(0x2B2F36));
+            g.setStroke(new BasicStroke(Math.max(1, s * 0.05f)));
+            g.draw(new java.awt.geom.Ellipse2D.Float(ex - er, ey - er, er * 2, er * 2));
+            float pr = er * 0.5f;
+            g.fill(new java.awt.geom.Ellipse2D.Float(ex - pr + look * er * 0.4f, ey - pr + (busted ? -er * 0.3f : 0), pr * 2, pr * 2));
+        }
+        // what it holds
+        if (c.phase == CheatPhase.WORK && j != null) {
+            switch (j.kind()) {
+                case "erase" -> {
+                    g.setColor(new Color(0xF48FB1));
+                    g.fillRoundRect((int) (cw / 2 - s * 0.2f), (int) (-s * 0.2f), (int) (s * 0.7f), (int) (s * 0.4f), 4, 4);
+                }
+                case "write" -> {
+                    g.setColor(new Color(0xE53935));
+                    g.setStroke(new BasicStroke(Math.max(2, s * 0.14f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                    g.drawLine((int) (cw / 2 - s * 0.1f), 0, (int) (cw / 2 + s * 0.5f), (int) (-s * 0.5f));
+                }
+                default -> { }
+            }
+        }
+        g.setTransform(at);
+        // what it's muttering, right next to it
+        if (!line.text().isEmpty() && System.currentTimeMillis() - lineAt < 5000) {
+            g.setFont(MenuView.font(Font.BOLD, h * 0.036f));
+            FontMetrics bf = g.getFontMetrics();
+            String text = line.text();
+            float bw = bf.stringWidth(text) + h * 0.04f, bh = bf.getHeight() + h * 0.02f;
+            float bx = Math.max(4, Math.min(w - bw - 4, cx - bw / 2)), by = cy - s * 1.25f - bh;
+            if (by < h * 0.1f) by = cy + s * 0.9f;
+            g.setColor(Color.WHITE);
+            g.fill(new RoundRectangle2D.Float(bx, by, bw, bh, bh * 0.6f, bh * 0.6f));
+            g.setColor(new Color(0x202124));
+            g.drawString(text, bx + h * 0.02f, by + h * 0.01f + bf.getAscent());
+        }
+        if (busted || c.phase == CheatPhase.SULK && c.t(now) < 1.2) {
+            // the stamp
+            java.awt.geom.AffineTransform a2 = g.getTransform();
+            double pop = Math.min(1, c.t(now) / 0.18);
+            g.translate(w / 2.0, h / 2.0);
+            g.rotate(-0.18);
+            g.scale(2.2 - 1.2 * pop, 2.2 - 1.2 * pop);
+            g.setFont(MenuView.font(Font.BOLD, h * 0.16f));
+            FontMetrics sf = g.getFontMetrics();
+            String stamp = "BUSTED!";
+            float sw = sf.stringWidth(stamp);
+            g.setColor(new Color(229, 57, 53, 230));
+            g.setStroke(new BasicStroke(h * 0.012f));
+            g.drawRoundRect((int) (-sw / 2 - h * 0.03f), (int) (-sf.getAscent() * 0.85f), (int) (sw + h * 0.06f), (int) (sf.getAscent() * 1.15f), 20, 20);
+            g.drawString(stamp, -sw / 2, sf.getAscent() * 0.2f);
+            g.setTransform(a2);
+        }
+    }
+
+    private void paintFlying(Graphics2D g, int w, int h) {
+        float s = h * 0.04f;
+        for (float[] f : flying) {
+            java.awt.geom.AffineTransform at = g.getTransform();
+            g.translate(f[0] * w, f[1] * h);
+            g.rotate(f[4]);
+            block(g, -s / 2, -s / 2, s, new Color((int) f[6], true));
+            g.setTransform(at);
+        }
+    }
+
     void paint(Graphics2D g, int w, int h, boolean showBubble) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -113,7 +394,10 @@ final class IdleGames {
         g.setColor(new Color(255, 255, 255, 90));
         String hint = "Press any button to take over";
         g.drawString(hint, w - w * 0.03f - g.getFontMetrics().stringWidth(hint), h * 0.075f);
-        if (showBubble && !line.text().isEmpty() && System.currentTimeMillis() - lineAt < 6000) bubble(g, w, h);
+        paintFlying(g, w, h);
+        if (cheat != null && (cheat.onTv() || cheat.phase == CheatPhase.BUSTED || cheat.phase == CheatPhase.SULK)) {
+            paintSneak(g, w, h, System.currentTimeMillis());
+        } else if (showBubble && !line.text().isEmpty() && System.currentTimeMillis() - lineAt < 6000) bubble(g, w, h);
     }
 
     /** The remark on the TV (when no phone shows it). */
@@ -161,6 +445,17 @@ final class IdleGames {
         long overAt();
 
         int score();
+
+        /** Losing badly enough to cheat (once a game). */
+        boolean wantsToCheat();
+
+        /** What it does to cheat (it may look at the game to decide). */
+        List<Job> cheatJobs();
+
+        /** Caught: everything back as it was (and a penalty). */
+        void cheatUndo();
+
+        void cheatEnded(boolean busted);
     }
 
     // ---- Tetris ----------------------------------------------------------------------------------
@@ -221,7 +516,9 @@ final class IdleGames {
         final int[][] board = new int[ROWS][COLS];
         int piece, next, rot, targetRot, targetX, x, lines, score, level = 1;
         double y, moveTimer;
-        boolean mistake, done, warned;
+        boolean mistake, done, warned, cheated, cheatWanted;
+        int[][] boardBefore;
+        int scoreBefore;
         long doneAt;
         int[] clearing = new int[0];
         double clearTimer;
@@ -407,6 +704,7 @@ final class IdleGames {
             if (holes() > before && mistake) say(pick(TETRIS_HOLE), "sad", true);
             else if (holes() > before + 1) say(pick(TETRIS_HOLE), "sad", false);
             int ht = height();
+            if (ht >= 15 && !cheated && random.nextDouble() < 0.75) cheatWanted = true;
             if (ht >= 14 && !warned) {
                 warned = true;
                 say(pick(TETRIS_DANGER), "nervous", true);
@@ -442,6 +740,57 @@ final class IdleGames {
         @Override
         public int score() {
             return score;
+        }
+
+        @Override
+        public boolean wantsToCheat() {
+            return (cheatWanted || CHEAT_SOON && lines >= 2) && !cheated;
+        }
+
+        /** Pulls the blocks off the top of the pile (the tallest columns first), then fixes the score. */
+        @Override
+        public List<Job> cheatJobs() {
+            cheated = true;
+            boardBefore = new int[ROWS][];
+            for (int i = 0; i < ROWS; i++) boardBefore[i] = board[i].clone();
+            scoreBefore = score;
+            List<int[]> cells = new ArrayList<>();
+            for (int cy = 0; cy < ROWS && cells.size() < 11; cy++)
+                for (int cx = 0; cx < COLS && cells.size() < 11; cx++)
+                    if (board[cy][cx] != 0) cells.add(new int[]{cx, cy});
+            List<Job> jobs = new ArrayList<>();
+            for (int i = 0; i < cells.size(); i++) {
+                int cx = cells.get(i)[0], cy = cells.get(i)[1];
+                jobs.add(new Job((w, h) -> {
+                    float cell = h * 0.82f / ROWS, bx = (w - cell * COLS) / 2, by = h * 0.12f;
+                    return new float[]{bx + (cx + 0.5f) * cell, by + (cy + 0.5f) * cell - h * 0.07f};
+                }, 0.3, null, () -> {
+                    int v = board[cy][cx];
+                    if (v == 0) return;
+                    board[cy][cx] = 0;
+                    float cell = 360 * 0.82f / ROWS, bx = (640 - cell * COLS) / 2, by = 360 * 0.12f;
+                    fling((bx + (cx + 0.5f) * cell) / 640f, (by + (cy + 0.5f) * cell) / 360f, COLORS[v - 1]);
+                }, "pull", i == 0 ? pick(CHEAT_PULL) : null));
+            }
+            jobs.add(new Job((w, h) -> {
+                float cell = h * 0.82f / ROWS, bx = (w - cell * COLS) / 2 + cell * COLS + cell * 1.5f, by = h * 0.12f;
+                return new float[]{bx + cell * 9.5f, by + cell * 6.6f};        // next to the score, so it shows
+            }, 2.0, p -> score = (int) Math.min(99_999_999, scoreBefore + (99_999_999L - scoreBefore) * p),
+                    () -> score = 99_999_999, "write", pick(CHEAT_SCORE)));
+            return jobs;
+        }
+
+        @Override
+        public void cheatUndo() {
+            for (int i = 0; i < ROWS; i++) board[i] = boardBefore[i].clone();
+            score = scoreBefore;
+            flying.clear();
+        }
+
+        @Override
+        public void cheatEnded(boolean busted) {
+            cheatWanted = false;
+            if (!collides(piece, rot, x, (int) y)) plan();
         }
 
         @Override
@@ -518,7 +867,9 @@ final class IdleGames {
     private final class Pong implements Game {
         static final double PADDLE = 0.2, WIN = 5;
         double bx = 0.5, by = 0.5, vx, vy, left = 0.5, right = 0.5, leftAim, rightAim;
-        int me, cpu, rally;
+        int me, cpu, rally, meBefore;
+        String meShown;                                    // the scoreboard while it's being "corrected"
+        boolean cheated, cheatWanted;
         double serveIn = 1.2, speed;
         boolean done;
         long doneAt;
@@ -607,6 +958,7 @@ final class IdleGames {
             if (mine) {
                 cpu++;
                 say(pick(PONG_MISS), "sad", true);
+                if (!cheated && cpu - me >= 2 && cpu >= 3 && cpu < WIN && random.nextDouble() < 0.8) cheatWanted = true;
             } else {
                 me++;
                 say(pick(PONG_POINT), "happy", true);
@@ -618,6 +970,45 @@ final class IdleGames {
                 return;
             }
             serve(mine ? 1 : -1);
+        }
+
+        @Override
+        public boolean wantsToCheat() {
+            return (cheatWanted || CHEAT_SOON && me + cpu >= 1) && !cheated && serveIn > 0;   // between points, so nobody notices
+        }
+
+        /** Rubs its score off the scoreboard and writes a better one. */
+        @Override
+        public List<Job> cheatJobs() {
+            cheated = true;
+            meBefore = me;
+            java.util.function.BiFunction<Integer, Integer, float[]> board = (w, h) -> new float[]{w * 0.38f, h * 0.12f + h * 0.09f};
+            java.util.function.BiFunction<Integer, Integer, float[]> below = (w, h) -> new float[]{w * 0.38f, h * 0.12f + h * 0.3f};
+            List<Job> jobs = new ArrayList<>();
+            jobs.add(new Job(board, 1.8, p -> meShown = p < 0.85 ? Integer.toString(me) : "", () -> meShown = "", "erase", pick(CHEAT_ERASE)));
+            jobs.add(new Job(below, 2.4, p -> meShown = "9999999".substring(0, (int) Math.ceil(p * 7)),
+                    () -> {
+                        meShown = null;
+                        me = 9_999_999;
+                    }, "write", pick(CHEAT_SCORE)));
+            return jobs;
+        }
+
+        @Override
+        public void cheatUndo() {
+            me = meBefore;
+            meShown = null;
+            cpu++;                                          // and a penalty point
+        }
+
+        @Override
+        public void cheatEnded(boolean busted) {
+            cheatWanted = false;
+            if (busted && cpu >= WIN || !busted && me >= WIN) {
+                done = true;
+                doneAt = System.currentTimeMillis();
+                if (!busted) say(pick(PONG_CHEAT_WIN), "smug", true);
+            }
         }
 
         double toward(double from, double to, double max) {
@@ -651,7 +1042,8 @@ final class IdleGames {
             g.setFont(MenuView.font(Font.BOLD, h * 0.13f));
             FontMetrics fm = g.getFontMetrics();
             g.setColor(new Color(255, 255, 255, 110));
-            g.drawString(Integer.toString(me), w * 0.38f - fm.stringWidth(Integer.toString(me)) / 2f, top + h * 0.14f);
+            String mine = meShown != null ? meShown : Integer.toString(me);
+            g.drawString(mine, w * 0.38f - fm.stringWidth(mine) / 2f, top + h * 0.14f);
             g.drawString(Integer.toString(cpu), w * 0.62f - fm.stringWidth(Integer.toString(cpu)) / 2f, top + h * 0.14f);
             g.setFont(MenuView.font(Font.BOLD, h * 0.035f));
             g.setColor(MenuView.ACCENT);
@@ -667,7 +1059,7 @@ final class IdleGames {
                 float s = h * 0.025f;
                 g.fillRect((int) (bx * w - s / 2), (int) (top + by * fh - s / 2), (int) s, (int) s);
             }
-            if (done) gameOver(g, w, h, me > cpu ? "WII-UU WINS" : "COMPUTER WINS");
+            if (done) gameOver(g, w, h, me > cpu ? (me > 1000 ? "WII-UU WINS (LEGIT)" : "WII-UU WINS") : "COMPUTER WINS");
         }
     }
 
@@ -708,6 +1100,14 @@ final class IdleGames {
     private static final String[] PONG_CLOSE = {"Whoa, close one!", "Just in time!"};
     private static final String[] PONG_WIN = {"I win! Obviously.", "GG, computer."};
     private static final String[] PONG_LOSE = {"I lost to a computer. Wait, I AM a computer.", "Rematch. Now."};
+    private static final String[] CHEAT_LOOK = {"Hmm. Is anyone watching?", "Nobody's looking, right?", "Psst. Is anyone there?"};
+    private static final String[] CHEAT_LEAVE = {"Be right back.", "Just going to... check something.", "Don't look at the TV."};
+    private static final String[] CHEAT_ERASE = {"This number is clearly wrong.", "Just fixing the scoreboard.", "Typo. Must be a typo."};
+    private static final String[] CHEAT_SCORE = {"There. Much better.", "Totally fair.", "Nine nine nine nine..."};
+    private static final String[] CHEAT_PULL = {"These blocks were in the wrong place anyway.", "Nobody needs this many blocks.", "Tidying up!"};
+    private static final String[] CHEAT_BACK = {"What? I didn't do anything.", "I was here the whole time.", "Did something happen? No? Good."};
+    private static final String[] CHEAT_SORRY = {"Okay okay, I'll play fair.", "You saw nothing!", "It was like that when I got there."};
+    private static final String[] PONG_CHEAT_WIN = {"9,999,999 points. I win. Totally legit.", "Look at the scoreboard. Fair and square."};
     private static final String[] WAKE = {"Oh, you're back! I was totally winning.", "Oh! Hi! I wasn't playing. Promise.",
             "You can have it back. I was done anyway.", "Aww, I was about to beat my high score."};
 }

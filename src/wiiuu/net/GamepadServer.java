@@ -87,10 +87,15 @@ public final class GamepadServer {
         default Idle idle() {
             return null;
         }
+
+        /** The phone caught WII-UU cheating at its idle game: true if it really was. */
+        default boolean idleCatch() {
+            return false;
+        }
     }
 
     /** WII-UU playing by itself: the game, its score, and its latest remark (with an id and mood). */
-    public record Idle(String game, int score, String line, int lineId, String mood) {}
+    public record Idle(String game, int score, String line, int lineId, String mood, String cheat) {}
 
     private static final long STALE_MS = 5000;
     /** paired phones are remembered (also across restarts) until unused for this long */
@@ -395,6 +400,10 @@ public final class GamepadServer {
                         case "/api/frame" -> frame(ex, query(ex));
                         case "/api/audio" -> audio(ex, query(ex));
                         case "/api/library" -> json(ex, 200, libraryJson());
+                        case "/api/idle" -> {
+                            if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
+                            json(ex, 200, new Json().obj().kv("caught", host.idleCatch()).endObj());
+                        }
                         case "/api/input" -> {
                             if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
                             input(c, body(ex));
@@ -614,7 +623,7 @@ public final class GamepadServer {
         j.key("idle");
         if (idle == null) j.val((String) null);
         else j.obj().kv("game", idle.game()).kv("score", idle.score()).kv("line", idle.line())
-                .kv("lineId", idle.lineId()).kv("mood", idle.mood()).endObj();
+                .kv("lineId", idle.lineId()).kv("mood", idle.mood()).kv("cheat", idle.cheat()).endObj();
         wiiuu.screen.OwnSound.Music m = wiiuu.screen.OwnSound.music();
         j.key("music");
         if (m == null || m.id() == null) j.val((String) null);
