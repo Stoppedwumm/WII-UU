@@ -3,6 +3,14 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.51 (2026-10-08)
+- Another idle sketch: WII-UU goes online shopping on amazin.shop (made up, and only drawn: nothing
+  is visited or bought). It picks the sponsored GOLD HDMI cable ($899.99, "1,000,000x better
+  picture"), gets talked into RGB lights (+500 FPS), is not jealous of "A REAL Wii U GamePad",
+  stutters on the 1-Click button until it has 47 cables ($42,317.53), gets declined ("Card holder is
+  a video game console"), tries 100 arcade tokens, sends the owner its wish list, and gets a free
+  sample delivered: 1 cm of golden HDMI cable. "Best. Purchase. Ever."
+
 ## 1.9.50 (2026-10-08)
 - A new idle sketch, between Tetris and Pong: WII-UU goes looking for free games on
   free-roms-totally-legit.biz (made up, and only drawn: nothing is visited or downloaded). It clicks

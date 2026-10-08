@@ -391,7 +391,8 @@ and each one is assigned a player number (P1–P4).
 
 **When nobody plays,** WII-UU plays by itself: after 3 minutes without input in the menu it
 plays Tetris or Pong on the TV, or goes looking for free games on a very trustworthy (made-up)
-website and catches a "virus" (all drawn, nothing is downloaded; shuffled, never twice in a row), and the GamePad shows the WII-UU logo talking about
+website and catches a "virus", or goes shopping on amazin.shop (made up too) and somehow ends up
+with 47 golden HDMI cables (all drawn: nothing is downloaded or bought; shuffled, never twice in a row), and the GamePad shows the WII-UU logo talking about
 its own game in a speech bubble: "Damn!" when it messes up, "TETRIS!!" when it doesn't, "Don't
 mind me, just don't interrupt me while I'm still finishing the level." Without a phone the bubble
 is on the TV. It's a sore loser, though: when it's losing badly it looks around ("Nobody's
