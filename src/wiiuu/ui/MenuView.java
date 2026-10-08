@@ -759,6 +759,21 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         spriteRenderer.shutdownNow();
     }
 
+    // ---- settings ------------------------------------------------------------------------
+
+    private SettingsScreen settings;
+
+    /** Shows the settings on the TV (F1, the dock's Settings, or Main). */
+    public void openSettings(SettingsScreen.Services services) {
+        if (settings != null || guide != null || intro != null || booting || playing != null) return;
+        settings = new SettingsScreen(this, services);
+        repaint();
+    }
+
+    public boolean settingsShowing() {
+        return settings != null;
+    }
+
     // ---- setup guide ---------------------------------------------------------------------
 
     private SetupGuide guide;
@@ -947,6 +962,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void navigate(int dx, int dy) {
         if (skipBoot()) return;
         if (skipIntro()) return;
+        if (settings != null) {
+            settings.navigate(dx, dy);
+            settings.touch();
+            repaint();
+            return;
+        }
         secret(dy < 0 ? 'U' : dy > 0 ? 'D' : dx < 0 ? 'L' : 'R');
         if (guide != null) {
             guide.navigate(dx, dy);
@@ -1020,6 +1041,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void activate() {
         if (skipBoot()) return;
         if (skipIntro()) return;
+        if (settings != null) {
+            settings.activate();
+            settings.touch();
+            repaint();
+            return;
+        }
         if (secret('A')) return;
         if (guide != null) {
             guide.activate();
@@ -1082,6 +1109,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void back() {
         if (skipBoot()) return;
         if (skipIntro()) return;
+        if (settings != null) {
+            settings.back();
+            settings.touch();
+            repaint();
+            return;
+        }
         secret('B');
         if (guide != null) {
             guide.back();
@@ -1120,6 +1153,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void page(int delta) {
         if (skipBoot()) return;
         if (skipIntro()) return;
+        if (settings != null) {
+            settings.page(delta);
+            settings.touch();
+            repaint();
+            return;
+        }
         if (guide != null) {
             guide.page(delta);
             repaint();
@@ -1151,6 +1190,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void toggleGamepadInfo() {
         if (skipBoot()) return;
         if (skipIntro()) return;
+        if (settings != null) {
+            settings.plus();
+            settings.touch();
+            repaint();
+            return;
+        }
         if (guide != null) return;
         if (playing != null || confirmQuit) return;
         showPad = !showPad;
@@ -1161,6 +1206,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void refresh() {
+        if (settings != null) return;
         showToast("Looking for games...");
         actions.refresh();
     }
@@ -1178,8 +1224,29 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void installInput() {
         addKeyListener(new KeyAdapter() {
             @Override
+            public void keyTyped(KeyEvent e) {
+                if (settings != null && settings.wantsKeys()) {
+                    settings.keyTyped(e.getKeyChar());
+                    settings.touch();
+                    repaint();
+                }
+            }
+
+            @Override
             public void keyPressed(KeyEvent e) {
                 if (skipBoot()) return;
+                if (settings != null) {
+                    settings.touch();
+                    repaint();
+                    if (settings.wantsKeys()) {
+                        settings.keyPressed(e);
+                        return;
+                    }
+                    if (e.getKeyCode() == KeyEvent.VK_F1) {
+                        settings.close();
+                        return;
+                    }
+                }
                 if (e.isControlDown() && e.getKeyCode() == KeyEvent.VK_Q) {
                     if (playing != null) actions.closeGame();
                     return;
@@ -1207,6 +1274,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 requestFocusInWindow();
                 if (skipBoot()) return;
                 if (skipIntro()) return;
+                if (settings != null) {
+                    settings.click(e.getX(), e.getY());
+                    settings.touch();
+                    repaint();
+                    return;
+                }
                 if (guide != null) {
                     guide.click(e.getX(), e.getY());
                     repaint();
@@ -1256,6 +1329,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
             @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
+                if (settings != null) {
+                    settings.wheel(e.getWheelRotation());
+                    settings.touch();
+                    repaint();
+                    return;
+                }
                 page(e.getWheelRotation() > 0 ? 1 : -1);
             }
         };
@@ -1268,6 +1347,18 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void tick() {
         boolean dirty = tickBoot();
         if (tickIntro()) return;
+        if (settings != null) {
+            if (!settings.tick()) {
+                settings = null;
+                repaint();
+                return;
+            }
+            if (settings.covers()) {
+                if (settings.needsFrame()) repaint();
+                return;
+            }
+            dirty = true;
+        }
         if (guide != null) {
             if (!guide.tick()) {
                 guide = null;
@@ -1778,6 +1869,13 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             Toolkit.getDefaultToolkit().sync();
             return;
         }
+        if (settings != null && settings.covers()) {
+            // the settings cover the whole screen too
+            settings.paint(g, getWidth(), getHeight());
+            g.dispose();
+            Toolkit.getDefaultToolkit().sync();
+            return;
+        }
         if (guide != null && !booting && guide.covers()) {
             // the guide covers the whole screen: don't spend time drawing the menu under it
             guide.paint(g, getWidth(), getHeight());
@@ -1801,9 +1899,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (vizFull) {
             boolean mix = ExtendedMix.ID.equals(musicChoice);
             viz.paintFull(g, getWidth(), getHeight(), musicEnabled ? musicTitle : "Music is off",
-                    !musicEnabled ? "Turn it on in Settings (F1) > General" : mix ? "WII-UU Extended Mix" : "Menu music");
+                    !musicEnabled ? "Turn it on in Settings (F1) > Look & sound" : mix ? "WII-UU Extended Mix" : "Menu music");
         }
         if (guide != null && !booting) guide.paint(g, getWidth(), getHeight());
+        if (settings != null) settings.paint(g, getWidth(), getHeight());
         if (booting) paintBoot(g, L);
         g.dispose();
         Toolkit.getDefaultToolkit().sync(); // flush X11 so animation doesn't stutter on Linux

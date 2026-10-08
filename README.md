@@ -67,7 +67,7 @@ sudo wiiuu-console install                                                    # 
 * **Every boot** starts in console mode again, like on a Steam Deck.
 * **If WII-UU crashes,** it is started again. If it fails three times in a row, the computer switches
   to the desktop, so you can never get locked out.
-* **Updates** from *Settings → Check for updates* install in place, and WII-UU comes back by itself.
+* **Updates** from *Settings → System → Check for updates* install in place, and WII-UU comes back by itself.
 
 How it works:
 * A login session called *WII-UU (Console Mode)* runs `wiiuu-session`, which keeps WII-UU running
@@ -184,7 +184,7 @@ beat (the home screen, your consoles' games, the GamePad screen, consoles flashi
 tiles), then a setup guide walks through the basics on the TV, steered like the menu (phone,
 controller, keyboard or mouse): the look (light, dark or automatic), menu music and sounds, the
 phone as GamePad (scan the code, it shows when the phone connects), where games go (and RetroArch
-mode), and controllers. Every choice applies straight away. *Settings → General → Show the setup
+mode), and controllers. Every choice applies straight away. *Settings → System → Show the setup
 guide* brings it back any time, and *Restart into the setup guide* restarts WII-UU so it starts
 with the guide, start-up animation and intro included, like the very first time. From a terminal,
 `wiiuu --setup` does the same (`wiiuu --setup --no-intro` goes straight to the guide). The guide's
@@ -197,9 +197,9 @@ the intro; `ui.firstBootIntro=false` leaves it out.
    * Wii U: `.wua`, `.wud`, `.wux`, or the `code/*.rpx` of an unpacked game.
    * Covers: put `covers/<game name>.png` (or `.jpg`) in a system folder, or place the image next to the ROM
      with the same name. PS3 `ICON0.PNG` and PS4 `sce_sys/icon0.png` are used automatically.
-2. Start WII-UU and press **F1** (Settings). Check each system's emulator command, or use
-   *Emulator program…* to pick the executable. In a command, `{rom}` is the game file, `{dir}`
-   is its folder and `{name}` is its title.
+2. Start WII-UU and open **Settings** (F1, or the dock). Under *Games → Consoles and emulators*,
+   check each console's command, or use *Choose the emulator program* to pick it. In a command,
+   `{rom}` is the game file, `{dir}` is its folder and `{name}` is its title.
 3. Choose a system, then a game, and press Enter or A.
 
 | Keyboard | GamePad | Action |
@@ -210,18 +210,27 @@ the intro; `ui.firstBootIntro=false` leaves it out.
 | PgUp / PgDn, Q / E | L / R, ZL / ZR | Change page |
 | F2 | + | Show the GamePad QR code |
 | F5 | − | Rescan games |
-| F1 | – | Settings |
+| F1 | Settings in the dock | Settings |
 | F11 | – | Toggle fullscreen |
 | V | – | Full-screen music visualizer |
 | Ctrl+Q | HOME → Close game | Quit the running game |
 
+**Settings** are part of the menu on the TV, like a console's: categories on the left (Look &
+sound, Games, GamePad & players, OpenBased, System), their settings on the right. Everything
+works with the phone, a controller, the keyboard or the mouse: up / down to choose, ◀ ▶ to change
+a choice or a switch, A to open or edit, B to go back, L / R for the next category, and the mouse
+wheel (or just moving down) scrolls. Changes apply and are saved straight away. Text is typed on
+an on-screen keyboard (A types, B deletes, L / R move the cursor, + is done), or on a real
+keyboard, which also pastes with Ctrl+V. Folders and emulator programs are picked in a built-in
+file browser, so nothing needs a window of the computer's own.
+
 **Start-up and music.** WII-UU opens with a short start-up animation and chime. Any key, click or
 GamePad button skips it. The menu then plays relaxed background music, an original jazzy loop
 that WII-UU synthesizes itself, so no audio files ship. The music fades out while a game runs and
-comes back afterwards. Both can be turned off under *Settings → General* (`ui.bootAnimation`,
+comes back afterwards. Both can be turned off under *Settings → Look & sound* (`ui.bootAnimation`,
 `ui.music`), and `ui.musicVolume` (0–100, default 45) sets the level.
 
-*Settings → General → Menu music* picks the tune (`ui.musicTrack`). Besides WII-UU's own loop,
+*Settings → Look & sound → Menu music track* picks the tune (`ui.musicTrack`). Besides WII-UU's own loop,
 there are public-domain melodies: Korobeiniki (the folk song that became the Tetris theme), In the
 Hall of the Mountain King, Ode to Joy, Für Elise, the Turkish March, Greensleeves and Pachelbel's
 Canon. Each comes in four versions:
@@ -243,7 +252,7 @@ over those bars. WII-UU makes the mix one track ahead while it plays, so it need
 the first track takes a few seconds to start.
 
 **Music visualizer.** While menu music plays, frequency bars move behind the tiles
-(`ui.visualizer`; *Settings → General*). Press **V** for the full-screen visualizer: a spectrum
+(`ui.visualizer`; *Settings → Look & sound*). Press **V** for the full-screen visualizer: a spectrum
 ring around the WII-UU logo that pulses with the bass, the waveform, and the name of the track
 playing. V, Esc or the GamePad's B button go back.
 *All of them, taking turns* plays each one twice and then moves to the next. For any other music,
@@ -251,15 +260,15 @@ such as a game theme you own, click *Add your own…* and put WAV or AIFF files 
 that opens (`~/.wiiuu/music`). WII-UU loops up to 5 minutes of each file. MP3 isn't supported,
 so convert those first.
 
-**Dark mode.** *Settings → General → Theme* offers Auto, Light or Dark (`ui.theme`). *Auto*
+**Dark mode.** *Settings → Look & sound → Theme* offers Auto, Light or Dark (`ui.theme`). *Auto*
 follows the system's appearance on macOS, Windows and GNOME/KDE, and switches along when you
 change it.
 
 ## Themes
 
-*Settings → General → Theme* also lists themes: Sunset, Midnight Arcade, Game Boy, Famicom,
+*Settings → Look & sound → Theme* also lists themes: Sunset, Midnight Arcade, Game Boy, Famicom,
 Ocean (light by day, deep sea in dark mode), Paper, and any you write yourself. Themes are small
-text files in WII-UU's own theme language. *Make your own…* opens `~/.wiiuu/themes` with a
+text files in WII-UU's own theme language. *Make your own theme* opens `~/.wiiuu/themes` with a
 commented theme to start from (`my-theme.wtheme`) and the full reference (`REFERENCE.txt`,
 also `wiiuu --theme-reference`). Pick your theme in Settings, then edit it: **WII-UU redraws
 within a second every time you save the file.**
@@ -298,7 +307,7 @@ when dark { glow = alpha(sun, 10%) }   # only in dark mode
 
 ## RetroArch mode
 
-Turn on *Settings → General → RetroArch mode* (`retroarch.enabled=true`) to run every system that has
+Turn on *Settings → Games → RetroArch mode* (`retroarch.enabled=true`) to run every system that has
 a libretro core in [RetroArch](https://www.retroarch.com) instead of its standalone emulator.
 
 | System | Cores, best first |
@@ -361,18 +370,18 @@ and each one is assigned a player number (P1–P4).
 
 **Phones stay paired.** The pairing code is created once and kept, and every paired phone keeps
 its player number in `~/.wiiuu/pads.properties`. When WII-UU restarts, phones reconnect on their
-own. To unpair all phones, change the code under *Settings → General*.
+own. To unpair all phones, change the code under *Settings → GamePad & players*.
 
 ### 8 players and Buzz! mode
 
 ![A Buzz! quiz game on the TV, with four phones in Buzz! mode](docs/buzz.jpg)
 
-* **8-player mode:** *Settings → General → 8-player mode* (`server.maxPlayers=8`) lets up to 8 phones
+* **8-player mode:** *Settings → GamePad & players → 8-player mode* (`server.maxPlayers=8`) lets up to 8 phones
   play at once, as players 1–8.
   * On Linux, each phone is its own virtual controller.
   * DSU motion and touch are limited to players 1–4 by the protocol.
-  * With the keyboard fallback, players 3–8 have no default keys. Set them under *Settings → GamePad
-    Keys*.
+  * With the keyboard fallback, players 3–8 have no default keys. Set them under *Settings → GamePad & players →
+    Player 3* to *8*.
 * **Buzz! mode:** in PS2 Buzz! quiz games, every phone turns into a Buzz! buzzer: a big red button
   and the four coloured answer buttons.
   * It switches on by itself for PS2 games with "Buzz" in the name (`buzz.games` is a regex), and
@@ -408,7 +417,7 @@ own. To unpair all phones, change the code under *Settings → General*.
   into the focused emulator window.
   * **Player 1:** gets each emulator's own default keyboard layout, so nothing needs mapping for
     Dolphin (GameCube), PPSSPP, mGBA, melonDS, DuckStation, Ryujinx and Azahar.
-  * **Other emulators and players 2–4:** use the layout under *Settings → GamePad Keys*, which
+  * **Other emulators and players 2–4:** use the layout under *Settings → GamePad & players → Player N*, which
     follows RetroArch. Keys you set there always win.
   * **Adjusting one emulator's layout:** use `keys.<emulator>.<BUTTON>=KEY`, for example
     `keys.dolphin.ZL=A`.
@@ -468,7 +477,7 @@ The picture is streamed at 30 fps.
   * **Split screens (RetroArch mode, DS and 3DS):** like a DS game on a Wii U, the TV shows the top
     screen big and the phone the touch screen. RetroArch's window goes onto a display the TV
     doesn't show, sized to the two screens exactly, and WII-UU covers the TV with the live top
-    screen. Everything is put back when the game ends. Turn it off under *Settings → General*
+    screen. Everything is put back when the game ends. Turn it off under *Settings → Games*
     (`screen.split=false`).
     * **Linux (X11):** WII-UU makes the hidden display itself. It widens the X screen past the
       TV, declares the new strip a monitor, and lets the mouse reach it (the TV output gets a
@@ -481,7 +490,7 @@ The picture is streamed at 30 fps.
       the largest size up to that, right of your screens) only while a DS/3DS game runs in
       RetroArch mode, and off again afterwards, so your desktop stays as it was. Taps are normal
       mouse clicks there. A virtual display you keep on yourself is used as it is and left on.
-      `screen.split.display=<n>` picks another display (`\\.\DISPLAY<n>`). *Settings → General →
+      `screen.split.display=<n>` picks another display (`\\.\DISPLAY<n>`). *Settings → System →
       Install virtual display* installs the driver from WII-UU itself.
     * **When the screens aren't split,** the TV and the phone say why, and
       `~/.wiiuu/logs/split.log` has the details. `wiiuu --split-check` (Windows:
@@ -549,7 +558,7 @@ and the GamePad buttons don't reach emulators. `install.sh` builds a native `WII
 
 1. Start WII-UU from **~/Applications/WII-UU.app**, not from a terminal.
 2. In *System Settings → Privacy & Security*, turn on **WII-UU** under **Screen Recording** and
-   **Accessibility**. *Settings (F1) → General → macOS permissions* opens both pages.
+   **Accessibility**. *Settings (F1) → System → macOS permissions* opens both pages.
 3. Restart WII-UU.
 
 If the picture is black, the phone and the TV now say so instead of showing a black screen. The
@@ -583,7 +592,7 @@ next start if WII-UU was killed. Turn this off with `input.dolphinMapping=off`.
 
 ## Updating
 
-* **In the app:** *Settings (F1) → General → Check for updates*. WII-UU also checks once at each
+* **In the app:** *Settings (F1) → System → Check for updates*. WII-UU also checks once at each
   start and shows a notification when a new version is out.
 * **In a terminal:** `wiiuu --upgrade`, or `curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash`.
 
@@ -598,7 +607,7 @@ Every release's changes are in [CHANGELOG.md](CHANGELOG.md), and WII-UU shows th
 * Before an update installs, the update prompt lists what it brings.
 * The first start after an update shows what changed since the version you had. With
   `ui.whatsNew=false` you get a short notification instead.
-* *Settings (F1) → General → What's new* lists every version.
+* *Settings (F1) → System → What's new* lists every version.
 * `wiiuu --changelog` prints the notes in a terminal, and `wiiuu --changelog 1.9.0` prints only
   what's newer than 1.9.0.
 

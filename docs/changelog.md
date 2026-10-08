@@ -3,6 +3,18 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.43 (2026-10-08)
+- New Settings, drawn on the TV like the rest of the menu instead of in a window of the computer's:
+  categories on the left (Look & sound, Games, GamePad & players, OpenBased, System), and every
+  setting on the right. They work with the phone, controllers, the keyboard and the mouse, scroll
+  smoothly (also with the mouse wheel), and every change applies and is saved at once.
+- Text is typed on an on-screen keyboard steered with the GamePad (or a real keyboard, with
+  Ctrl+V to paste); folders and emulator programs are picked in a built-in file browser.
+- Each console has its own page (shown or hidden, command, emulator program, games folder), each
+  player a page of keyboard keys (A, then press the key, or ◀ ▶ through them), and What's new and
+  updates are part of Settings too.
+- Choosing a theme or a music track in Settings applies it right away.
+
 ## 1.9.42 (2026-10-07)
 - Themes, with their own language: small `.wtheme` text files that recolour the whole menu, with
   variables (`let`), colour functions (`mix`, `lighten`, `alpha`, `spin`, `gradient` …), console

@@ -150,7 +150,7 @@ public final class Themes {
                 =========================
 
                 A theme is a text file ending in .wtheme in this folder. Pick it in Settings (F1) >
-                General > Theme. While it is the theme in use, WII-UU redraws as soon as you save the file.
+                Look & sound > Theme. While it is the theme in use, WII-UU redraws as soon as you save the file.
                 Check one from a terminal with:  wiiuu --theme-check FILE
 
                 One statement per line. "# " or "//" starts a comment.

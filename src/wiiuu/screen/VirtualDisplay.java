@@ -333,7 +333,7 @@ public final class VirtualDisplay {
             }
         }
         if (v == null) {
-            note("no virtual display installed: Settings (F1) > General > Install virtual display; the TV shows both screens");
+            note("no virtual display installed: Settings (F1) > System > Install the virtual display; the TV shows both screens");
             return null;
         }
         if (v.attached() && v.rect() != null) {

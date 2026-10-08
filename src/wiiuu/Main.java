@@ -37,11 +37,11 @@ import wiiuu.net.GamepadServer;
 import wiiuu.screen.AudioStreamer;
 import wiiuu.screen.ScreenStreamer;
 import wiiuu.ui.MenuView;
-import wiiuu.ui.SettingsDialog;
+import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.42";
+    public static final String VERSION = "1.9.43";
 
     private final Config config;
     private final Library library;
@@ -68,18 +68,6 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.launcher = new Launcher(config);
         this.openBased = new wiiuu.core.OpenBased(config, library);
         launcher.setOpenBased(openBased);
-        wiiuu.ui.SettingsDialog.setOpenBased(openBased, () -> server == null ? null : server.url());
-        wiiuu.ui.SettingsDialog.setGuide(() -> view.startGuide());
-        wiiuu.ui.SettingsDialog.setRestartIntoGuide(() -> {
-            config.set("ui.setupNext", "true");
-            config.save();
-            try {
-                Updater.restartAfterExit();
-            } catch (IOException e) {
-                System.err.println("[restart] could not start WII-UU again: " + e.getMessage());
-            }
-            quit();
-        });
         launcher.addListener(openBased);
         this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
         // type each emulator's own default keys (Dolphin, PPSSPP, mGBA, melonDS, ...), so nothing needs mapping
@@ -223,7 +211,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         if (freshInstall) config.save();
         // never ran before (install.sh may already have written settings): the setup guide
         firstRun = config.get("app.lastVersion", null) == null && !config.getBool("ui.setupDone", false);
-        // Settings > General > Restart into the setup guide
+        // Settings > System > Restart into the setup guide
         boolean guideAsked = config.getBool("ui.setupNext", false) || setup;
         if (config.getBool("ui.setupNext", false)) {
             config.set("ui.setupNext", null);
@@ -376,15 +364,27 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
     @Override
     public void openSettings() {
-        new SettingsDialog(frame, config, () -> {
+        view.openSettings(new SettingsScreen.Services(config, openBased, () -> server == null ? null : server.url(),
+                () -> view.startGuide(), this::restartIntoGuide, new Updater(config, VERSION), this::quit, () -> {
+            // everything is saved as it changes; what the menu shows may have changed too
             view.setSoundsEnabled(config.getBool("ui.sounds", true));
             view.setMusicEnabled(config.getBool("ui.music", true));
-            view.setThemeMode(config.get("ui.theme", "auto"));
-            view.showToast("Settings saved");
             library.rescanAsync();
             openBased.refreshAsync();
-        }).withUpdater(new Updater(config, VERSION), this::quit).setVisible(true);
+        }));
         view.requestFocusInWindow();
+    }
+
+    /** Settings > System > Restart into the setup guide. */
+    private void restartIntoGuide() {
+        config.set("ui.setupNext", "true");
+        config.save();
+        try {
+            Updater.restartAfterExit();
+        } catch (IOException e) {
+            System.err.println("[restart] could not start WII-UU again: " + e.getMessage());
+        }
+        quit();
     }
 
     @Override
@@ -589,7 +589,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             if (view.isBooting() || view.guideShowing()) return;
             wait.stop();
             if (!config.getBool("ui.whatsNew", true)) {
-                view.showToast("Updated to WII-UU " + VERSION + " - what's new: Settings (F1) > General");
+                view.showToast("Updated to WII-UU " + VERSION + " - what's new: Settings (F1) > System");
                 return;
             }
             wiiuu.ui.ChangelogDialog.show(frame, "What's new in WII-UU " + VERSION,
@@ -606,7 +606,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                 Updater.Release rel = new Updater(config, VERSION).check();
                 if (rel != null) {
                     SwingUtilities.invokeLater(() -> view.showToast("WII-UU " + rel.version()
-                            + " is available - Settings (F1) > General > Check for updates"));
+                            + " is available - Settings (F1) > System > Check for updates"));
                 }
             } catch (Exception ignored) {
                 // offline or site unreachable: try again next start

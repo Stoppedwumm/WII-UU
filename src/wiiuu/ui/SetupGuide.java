@@ -25,7 +25,7 @@ import wiiuu.input.PadButton;
 import wiiuu.net.QrCode;
 
 /**
- * The setup guide WII-UU shows on its first start (and again from Settings > General), like a
+ * The setup guide WII-UU shows on its first start (and again from Settings > System), like a
  * console's first-time setup: welcome, look, sound, the phone as GamePad, where games go,
  * controllers, done. It is drawn over the menu and steered like the menu (arrows / stick, A to
  * choose, B back, L / R to skip a step), so it works on the TV with the phone, a controller,
@@ -578,7 +578,7 @@ final class SetupGuide {
             center(g, head[0], Font.BOLD, h * 0.075f, x + w / 2, y + h * 0.53f, inner);
             g.setColor(MenuView.TEXT_DIM);
             center(g, head[1], Font.PLAIN, h * 0.036f, x + w / 2, y + h * 0.61f, inner);
-            center(g, "This guide is in Settings (F1) > General whenever you want it again.", Font.PLAIN, h * 0.03f,
+            center(g, "This guide is in Settings (F1) > System whenever you want it again.", Font.PLAIN, h * 0.03f,
                     x + w / 2, y + h * 0.67f, inner);
         } else {
             g.setColor(MenuView.ACCENT);
