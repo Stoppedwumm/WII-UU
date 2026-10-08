@@ -6,8 +6,8 @@ import java.util.Random;
  * The music for {@link IdleStudio}: the Future House track WII-UU builds, synthesized to the
  * sketch's timeline (seconds from its start, 128 BPM, beats on multiples of 60/128 s). Each part
  * comes in when its pattern appears in the playlist, the music stops while the piano roll is open,
- * comes back with the "Mario" lead (an original bouncy tune: the one drawn in the piano roll, not
- * Nintendo's), builds up with a snare roll and a riser, drops, and stops for the export. Then the
+ * comes back with the Mario lead (the overworld theme's opening phrase, square wave), builds up
+ * with a snare roll and a riser, drops, and stops for the export. Then the
  * door, the sirens, the stamp and one lonely note. Mono, at {@link MenuAudio#RATE}.
  */
 final class StudioTrack {
@@ -36,91 +36,25 @@ final class StudioTrack {
     /** One note of the lead: when (in beats from its start), how long (beats), and its pitch (MIDI). */
     record Note(double beat, double length, int pitch) {}
 
-    /** The lead: its notes, and the file they came from (null: the built-in tune). */
+    /** The lead: its notes, and the file name the piano roll shows being dragged in. */
     record Lead(java.util.List<Note> notes, String file) {}
 
-    /** Where your own lead can go: the first .mid file in it is played instead of the built-in tune. */
-    static volatile java.nio.file.Path leadFolder;
-
-    /** The built-in tune (the one drawn in the piano roll), or the first .mid in {@link #leadFolder}. */
+    /** The lead: the opening phrase of the Super Mario Bros. overworld theme (16 beats). */
     static Lead lead() {
-        java.nio.file.Path dir = leadFolder;
-        if (dir != null && java.nio.file.Files.isDirectory(dir)) {
-            try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(dir)) {
-                java.util.Optional<java.nio.file.Path> mid = files
-                        .filter(p -> p.getFileName().toString().toLowerCase(java.util.Locale.ROOT).matches(".*\\.midi?"))
-                        .sorted().findFirst();
-                if (mid.isPresent()) {
-                    java.util.List<Note> notes = fromMidi(mid.get());
-                    if (!notes.isEmpty()) return new Lead(notes, mid.get().getFileName().toString());
-                }
-            } catch (Exception | LinkageError e) {
-                System.err.println("[studio] couldn't read the lead: " + e.getMessage());
-            }
-        }
         java.util.List<Note> notes = new java.util.ArrayList<>();
-        for (int[] n : TUNE) notes.add(new Note(n[0] / 4.0, 1.5 / 4, PITCHES[n[1]]));
-        return new Lead(notes, null);
+        for (double[] n : THEME) notes.add(new Note(n[0], n[1], (int) n[2]));
+        return new Lead(notes, "super_mario_bros_theme.mid");
     }
 
-    /**
-     * The melody of a MIDI file: the highest-sounding of its busier tracks (not drums), one note at a time (the highest when
-     * several start together), from its first note, at most 32 beats, moved by octaves to sit around
-     * C5-C6. Its tempo is ignored: the beats are played at 128 BPM.
-     */
-    static java.util.List<Note> fromMidi(java.nio.file.Path file) throws Exception {
-        javax.sound.midi.Sequence seq = javax.sound.midi.MidiSystem.getSequence(file.toFile());
-        if (seq.getDivisionType() != javax.sound.midi.Sequence.PPQ) return java.util.List.of();
-        double ppq = seq.getResolution();
-        java.util.List<java.util.List<Note>> tracks = new java.util.ArrayList<>();
-        for (javax.sound.midi.Track track : seq.getTracks()) {
-            java.util.TreeMap<Long, int[]> starts = new java.util.TreeMap<>();      // tick -> {pitch, end tick}
-            java.util.Map<Integer, Long> open = new java.util.HashMap<>();
-            for (int i = 0; i < track.size(); i++) {
-                javax.sound.midi.MidiEvent ev = track.get(i);
-                if (!(ev.getMessage() instanceof javax.sound.midi.ShortMessage m) || m.getChannel() == 9) continue;
-                boolean on = m.getCommand() == javax.sound.midi.ShortMessage.NOTE_ON && m.getData2() > 0;
-                boolean off = m.getCommand() == javax.sound.midi.ShortMessage.NOTE_OFF
-                        || m.getCommand() == javax.sound.midi.ShortMessage.NOTE_ON && m.getData2() == 0;
-                if (on) open.put(m.getData1(), ev.getTick());
-                else if (off && open.containsKey(m.getData1())) {
-                    long from = open.remove(m.getData1());
-                    int[] was = starts.get(from);
-                    if (was == null || m.getData1() > was[0]) starts.put(from, new int[]{m.getData1(), (int) (ev.getTick() - from)});
-                }
-            }
-            if (starts.isEmpty()) continue;
-            long first = starts.firstKey();
-            java.util.List<Note> notes = new java.util.ArrayList<>();
-            for (java.util.Map.Entry<Long, int[]> e : starts.entrySet()) {
-                double beat = (e.getKey() - first) / ppq;
-                if (beat >= 32) break;
-                notes.add(new Note(beat, Math.max(0.1, e.getValue()[1] / ppq), e.getValue()[0]));
-            }
-            tracks.add(notes);
-        }
-        // the melody is usually on top: the highest on average of the tracks with a fair share of notes
-        int most = 0;
-        for (java.util.List<Note> t : tracks) most = Math.max(most, t.size());
-        java.util.List<Note> best = java.util.List.of();
-        double bestPitch = -1;
-        for (java.util.List<Note> t : tracks) {
-            if (t.size() < most * 0.4) continue;
-            double avg = t.stream().mapToInt(Note::pitch).average().orElse(0);
-            if (avg > bestPitch) {
-                bestPitch = avg;
-                best = t;
-            }
-        }
-        if (best.isEmpty()) return best;
-        int[] pitches = best.stream().mapToInt(Note::pitch).sorted().toArray();
-        int shift = 0, median = pitches[pitches.length / 2];
-        while (median + shift < 72) shift += 12;
-        while (median + shift > 84) shift -= 12;
-        java.util.List<Note> out = new java.util.ArrayList<>();
-        for (Note n : best) out.add(new Note(n.beat(), n.length(), n.pitch() + shift));
-        return out;
-    }
+    /** {beat, length in beats, MIDI pitch} */
+    private static final double[][] THEME = {
+            {0, 0.25, 76}, {0.25, 0.25, 76}, {0.75, 0.25, 76}, {1.25, 0.25, 72}, {1.5, 0.25, 76}, {2, 0.25, 79},
+            {3, 0.25, 67},
+            {4, 0.25, 72}, {4.75, 0.25, 67}, {5.5, 0.25, 64}, {6.25, 0.25, 69}, {6.75, 0.25, 71}, {7.25, 0.25, 70},
+            {7.5, 0.25, 69}, {8, 0.25, 67}, {8.333, 0.25, 76}, {8.667, 0.25, 79}, {9, 0.25, 81}, {9.5, 0.25, 77},
+            {9.75, 0.25, 79}, {10.25, 0.25, 76}, {10.75, 0.25, 72}, {11, 0.25, 74}, {11.25, 0.25, 71},
+            {12, 0.25, 72}, {12.75, 0.25, 67}, {13.5, 0.25, 64}, {14.25, 0.25, 69}, {14.75, 0.25, 71},
+            {15.25, 0.25, 70}, {15.5, 0.25, 69}};
 
     private static double hz(int pitch) {
         return 440 * Math.pow(2, (pitch - 69) / 12.0);
@@ -187,7 +121,7 @@ final class StudioTrack {
             int step = (int) Math.round(t / (BEAT / 2)) % 8;
             if (step == 3 || step == 6 || step == 7) chop(t, CHORDS[chord(t)][step % 3] * 2, BEAT * 0.4, step);
         }
-        // the "Mario" lead (square wave): from the top when it comes back, and again at the drop
+        // the Mario lead (square wave): from the top when it comes back, and again at the drop
         java.util.List<Note> notes = lead.notes();
         double end = 0;
         for (Note n : notes) end = Math.max(end, n.beat() + n.length());
@@ -220,10 +154,6 @@ final class StudioTrack {
         square(53.6, hz(74), 0.35, 0.12);
     }
 
-    /** {sixteenth, scale step}: the notes drawn in the piano roll. */
-    private static final int[][] TUNE = {{0, 3}, {1, 3}, {3, 3}, {5, 5}, {6, 3}, {8, 1}, {10, 8}, {12, 5}, {14, 2}, {16, 6},
-            {17, 4}, {19, 3}, {21, 7}, {22, 6}, {24, 5}, {26, 4}, {27, 3}, {29, 6}, {31, 8}};
-    private static final int[] PITCHES = {69, 71, 72, 74, 76, 79, 81, 83, 84};      // A4 .. C6
 
     // ---- instruments --------------------------------------------------------------------------------
 

@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.59 (2026-10-08)
+- The music-making idle activity now really has Super Mario Bros. in it: the lead of WII-UU's
+  Future House track plays the opening of the overworld theme as a square wave, and the piano roll
+  shows its notes. (This replaces 1.9.58's folder for your own MIDI file.)
+
 ## 1.9.58 (2026-10-08)
 - Your own tune for the music-making idle activity: put a MIDI file into `~/.wiiuu/studio/` and
   WII-UU plays its melody as the lead of its Future House track (the highest of the file's busier

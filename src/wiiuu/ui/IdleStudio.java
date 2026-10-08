@@ -19,7 +19,7 @@ import java.util.function.BiConsumer;
  * track by track, then has the idea of putting the Super Mario Bros. theme in it. Build-up, drop,
  * export, upload... copyright claim. Red and blue lights, and the COPYRIGHT S.W.A.T. team bursts in
  * with a giant TAKEDOWN stamp and leaves with its MIDI keyboard. With its own music
- * ({@link StudioTrack}; the menu's pauses meanwhile), whose "Mario" lead is an original tune.
+ * ({@link StudioTrack}; the menu's pauses meanwhile), with the theme's opening as the lead.
  *
  * <p>Worked out from the time since it started, like {@link IdleWeb}: see {@link #SCRIPT}.
  */
@@ -445,7 +445,7 @@ final class IdleStudio implements IdleGames.Game {
             double k = ease((t - ROLL) / 1.2);
             float fx = (float) (x + w * 0.7f - k * w * 0.4f), fy = (float) (y + h * 0.15f + k * h * 0.2f);
             g.setColor(new Color(0xFAFAFA));
-            g.fillRect((int) fx, (int) fy, (int) (w * 0.42f), (int) (h * 0.12f));
+            g.fillRect((int) fx, (int) fy, (int) (w * 0.5f), (int) (h * 0.12f));
             g.setColor(new Color(0x212121));
             g.setFont(MenuView.font(Font.BOLD, H * 0.02f));
             g.drawString(lead != null && lead.file() != null ? lead.file() : "super_mario_bros_theme.mid", fx + 6, fy + h * 0.08f);

@@ -423,10 +423,8 @@ blocks for "reasons"; it tries secret mode and a VPN to Antarctica, and pretends
 the hallway light comes on. Or it produces a Future House banger in "FL Stoodio" (made up),
 puts the Super Mario Bros. theme in it, uploads it, and gets raided by the COPYRIGHT S.W.A.T.
 team (a giant TAKEDOWN stamp; they take its MIDI keyboard). That one has its own music: the
-menu music pauses while WII-UU's track builds up and drops (synthesized like the menu's; the
-"Mario" lead is an original tune, not Nintendo's). For the real thing, put a MIDI file you have
-into `~/.wiiuu/studio/`: WII-UU plays its melody as the lead (the highest of its busier tracks,
-at 128 BPM) and shows it in the piano roll. The
+menu music pauses while WII-UU's track builds up and drops, with the opening of the Super Mario
+Bros. theme as its square-wave lead (synthesized like the menu's music). The
 activities are shuffled, never twice in a row, and the GamePad shows the WII-UU logo talking about
 its own game in a speech bubble: "Damn!" when it messes up, "TETRIS!!" when it doesn't, "Don't
 mind me, just don't interrupt me while I'm still finishing the level." Without a phone the bubble

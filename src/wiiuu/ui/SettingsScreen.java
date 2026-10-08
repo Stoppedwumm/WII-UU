@@ -1102,9 +1102,6 @@ public final class SettingsScreen {
             close();
             view.startIdle("");
         }, null, null));
-        r.add(new Header("Music-making lead"));
-        r.add(new Info("Put a MIDI file (.mid) in " + config.home().resolve("studio")
-                + " and WII-UU plays its melody as the lead when it makes music (and shows it in the piano roll)."));
         r.add(new Header("Developer tab"));
         r.add(new Action("Hide the Developer tab", "Press Check for updates 7 times to get it back.", () -> {
             config.set("dev.unlocked", "false");
