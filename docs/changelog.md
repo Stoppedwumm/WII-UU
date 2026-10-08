@@ -3,6 +3,14 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.46 (2026-10-08)
+- When nobody uses it for 3 minutes, WII-UU plays by itself on the TV: Tetris (good, but not
+  perfect, and more careless as it speeds up) and Pong against the computer, taking turns. The
+  GamePad shows the WII-UU logo commenting on its own game in a speech bubble ("Damn!", "TETRIS!!",
+  "I lost to a computer. Wait, I AM a computer."), hopping when it's happy and slumping when it
+  isn't. Any button or a tap on the phone takes over ("Oh, you're back! I was totally winning.").
+  *Settings > Look & sound > Plays by itself when idle* sets the wait or turns it off.
+
 ## 1.9.45 (2026-10-08)
 - On Linux, WII-UU now draws with the graphics chip (OpenGL) instead of the processor when there is
   a driver for one, as on a Raspberry Pi: much less work for the processor on big TVs. Without a

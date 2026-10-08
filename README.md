@@ -368,6 +368,13 @@ The GamePad's screen shows your library, and tapping a game starts it on the TV.
 runs, it shows *Now Playing*, and HOME opens a menu with *Close game*. Up to 4 phones can connect,
 and each one is assigned a player number (P1–P4).
 
+**When nobody plays,** WII-UU plays by itself: after 3 minutes without input in the menu it
+plays Tetris or Pong on the TV (taking turns), and the GamePad shows the WII-UU logo talking about
+its own game in a speech bubble: "Damn!" when it messes up, "TETRIS!!" when it doesn't, "Don't
+mind me, just don't interrupt me while I'm still finishing the level." Without a phone the bubble
+is on the TV. Any button (or a tap on the phone) takes over. *Settings → Look & sound → Plays by
+itself when idle* sets the wait or turns it off (`ui.idleGames`, in minutes; 0 = never).
+
 When WII-UU closes (from its power menu, a restart or an update, or Console Mode going to the
 desktop or shutting down), every phone shows **WII-UU is not running** and why. If WII-UU just
 disappears (a crash, the computer switched off), the phone notices within a few seconds. The page
@@ -691,6 +698,7 @@ ui.musicTrack=wiiuu         # wiiuu | korobeiniki | mountainking | odetojoy | fu
 ui.visualizer=true          # frequency bars behind the menu while music plays (V: full screen)
 ui.bootAnimation=true       # start-up animation and chime
 ui.theme=auto               # auto (follow the system) | light | dark | a theme's file name (sunset, my-theme …)
+ui.idleGames=3              # minutes without input before WII-UU plays Tetris / Pong by itself (0 = never)
 ui.opengl=auto              # Linux: draw with the graphics chip (OpenGL) when there is one | true | false
 retroarch.enabled=false     # RetroArch mode; retroarch.path, retroarch.core.<id>, retroarch.download
 ```

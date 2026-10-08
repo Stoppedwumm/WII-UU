@@ -82,7 +82,15 @@ public final class GamepadServer {
         default String setUpOpenBased(String url, String token) {
             return "OpenBased isn't available";
         }
+
+        /** What WII-UU plays by itself while nobody uses it (null: it doesn't), for the GamePad. */
+        default Idle idle() {
+            return null;
+        }
     }
+
+    /** WII-UU playing by itself: the game, its score, and its latest remark (with an id and mood). */
+    public record Idle(String game, int score, String line, int lineId, String mood) {}
 
     private static final long STALE_MS = 5000;
     /** paired phones are remembered (also across restarts) until unused for this long */
@@ -602,6 +610,11 @@ public final class GamepadServer {
                 .kv("clientConfig", ob.clientConfig(ob.redirectUri(url()))).endObj();
         // the menu music, for phones that make it themselves (web/music.js); "local" when the sound
         // they get leaves it out
+        Idle idle = host.idle();
+        j.key("idle");
+        if (idle == null) j.val((String) null);
+        else j.obj().kv("game", idle.game()).kv("score", idle.score()).kv("line", idle.line())
+                .kv("lineId", idle.lineId()).kv("mood", idle.mood()).endObj();
         wiiuu.screen.OwnSound.Music m = wiiuu.screen.OwnSound.music();
         j.key("music");
         if (m == null || m.id() == null) j.val((String) null);

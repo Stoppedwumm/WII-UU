@@ -759,6 +759,77 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         spriteRenderer.shutdownNow();
     }
 
+    // ---- playing by itself when idle ------------------------------------------------------
+
+    /** Tetris or Pong, played by WII-UU itself after ui.idleGames minutes (default 3) without input */
+    private IdleGames idleGames;
+    private BufferedImage idleBuf;
+    private long lastInput = System.currentTimeMillis();
+    private volatile wiiuu.net.GamepadServer.Idle idleSnap;
+
+    /** For the GamePad page: what WII-UU is playing and saying, or null. */
+    public wiiuu.net.GamepadServer.Idle idleState() {
+        return idleSnap;
+    }
+
+    private boolean canIdle() {
+        return !booting && intro == null && !introPending && guide == null && !guidePending && settings == null
+                && playing == null && !showPad && !confirmQuit && !vizFull && isShowing();
+    }
+
+    /** Any input: counts as someone being there; while WII-UU plays by itself, takes over (and does nothing else). */
+    private boolean wakeIdle() {
+        lastInput = System.currentTimeMillis();
+        if (idleGames == null) return false;
+        String bye = idleGames.goodbye();
+        idleGames = null;
+        idleSnap = null;
+        idleBuf = null;
+        Sfx.select();
+        showToast("WII-UU: \u201c" + bye + "\u201d");
+        repaint();
+        return true;
+    }
+
+    /** Starts, runs or ends the idle games; true while they own the screen. */
+    private boolean tickIdle() {
+        long now = System.currentTimeMillis();
+        if (!canIdle()) {
+            lastInput = now;                                 // a game, a dialog: the wait starts again afterwards
+            if (idleGames != null) {
+                idleGames = null;
+                idleSnap = null;
+                repaint();
+            }
+            return false;
+        }
+        if (idleGames == null) {
+            int minutes = config.getInt("ui.idleGames", 3);
+            long wait = Long.getLong("wiiuu.idleSeconds", minutes * 60L) * 1000;      // -Dwiiuu.idleSeconds: for trying it out
+            if (minutes <= 0 || now - lastInput < wait) return false;
+            idleGames = new IdleGames();
+        }
+        idleGames.step(now);
+        IdleGames.Line l = idleGames.line();
+        idleSnap = new wiiuu.net.GamepadServer.Idle(idleGames.gameName(), idleGames.score(), l.text(), l.id(), l.mood());
+        repaint();
+        return true;
+    }
+
+    /** The idle game, drawn small (a retro picture, and cheap) and enlarged pixel by pixel. */
+    private void paintIdle(Graphics2D g, int w, int h) {
+        int div = Math.max(1, (int) Math.ceil(w / 640.0));
+        int bw = (w + div - 1) / div, bh = (h + div - 1) / div;
+        if (idleBuf == null || idleBuf.getWidth() != bw || idleBuf.getHeight() != bh) {
+            idleBuf = gc != null ? gc.createCompatibleImage(bw, bh) : new BufferedImage(bw, bh, BufferedImage.TYPE_INT_RGB);
+        }
+        Graphics2D b = idleBuf.createGraphics();
+        idleGames.paint(b, bw, bh, pads == 0);
+        b.dispose();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        g.drawImage(idleBuf, 0, 0, bw * div, bh * div, null);
+    }
+
     // ---- settings ------------------------------------------------------------------------
 
     private SettingsScreen settings;
@@ -960,6 +1031,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void navigate(int dx, int dy) {
+        if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
         if (settings != null) {
@@ -1039,6 +1111,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void activate() {
+        if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
         if (settings != null) {
@@ -1107,6 +1180,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void back() {
+        if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
         if (settings != null) {
@@ -1151,6 +1225,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void page(int delta) {
+        if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
         if (settings != null) {
@@ -1180,6 +1255,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     /** Every phone / controller button: the setup guide's controller test sees them all. */
     @Override
     public boolean pressed(int player, wiiuu.input.PadButton b, boolean down) {
+        if (down) lastInput = System.currentTimeMillis();
         if (guide == null || booting || intro != null) return false;
         boolean used = guide.pressed(player, b, down);
         if (used) repaint();
@@ -1188,6 +1264,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void toggleGamepadInfo() {
+        if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
         if (settings != null) {
@@ -1206,6 +1283,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void refresh() {
+        if (wakeIdle()) return;
         if (settings != null) return;
         showToast("Looking for games...");
         actions.refresh();
@@ -1234,6 +1312,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
             @Override
             public void keyPressed(KeyEvent e) {
+                if (wakeIdle()) return;
                 if (skipBoot()) return;
                 if (settings != null) {
                     settings.touch();
@@ -1272,6 +1351,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             @Override
             public void mousePressed(MouseEvent e) {
                 requestFocusInWindow();
+                if (wakeIdle()) return;
                 if (skipBoot()) return;
                 if (skipIntro()) return;
                 if (settings != null) {
@@ -1329,6 +1409,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
             @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
+                if (wakeIdle()) return;
                 if (settings != null) {
                     settings.wheel(e.getWheelRotation());
                     settings.touch();
@@ -1347,6 +1428,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void tick() {
         boolean dirty = tickBoot();
         if (tickIntro()) return;
+        if (tickIdle()) return;
         if (settings != null) {
             if (!settings.tick()) {
                 settings = null;
@@ -1865,6 +1947,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
         if (intro != null && !booting) {
             paintIntro(g, getWidth(), getHeight());
+            g.dispose();
+            Toolkit.getDefaultToolkit().sync();
+            return;
+        }
+        if (idleGames != null) {
+            paintIdle(g, getWidth(), getHeight());
             g.dispose();
             Toolkit.getDefaultToolkit().sync();
             return;

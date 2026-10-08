@@ -686,6 +686,15 @@ public final class SettingsScreen {
             }
         }, () -> Themes.folder(config).toString(), null));
         r.add(toggle("Start-up animation", "The console-style animation when WII-UU starts.", "ui.bootAnimation", true, null));
+        List<Integer> idleMinutes = List.of(0, 1, 3, 5, 10);
+        r.add(new Choice("Plays by itself when idle", "After this long without anyone using it, WII-UU plays Tetris and Pong "
+                + "on the TV and talks about it on the GamePad. Any button takes over.",
+                () -> idleMinutes.stream().map(m -> m == 0 ? "Never" : "After " + m + (m == 1 ? " minute" : " minutes")).toList(),
+                () -> Math.max(0, idleMinutes.indexOf(config.getInt("ui.idleGames", 3))),
+                i -> {
+                    config.set("ui.idleGames", idleMinutes.get(i) == 3 ? null : Integer.toString(idleMinutes.get(i)));
+                    config.save();
+                }));
         r.add(toggle("Start in fullscreen", "From the next start (F11 switches now).", "ui.fullscreen", false, null));
         r.add(new Header("Sound"));
         r.add(toggle("Menu music", "Music in the menu; it fades out while a game runs.", "ui.music", true,
