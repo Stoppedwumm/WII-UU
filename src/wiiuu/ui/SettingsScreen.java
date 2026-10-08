@@ -1142,6 +1142,11 @@ public final class SettingsScreen {
             close();
             view.startIdle("");
         }, null, null));
+        r.add(new Header("Minigames"));
+        r.add(new Action("Boss fight: WII-UU", "WII-UU has a gun. Arrows / stick move, A / Space shoots, Esc quits.", () -> {
+            close();
+            view.startBoss();
+        }, null, null));
         r.add(new Header("Developer tab"));
         r.add(new Action("Hide the Developer tab", "Press Check for updates 7 times to get it back.", () -> {
             config.set("dev.unlocked", "false");

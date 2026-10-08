@@ -449,6 +449,12 @@ from the third press) and a *Developer* category appears. It starts any of WII-U
 right away, without the wait, or all of them shuffled; *Hide the Developer tab* puts it away again
 (`dev.unlocked`).
 
+It also has a minigame: **Boss fight: WII-UU**. You're a little GamePad at the bottom; WII-UU
+floats at the top and has a gun. Arrows / stick move, A / Space shoots (hold it), Esc or − quits.
+As its health drops it goes from one pistol (aimed shots, bursts) to two (spreads) to A BIGGER GUN
+(a sweeping minigun and big slow shells), taunting you all the way, to its own music. You have five
+hearts and a tiny hitbox (the dot in the middle).
+
 When WII-UU closes (from its power menu, a restart or an update, or Console Mode going to the
 desktop or shutting down), every phone shows **WII-UU is not running** and why. If WII-UU just
 disappears (a crash, the computer switched off), the phone notices within a few seconds. The page

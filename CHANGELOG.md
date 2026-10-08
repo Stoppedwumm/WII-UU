@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.61 (2026-10-08)
+- A boss fight in Settings > Developer: you, a little GamePad, against WII-UU, which has a gun.
+  Dodge its shots (five hearts, a tiny hitbox) and shoot back with A / Space. Three phases: a
+  pistol ("Pew pew."), two pistols ("Twice the fun."), and A BIGGER GUN ("BRRRRRRT."). With its own
+  driving music, angry eyebrows, and opinions ("Skill issue."). Esc or − quits; WII-UU is a good
+  sport about it afterwards. Mostly.
+
 ## 1.9.60 (2026-10-08)
 - WII-UU keeps you company outside the setup guide too. In the menu's bottom-left corner it walks
   in, says hello by the time of day, watches the selection with its googly eyes, now and then says

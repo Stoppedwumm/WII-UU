@@ -805,7 +805,25 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
     }
 
-    private String idleNow;                                 // started from Settings > Developer
+    private String idleNow;
+
+    // ---- the boss fight (Settings > Developer) -------------------------------------------------------
+
+    private BossFight boss;
+
+    /** Starts the boss fight against WII-UU (it has a gun). */
+    void startBoss() {
+        IdleGames.musicAllowed = musicEnabled;
+        boss = new BossFight(() -> {
+            boss = null;
+            lastInput = System.currentTimeMillis();
+            updateMusic();
+            mascot.say("Good fight. No hard feelings? ...I'm keeping the gun.");
+            repaint();
+        });
+        updateMusic();
+        repaint();
+    }                                 // started from Settings > Developer
 
     /** Starts an idle activity right away (by its id; "" = the usual shuffle), once the menu is free. */
     void startIdle(String kind) {
@@ -814,7 +832,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private boolean canIdle() {
-        return !booting && intro == null && !introPending && guide == null && !guidePending && settings == null
+        return !booting && intro == null && !introPending && guide == null && !guidePending && settings == null && boss == null
                 && playing == null && !showPad && !confirmQuit && !vizFull && isShowing();
     }
 
@@ -1143,7 +1161,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private void updateMusic() {
         // not while the first boot's intro (with its own beat) is pending or playing
-        MenuAudio.get().musicOn(musicEnabled && revealed && playing == null && intro == null && !introPending && !idleOwnMusic);
+        MenuAudio.get().musicOn(musicEnabled && revealed && playing == null && intro == null && !introPending && !idleOwnMusic && boss == null);
     }
 
     private void buildHomeTiles() {
@@ -1397,6 +1415,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public boolean pressed(int player, wiiuu.input.PadButton b, boolean down) {
         if (down) lastInput = System.currentTimeMillis();
+        if (boss != null) {
+            BossFight f = boss;
+            SwingUtilities.invokeLater(() -> f.pad(b, down));
+            return true;
+        }
         if (guide == null || booting || intro != null) return false;
         boolean used = guide.pressed(player, b, down);
         if (used) repaint();
@@ -1452,7 +1475,16 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             }
 
             @Override
+            public void keyReleased(KeyEvent e) {
+                if (boss != null) boss.key(e.getKeyCode(), false);
+            }
+
+            @Override
             public void keyPressed(KeyEvent e) {
+                if (boss != null) {
+                    boss.key(e.getKeyCode(), true);
+                    return;
+                }
                 if (wakeIdle()) return;
                 if (skipBoot()) return;
                 if (settings != null) {
@@ -1492,6 +1524,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             @Override
             public void mousePressed(MouseEvent e) {
                 requestFocusInWindow();
+                if (boss != null) return;
                 if (wakeIdle()) return;
                 if (skipBoot()) return;
                 if (skipIntro()) return;
@@ -1574,6 +1607,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private void tick() {
         boolean dirty = tickBoot();
+        if (boss != null && settings == null) {
+            boss.step();
+            repaint();
+            return;
+        }
         if (tickIntro()) return;
         if (tickIdle()) return;
         if (settings != null) {
@@ -2095,6 +2133,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
         if (intro != null && !booting) {
             paintIntro(g, getWidth(), getHeight());
+            g.dispose();
+            Toolkit.getDefaultToolkit().sync();
+            return;
+        }
+        if (boss != null && settings == null) {
+            boss.paint(g, getWidth(), getHeight());
             g.dispose();
             Toolkit.getDefaultToolkit().sync();
             return;
