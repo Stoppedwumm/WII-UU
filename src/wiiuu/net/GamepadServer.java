@@ -283,7 +283,28 @@ public final class GamepadServer {
         System.out.println("[gamepad] open " + url() + " on your phone (code " + code + ")");
     }
 
+    /** why WII-UU is closing (quit, restart, update, desktop, shutdown), told to the phones; null while running */
+    private volatile String closing;
+    private volatile boolean stopped;
+
+    /**
+     * Tells the phones that WII-UU is closing, so they show "WII-UU is not running" at once (and
+     * why) instead of finding out when it stops answering: waits until each has asked once more
+     * (they ask every second). Returns at once when no phone is connected.
+     */
+    public void announceClosing(String why) {
+        if (stopped || closing != null) return;
+        closing = why;
+        if (connectedPads() == 0) return;
+        try {
+            Thread.sleep(1300);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     public void stop() {
+        stopped = true;
         saveClients();
         if (http != null) http.stop(0);
         if (https != null) https.stop(0);
@@ -543,6 +564,7 @@ public final class GamepadServer {
     private Json status(Client c) {
         Game g = launcher.current();
         Json j = new Json().obj()
+                .kv("closing", closing)
                 .kv("mode", g == null ? "menu" : "game")
                 .kv("player", c.player)
                 .kv("pads", connectedPads())

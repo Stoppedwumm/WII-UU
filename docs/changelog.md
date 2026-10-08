@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.44 (2026-10-08)
+- The GamePad (phone) says **WII-UU is not running** when WII-UU closes, and why: closed, restarting,
+  updating, or the computer going to the desktop or shutting down. If WII-UU disappears without a
+  word (a crash, the power going off), the phone notices within a few seconds. It connects again
+  by itself, and says so, when WII-UU is back.
+
 ## 1.9.43 (2026-10-08)
 - New Settings, drawn on the TV like the rest of the menu instead of in a window of the computer's:
   categories on the left (Look & sound, Games, GamePad & players, OpenBased, System), and every

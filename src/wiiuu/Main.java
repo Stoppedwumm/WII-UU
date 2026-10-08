@@ -41,7 +41,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.43";
+    public static final String VERSION = "1.9.44";
 
     private final Config config;
     private final Library library;
@@ -264,10 +264,13 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         if (screen != null) {
             screen.setOnBlocked(msg -> SwingUtilities.invokeLater(() -> view.showToast(
                     System.getProperty("os.name", "").toLowerCase().contains("mac")
-                            ? "GamePad screen is black: allow Screen Recording for WII-UU (Settings F1 > General > macOS permissions)"
+                            ? "GamePad screen is black: allow Screen Recording for WII-UU (Settings F1 > System > macOS permissions)"
                             : "GamePad screen is black: screen capture seems blocked")));
         }
         server = new GamepadServer(config, library, launcher, router, this, screen, dsu);
+        // killed from outside (Console Mode's session, the system shutting down): the phones still hear it
+        GamepadServer phones = server;
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> phones.announceClosing("quit"), "tell-phones"));
         if (config.getBool("audio.enabled", true)) {
             server.setAudio(new AudioStreamer(config, screen != null ? screen::macAudioHelper : () -> null));
         }
@@ -365,7 +368,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     @Override
     public void openSettings() {
         view.openSettings(new SettingsScreen.Services(config, openBased, () -> server == null ? null : server.url(),
-                () -> view.startGuide(), this::restartIntoGuide, new Updater(config, VERSION), this::quit, () -> {
+                () -> view.startGuide(), this::restartIntoGuide, new Updater(config, VERSION), () -> {
+                    quitReason = "update";
+                    quit();
+                }, () -> {
             // everything is saved as it changes; what the menu shows may have changed too
             view.setSoundsEnabled(config.getBool("ui.sounds", true));
             view.setMusicEnabled(config.getBool("ui.music", true));
@@ -375,8 +381,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         view.requestFocusInWindow();
     }
 
+    /** Why WII-UU is about to quit, for the phones ("WII-UU is restarting", ...). */
+    private String quitReason = "quit";
+
     /** Settings > System > Restart into the setup guide. */
     private void restartIntoGuide() {
+        quitReason = "restart";
         config.set("ui.setupNext", "true");
         config.save();
         try {
@@ -390,7 +400,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     @Override
     public void quit() {
         launcher.stop(true);        // make sure the emulator is really gone before we exit
-        if (server != null) server.stop();
+        if (server != null) {
+            server.announceClosing(quitReason);
+            server.stop();
+        }
         if (dsuServer != null) dsuServer.stop();
         if (vpads != null) vpads.stop();
         System.exit(0);
@@ -415,7 +428,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             default -> 0;
         };
         launcher.stop(true);
-        if (server != null) server.stop();
+        if (server != null) {
+            server.announceClosing(action);
+            server.stop();
+        }
         if (dsuServer != null) dsuServer.stop();
         if (vpads != null) vpads.stop();
         System.exit(code);

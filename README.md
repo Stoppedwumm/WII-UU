@@ -368,6 +368,11 @@ The GamePad's screen shows your library, and tapping a game starts it on the TV.
 runs, it shows *Now Playing*, and HOME opens a menu with *Close game*. Up to 4 phones can connect,
 and each one is assigned a player number (P1–P4).
 
+When WII-UU closes (from its power menu, a restart or an update, or Console Mode going to the
+desktop or shutting down), every phone shows **WII-UU is not running** and why. If WII-UU just
+disappears (a crash, the computer switched off), the phone notices within a few seconds. The page
+connects again by itself as soon as WII-UU is back.
+
 **Phones stay paired.** The pairing code is created once and kept, and every paired phone keeps
 its player number in `~/.wiiuu/pads.properties`. When WII-UU restarts, phones reconnect on their
 own. To unpair all phones, change the code under *Settings → GamePad & players*.

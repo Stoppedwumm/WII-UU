@@ -162,6 +162,18 @@
   .sheet p { margin: 0 16px; font-size: 12px; color: #6f7780; text-align: center; max-width: 380px; }
   a.bigbtn { text-decoration: none; }
 
+  /* WII-UU closed or gone: the whole GamePad says so until it is back */
+  #down { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 2.2vh; text-align: center; padding: 6vh 8vw;
+    background: radial-gradient(circle at 50% 38%, #23272e 0%, #121418 60%, #08090b 100%); animation: downIn .35s ease-out; }
+  @keyframes downIn { from { opacity: 0; } to { opacity: 1; } }
+  #down .logo { font-weight: 900; font-size: 9vh; letter-spacing: .02em; color: #e9edf1; opacity: .35; }
+  #down .logo b { color: var(--accent); }
+  #down h2 { margin: 0; font-size: 6vh; font-weight: 900; color: #fff; }
+  #down .why { font-size: 3.2vh; color: #c3cad2; max-width: 70vw; }
+  #down .wait { display: flex; align-items: center; gap: 1.4vw; font-size: 2.6vh; color: #8a939d; margin-top: 1vh; }
+  #down .dot { width: 1.6vh; height: 1.6vh; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite ease-in-out; }
+  @keyframes pulse { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.15); } }
   #rotate { position: fixed; inset: 0; background: #15171b; display: none; flex-direction: column; align-items: center;
     justify-content: center; gap: 16px; text-align: center; padding: 30px; z-index: 10; }
   #rotate .phone { width: 60px; height: 100px; border: 4px solid var(--accent); border-radius: 12px; animation: turn 2s infinite ease-in-out; }
@@ -326,6 +338,12 @@
   </div>
 </div>
 
+<div id="down" class="hidden">
+  <div class="logo">WII-<b>UU</b></div>
+  <h2>WII-UU is not running</h2>
+  <div class="why" id="downWhy">It stopped answering.</div>
+  <div class="wait"><span class="dot"></span><span id="downWait">This GamePad connects again by itself when WII-UU starts.</span></div>
+</div>
 <div id="rotate">
   <div class="phone"></div>
   <div style="font-weight:800;font-size:20px">Rotate your phone</div>
@@ -339,7 +357,7 @@ const store = {
   get(k) { try { return localStorage.getItem("wiiuu." + k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem("wiiuu." + k, v); } catch (e) {} }
 };
-const S = { id: store.get("id"), code: store.get("code") || "", player: 0, mode: null, game: null,
+const S = { fails: 0, id: store.get("id"), code: store.get("code") || "", player: 0, mode: null, game: null,
             libVersion: -1, lib: null, sys: store.get("sys"), online: false, haptics: store.get("haptics") !== "0",
             view: "pair", streamMode: "tv", second: null, https: null, tv: false };
 
@@ -399,8 +417,12 @@ async function poll() {
   if (!S.id) return;
   try {
     const asked = performance.now();
-    const r = await api("/api/status");
+    // a computer that is switched off doesn't refuse, it just never answers: give up after a while
+    const r = await api("/api/status", typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(2500) } : {});
     const j = await r.json();
+    if (j.closing) { setOnline(false); showDown(j.closing); return; }
+    S.fails = 0;
+    hideDown();
     setOnline(true);
     tunes.at = (asked + performance.now()) / 2;      // about when the PC said where its music is
     tunes.want = j.music || null;
@@ -447,9 +469,38 @@ async function poll() {
         if (!(S.view === "screen" && S.streamMode === "tv")) show("lib");
       }
     }
-  } catch (e) { setOnline(false); }
+  } catch (e) {
+    setOnline(false);
+    // a missed answer or two happens on Wi-Fi; three in a row: WII-UU is gone
+    if (e.message !== "re-paired" && ++S.fails >= 3) showDown(null);
+  }
 }
 setInterval(poll, 1000);
+
+/** "WII-UU is not running", and why if WII-UU said so before it went. */
+function showDown(why) {
+  const text = {
+    quit: "WII-UU was closed on the computer.",
+    restart: "WII-UU is restarting…",
+    update: "WII-UU is updating and starts again in a moment…",
+    desktop: "The computer went to the desktop.",
+    shutdown: "The computer is shutting down.",
+  }[why];
+  if (why || $("down").classList.contains("hidden")) $("downWhy").textContent = text || "It stopped answering: it was closed, or the computer is off or on another network.";
+  $("downWait").textContent = why === "restart" || why === "update" ? "This GamePad connects again when it's back."
+                                                                    : "This GamePad connects again by itself when WII-UU starts.";
+  if (!$("down").classList.contains("hidden")) return;
+  $("down").classList.remove("hidden");
+  tunes.want = null; syncTunes();                  // the menu music stops with WII-UU
+  if (S.view === "screen") stopStream();
+}
+
+function hideDown() {
+  if ($("down").classList.contains("hidden")) return;
+  $("down").classList.add("hidden");
+  if (S.view === "screen") startStream();
+  toast("WII-UU is back");
+}
 
 function setOnline(on) {
   S.online = on;
@@ -469,6 +520,7 @@ async function loadLibrary() {
 // ---------------------------------------------------------------- screen views
 function show(which) {
   S.view = which;
+  if (which === "pair") { S.fails = 0; hideDown(); }      // back, but it wants the (new) pairing code
   for (const v of ["pair", "lib", "play", "screen"]) $("v-" + v).classList.toggle("hidden", v !== which);
   const big = which === "screen";
   document.body.classList.toggle("big", big);
