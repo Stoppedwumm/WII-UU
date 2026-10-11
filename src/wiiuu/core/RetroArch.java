@@ -128,12 +128,12 @@ public final class RetroArch {
                     + ")\u2026 the game starts by itself in a moment");
         }
         List<String> cmd = new ArrayList<>(exe);
-        if (split == null) cmd.add("-f");
+        if (split == null && config.getBool("retroarch.fullscreen", true)) cmd.add("-f");
         // --verbose: RetroArch's own log goes to logs/<system>.log (why a game didn't start)
         cmd.addAll(List.of("--verbose", "-L", core.toString()));
         Path extra = writeExtraConfig(split, id.equals("n64") && (n64Software() || n64Interpreter()) ? n64Options(exe) : null,
                 userCoreDir(exe).getParent(), forRetroArch(exe, "retroarch.cfg"));
-        if (extra != null) cmd.addAll(List.of("--appendconfig", extra.toString()));
+        if (extra != null && config.getBool("retroarch.appendConfig", true)) cmd.addAll(List.of("--appendconfig", extra.toString()));
         cmd.add(game.path().toAbsolutePath().toString());
         return cmd;
     }

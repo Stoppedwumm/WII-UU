@@ -3,6 +3,10 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.70 (2026-10-11)
+- Two switches for finding out why RetroArch doesn't show a game: `retroarch.fullscreen=false` starts
+  it without `-f`, `retroarch.appendConfig=false` without WII-UU's settings for it.
+
 ## 1.9.69 (2026-10-11)
 - RetroArch as a Snap (/snap/bin/retroarch) is understood now: WII-UU uses the Snap's own cores and
   settings (~/snap/retroarch/common/.config/retroarch) and puts the settings it gives RetroArch where
