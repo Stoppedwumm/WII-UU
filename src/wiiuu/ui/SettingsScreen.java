@@ -785,6 +785,16 @@ public final class SettingsScreen {
                 () -> Systems.ALL.size() + " consoles", this::systemsPage));
         r.add(new Header("Playing"));
         r.add(toggle("RetroArch mode", "Runs every console that has a RetroArch core in RetroArch.", "retroarch.enabled", false, null));
+        List<String> n64Ids = List.of("auto", "opengl", "software");
+        r.add(new Choice("N64 renderer", "In RetroArch mode. Software needs no OpenGL (slower); Automatic switches to it "
+                + "by itself if the N64 core can't get OpenGL on this computer.",
+                () -> List.of(config.getBool("retroarch.n64.glFailed", false) ? "Automatic (software: OpenGL failed here)"
+                        : "Automatic (OpenGL)", "OpenGL (GLideN64)", "Software (Angrylion)"),
+                () -> Math.max(0, n64Ids.indexOf(config.get("retroarch.n64.renderer", "auto"))), i -> {
+            config.set("retroarch.n64.renderer", i == 0 ? null : n64Ids.get(i));
+            if (i == 1) config.set("retroarch.n64.glFailed", null);     // trying OpenGL again: forget that it failed
+            config.save();
+        }));
         r.add(new Toggle("Split DS / 3DS screens", "In RetroArch mode: the top screen on the TV, the touch screen on the phone.",
                 () -> config.getBool("screen.split", true), on -> {
             config.set("screen.split", on ? null : "false");

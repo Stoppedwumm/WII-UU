@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.63";
+    public static final String VERSION = "1.9.64";
 
     private final Config config;
     private final Library library;
@@ -795,7 +795,25 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     public void exited(Game game, int exitCode, boolean quickFailure, Path log) {
         dual.ended(exitCode, log);
         afterPlaying();
+        // N64 in RetroArch: the core crashed getting OpenGL (old or missing graphics driver): use the
+        // software renderer from now on (Settings > Games > N64 renderer) and start the game again
+        boolean retryN64 = quickFailure && "n64".equals(game.system().id())
+                && "auto".equals(config.get("retroarch.n64.renderer", "auto"))
+                && !config.getBool("retroarch.n64.glFailed", false) && wiiuu.core.RetroArch.openGlFailed(log);
+        if (retryN64) {
+            config.set("retroarch.n64.glFailed", "true");
+            config.save();
+            System.out.println("[retroarch] N64: OpenGL failed (" + log + "); switching to the software renderer");
+        }
         SwingUtilities.invokeLater(() -> {
+            if (retryN64) {
+                view.setPlaying(null);
+                view.showToast("The N64 core couldn't use OpenGL here: trying again with the software renderer");
+                javax.swing.Timer again = new javax.swing.Timer(1500, e -> launch(game));
+                again.setRepeats(false);
+                again.start();
+                return;
+            }
             view.setPlaying(null);
             frame.setState(Frame.NORMAL);
             frame.toFront();

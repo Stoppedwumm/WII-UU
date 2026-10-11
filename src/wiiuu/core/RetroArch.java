@@ -131,10 +131,74 @@ public final class RetroArch {
         if (split == null) cmd.add("-f");
         // --verbose: RetroArch's own log goes to logs/<system>.log (why a game didn't start)
         cmd.addAll(List.of("--verbose", "-L", core.toString()));
-        Path extra = writeExtraConfig(split);
+        Path extra = writeExtraConfig(split, id.equals("n64") && n64Software() ? n64SoftwareOptions(exe) : null);
         if (extra != null) cmd.addAll(List.of("--appendconfig", extra.toString()));
         cmd.add(game.path().toAbsolutePath().toString());
         return cmd;
+    }
+
+    // ---- N64: OpenGL or the software renderer ---------------------------------------------------
+
+    /**
+     * Whether N64 games draw with the cores' software renderer (Angrylion) instead of OpenGL
+     * (GLideN64): {@code retroarch.n64.renderer} = software, or auto after OpenGL failed on this
+     * computer ({@code retroarch.n64.glFailed}, set when the core crashed creating its context).
+     */
+    public boolean n64Software() {
+        String r = config.get("retroarch.n64.renderer", "auto");
+        return r.equals("software") || r.equals("auto") && config.getBool("retroarch.n64.glFailed", false);
+    }
+
+    /** True when this RetroArch log shows a core failing to get its OpenGL context. */
+    public static boolean openGlFailed(Path log) {
+        if (log == null || !Files.isRegularFile(log)) return false;
+        try {
+            String text = Files.readString(log, java.nio.charset.StandardCharsets.ISO_8859_1);
+            if (text.length() > 400_000) text = text.substring(text.length() - 400_000);
+            return text.contains("Failed to create new context") || text.contains("Failed to create GL context")
+                    || text.contains("Failed to create shared context");
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
+     * WII-UU's copy of the N64 cores' options with the software renderer chosen: your own options
+     * for Mupen64Plus-Next and ParaLLEl N64 (from RetroArch's per-core files or its global file), with
+     * the renderer and RSP changed. RetroArch's own files stay as they are.
+     */
+    private Path n64SoftwareOptions(List<String> exe) {
+        Path raConfig = userCoreDir(exe).getParent();
+        java.util.LinkedHashMap<String, String> opts = new java.util.LinkedHashMap<>();
+        for (Path f : List.of(raConfig.resolve("retroarch-core-options.cfg"),
+                raConfig.resolve("config").resolve("Mupen64Plus-Next").resolve("Mupen64Plus-Next.opt"),
+                raConfig.resolve("config").resolve("ParaLLEl N64").resolve("ParaLLEl N64.opt"))) {
+            if (!Files.isRegularFile(f)) continue;
+            try {
+                for (String line : Files.readAllLines(f)) {
+                    int eq = line.indexOf('=');
+                    if (eq < 0 || line.trim().startsWith("#")) continue;
+                    String k = line.substring(0, eq).trim();
+                    if (k.startsWith("mupen64plus-") || k.startsWith("parallel-n64-")) opts.put(k, line.substring(eq + 1).trim());
+                }
+            } catch (IOException ignored) {
+                // just the defaults then
+            }
+        }
+        opts.put("mupen64plus-rdp-plugin", "\"angrylion\"");          // Mupen64Plus-Next: software RDP...
+        opts.put("mupen64plus-rsp-plugin", "\"cxd4\"");                // ...which needs a low-level RSP
+        opts.put("parallel-n64-gfxplugin", "\"angrylion\"");          // ParaLLEl N64: the same
+        opts.put("parallel-n64-rspplugin", "\"cxd4\"");
+        StringBuilder out = new StringBuilder("# written by WII-UU: the N64 software renderer (no OpenGL needed)\n");
+        for (var e : opts.entrySet()) out.append(e.getKey()).append(" = ").append(e.getValue()).append('\n');
+        Path file = config.home().resolve("retroarch-core-options.cfg");
+        try {
+            Files.writeString(file, out.toString());
+            return file;
+        } catch (IOException e) {
+            System.err.println("[retroarch] couldn't write " + file + ": " + e.getMessage());
+            return null;
+        }
     }
 
     // ---- finding RetroArch and its cores -------------------------------------------------------
@@ -308,11 +372,16 @@ public final class RetroArch {
      * fast-forward...).
      */
     Path writeExtraConfig() {
-        return writeExtraConfig(null);
+        return writeExtraConfig(null, null);
     }
 
-    Path writeExtraConfig(java.awt.Rectangle split) {
+    Path writeExtraConfig(java.awt.Rectangle split, Path coreOptions) {
         StringBuilder cfg = new StringBuilder("# written by WII-UU for games it starts in RetroArch\n");
+        if (coreOptions != null) {
+            // this game's core options come from WII-UU's copy (the N64 software renderer)
+            cfg.append("global_core_options = \"true\"\n");
+            cfg.append("core_options_path = \"").append(coreOptions.toAbsolutePath().toString().replace("\\", "/")).append("\"\n");
+        }
         if (split != null) {
             // split screens: a borderless window exactly the size of both screens, on WII-UU's hidden display
             cfg.append("video_fullscreen = \"false\"\n");

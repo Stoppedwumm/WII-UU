@@ -432,6 +432,15 @@ Wii U, Switch, PS3 and PS4 have no cores, so they keep their standalone emulator
 * **BIOS:** some cores need BIOS files in RetroArch's `system` folder, as the core's documentation
   says: PS1 (SwanStation can run without), PS2, Saturn and, optionally, Dreamcast.
 
+
+**N64 and OpenGL.** RetroArch's N64 cores draw with OpenGL (GLideN64), which needs a fairly new
+OpenGL from the graphics driver. Where they can't get it (a Raspberry Pi, old Intel graphics, no GPU
+driver), RetroArch crashes with error 139 and `[GLX] Failed to create new context`. WII-UU notices
+that, switches N64 games to the cores' software renderer (Angrylion, with the cxd4 RSP: no OpenGL
+needed, but slower), and starts the game again by itself. *Settings → Games → N64 renderer* chooses
+it yourself: Automatic, OpenGL or Software (`retroarch.n64.renderer`). It uses its own copy of your
+N64 core options (`~/.wiiuu/retroarch-core-options.cfg`), so RetroArch's own settings stay as they are.
+
 ## Phone as GamePad
 
 Press **+** or **F2** on the TV and scan the QR code. You can also open the URL shown there on a phone
