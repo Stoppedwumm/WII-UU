@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.61";
+    public static final String VERSION = "1.9.62";
 
     private final Config config;
     private final Library library;
@@ -71,6 +71,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         launcher.setOpenBased(openBased);
         this.reactions = new wiiuu.core.Reactions(config, library);
         this.scraper = new wiiuu.core.Scraper(config);
+        this.achievements = new wiiuu.core.Achievements(config);
         wiiuu.ui.IdleArt.setSource(this::idleArt);
         launcher.setReactions(reactions);
         launcher.addListener(reactions);
@@ -248,6 +249,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         app.library.addListener(s -> {
             if (app.scraper.automatic()) app.findCovers(false);
         });
+        // RetroAchievements: your progress on these games
+        app.library.addListener(s -> app.achievements.refresh(app.allGames()));
         app.library.rescanAsync();
         app.openBased.refreshAsync();
         app.reactions.refreshAsync();
@@ -317,6 +320,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             // default look and feel is fine
         }
         view = new MenuView(config, this);
+        view.setAchievements(achievements);
+        achievements.addListener(() -> SwingUtilities.invokeLater(view::repaint));
         router.setMenu(view);
         // real USB / Bluetooth controllers in the menu too (Linux)
         if (config.getBool("input.localPads", true)) {
@@ -394,14 +399,34 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             library.rescanAsync();
             openBased.refreshAsync();
             reactions.refreshAsync();
-        }, scraper, () -> findCovers(true)));
+        }, scraper, () -> findCovers(true), achievements));
         view.requestFocusInWindow();
     }
 
     private final wiiuu.core.Reactions reactions;
     private final wiiuu.core.Scraper scraper;
+    private final wiiuu.core.Achievements achievements;
+    private long playStarted;
     /** games the automatic cover search tried already (this session): not again after every scan */
     private final java.util.Set<Path> coversTried = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** After a game: what you unlocked on RetroAchievements while playing, then your progress again. */
+    private void afterPlaying() {
+        if (!achievements.enabled() || playStarted == 0) return;
+        int minutes = (int) ((System.currentTimeMillis() - playStarted) / 60_000) + 2;
+        Thread t = new Thread(() -> {
+            try {
+                Thread.sleep(4000);                                  // the emulator's last unlocks reach the site
+            } catch (InterruptedException e) {
+                return;
+            }
+            List<wiiuu.core.Achievements.Unlock> got = achievements.recent(minutes);
+            if (!got.isEmpty()) SwingUtilities.invokeLater(() -> view.achievementsUnlocked(got));
+            achievements.refresh(allGames());
+        }, "achievements-after");
+        t.setDaemon(true);
+        t.start();
+    }
 
     private List<Game> allGames() {
         List<Game> all = new java.util.ArrayList<>();
@@ -651,6 +676,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     @Override
     public void started(Game game) {
         dual.begin();
+        playStarted = System.currentTimeMillis();
         SwingUtilities.invokeLater(() -> {
             view.setPlaying(game);
             if (config.getBool("ui.minimizeOnLaunch", true)) frame.setState(Frame.ICONIFIED);
@@ -703,6 +729,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     @Override
     public void exited(Game game, int exitCode, boolean quickFailure, Path log) {
         dual.ended(exitCode, log);
+        afterPlaying();
         SwingUtilities.invokeLater(() -> {
             view.setPlaying(null);
             frame.setState(Frame.NORMAL);

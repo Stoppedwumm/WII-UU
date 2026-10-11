@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.62 (2026-10-11)
+- RetroAchievements: enter your user name and Web API key under *Settings > Games > RetroAchievements
+  account* and every game tile shows your progress (a trophy and "12/40", gold at 100%). Games are
+  recognized by their ROM hash, like RetroAchievements does, or by title. After playing, WII-UU tells
+  you what you unlocked. With your password too, RetroArch mode signs RetroArch in so achievements
+  unlock while you play (with an optional hardcore mode).
+
 ## 1.9.61 (2026-10-08)
 - A boss fight in Settings > Developer: you, a little GamePad, against WII-UU, which has a gun.
   Dodge its shots (five hearts, a tiny hitbox) and shoot back with A / Space. Three phases: a

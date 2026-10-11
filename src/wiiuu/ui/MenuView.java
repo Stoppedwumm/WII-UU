@@ -990,6 +990,26 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         mascot.paint(g, footX, footY, s, false, bubbleW);
     }
 
+    // ---- RetroAchievements --------------------------------------------------------------------------
+
+    private wiiuu.core.Achievements achievements;
+
+    public void setAchievements(wiiuu.core.Achievements a) {
+        achievements = a;
+    }
+
+    /** After a game: what you unlocked (toast, and WII-UU is impressed). */
+    public void achievementsUnlocked(List<wiiuu.core.Achievements.Unlock> got) {
+        int points = 0;
+        for (wiiuu.core.Achievements.Unlock u : got) points += u.points();
+        showToast(got.size() == 1 ? "Achievement unlocked: " + got.get(0).title() + " (" + points + " points)"
+                : got.size() + " achievements unlocked (" + points + " points)");
+        Sfx.chime();
+        mascot.say(got.size() == 1 ? "You got \u201c" + got.get(0).title() + "\u201d! Nice."
+                : got.size() + " achievements in one go? Show-off.");
+        repaint();
+    }
+
     private SettingsScreen settings;
 
     /** Shows the settings on the TV (F1, the dock's Settings, or Main). */
@@ -2430,8 +2450,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     /** @return the cached sprite, or null after queueing it for background rendering */
     private BufferedImage sprite(Tile t, Layout L, float scale) {
         BufferedImage cover = t.game == null ? null : cover(t.game);
+        wiiuu.core.Achievements.Progress ra = t.game == null || achievements == null ? null : achievements.progress(t.game);
         Object key = List.of(t.id(), (int) L.tileW, (int) L.tileH, scale,
-                cover == null ? "" : System.identityHashCode(cover), t.count, dark);
+                cover == null ? "" : System.identityHashCode(cover), t.count, dark, ra == null ? "" : ra.label());
         synchronized (sprites) {
             BufferedImage img = sprites.get(key);
             if (img != null) return img;
@@ -2542,6 +2563,32 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private void paintGameTile(Graphics2D g, Tile t, RoundRectangle2D card) {
+        paintGameTileArt(g, t, card);
+        wiiuu.core.Achievements.Progress ra = achievements == null ? null : achievements.progress(t.game);
+        if (ra != null) paintAchievementBadge(g, ra, card);
+    }
+
+    /** RetroAchievements: a little trophy and "12/40" (gold when you have them all), top right. */
+    private static void paintAchievementBadge(Graphics2D g, wiiuu.core.Achievements.Progress ra, RoundRectangle2D card) {
+        float h = (float) card.getHeight(), s = h * 0.092f;
+        g.setFont(font(Font.BOLD, s));
+        FontMetrics fm = g.getFontMetrics();
+        String text = ra.label();
+        float pw = fm.stringWidth(text) + s * 2.1f, ph = s * 1.55f;
+        float px = (float) (card.getMaxX() - pw - h * 0.04f), py = (float) card.getY() + h * 0.04f;
+        g.setColor(ra.complete() ? new Color(0xF9A825) : new Color(0, 0, 0, 150));
+        g.fill(new RoundRectangle2D.Float(px, py, pw, ph, ph, ph));
+        // the trophy
+        float tx = px + s * 0.45f, ty = py + ph * 0.22f, tw = s * 0.85f;
+        g.setColor(ra.complete() ? Color.WHITE : new Color(0xFFD54F));
+        g.fill(new java.awt.geom.Arc2D.Float(tx, ty - tw * 0.5f, tw, tw * 1.1f, 180, 180, java.awt.geom.Arc2D.CHORD));
+        g.fill(new Rectangle2D.Float(tx + tw * 0.4f, ty + tw * 0.5f, tw * 0.2f, tw * 0.25f));
+        g.fill(new Rectangle2D.Float(tx + tw * 0.2f, ty + tw * 0.72f, tw * 0.6f, tw * 0.15f));
+        g.setColor(Color.WHITE);
+        g.drawString(text, px + s * 1.55f, py + ph / 2 + fm.getAscent() * 0.36f);
+    }
+
+    private void paintGameTileArt(Graphics2D g, Tile t, RoundRectangle2D card) {
         float x = (float) card.getX(), y = (float) card.getY(), w = (float) card.getWidth(), h = (float) card.getHeight();
         BufferedImage cover = cover(t.game);
         Shape oldClip = g.getClip();

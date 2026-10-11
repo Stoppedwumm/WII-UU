@@ -345,9 +345,18 @@ public final class RetroArch {
                         .append(" = \"").append(key).append("\"\n");
             }
         }
+        String cheevos = Achievements.retroarchConfig(config);       // RetroAchievements: signed in as you
+        cfg.append(cheevos);
         Path file = config.home().resolve("retroarch.cfg");
         try {
             Files.writeString(file, cfg.toString());
+            if (!cheevos.isEmpty()) {
+                try {                                                  // it has your password in it: yours only
+                    Files.setPosixFilePermissions(file, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+                } catch (UnsupportedOperationException ignored) {
+                    // (Windows: the home folder is the user's own anyway)
+                }
+            }
             return file;
         } catch (IOException e) {
             System.err.println("[retroarch] could not write " + file + ": " + e.getMessage());

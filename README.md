@@ -353,6 +353,31 @@ hides it). A video plays full screen (mpv best, VLC works) with the reactions as
 captions, and the GamePad shows the WII-UU logo saying each line, in its mood, right on time (it
 follows mpv's position, also after pausing or skipping). Tap the phone to pause.
 
+## RetroAchievements
+
+WII-UU works with [RetroAchievements](https://retroachievements.org). Under *Settings → Games →
+RetroAchievements account* enter your user name and your **Web API key** (on the site: Settings →
+Keys), and your game tiles show how far you are: a trophy with "12/40", gold at 100%. WII-UU
+recognizes games the way RetroAchievements does, by the ROM's hash (NES / SNES headers skipped, any
+N64 byte order, the DS's code), and by title for discs or unknown dumps. After you play, it tells you
+what you unlocked ("Achievement unlocked: Warp Zone (10 points)"), and WII-UU in the corner is
+impressed.
+
+The achievements themselves unlock in the emulator. In RetroArch mode, also enter your
+RetroAchievements **password**: WII-UU then signs RetroArch in for the games it starts
+(`cheevos_*` in `~/.wiiuu/retroarch.cfg`, which is then readable only by you), with *Hardcore mode*
+if you want it. Dolphin, DuckStation, PCSX2 and PPSSPP have their own RetroAchievements sign-in in
+their settings.
+
+```properties
+ra.user=YourName
+ra.apikey=...               # Web API key, for your progress
+ra.password=...             # for RetroArch to unlock achievements (optional)
+ra.enabled=true             # progress on the game tiles
+ra.retroarch=true           # sign RetroArch in, in RetroArch mode
+ra.hardcore=false
+```
+
 ## RetroArch mode
 
 Turn on *Settings → Games → RetroArch mode* (`retroarch.enabled=true`) to run every system that has

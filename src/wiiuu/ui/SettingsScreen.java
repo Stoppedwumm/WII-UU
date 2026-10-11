@@ -53,7 +53,8 @@ public final class SettingsScreen {
     /** What the settings can do beyond the config file; Main fills it in. */
     public record Services(Config config, wiiuu.core.OpenBased openBased, Supplier<String> gamepadBase,
                     Runnable showGuide, Runnable restartIntoGuide, Updater updater, Runnable exitForUpgrade,
-                    Runnable onClosed, wiiuu.core.Scraper scraper, Runnable findCovers) {}
+                    Runnable onClosed, wiiuu.core.Scraper scraper, Runnable findCovers,
+                    wiiuu.core.Achievements achievements) {}
 
     // ---- rows -----------------------------------------------------------------------------------
 
@@ -772,6 +773,12 @@ public final class SettingsScreen {
         r.add(new Link("ScreenScraper account", "ScreenScraper.fr knows games by their files (and has more pictures). "
                 + "It needs a developer account for apps.", () -> config.get("scraper.ss.devid", "").isBlank() ? "not set" : "set",
                 this::screenScraperPage));
+        r.add(new Header("RetroAchievements"));
+        r.add(new Link("RetroAchievements account", "Achievements in RetroArch mode, and your progress on your games' tiles.",
+                () -> sv.achievements().configured() ? config.get("ra.user", "") : "not set", this::achievementsPage));
+        if (sv.achievements().configured()) {
+            r.add(toggle("Show progress on games", "How many of a game's achievements you have, on its tile.", "ra.enabled", true, null));
+        }
         r.add(new Header("Consoles"));
         r.add(new Link("Consoles and emulators", "Which consoles show, where their games are, and the program that plays them.",
                 () -> Systems.ALL.size() + " consoles", this::systemsPage));
@@ -830,6 +837,36 @@ public final class SettingsScreen {
                     say("Could not make " + config.romDir(s));
                 }
             }, null, null));
+            return r;
+        });
+    }
+
+    private String raCheck = "";
+
+    private Page achievementsPage() {
+        return new Page("RetroAchievements account", () -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info("Make an account on retroachievements.org, then find your Web API key there under Settings > Keys. "
+                    + "WII-UU uses it to show your progress. To unlock achievements, RetroArch signs in with your password."));
+            r.add(text("User name", "ra.user", false, "not set"));
+            r.add(text("Web API key", "ra.apikey", true, "not set"));
+            r.add(text("Password (for RetroArch)", "ra.password", true, "not set"));
+            r.add(new Action("Check", "Signs in to see that the user name and key work.", () -> {
+                raCheck = "checking...";
+                Thread t = new Thread(() -> {
+                    raCheck = sv.achievements().check();
+                    say(raCheck);
+                    touch();
+                }, "achievements-check");
+                t.setDaemon(true);
+                t.start();
+            }, () -> raCheck.isEmpty() ? null : raCheck, null));
+            r.add(new Header("In RetroArch mode"));
+            r.add(toggle("Achievements in RetroArch", "RetroArch signs in as you and unlocks achievements while you play.",
+                    "ra.retroarch", true, null));
+            r.add(toggle("Hardcore mode", "No save states, rewind or slow motion; achievements count double.", "ra.hardcore", false, null));
+            r.add(new Info("Other emulators (Dolphin, DuckStation, PCSX2, PPSSPP...) have their own RetroAchievements sign-in "
+                    + "in their settings."));
             return r;
         });
     }
