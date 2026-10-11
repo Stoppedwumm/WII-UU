@@ -795,6 +795,16 @@ public final class SettingsScreen {
             if (i == 1) config.set("retroarch.n64.glFailed", null);     // trying OpenGL again: forget that it failed
             config.save();
         }));
+        List<String> cpuIds = List.of("auto", "dynarec", "interpreter");
+        r.add(new Choice("N64 processor", "In RetroArch mode. The recompiler is fast; the interpreter is slower but works "
+                + "where the recompiler crashes (some ARM computers). Automatic switches by itself.",
+                () -> List.of(config.getBool("retroarch.n64.dynarecFailed", false) ? "Automatic (interpreter: the recompiler crashed here)"
+                        : "Automatic (recompiler)", "Recompiler (fast)", "Interpreter (safe)"),
+                () -> Math.max(0, cpuIds.indexOf(config.get("retroarch.n64.cpu", "auto"))), i -> {
+            config.set("retroarch.n64.cpu", i == 0 ? null : cpuIds.get(i));
+            if (i == 1) config.set("retroarch.n64.dynarecFailed", null);
+            config.save();
+        }));
         r.add(new Toggle("Split DS / 3DS screens", "In RetroArch mode: the top screen on the TV, the touch screen on the phone.",
                 () -> config.getBool("screen.split", true), on -> {
             config.set("screen.split", on ? null : "false");

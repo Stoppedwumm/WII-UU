@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.64";
+    public static final String VERSION = "1.9.65";
 
     private final Config config;
     private final Library library;
@@ -805,10 +805,20 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             config.save();
             System.out.println("[retroarch] N64: OpenGL failed (" + log + "); switching to the software renderer");
         }
+        // ...or its recompiler crashed (some ARM systems): the interpreter, slower but safe
+        boolean retryCpu = !retryN64 && quickFailure && "n64".equals(game.system().id())
+                && "auto".equals(config.get("retroarch.n64.cpu", "auto"))
+                && !config.getBool("retroarch.n64.dynarecFailed", false) && wiiuu.core.RetroArch.dynarecCrashed(log, exitCode);
+        if (retryCpu) {
+            config.set("retroarch.n64.dynarecFailed", "true");
+            config.save();
+            System.out.println("[retroarch] N64: the recompiler crashed (" + log + "); switching to the interpreter");
+        }
         SwingUtilities.invokeLater(() -> {
-            if (retryN64) {
+            if (retryN64 || retryCpu) {
                 view.setPlaying(null);
-                view.showToast("The N64 core couldn't use OpenGL here: trying again with the software renderer");
+                view.showToast(retryN64 ? "The N64 core couldn't use OpenGL here: trying again with the software renderer"
+                        : "The N64 core's recompiler crashed here: trying again with its interpreter");
                 javax.swing.Timer again = new javax.swing.Timer(1500, e -> launch(game));
                 again.setRepeats(false);
                 again.start();

@@ -131,7 +131,7 @@ public final class RetroArch {
         if (split == null) cmd.add("-f");
         // --verbose: RetroArch's own log goes to logs/<system>.log (why a game didn't start)
         cmd.addAll(List.of("--verbose", "-L", core.toString()));
-        Path extra = writeExtraConfig(split, id.equals("n64") && n64Software() ? n64SoftwareOptions(exe) : null);
+        Path extra = writeExtraConfig(split, id.equals("n64") && (n64Software() || n64Interpreter()) ? n64Options(exe) : null);
         if (extra != null) cmd.addAll(List.of("--appendconfig", extra.toString()));
         cmd.add(game.path().toAbsolutePath().toString());
         return cmd;
@@ -149,6 +149,32 @@ public final class RetroArch {
         return r.equals("software") || r.equals("auto") && config.getBool("retroarch.n64.glFailed", false);
     }
 
+    /**
+     * Whether the N64 cores run the game with their cached interpreter instead of the dynamic
+     * recompiler: {@code retroarch.n64.cpu} = interpreter, or auto after the recompiler crashed on
+     * this computer ({@code retroarch.n64.dynarecFailed}; it does on some ARM systems, such as a
+     * Raspberry Pi 5 with 16 KB memory pages).
+     */
+    public boolean n64Interpreter() {
+        String c = config.get("retroarch.n64.cpu", "auto");
+        return c.equals("interpreter") || c.equals("auto") && config.getBool("retroarch.n64.dynarecFailed", false);
+    }
+
+    /** True when RetroArch crashed (a signal, not a normal error) right after the N64 core started its recompiler. */
+    public static boolean dynarecCrashed(Path log, int exitCode) {
+        if (exitCode != 139 && exitCode != 134 && exitCode != 132 && exitCode != 135 && exitCode != -11 && exitCode != 11) return false;
+        if (log == null || !Files.isRegularFile(log)) return false;
+        try {
+            List<String> lines = Files.readAllLines(log, java.nio.charset.StandardCharsets.ISO_8859_1);
+            for (int i = Math.max(0, lines.size() - 25); i < lines.size(); i++) {
+                if (lines.get(i).toLowerCase(Locale.ROOT).contains("dynarec")) return true;
+            }
+        } catch (IOException e) {
+            return false;
+        }
+        return false;
+    }
+
     /** True when this RetroArch log shows a core failing to get its OpenGL context. */
     public static boolean openGlFailed(Path log) {
         if (log == null || !Files.isRegularFile(log)) return false;
@@ -163,11 +189,11 @@ public final class RetroArch {
     }
 
     /**
-     * WII-UU's copy of the N64 cores' options with the software renderer chosen: your own options
-     * for Mupen64Plus-Next and ParaLLEl N64 (from RetroArch's per-core files or its global file), with
-     * the renderer and RSP changed. RetroArch's own files stay as they are.
+     * WII-UU's copy of the N64 cores' options: your own options for Mupen64Plus-Next and ParaLLEl N64
+     * (from RetroArch's per-core files or its global file), with the software renderer and / or the
+     * interpreter chosen. RetroArch's own files stay as they are.
      */
-    private Path n64SoftwareOptions(List<String> exe) {
+    private Path n64Options(List<String> exe) {
         Path raConfig = userCoreDir(exe).getParent();
         java.util.LinkedHashMap<String, String> opts = new java.util.LinkedHashMap<>();
         for (Path f : List.of(raConfig.resolve("retroarch-core-options.cfg"),
@@ -185,11 +211,19 @@ public final class RetroArch {
                 // just the defaults then
             }
         }
-        opts.put("mupen64plus-rdp-plugin", "\"angrylion\"");          // Mupen64Plus-Next: software RDP...
-        opts.put("mupen64plus-rsp-plugin", "\"cxd4\"");                // ...which needs a low-level RSP
-        opts.put("parallel-n64-gfxplugin", "\"angrylion\"");          // ParaLLEl N64: the same
-        opts.put("parallel-n64-rspplugin", "\"cxd4\"");
-        StringBuilder out = new StringBuilder("# written by WII-UU: the N64 software renderer (no OpenGL needed)\n");
+        if (n64Software()) {
+            opts.put("mupen64plus-rdp-plugin", "\"angrylion\"");      // Mupen64Plus-Next: software RDP...
+            opts.put("mupen64plus-rsp-plugin", "\"cxd4\"");            // ...which needs a low-level RSP
+            opts.put("parallel-n64-gfxplugin", "\"angrylion\"");      // ParaLLEl N64: the same
+            opts.put("parallel-n64-rspplugin", "\"cxd4\"");
+        }
+        if (n64Interpreter()) {
+            opts.put("mupen64plus-cpucore", "\"cached_interpreter\"");
+            opts.put("parallel-n64-cpucore", "\"cached_interpreter\"");
+        }
+        StringBuilder out = new StringBuilder("# written by WII-UU: N64 core options for this computer"
+                + (n64Software() ? " (software renderer: no OpenGL needed)" : "")
+                + (n64Interpreter() ? " (interpreter: the recompiler crashes here)" : "") + "\n");
         for (var e : opts.entrySet()) out.append(e.getKey()).append(" = ").append(e.getValue()).append('\n');
         Path file = config.home().resolve("retroarch-core-options.cfg");
         try {

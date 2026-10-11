@@ -441,6 +441,13 @@ needed, but slower), and starts the game again by itself. *Settings → Games �
 it yourself: Automatic, OpenGL or Software (`retroarch.n64.renderer`). It uses its own copy of your
 N64 core options (`~/.wiiuu/retroarch-core-options.cfg`), so RetroArch's own settings stay as they are.
 
+The same goes for the N64 cores' **dynamic recompiler** ("Init new dynarec", then error 139): it
+crashes on some ARM computers (a Raspberry Pi 5 with its 16 KB memory pages, for one). WII-UU then
+switches to the cores' cached interpreter, which works everywhere but is slower, and tries again.
+*Settings → Games → N64 processor* (`retroarch.n64.cpu`: auto, dynarec, interpreter). With both
+the software renderer and the interpreter, many N64 games will run slowly on a small computer; a
+graphics driver with OpenGL 3.3 (or the standalone mupen64plus) does better there.
+
 ## Phone as GamePad
 
 Press **+** or **F2** on the TV and scan the QR code. You can also open the URL shown there on a phone
