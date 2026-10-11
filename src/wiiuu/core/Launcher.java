@@ -191,8 +191,6 @@ public final class Launcher {
         if (viaRetroArch) System.out.println("[retroarch] " + game.name() + " with " + Path.of(cmd.get(cmd.indexOf("-L") + 1)).getFileName());
         long startedAt = System.currentTimeMillis();
         for (Listener l : listeners) l.started(game);
-        // opt-in: activating the emulator's window from outside froze RetroArch on some desktops
-        if (LINUX && !video && typesKeys.test(game) && config.getBool("launch.focusEmulator", false)) focusWhenShown(p, viaRetroArch);
         p.onExit().thenAccept(done -> {
             synchronized (Launcher.this) {
                 if (process == done) {
@@ -486,55 +484,6 @@ public final class Launcher {
         if (cmd.size() < 3 || !cmd.get(0).endsWith("flatpak") || !cmd.get(1).equals("run")) return null;
         for (int i = 2; i < cmd.size(); i++) if (!cmd.get(i).startsWith("-")) return cmd.get(i);
         return null;
-    }
-
-    /**
-     * Typed keys go to whichever window has focus, and a window manager doesn't always give it to a
-     * new emulator window (say, when it starts without a click). So: wait for the emulator's window
-     * (by its processes, or RetroArch's by its class, which also finds a Flatpak's) and activate it.
-     * X11 with xdotool only; elsewhere the window manager decides as before. Off unless
-     * {@code launch.focusEmulator=true}: on some desktops (XWayland, for one) it left RetroArch frozen.
-     */
-    private void focusWhenShown(Process p, boolean retroArch) {
-        if (onPath("xdotool") == null || System.getenv("DISPLAY") == null) return;
-        Thread t = new Thread(() -> {
-            long until = System.currentTimeMillis() + 20_000;
-            try {
-                while (System.currentTimeMillis() < until && p.isAlive()) {
-                    Thread.sleep(500);
-                    List<Long> pids = new ArrayList<>();
-                    pids.add(p.pid());
-                    p.descendants().forEach(h -> pids.add(h.pid()));
-                    String win = null;
-                    for (long pid : pids) {
-                        win = firstWindow("--pid", String.valueOf(pid));
-                        if (win != null) break;
-                    }
-                    if (win == null && retroArch) win = firstWindow("--class", "retroarch");
-                    if (win == null) continue;
-                    Thread.sleep(300);                                   // let it map before activating
-                    new ProcessBuilder("xdotool", "windowactivate", win).redirectErrorStream(true)
-                            .redirectOutput(ProcessBuilder.Redirect.DISCARD).start().waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
-                    System.out.println("[launch] focused the emulator's window (" + win + ") for the keys WII-UU types");
-                    return;
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } catch (IOException ignored) {
-                // no xdotool after all
-            }
-        }, "focus-emulator");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    private static String firstWindow(String how, String what) throws IOException, InterruptedException {
-        Process s = new ProcessBuilder("xdotool", "search", "--onlyvisible", how, what).redirectErrorStream(true).start();
-        String out = new String(s.getInputStream().readAllBytes()).trim();
-        s.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
-        if (out.isEmpty()) return null;
-        String first = out.split("\\s+")[0];
-        return first.matches("\\d+") ? first : null;
     }
 
     static String onPath(String name) {

@@ -131,7 +131,8 @@ public final class RetroArch {
         if (split == null) cmd.add("-f");
         // --verbose: RetroArch's own log goes to logs/<system>.log (why a game didn't start)
         cmd.addAll(List.of("--verbose", "-L", core.toString()));
-        Path extra = writeExtraConfig(split, id.equals("n64") && (n64Software() || n64Interpreter()) ? n64Options(exe) : null);
+        Path extra = writeExtraConfig(split, id.equals("n64") && (n64Software() || n64Interpreter()) ? n64Options(exe) : null,
+                userCoreDir(exe).getParent());
         if (extra != null) cmd.addAll(List.of("--appendconfig", extra.toString()));
         cmd.add(game.path().toAbsolutePath().toString());
         return cmd;
@@ -173,6 +174,36 @@ public final class RetroArch {
             return false;
         }
         return false;
+    }
+
+    /**
+     * Settings earlier WII-UU versions gave RetroArch for one game that RetroArch saved into its own
+     * retroarch.cfg on exit: WII-UU's N64 core options file, and the RetroAchievements sign-in when
+     * that's off in WII-UU now. Returns the lines that set them back (RetroArch's file isn't touched).
+     */
+    private String undoLeftovers(Path raConfigDir, boolean n64Options) {
+        if (raConfigDir == null) return "";
+        Path main = raConfigDir.resolve("retroarch.cfg");
+        if (!Files.isRegularFile(main)) return "";
+        StringBuilder out = new StringBuilder();
+        try {
+            String text = Files.readString(main, java.nio.charset.StandardCharsets.ISO_8859_1);
+            String ours = config.home().resolve("retroarch-core-options.cfg").toAbsolutePath().toString().replace("\\", "/");
+            if (!n64Options && text.contains(ours)) {
+                out.append("global_core_options = \"false\"\n");
+                out.append("core_options_path = \"\"\n");
+                System.out.println("[retroarch] undoing WII-UU's N64 core options that RetroArch saved into " + main);
+            }
+            if (Achievements.retroarchConfig(config).isEmpty() && text.matches("(?s).*cheevos_enable\\s*=\\s*\"true\".*")
+                    && !config.get("ra.user", "").isBlank()
+                    && text.contains("cheevos_username = \"" + config.get("ra.user", "").trim() + "\"")) {
+                out.append("cheevos_enable = \"false\"\n");
+                System.out.println("[retroarch] RetroAchievements is off in WII-UU: turning off the sign-in RetroArch saved");
+            }
+        } catch (IOException ignored) {
+            // nothing to undo then
+        }
+        return out.toString();
     }
 
     /** True when this RetroArch log shows a core failing to get its OpenGL context. */
@@ -406,11 +437,15 @@ public final class RetroArch {
      * fast-forward...).
      */
     Path writeExtraConfig() {
-        return writeExtraConfig(null, null);
+        return writeExtraConfig(null, null, null);
     }
 
-    Path writeExtraConfig(java.awt.Rectangle split, Path coreOptions) {
+    Path writeExtraConfig(java.awt.Rectangle split, Path coreOptions, Path raConfigDir) {
         StringBuilder cfg = new StringBuilder("# written by WII-UU for games it starts in RetroArch\n");
+        // RetroArch saves its settings on exit, these included: they'd stay in its own config for every
+        // game afterwards. So it doesn't save them, and what earlier versions left there is undone.
+        cfg.append("config_save_on_exit = \"false\"\n");
+        cfg.append(undoLeftovers(raConfigDir, coreOptions != null));
         if (coreOptions != null) {
             // this game's core options come from WII-UU's copy (the N64 software renderer)
             cfg.append("global_core_options = \"true\"\n");

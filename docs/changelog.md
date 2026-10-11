@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.68 (2026-10-11)
+- Back to how games started in 1.9.65 (no window activation, no extra step before an N64 retry).
+- RetroArch no longer keeps settings WII-UU gives it for one game: it used to save them into its own
+  config when the game ended (WII-UU's N64 renderer options, the RetroAchievements sign-in), so they
+  applied to every game afterwards. WII-UU now tells RetroArch not to save on exit for games it
+  starts, and undoes what earlier versions left in RetroArch's config (without changing the file).
+
 ## 1.9.67 (2026-10-11)
 - Games in RetroArch no longer freeze right at the start (a black or dark screen with a notification
   that stays): 1.9.66 activated the emulator's window from outside, which upset RetroArch on some
