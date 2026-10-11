@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.67 (2026-10-11)
+- Games in RetroArch no longer freeze right at the start (a black or dark screen with a notification
+  that stays): 1.9.66 activated the emulator's window from outside, which upset RetroArch on some
+  desktops. That's off again (`launch.focusEmulator=true` turns it on for those who need it).
+
 ## 1.9.66 (2026-10-11)
 - Buttons from the phone reach the game again when WII-UU types them as keys: on Linux (X11, with
   xdotool) WII-UU now brings the emulator's window to the front itself once it opens, instead of

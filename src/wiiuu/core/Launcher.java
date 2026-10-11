@@ -191,7 +191,8 @@ public final class Launcher {
         if (viaRetroArch) System.out.println("[retroarch] " + game.name() + " with " + Path.of(cmd.get(cmd.indexOf("-L") + 1)).getFileName());
         long startedAt = System.currentTimeMillis();
         for (Listener l : listeners) l.started(game);
-        if (LINUX && !video && typesKeys.test(game)) focusWhenShown(p, viaRetroArch);
+        // opt-in: activating the emulator's window from outside froze RetroArch on some desktops
+        if (LINUX && !video && typesKeys.test(game) && config.getBool("launch.focusEmulator", false)) focusWhenShown(p, viaRetroArch);
         p.onExit().thenAccept(done -> {
             synchronized (Launcher.this) {
                 if (process == done) {
@@ -491,7 +492,8 @@ public final class Launcher {
      * Typed keys go to whichever window has focus, and a window manager doesn't always give it to a
      * new emulator window (say, when it starts without a click). So: wait for the emulator's window
      * (by its processes, or RetroArch's by its class, which also finds a Flatpak's) and activate it.
-     * X11 with xdotool only; elsewhere the window manager decides as before.
+     * X11 with xdotool only; elsewhere the window manager decides as before. Off unless
+     * {@code launch.focusEmulator=true}: on some desktops (XWayland, for one) it left RetroArch frozen.
      */
     private void focusWhenShown(Process p, boolean retroArch) {
         if (onPath("xdotool") == null || System.getenv("DISPLAY") == null) return;
