@@ -163,6 +163,23 @@
   a.bigbtn { text-decoration: none; }
 
   /* WII-UU playing by itself: its logo talks about the game on the TV */
+  #signin { position: fixed; inset: 0; z-index: 60; background: rgba(8,12,18,.86); display: flex; align-items: center;
+            justify-content: center; padding: 3vh 4vw; overflow-y: auto; }
+  #signin .card { background: #fff; color: #202124; border-radius: 18px; padding: 22px 22px 18px; width: min(560px, 100%);
+                  box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+  #signin h2 { margin: 0 0 4px; font-size: 22px; }
+  #signin .note { margin: 0 0 14px; color: #5f6368; font-size: 14px; }
+  #signin label { display: block; font-size: 14px; font-weight: 600; margin: 10px 0 4px; color: #3c4043; }
+  #signin input { width: 100%; box-sizing: border-box; font-size: 17px; padding: 11px 12px; border: 1.5px solid #c9ced4;
+                  border-radius: 10px; background: #f8f9fa; color: #202124; }
+  #signin input:focus { outline: none; border-color: var(--accent); background: #fff; }
+  #signin .row { display: flex; gap: 10px; margin-top: 18px; }
+  #signin button { flex: 1; font-size: 17px; font-weight: 700; padding: 12px; border-radius: 999px; border: 0; }
+  #signin .send { background: var(--accent); color: #fff; }
+  #signin .cancel { background: #eceff1; color: #202124; }
+  #signin .msg { min-height: 20px; margin-top: 12px; font-size: 14px; color: #5f6368; }
+  #signin .msg.bad { color: #d32f2f; }
+  #signin .msg.good { color: #2e7d32; }
   #idle { position: fixed; inset: 0; z-index: 35; display: flex; align-items: center; justify-content: center; gap: 5vw;
     padding: 6vh 6vw; background: radial-gradient(circle at 28% 50%, #1d2a38 0%, #10141a 55%, #07090c 100%); animation: downIn .35s ease-out; }
   #idle .me { display: flex; flex-direction: column; align-items: center; gap: 2vh; flex: 0 0 auto; }
@@ -397,6 +414,18 @@
   <button id="idleCatch" class="hidden">Catch it cheating!</button>
   <div id="idleBusted" class="hidden"><span>BUSTED!</span></div>
 </div>
+<div id="signin" class="hidden">
+  <form class="card" id="signinForm" autocomplete="off">
+    <h2 id="signinTitle">Sign in</h2>
+    <p class="note" id="signinNote"></p>
+    <div id="signinFields"></div>
+    <div class="msg" id="signinMsg"></div>
+    <div class="row">
+      <button type="button" class="cancel" id="signinCancel">Not now</button>
+      <button type="submit" class="send" id="signinSend">Send to the TV</button>
+    </div>
+  </form>
+</div>
 <div id="down" class="hidden">
   <div class="logo">WII-<b>UU</b></div>
   <h2>WII-UU is not running</h2>
@@ -483,6 +512,7 @@ async function poll() {
     S.fails = 0;
     hideDown();
     setOnline(true);
+    showSignin(j.form);
     if (j.idle) {
       showIdle(j.idle);
       // while it plays, look more often (so catching it cheating is quick)
@@ -540,6 +570,71 @@ async function poll() {
   }
 }
 setInterval(poll, 1000);
+
+/** The TV asks for a sign-in: type it here, with the phone's keyboard. */
+function showSignin(f) {
+  const el = $("signin");
+  if (!f) {                                   // nothing asked (any more)
+    S.signinGone = null;
+    if (!S.signinBusy && !S.signinDone) el.classList.add("hidden");
+    S.signinId = null;
+    return;
+  }
+  if (S.signinGone === f.id) return;          // "Not now" on this phone
+  if (S.signinId === f.id && !el.classList.contains("hidden")) return;   // already showing: don't wipe what's typed
+  S.signinId = f.id;
+  S.signinDone = false;
+  $("signinTitle").textContent = f.title;
+  $("signinNote").textContent = f.note || "";
+  const box = $("signinFields");
+  box.innerHTML = "";
+  for (const fd of f.fields) {
+    const lab = document.createElement("label");
+    lab.textContent = fd.label;
+    const inp = document.createElement("input");
+    inp.name = fd.key;
+    inp.type = fd.secret ? "password" : "text";
+    inp.autocomplete = "off"; inp.autocapitalize = "off"; inp.spellcheck = false;
+    inp.setAttribute("autocorrect", "off");
+    inp.value = fd.value || "";
+    if (fd.secret && fd.set) inp.placeholder = "set (leave empty to keep it)";
+    lab.appendChild(inp);
+    box.appendChild(lab);
+  }
+  const msg = $("signinMsg");
+  msg.textContent = ""; msg.className = "msg";
+  el.classList.remove("hidden");
+}
+$("signinCancel").addEventListener("click", () => {
+  S.signinGone = S.signinId;
+  $("signin").classList.add("hidden");
+});
+$("signinForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  if (S.signinBusy || !S.signinId) return;
+  const values = { form: S.signinId };
+  for (const inp of $("signinFields").querySelectorAll("input")) values[inp.name] = inp.value;
+  const msg = $("signinMsg");
+  msg.textContent = "Sending…"; msg.className = "msg";
+  S.signinBusy = true;
+  $("signinSend").disabled = true;
+  try {
+    const r = await api("/api/form", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form(values) });
+    const j = await r.json().catch(() => ({}));
+    msg.textContent = j.message || (r.ok ? "Done" : "That didn't work");
+    msg.className = "msg " + (j.ok ? "good" : "bad");
+    if (j.ok) {
+      S.signinDone = true;
+      for (const inp of $("signinFields").querySelectorAll("input[type=password]")) inp.value = "";
+      setTimeout(() => { S.signinDone = false; $("signin").classList.add("hidden"); }, 1800);
+    }
+  } catch (e) {
+    msg.textContent = "Couldn't reach WII-UU"; msg.className = "msg bad";
+  } finally {
+    S.signinBusy = false;
+    $("signinSend").disabled = false;
+  }
+});
 
 /** WII-UU playing by itself: its logo says what it thinks of its own game. */
 function showIdle(st) {

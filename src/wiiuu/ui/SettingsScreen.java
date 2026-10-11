@@ -54,7 +54,8 @@ public final class SettingsScreen {
     public record Services(Config config, wiiuu.core.OpenBased openBased, Supplier<String> gamepadBase,
                     Runnable showGuide, Runnable restartIntoGuide, Updater updater, Runnable exitForUpgrade,
                     Runnable onClosed, wiiuu.core.Scraper scraper, Runnable findCovers,
-                    wiiuu.core.Achievements achievements) {}
+                    wiiuu.core.Achievements achievements, Consumer<String> askPhone, BooleanSupplier phoneAsked,
+                    BooleanSupplier phonesConnected) {}
 
     // ---- rows -----------------------------------------------------------------------------------
 
@@ -848,6 +849,7 @@ public final class SettingsScreen {
             List<Row> r = new ArrayList<>();
             r.add(new Info("Make an account on retroachievements.org, then find your Web API key there under Settings > Keys. "
                     + "WII-UU uses it to show your progress. To unlock achievements, RetroArch signs in with your password."));
+            r.add(phoneAction("ra"));
             r.add(text("User name", "ra.user", false, "not set"));
             r.add(text("Web API key", "ra.apikey", true, "not set"));
             r.add(text("Password (for RetroArch)", "ra.password", true, "not set"));
@@ -871,12 +873,31 @@ public final class SettingsScreen {
         });
     }
 
+    /** "Enter on your phone": the phones show the fields, with a real keyboard. Again: stop asking. */
+    private Action phoneAction(String id) {
+        return new Action("Enter on your phone", "Every connected phone shows these fields; type them there.", () -> {
+            if (sv.phoneAsked().getAsBoolean()) {
+                sv.askPhone().accept(null);
+                say("Stopped asking the phones");
+                return;
+            }
+            if (!sv.phonesConnected().getAsBoolean()) {
+                say("Connect a phone first (Settings > GamePad & players, or + in the menu)");
+                return;
+            }
+            sv.askPhone().accept(id);
+            say("Look at your phone");
+            mascot.say("Your phone has a real keyboard. Much better.");
+        }, () -> sv.phoneAsked().getAsBoolean() ? "waiting for your phone... (A: stop)" : null, null);
+    }
+
     private Page screenScraperPage() {
         return new Page("ScreenScraper account", () -> {
             List<Row> r = new ArrayList<>();
             r.add(new Info("ScreenScraper.fr only answers apps with a developer account (ask for one on screenscraper.fr, "
                     + "forum: \"Demande d'identifiants API\"). Your own user account on top gives you more requests a day. "
                     + "Without these, WII-UU uses libretro's thumbnails, which need no account."));
+            r.add(phoneAction("ss"));
             r.add(text("Developer id", "scraper.ss.devid", false, "not set"));
             r.add(text("Developer password", "scraper.ss.devpassword", true, "not set"));
             r.add(text("Your user name", "scraper.ss.user", false, "optional"));
@@ -1621,6 +1642,13 @@ public final class SettingsScreen {
 
     boolean needsFrame() {
         return needsFrame;
+    }
+
+    /** Settings changed from outside (a phone typed a sign-in): show it, and the rows again. */
+    void reloadFromOutside(String message) {
+        say(message);
+        reload(false);
+        stale = true;
     }
 
     /** Something changed from outside (input): draw again. */

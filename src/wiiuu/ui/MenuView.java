@@ -998,6 +998,15 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         achievements = a;
     }
 
+    /** A phone filled in a sign-in the TV asked for. */
+    public void phoneFormDone(String title, String message, boolean ok) {
+        showToast(title + ": " + message);
+        if (ok) Sfx.chime();
+        else Sfx.bump();
+        if (settings != null) settings.reloadFromOutside(title + ": " + message);
+        repaint();
+    }
+
     /** After a game: what you unlocked (toast, and WII-UU is impressed). */
     public void achievementsUnlocked(List<wiiuu.core.Achievements.Unlock> got) {
         int points = 0;
@@ -1039,7 +1048,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         return guide != null || guidePending;
     }
 
-    int padCount() {
+    public int padCount() {
         return pads;
     }
 

@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.62";
+    public static final String VERSION = "1.9.63";
 
     private final Config config;
     private final Library library;
@@ -399,7 +399,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             library.rescanAsync();
             openBased.refreshAsync();
             reactions.refreshAsync();
-        }, scraper, () -> findCovers(true), achievements));
+        }, scraper, () -> findCovers(true), achievements, this::askPhone, () -> phoneForm != null,
+                () -> server != null && view.padCount() > 0));
         view.requestFocusInWindow();
     }
 
@@ -409,6 +410,70 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     private long playStarted;
     /** games the automatic cover search tried already (this session): not again after every scan */
     private final java.util.Set<Path> coversTried = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    // ---- typing sign-ins on the phone ----------------------------------------------------------------
+
+    private volatile GamepadServer.Form phoneForm;
+    private volatile long phoneFormAt;
+
+    @Override
+    public GamepadServer.Form form() {
+        if (phoneForm != null && System.currentTimeMillis() - phoneFormAt > 10 * 60_000) phoneForm = null;   // asked long ago
+        return phoneForm;
+    }
+
+    /** Asks the phones for a sign-in (Settings: "Enter on your phone"); null id: stop asking. */
+    void askPhone(String id) {
+        if (id == null) {
+            phoneForm = null;
+            return;
+        }
+        List<GamepadServer.Field> f = switch (id) {
+            case "ra" -> List.of(
+                    field("ra.user", "User name", false),
+                    field("ra.apikey", "Web API key (retroachievements.org > Settings > Keys)", true),
+                    field("ra.password", "Password (for RetroArch, optional)", true));
+            case "ss" -> List.of(
+                    field("scraper.ss.devid", "Developer id", false),
+                    field("scraper.ss.devpassword", "Developer password", true),
+                    field("scraper.ss.user", "Your user name (optional)", false),
+                    field("scraper.ss.password", "Your password (optional)", true));
+            default -> List.of();
+        };
+        String title = id.equals("ra") ? "RetroAchievements sign-in" : "ScreenScraper account";
+        String note = "Typed here instead of on the TV. Leave a secret empty to keep the one that's set.";
+        phoneForm = new GamepadServer.Form(id, title, note, f);
+        phoneFormAt = System.currentTimeMillis();
+    }
+
+    private GamepadServer.Field field(String key, String label, boolean secret) {
+        String v = config.get(key, "");
+        return new GamepadServer.Field(key, label, secret, secret ? "" : v, !v.isBlank());
+    }
+
+    @Override
+    public GamepadServer.FormResult submitForm(String id, java.util.Map<String, String> values) {
+        GamepadServer.Form f = form();
+        if (f == null || !f.id().equals(id)) return new GamepadServer.FormResult(false, "The TV isn't asking for that any more");
+        for (GamepadServer.Field fd : f.fields()) {
+            String v = values.getOrDefault(fd.key(), "").trim();
+            if (fd.secret() && v.isEmpty()) continue;                 // keeps the one that's set
+            config.set(fd.key(), v.isEmpty() ? null : v);
+        }
+        config.save();
+        String message;
+        boolean ok = true;
+        if (id.equals("ra")) {
+            message = achievements.check();
+            ok = message.startsWith("Signed in");
+            if (ok) achievements.refresh(allGames());
+        } else message = "Saved";
+        if (ok) phoneForm = null;
+        String said = message;
+        boolean good = ok;
+        SwingUtilities.invokeLater(() -> view.phoneFormDone(f.title(), said, good));
+        return new GamepadServer.FormResult(ok, message);
+    }
 
     /** After a game: what you unlocked on RetroAchievements while playing, then your progress again. */
     private void afterPlaying() {

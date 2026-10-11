@@ -92,7 +92,27 @@ public final class GamepadServer {
         default boolean idleCatch() {
             return false;
         }
+
+        /** What the TV asks the phones to fill in (a sign-in, say), or null. */
+        default Form form() {
+            return null;
+        }
+
+        /** A phone filled in the form with this id. */
+        default FormResult submitForm(String id, Map<String, String> values) {
+            return new FormResult(false, "The TV isn't asking for that any more");
+        }
     }
+
+    /**
+     * Something to type on the phone instead of the TV's on-screen keyboard: the TV asks for it, every
+     * phone shows it. Secret fields are never sent to the phone (only whether one is set).
+     */
+    public record Form(String id, String title, String note, List<Field> fields) {}
+
+    public record Field(String key, String label, boolean secret, String value, boolean set) {}
+
+    public record FormResult(boolean ok, String message) {}
 
     /** WII-UU playing by itself: the game, its score, and its latest remark (with an id and mood). */
     public record Idle(String game, int score, String line, int lineId, String mood, String cheat, boolean watching) {}
@@ -400,6 +420,12 @@ public final class GamepadServer {
                         case "/api/frame" -> frame(ex, query(ex));
                         case "/api/audio" -> audio(ex, query(ex));
                         case "/api/library" -> json(ex, 200, libraryJson());
+                        case "/api/form" -> {
+                            if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
+                            Map<String, String> f = form(body(ex));
+                            FormResult r = host.submitForm(f.getOrDefault("form", ""), f);
+                            json(ex, r.ok() ? 200 : 422, new Json().obj().kv("ok", r.ok()).kv("message", r.message()).endObj());
+                        }
                         case "/api/idle" -> {
                             if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
                             json(ex, 200, new Json().obj().kv("caught", host.idleCatch()).endObj());
@@ -619,6 +645,17 @@ public final class GamepadServer {
                 .kv("clientConfig", ob.clientConfig(ob.redirectUri(url()))).endObj();
         // the menu music, for phones that make it themselves (web/music.js); "local" when the sound
         // they get leaves it out
+        Form form = host.form();
+        j.key("form");
+        if (form == null) j.val((String) null);
+        else {
+            j.obj().kv("id", form.id()).kv("title", form.title()).kv("note", form.note()).key("fields").arr();
+            for (Field fd : form.fields()) {
+                j.obj().kv("key", fd.key()).kv("label", fd.label()).kv("secret", fd.secret())
+                        .kv("value", fd.secret() ? "" : fd.value()).kv("set", fd.set()).endObj();
+            }
+            j.endArr().endObj();
+        }
         Idle idle = host.idle();
         j.key("idle");
         if (idle == null) j.val((String) null);

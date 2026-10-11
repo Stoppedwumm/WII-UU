@@ -363,6 +363,11 @@ N64 byte order, the DS's code), and by title for discs or unknown dumps. After y
 what you unlocked ("Achievement unlocked: Warp Zone (10 points)"), and WII-UU in the corner is
 impressed.
 
+Typing a key on the TV is no fun: *Enter on your phone* (on the same page) shows the sign-in on
+every connected phone instead, to type with its keyboard. WII-UU checks it and says on both screens
+whether it worked. Phones only see this while the TV asks for it, and never the secrets already set
+(leave one empty to keep it). The ScreenScraper account page has the same button.
+
 The achievements themselves unlock in the emulator. In RetroArch mode, also enter your
 RetroAchievements **password**: WII-UU then signs RetroArch in for the games it starts
 (`cheevos_*` in `~/.wiiuu/retroarch.cfg`, which is then readable only by you), with *Hardcore mode*

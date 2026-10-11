@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.63 (2026-10-11)
+- Sign in on your phone: *Enter on your phone* on the RetroAchievements (and ScreenScraper) account
+  page shows the fields on every connected phone, to type with its keyboard instead of the TV's.
+  WII-UU checks the sign-in and tells you on the phone and the TV whether it worked. Phones only see
+  this while the TV asks, and never secrets that are already set.
+
 ## 1.9.62 (2026-10-11)
 - RetroAchievements: enter your user name and Web API key under *Settings > Games > RetroAchievements
   account* and every game tile shows your progress (a trophy and "12/40", gold at 100%). Games are
