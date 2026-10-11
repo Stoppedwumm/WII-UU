@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.66 (2026-10-11)
+- Buttons from the phone reach the game again when WII-UU types them as keys: on Linux (X11, with
+  xdotool) WII-UU now brings the emulator's window to the front itself once it opens, instead of
+  hoping the window manager does. That mattered most when WII-UU restarted an N64 game by itself
+  (after switching to the software renderer or the interpreter): the new RetroArch window could
+  open without getting the keyboard.
+
 ## 1.9.65 (2026-10-11)
 - N64 in RetroArch mode: when the N64 core's recompiler crashes ("Init new dynarec", error 139: some
   ARM computers, like a Raspberry Pi 5), WII-UU switches to the core's interpreter (slower, but it
