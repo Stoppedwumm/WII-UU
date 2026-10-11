@@ -3,6 +3,14 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.69 (2026-10-11)
+- RetroArch as a Snap (/snap/bin/retroarch) is understood now: WII-UU uses the Snap's own cores and
+  settings (~/snap/retroarch/common/.config/retroarch) and puts the settings it gives RetroArch where
+  the Snap can read them (~/snap/retroarch/common/wiiuu). Leftovers from earlier versions in the
+  Snap's settings are undone too.
+- RetroArch's full screen is a borderless window for games WII-UU starts, instead of switching the
+  screen mode, which left the picture frozen (black, a notification stuck) on some X11 desktops.
+
 ## 1.9.68 (2026-10-11)
 - Back to how games started in 1.9.65 (no window activation, no extra step before an N64 retry).
 - RetroArch no longer keeps settings WII-UU gives it for one game: it used to save them into its own

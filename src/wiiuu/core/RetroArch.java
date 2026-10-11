@@ -132,7 +132,7 @@ public final class RetroArch {
         // --verbose: RetroArch's own log goes to logs/<system>.log (why a game didn't start)
         cmd.addAll(List.of("--verbose", "-L", core.toString()));
         Path extra = writeExtraConfig(split, id.equals("n64") && (n64Software() || n64Interpreter()) ? n64Options(exe) : null,
-                userCoreDir(exe).getParent());
+                userCoreDir(exe).getParent(), forRetroArch(exe, "retroarch.cfg"));
         if (extra != null) cmd.addAll(List.of("--appendconfig", extra.toString()));
         cmd.add(game.path().toAbsolutePath().toString());
         return cmd;
@@ -189,7 +189,8 @@ public final class RetroArch {
         try {
             String text = Files.readString(main, java.nio.charset.StandardCharsets.ISO_8859_1);
             String ours = config.home().resolve("retroarch-core-options.cfg").toAbsolutePath().toString().replace("\\", "/");
-            if (!n64Options && text.contains(ours)) {
+            String oursSnap = snapHome().resolve("wiiuu").resolve("retroarch-core-options.cfg").toString();
+            if (!n64Options && (text.contains(ours) || text.contains(oursSnap))) {
                 out.append("global_core_options = \"false\"\n");
                 out.append("core_options_path = \"\"\n");
                 System.out.println("[retroarch] undoing WII-UU's N64 core options that RetroArch saved into " + main);
@@ -256,7 +257,7 @@ public final class RetroArch {
                 + (n64Software() ? " (software renderer: no OpenGL needed)" : "")
                 + (n64Interpreter() ? " (interpreter: the recompiler crashes here)" : "") + "\n");
         for (var e : opts.entrySet()) out.append(e.getKey()).append(" = ").append(e.getValue()).append('\n');
-        Path file = config.home().resolve("retroarch-core-options.cfg");
+        Path file = forRetroArch(exe, "retroarch-core-options.cfg");
         try {
             Files.writeString(file, out.toString());
             return file;
@@ -306,6 +307,36 @@ public final class RetroArch {
     }
 
     /** Where RetroArch keeps its downloaded cores. */
+    /** RetroArch as a Snap (/snap/bin/retroarch): its own home, and it may not read hidden folders like ~/.wiiuu. */
+    static boolean snap(List<String> exe) {
+        if (exe == null || exe.isEmpty()) return false;
+        String p = exe.get(0);
+        if (p.startsWith("/snap/")) return true;
+        try {
+            return Path.of(p).toRealPath().toString().startsWith("/snap/") || Path.of(p).toRealPath().toString().endsWith("/snap");
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static Path snapHome() {
+        return Path.of(System.getProperty("user.home"), "snap", "retroarch", "common");
+    }
+
+    /** Where WII-UU puts a file RetroArch must read: in the Snap's own folder for a Snap, else ~/.wiiuu. */
+    private Path forRetroArch(List<String> exe, String name) {
+        if (snap(exe)) {
+            Path dir = snapHome().resolve("wiiuu");
+            try {
+                Files.createDirectories(dir);
+                return dir.resolve(name);
+            } catch (IOException e) {
+                System.err.println("[retroarch] couldn't make " + dir + ": " + e.getMessage());
+            }
+        }
+        return config.home().resolve(name);
+    }
+
     Path userCoreDir(List<String> exe) {
         String home = System.getProperty("user.home");
         if (MAC) return Path.of(home, "Library", "Application Support", "RetroArch", "cores");
@@ -317,6 +348,7 @@ public final class RetroArch {
             return Path.of(appdata == null ? home : appdata, "RetroArch", "cores");
         }
         if (flatpak(exe)) return Path.of(home, ".var", "app", "org.libretro.RetroArch", "config", "retroarch", "cores");
+        if (snap(exe)) return snapHome().resolve(".config").resolve("retroarch").resolve("cores");
         String xdg = System.getenv("XDG_CONFIG_HOME");
         return (xdg != null && !xdg.isBlank() ? Path.of(xdg) : Path.of(home, ".config")).resolve("retroarch").resolve("cores");
     }
@@ -437,11 +469,13 @@ public final class RetroArch {
      * fast-forward...).
      */
     Path writeExtraConfig() {
-        return writeExtraConfig(null, null, null);
+        return writeExtraConfig(null, null, null, config.home().resolve("retroarch.cfg"));
     }
 
-    Path writeExtraConfig(java.awt.Rectangle split, Path coreOptions, Path raConfigDir) {
+    Path writeExtraConfig(java.awt.Rectangle split, Path coreOptions, Path raConfigDir, Path file) {
         StringBuilder cfg = new StringBuilder("# written by WII-UU for games it starts in RetroArch\n");
+        // full screen as a borderless window: switching the screen mode froze some X11 desktops
+        if (split == null) cfg.append("video_windowed_fullscreen = \"true\"\n");
         // RetroArch saves its settings on exit, these included: they'd stay in its own config for every
         // game afterwards. So it doesn't save them, and what earlier versions left there is undone.
         cfg.append("config_save_on_exit = \"false\"\n");
@@ -485,7 +519,6 @@ public final class RetroArch {
         }
         String cheevos = Achievements.retroarchConfig(config);       // RetroAchievements: signed in as you
         cfg.append(cheevos);
-        Path file = config.home().resolve("retroarch.cfg");
         try {
             Files.writeString(file, cfg.toString());
             if (!cheevos.isEmpty()) {
