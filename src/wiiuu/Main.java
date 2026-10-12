@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.88";
+    public static final String VERSION = "1.9.89";
 
     private final Config config;
     private final Library library;
@@ -344,6 +344,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             if (s != null) s.directFrame(px, w, h, aspect);
         });
         view.setChoccyKeys((b, down) -> launcher.choccyButton(1, b, down));
+        launcher.setChoccyLook(view::choccyLook);
         view.setChoccyStates(launcher::choccyState);
         launcher.setAnnouncer((title, text, trophy) -> {
             view.choccyAnnounce(title, text, trophy);

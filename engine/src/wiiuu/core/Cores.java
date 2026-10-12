@@ -163,6 +163,102 @@ public final class Cores {
                 + ")\u2026 the game starts by itself in a moment");
     }
 
+    /**
+     * The core Choccy Milk plays a console with: the one its picture settings need when there are
+     * some (Beetle PSX, bsnes-hd, Genesis Plus GX Wide; see {@link ChoccyPicture}), found or
+     * downloaded once, else the usual one (also when that core doesn't exist for this computer).
+     */
+    public Path choccyCoreFor(GameSystem system, Runnable afterDownload) throws Downloading {
+        List<String> want = ChoccyPicture.cores(config, system.id());
+        if (want != null) {
+            boolean translated = Choccy.translated();
+            Path own = translated ? choccyCoreDir().resolve(Choccy.arch()) : choccyCoreDir();
+            List<Path> dirs = new java.util.ArrayList<>();
+            if (!translated) {
+                dirs.addAll(coreDirs(executable()));
+                dirs.addAll(coreDirs(List.of("/snap/bin/retroarch")));
+                dirs.addAll(coreDirs(List.of("flatpak", "run", "org.libretro.RetroArch")));
+            }
+            dirs.add(own);
+            for (String n : want) {
+                for (Path d : dirs) {
+                    Path core = d.resolve(n + "_libretro." + EXT);
+                    if (Files.isRegularFile(core)) return core;
+                }
+            }
+            String from = buildbot(Choccy.arch());
+            if (config.getBool("retroarch.download", true) && from != null && triedDownload.add("picture:" + want.get(0))) {
+                Thread t = new Thread(() -> {
+                    for (String n : want) {
+                        if (download(n, own, from) != null) break;
+                    }
+                    afterDownload.run();
+                }, "core-download");
+                t.setDaemon(true);
+                t.start();
+                throw new Downloading("Getting " + want.get(0) + " for " + system.name() + "'s picture settings\u2026 the game starts by itself in a moment");
+            }
+            System.out.println("[choccy] " + want.get(0) + " isn't available for this computer: " + system.name()
+                    + " plays with its usual core (widescreen stretched, upscaling smoothed)");
+        }
+        Path usual = coreFor(system, afterDownload);
+        if (usual == null || choccyCanRun(usual)) return usual;
+        // one Choccy Milk can't run (bsnes): the next of the console's cores it can, downloaded if need be
+        for (String n : CORES.getOrDefault(system.id(), List.of())) {
+            if (!choccyCanRun(n)) continue;
+            for (Path d : coreDirs(executable())) {
+                Path core = d.resolve(n + "_libretro." + EXT);
+                if (Files.isRegularFile(core)) return core;
+            }
+            Path own = choccyCoreDir().resolve(n + "_libretro." + EXT);
+            if (Files.isRegularFile(own)) return own;
+        }
+        String from = buildbot(Choccy.arch());
+        if (config.getBool("retroarch.download", true) && from != null && triedDownload.add("choccy:" + system.id())) {
+            Thread t = new Thread(() -> {
+                for (String n : CORES.get(system.id())) {
+                    if (choccyCanRun(n) && download(n, choccyCoreDir(), from) != null) break;
+                }
+                afterDownload.run();
+            }, "core-download");
+            t.setDaemon(true);
+            t.start();
+            throw new Downloading("Getting a core Choccy Milk can play " + system.name() + " with\u2026 the game starts by itself in a moment");
+        }
+        return null;
+    }
+
+    /**
+     * Whether Choccy Milk can run this core. Not the bsnes family: they run the console's chips as
+     * coroutines on 32 KB stacks, and each call back into Choccy Milk (sound, picture, buttons)
+     * needs more than that, so memory gets overwritten and the player crashes.
+     */
+    public static boolean choccyCanRun(Path core) {
+        return choccyCanRun(core.getFileName().toString().replaceFirst("_libretro\\..*$", ""));
+    }
+
+    public static boolean choccyCanRun(String name) {
+        return !name.startsWith("bsnes") && !name.startsWith("higan");
+    }
+
+    /**
+     * How the picture goes to the screen with this core: {filter, "stretch" or ""}. When the core
+     * the settings need wasn't to be had, its widescreen becomes stretched and its upscaling smooth.
+     */
+    public String[] choccyLook(GameSystem system, Path core) {
+        String id = system.id();
+        List<String> want = ChoccyPicture.cores(config, id);
+        String name = core == null ? "" : core.getFileName().toString().replaceFirst("_libretro\\..*$", "");
+        boolean fallback = want != null && !want.contains(name);
+        String filter = ChoccyPicture.filter(config, id);
+        boolean stretch = ChoccyPicture.stretch(config, id);
+        if (fallback) {
+            if (ChoccyPicture.coreUpscale(config, id)) filter = "smooth";
+            if (ChoccyPicture.widescreen(config, id) && !id.equals("ps1")) stretch = true;     // PlayStation: SwanStation widens too
+        }
+        return new String[]{filter, stretch ? "stretch" : ""};
+    }
+
     /** RetroArch's system folder (BIOS files), when there is one. */
     public Path systemDir() {
         List<String> exe = executable();
@@ -176,7 +272,7 @@ public final class Cores {
 
     /** Core options Choccy Milk gives this console's cores: N64 without OpenGL (and without the recompiler if it crashed). */
     public java.util.Map<String, String> choccyOptions(String systemId) {
-        java.util.Map<String, String> o = new java.util.LinkedHashMap<>();
+        java.util.Map<String, String> o = new java.util.LinkedHashMap<>(ChoccyPicture.options(config, systemId));
         if (systemId.equals("n64")) {
             // the software renderer (Angrylion: no OpenGL needed) on every processor core
             o.put("mupen64plus-rdp-plugin", "angrylion");

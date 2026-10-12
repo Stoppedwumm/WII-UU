@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.89 (2026-10-12)
+- Choccy Milk upscaling, per console (Settings > Games > Choccy Milk picture; U in the Choccy Milk
+  app): Scale2x / Scale3x pixel-art upscaling for the 2D consoles, Smooth for all, and for the
+  PlayStation the 3D drawn at 2x / 4x by Beetle PSX itself.
+- Widescreen (W in the app): PlayStation 3D games really widen (the widescreen hack), the Mega Drive
+  shows more of each level (Genesis Plus GX Wide), and other consoles are stretched to 16:9.
+- Choccy Milk no longer picks a bsnes core for the Super Nintendo (it would crash: its coroutine
+  stacks are too small for Choccy Milk's calls); it gets Snes9x instead.
+
 ## 1.9.88 (2026-10-12)
 - Remap a controller button for button: Settings > GamePad & players > Controller buttons. Pick a
   GamePad button and press the controller's button that should be it; the two swap, so nothing

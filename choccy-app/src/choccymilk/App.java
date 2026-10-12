@@ -50,7 +50,7 @@ import wiiuu.input.PadSink;
  * saves, cores and Java, so games show up in both and saves carry over. Keyboard: arrows choose,
  * Enter (or X) plays, Esc goes back; in a game the same keys as in WII-UU (arrows, X Z S A, Q W,
  * E R, Enter, Space). F11: full screen. O: open a file. F5: look for games again. T: Cocoa (dark) or
- * Milk (light) look. Controllers work too (Linux).
+ * Milk (light) look. U / W: the chosen console's upscaling / widescreen. Controllers work too (Linux).
  */
 public final class App extends JPanel implements PadSink {
     public static final String NAME = "Choccy Milk";
@@ -179,7 +179,7 @@ public final class App extends JPanel implements PadSink {
         }
         Path core;
         try {
-            core = cores.coreFor(game, () -> SwingUtilities.invokeLater(() -> play(game)));
+            core = cores.choccyCoreFor(game.system(), () -> SwingUtilities.invokeLater(() -> play(game)));
         } catch (Cores.Downloading d) {
             say(d.getMessage());
             return;
@@ -189,6 +189,8 @@ public final class App extends JPanel implements PadSink {
             return;
         }
         String id = game.system().id();
+        String[] look = cores.choccyLook(game.system(), core);
+        screen.look(look[0], !look[1].isEmpty());
         Path log = config.logDir().resolve("choccy-" + id + ".log");
         Choccy.Session s;
         try {
@@ -282,6 +284,25 @@ public final class App extends JPanel implements PadSink {
         return true;
     }
 
+    /** U: the chosen console's next upscaling; W: its widescreen on or off (see ChoccyPicture). */
+    private void picture(boolean wide) {
+        if (systems.isEmpty()) return;
+        String id = systems.get(Math.min(sys, systems.size() - 1)).id();
+        if (wide) {
+            config.set("choccy." + id + ".widescreen", wiiuu.core.ChoccyPicture.widescreen(config, id) ? null : "true");
+        } else {
+            List<String[]> ups = wiiuu.core.ChoccyPicture.upscalers(id);
+            String now = wiiuu.core.ChoccyPicture.upscale(config, id);
+            int at = 0;
+            for (int i = 0; i < ups.size(); i++) if (ups.get(i)[0].equals(now)) at = i;
+            String next = ups.get((at + 1) % ups.size())[0];
+            config.set("choccy." + id + ".upscale", next.equals("off") ? null : next);
+        }
+        config.save();
+        say(systems.get(Math.min(sys, systems.size() - 1)).shortName() + " picture: " + wiiuu.core.ChoccyPicture.describe(config, id)
+                + "  ·  U upscaling, W widescreen");
+    }
+
     /** T: Cocoa (dark) or Milk (light), remembered. */
     private void switchLook() {
         look = look.dark ? Look.MILK : Look.COCOA;
@@ -349,6 +370,7 @@ public final class App extends JPanel implements PadSink {
             case KeyEvent.VK_ENTER, KeyEvent.VK_X, KeyEvent.VK_SPACE -> choose();
             case KeyEvent.VK_O -> openFile();
             case KeyEvent.VK_T -> switchLook();
+            case KeyEvent.VK_U, KeyEvent.VK_W -> picture(k == KeyEvent.VK_W);
             case KeyEvent.VK_F2 -> signIn();
             case KeyEvent.VK_F5 -> {
                 say("Looking for games…");
@@ -657,7 +679,7 @@ public final class App extends JPanel implements PadSink {
         FontMetrics fm = g.getFontMetrics();
         boolean news = !status.isEmpty() && System.currentTimeMillis() - statusAt < 12000;
         String text = news ? status
-                : "↑↓ choose   Enter play   ←→ consoles / games   O open a file   F5 look again   T look   F11 full screen   F2 "
+                : "↑↓ choose   Enter play   ←→ consoles / games   O open a file   U / W upscaling / widescreen   T look   F11 full screen   F2 "
                 + (ra.signedIn() ? "RetroAchievements: " + ra.user() : "RetroAchievements sign-in");
         if (news) {                                     // news in a little caramel pill
             float tw = Math.min(fm.stringWidth(text), l.w - 80 * u) + 28 * u, th = 28 * u;

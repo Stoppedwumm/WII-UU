@@ -459,6 +459,29 @@ Q / W = L / R, Enter = Start, Space = Select.
   slot (0-9, as in RetroArch), or *Save state* / *Load state* on the phone's GamePad screen. They're
   `<game>.state`, `<game>.state1` ... next to the saves, RetroArch's names.
 
+### Choccy Milk's picture
+
+*Settings → Games → Choccy Milk picture* sets each console's upscaling and widescreen (the Choccy
+Milk app: U and W in the list). Choccy Milk draws without a graphics chip, so:
+
+| Upscaling | Consoles | What it does |
+|---|---|---|
+| Off | all | whole pixels, as the console drew them (the default) |
+| Smooth | all | softened to the screen's size |
+| Pixel art 2x / 3x | NES, SNES, Game Boy (Color / Advance), DS, Master System, Mega Drive | Scale2x / Scale3x: rounds off the stair steps of pixel art, stays crisp |
+| Internal resolution 2x / 4x | PlayStation | Beetle PSX draws the 3D at 2x / 4x itself (downloaded once; 4x needs a fast computer, not a Raspberry Pi) |
+
+**Widescreen** shows more of the game where the emulator can: PlayStation 3D games (SwanStation's
+or Beetle PSX's widescreen hack; 2D parts and pre-drawn backgrounds can look off) and the Mega Drive
+(Genesis Plus GX Wide, downloaded once; some games show glitches at the edges). Elsewhere it
+stretches the picture to 16:9, which is right for games with a widescreen mode of their own (some
+N64 ones). Changes apply from the next game. In config: `choccy.<console>.upscale=off|smooth|scale2x|scale3x|hd2|hd4`,
+`choccy.<console>.widescreen=true`.
+
+N64 and DS games can't be drawn at a higher resolution without a graphics chip; the Super
+Nintendo's bsnes-hd (HD Mode 7) can't run in Choccy Milk (its 32 KB coroutine stacks are too small
+for the calls back into it), so Choccy Milk never uses the bsnes cores and plays the SNES with Snes9x.
+
 ### Choccy Milk on its own
 
 Its own page: [wiiuu.stoppedwumm.net/choccymilk](https://wiiuu.stoppedwumm.net/choccymilk/).
@@ -477,6 +500,9 @@ same in both.
   chocolate band dripping across the top, the glass of chocolate milk as its logo and icon, and
   rounded type when the computer has some (Nunito, Varela Round, Quicksand...). T switches, and
   the choice is kept (`choccy.theme=auto|cocoa|milk`).
+- **Upscaling and widescreen, per console:** U cycles the chosen console's upscaling and W turns
+  its widescreen on or off (in WII-UU: *Settings → Games → Choccy Milk picture*; the same settings).
+  See *Choccy Milk's picture* below.
 - **It starts with a little animation:** a glass of milk drops in, chocolate pours in and gets
   stirred, a straw lands and the name pops in, then it fades into the list (about three seconds).
   Any key, click or controller button skips it; `--no-intro` or `choccy.intro=false` turns it off.

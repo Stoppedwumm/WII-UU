@@ -828,6 +828,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     /** A frame from Choccy Milk (on its reading thread). */
+    /** The next Choccy Milk game's upscaler and widescreen stretch. */
+    public void choccyLook(String filter, boolean stretch) {
+        choccyScreen.look(filter, stretch);
+    }
+
     public void choccyFrame(int[] rgb, int w, int h, float aspect) {
         if (playing == null) return;
         choccyScreen.frame(rgb, w, h, aspect);

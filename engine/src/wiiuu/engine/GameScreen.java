@@ -15,8 +15,8 @@ import java.awt.image.DataBufferInt;
 import wiiuu.input.PadButton;
 
 /**
- * A game's picture as Choccy Milk draws it: as big as fits at the game's shape, whole source pixels
- * (no smoothing), on black, with a hint at the top for a few seconds after it starts. Shared by
+ * A game's picture as Choccy Milk draws it: as big as fits at the game's shape (or stretched to
+ * 16:9), whole source pixels or upscaled (smooth, Scale2x, Scale3x: {@link #look}), on black, with a hint at the top for a few seconds after it starts. Shared by
  * WII-UU's menu and the Choccy Milk app; frames come in on the player's reading thread.
  */
 public final class GameScreen {
@@ -26,13 +26,91 @@ public final class GameScreen {
     private volatile BufferedImage picture;
     private volatile float aspect = 4f / 3;
     private long shownAt;
+    /** off (whole pixels), smooth, scale2x, scale3x; and whether to stretch to 16:9 */
+    private volatile String filter = "off";
+    private volatile boolean stretch;
+
+    /** How the next game's picture is drawn (see wiiuu.core.ChoccyPicture). */
+    public void look(String filter, boolean stretch) {
+        this.filter = filter == null ? "off" : filter;
+        this.stretch = stretch;
+    }
 
     /** A frame (0xRRGGBB pixels); aspect is its display shape (0 = as the pixels are). */
     public void frame(int[] rgb, int w, int h, float aspect) {
-        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        System.arraycopy(rgb, 0, ((DataBufferInt) img.getRaster().getDataBuffer()).getData(), 0, w * h);
-        this.aspect = aspect > 0 ? aspect : (float) w / h;
+        String f = filter;
+        int n = f.equals("scale3x") ? 3 : f.equals("scale2x") ? 2 : 1;
+        if (n > 1 && w * h > 200_000) n = 1;                // already big (a high-resolution screen): no need
+        BufferedImage img = new BufferedImage(w * n, h * n, BufferedImage.TYPE_INT_RGB);
+        int[] out = ((DataBufferInt) img.getRaster().getDataBuffer()).getData();
+        if (n == 3) scale3x(rgb, w, h, out);
+        else if (n == 2) scale2x(rgb, w, h, out);
+        else System.arraycopy(rgb, 0, out, 0, w * h);
+        float a = aspect > 0 ? aspect : (float) w / h;
+        this.aspect = stretch && a < 1.7f ? 16f / 9 : a;
         picture = img;
+    }
+
+    /**
+     * Scale2x (AdvMAME2x): each pixel becomes 2x2, its corners taking a neighbour's colour where two
+     * neighbours agree, so diagonal edges of pixel art come out smooth instead of stair-stepped.
+     */
+    static void scale2x(int[] in, int w, int h, int[] out) {
+        int ow = w * 2;
+        for (int y = 0; y < h; y++) {
+            int up = (y > 0 ? y - 1 : y) * w, row = y * w, dn = (y < h - 1 ? y + 1 : y) * w;
+            for (int x = 0; x < w; x++) {
+                int l = x > 0 ? x - 1 : x, r = x < w - 1 ? x + 1 : x;
+                int B = in[up + x], D = in[row + l], E = in[row + x], F = in[row + r], H = in[dn + x];
+                int e0 = E, e1 = E, e2 = E, e3 = E;
+                if (B != H && D != F) {
+                    if (D == B) e0 = D;
+                    if (B == F) e1 = F;
+                    if (D == H) e2 = D;
+                    if (H == F) e3 = F;
+                }
+                int o = y * 2 * ow + x * 2;
+                out[o] = e0;
+                out[o + 1] = e1;
+                out[o + ow] = e2;
+                out[o + ow + 1] = e3;
+            }
+        }
+    }
+
+    /** Scale3x (AdvMAME3x): the same idea at 3x3, with edge pixels as well as corners. */
+    static void scale3x(int[] in, int w, int h, int[] out) {
+        int ow = w * 3;
+        for (int y = 0; y < h; y++) {
+            int up = (y > 0 ? y - 1 : y) * w, row = y * w, dn = (y < h - 1 ? y + 1 : y) * w;
+            for (int x = 0; x < w; x++) {
+                int l = x > 0 ? x - 1 : x, r = x < w - 1 ? x + 1 : x;
+                int A = in[up + l], B = in[up + x], C = in[up + r];
+                int D = in[row + l], E = in[row + x], F = in[row + r];
+                int G = in[dn + l], H = in[dn + x], I = in[dn + r];
+                int e0 = E, e1 = E, e2 = E, e3 = E, e4 = E, e5 = E, e6 = E, e7 = E, e8 = E;
+                if (B != H && D != F) {
+                    if (D == B) e0 = D;
+                    if (D == B && E != C || B == F && E != A) e1 = B;
+                    if (B == F) e2 = F;
+                    if (D == B && E != G || D == H && E != A) e3 = D;
+                    if (B == F && E != I || H == F && E != C) e5 = F;
+                    if (D == H) e6 = D;
+                    if (D == H && E != I || H == F && E != G) e7 = H;
+                    if (H == F) e8 = F;
+                }
+                int o = y * 3 * ow + x * 3;
+                out[o] = e0;
+                out[o + 1] = e1;
+                out[o + 2] = e2;
+                out[o + ow] = e3;
+                out[o + ow + 1] = e4;
+                out[o + ow + 2] = e5;
+                out[o + 2 * ow] = e6;
+                out[o + 2 * ow + 1] = e7;
+                out[o + 2 * ow + 2] = e8;
+            }
+        }
     }
 
     /** Whether a game picture is there (a game is playing). */
@@ -66,7 +144,9 @@ public final class GameScreen {
             dw = w;
             dh = Math.round(w / a);
         }
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        // whole pixels, or (smooth and the upscalers) softened to the screen's size
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, filter.equals("off")
+                ? RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR : RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh, null);
         long now = System.currentTimeMillis();
         if (shownAt == 0) shownAt = now;

@@ -133,6 +133,13 @@ public final class Launcher {
     private volatile Choccy.Session choccy;
 
     /** Where Choccy Milk's frames go (WII-UU's window). */
+    private volatile java.util.function.BiConsumer<String, Boolean> choccyLook = (f, s) -> { };
+
+    /** Told the picture's upscaler and whether to stretch it to 16:9, before each Choccy Milk game. */
+    public void setChoccyLook(java.util.function.BiConsumer<String, Boolean> look) {
+        this.choccyLook = look;
+    }
+
     public void setChoccyScreen(Choccy.Screen screen) {
         this.choccyScreen = screen;
     }
@@ -188,7 +195,7 @@ public final class Launcher {
         }
         Path core;
         try {
-            core = retroArch.coreFor(game, () -> {
+            core = retroArch.choccyCoreFor(game, () -> {
                 try {
                     launch(game);
                 } catch (LaunchException e) {
@@ -200,6 +207,8 @@ public final class Launcher {
         }
         if (core == null) throw new LaunchException("No core for " + game.system().name() + " found: install one in RetroArch's Online Updater");
         Path log = config.logDir().resolve(game.system().id() + ".log");
+        String[] look = retroArch.choccyLook(game, core);
+        choccyLook.accept(look[0], !look[1].isEmpty());
         Choccy.Session session;
         try {
             session = Choccy.play(core, game.path(), config.home().resolve("saves").resolve(game.system().id()),

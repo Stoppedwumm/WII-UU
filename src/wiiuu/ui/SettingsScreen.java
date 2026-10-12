@@ -866,6 +866,7 @@ public final class SettingsScreen {
             config.set("choccy.enabled", Boolean.toString(on));
             config.save();
         }));
+        r.add(new Link("Choccy Milk picture", "Upscaling and widescreen, per console.", null, this::choccyPicturePage));
         List<String> n64Ids = List.of("auto", "opengl", "software");
         r.add(new Choice("N64 renderer", "In RetroArch mode. Software needs no OpenGL (slower); Automatic switches to it "
                 + "by itself if the N64 core can't get OpenGL on this computer.",
@@ -944,6 +945,59 @@ public final class SettingsScreen {
                     say("Could not make " + config.romDir(s));
                 }
             }, null, null));
+            return r;
+        });
+    }
+
+    /** The consoles Choccy Milk plays, each with its upscaling and widescreen. */
+    private static final List<String> CHOCCY_CONSOLES = List.of("nes", "snes", "gb", "gba", "n64", "nds", "sms", "genesis", "ps1", "saturn");
+
+    private Page choccyPicturePage() {
+        return new Page("Choccy Milk picture", () -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info("How Choccy Milk draws each console's games. Upscaling: pixel art 2x / 3x rounds off the stair steps of "
+                    + "2D graphics and stays crisp; Smooth softens; Internal resolution (PlayStation) has the emulator draw its 3D "
+                    + "at a higher resolution itself. Widescreen shows more of the game where the emulator can (PlayStation 3D "
+                    + "games, Mega Drive) and stretches the picture elsewhere. From the next game."));
+            for (String id : CHOCCY_CONSOLES) {
+                GameSystem sys = Systems.ALL.stream().filter(x -> x.id().equals(id)).findFirst().orElse(null);
+                if (sys == null) continue;
+                r.add(new Link(sys.name(), null, () -> wiiuu.core.ChoccyPicture.describe(config, id), () -> choccyConsolePage(sys)));
+            }
+            return r;
+        });
+    }
+
+    private Page choccyConsolePage(GameSystem sys) {
+        String id = sys.id();
+        return new Page(sys.name(), () -> {
+            List<Row> r = new ArrayList<>();
+            List<String[]> ups = wiiuu.core.ChoccyPicture.upscalers(id);
+            List<String> names = new ArrayList<>();
+            for (String[] u : ups) names.add(u[1]);
+            String hdHelp = id.equals("ps1") ? " Internal resolution: Beetle PSX draws the 3D at 2x / 4x (downloaded once; 4x needs a "
+                    + "fast computer, too much for a Raspberry Pi)." : "";
+            r.add(new Choice("Upscaling", "Pixel art 2x / 3x: Scale2x / Scale3x, for 2D pixel art. Smooth: softened." + hdHelp,
+                    () -> names, () -> {
+                        String u = wiiuu.core.ChoccyPicture.upscale(config, id);
+                        for (int i = 0; i < ups.size(); i++) if (ups.get(i)[0].equals(u)) return i;
+                        return 0;
+                    }, i -> {
+                config.set("choccy." + id + ".upscale", i == 0 ? null : ups.get(i)[0]);
+                config.save();
+            }));
+            String wideHelp = switch (id) {
+                case "ps1" -> "3D games show more to the sides (SwanStation's or Beetle PSX's widescreen hack). 2D parts and "
+                        + "pre-drawn backgrounds can look stretched or cut off.";
+                case "genesis" -> "Genesis Plus GX Wide draws more of the level to the sides (downloaded once). Some games show "
+                        + "glitches at the edges.";
+                default -> "Stretched to 16:9: right for games with a widescreen mode of their own (some N64 ones), wide "
+                        + "everywhere else.";
+            };
+            r.add(new Toggle("Widescreen", wideHelp, () -> wiiuu.core.ChoccyPicture.widescreen(config, id), on -> {
+                config.set("choccy." + id + ".widescreen", on ? "true" : null);
+                config.save();
+            }));
             return r;
         });
     }

@@ -99,6 +99,16 @@ public final class RetroArch {
         return cores.coreFor(game, afterDownload);
     }
 
+    /** The core Choccy Milk plays a game with (the one its picture settings need, if any). */
+    public Path choccyCoreFor(Game game, Runnable afterDownload) throws Cores.Downloading {
+        return cores.choccyCoreFor(game.system(), afterDownload);
+    }
+
+    /** {filter, "stretch" or ""} for Choccy Milk's picture with this core. */
+    public String[] choccyLook(Game game, Path core) {
+        return cores.choccyLook(game.system(), core);
+    }
+
     public Path systemDir() {
         return cores.systemDir();
     }
