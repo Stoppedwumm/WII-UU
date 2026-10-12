@@ -14,3 +14,4 @@ presentation/build/
 dist/WII-UU-presentation*
 # release zips from package.sh (the website copy lives in docs/download)
 dist/WII-UU-*.zip
+__pycache__/
