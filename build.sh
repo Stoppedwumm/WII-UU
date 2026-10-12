@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Builds build/wiiuu.jar with only the JDK (javac + jar), Java 17 or newer.
+# Builds with only the JDK (javac + jar), Java 17 or newer:
+#   build/wiiuu-engine.jar  the WII-UU engine, the library WII-UU and Choccy Milk share (engine/)
+#   build/wiiuu.jar         WII-UU (src/, with the engine inside)
+#   build/ChoccyMilk.jar    Choccy Milk on its own (choccy-app/, with the engine inside)
 set -euo pipefail
 cd "$(dirname "$0")"
-rm -rf build/classes && mkdir -p build/classes
-find src -name '*.java' > build/sources.txt
-javac --release 17 -encoding UTF-8 -d build/classes @build/sources.txt
+rm -rf build/classes build/engine build/choccy-classes && mkdir -p build/classes build/engine build/choccy-classes
+# the engine first, on its own: so it can't come to depend on either program
+find engine/src -name '*.java' > build/sources-engine.txt
+javac --release 17 -encoding UTF-8 -d build/engine @build/sources-engine.txt
 # Choccy Milk (WII-UU's own libretro frontend) uses Java 22's foreign function API; it runs in its own
 # process on a Java 22+ that WII-UU looks for (or downloads), so WII-UU itself stays Java 17. Built with
 # this JDK if it can, else with a newer one on this computer, else taken from the release zip in docs/.
@@ -17,21 +21,27 @@ for c in javac "${JAVA_HOME:-/nonexistent}/bin/javac" /usr/lib/jvm/*/bin/javac /
   if { [ "$c" = javac ] || [ -x "$c" ]; } && "$c" --release 22 -version >/dev/null 2>&1; then JAVAC22="$c"; break; fi
 done
 if [ -n "$JAVAC22" ]; then
-  find src-choccy -name '*.java' > build/sources-choccy.txt
-  "$JAVAC22" --release 22 -encoding UTF-8 -d build/classes @build/sources-choccy.txt
+  find engine/src-choccy -name '*.java' > build/sources-choccy.txt
+  "$JAVAC22" --release 22 -encoding UTF-8 -cp build/engine -d build/engine @build/sources-choccy.txt
   [ "$JAVAC22" = javac ] || echo "(Choccy Milk built with $JAVAC22)"
 elif [ -f docs/download/WII-UU-latest.zip ]; then
   rm -rf build/prebuilt && mkdir -p build/prebuilt
   (cd build/prebuilt && jar xf ../../docs/download/WII-UU-latest.zip)
   pre=$(ls build/prebuilt/*/wiiuu.jar 2>/dev/null | head -1)
   if [ -n "$pre" ]; then
-    (cd build/classes && jar xf "../../$pre" wiiuu/choccy)
+    (cd build/engine && jar xf "../../$pre" wiiuu/choccy)
     echo "(this JDK is older than 22: Choccy Milk taken from the release in docs/download)"
   fi
   rm -rf build/prebuilt
 else
   echo "(no JDK 22 or newer here: built without Choccy Milk)"
 fi
+jar --create --file build/wiiuu-engine.jar -C build/engine .
+echo "Built build/wiiuu-engine.jar"
+# WII-UU, on the engine
+find src -name '*.java' > build/sources.txt
+javac --release 17 -encoding UTF-8 -cp build/engine -d build/classes @build/sources.txt
+cp -r build/engine/. build/classes/
 cp -r resources/. build/classes/
 # the release notes WII-UU shows after an update (Settings > General > What's new)
 [ -f CHANGELOG.md ] && cp CHANGELOG.md build/classes/CHANGELOG.md
@@ -44,3 +54,11 @@ printf 'Main-Class: wiiuu.react.Editor\n' > build/manifest-reactions.txt
 jar --create --file build/WII-UU-Reactions.jar --manifest build/manifest-reactions.txt -C build/classes .
 zip -q -d build/WII-UU-Reactions.jar 'reactions/*' >/dev/null || true
 echo "Built build/WII-UU-Reactions.jar"
+# Choccy Milk on its own, on the engine
+find choccy-app/src -name '*.java' > build/sources-app.txt
+javac --release 17 -encoding UTF-8 -cp build/engine -d build/choccy-classes @build/sources-app.txt
+cp -r build/engine/. build/choccy-classes/
+[ -d choccy-app/resources ] && cp -r choccy-app/resources/. build/choccy-classes/
+printf 'Main-Class: choccymilk.App\nEnable-Native-Access: ALL-UNNAMED\n' > build/manifest-choccy.txt
+jar --create --file build/ChoccyMilk.jar --manifest build/manifest-choccy.txt -C build/choccy-classes .
+echo "Built build/ChoccyMilk.jar"

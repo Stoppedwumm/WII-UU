@@ -19,7 +19,7 @@ import wiiuu.core.Joysticks;
  * ...); the left stick from its joystick device (/dev/input/jsN), which the kernel scales to
  * ±32767 whatever the pad. Both are readable by the logged-in user (udev's "uaccess").
  *
- * <p>They drive the menu through {@link InputRouter} like a phone does, as players -1, -2, ...,
+ * <p>They drive the menu through WII-UU's InputRouter like a phone does, as players -1, -2, ...,
  * which the router ignores while a game runs (the emulator reads the controller itself). The
  * phones' own virtual controllers are skipped: the phones already drive the menu.
  *
@@ -37,7 +37,7 @@ public final class LocalPads {
     /** struct input_event: two longs of time, then u16 type, u16 code, s32 value */
     private static final int EVENT_SIZE = System.getProperty("os.arch", "").contains("64") ? 24 : 16;
 
-    private final InputRouter router;
+    private final PadSink router;
     private final boolean confirmEast;
     /** device nodes being read now (event5, js0, ...) */
     private final Set<String> open = ConcurrentHashMap.newKeySet();
@@ -57,7 +57,7 @@ public final class LocalPads {
         return NAMES.values().stream().sorted().toList();
     }
 
-    public LocalPads(InputRouter router, boolean confirmEast) {
+    public LocalPads(PadSink router, boolean confirmEast) {
         this.router = router;
         this.confirmEast = confirmEast;
     }

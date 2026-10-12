@@ -20,7 +20,7 @@ import javax.swing.SwingUtilities;
  * Routes gamepad input either to the menu (navigation) or, while an emulator runs,
  * into the OS as keyboard events via {@link Robot} so any emulator can consume it.
  */
-public final class InputRouter {
+public final class InputRouter implements PadSink {
 
     /** What the phone can do to the launcher menu. Called on the Swing thread. */
     public interface MenuActions {

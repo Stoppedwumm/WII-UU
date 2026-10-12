@@ -58,8 +58,8 @@ done
 # ---------------------------------------------------------------------------- uninstall
 if [ "$UNINSTALL" = 1 ]; then
   say "Removing $APP"
-  rm -rf "$PREFIX" "$BIN/wiiuu" "$BIN/wiiuu-emulators" "$BIN/wiiuu-console" \
-         "$HOME/.local/share/applications/wiiuu.desktop" \
+  rm -rf "$PREFIX" "$BIN/wiiuu" "$BIN/wiiuu-emulators" "$BIN/wiiuu-console" "$BIN/choccymilk" \
+         "$HOME/.local/share/applications/wiiuu.desktop" "$HOME/.local/share/applications/choccymilk.desktop" \
          "$HOME/.local/share/icons/hicolor/256x256/apps/wiiuu.png" \
          "$HOME/Applications/WII-UU.app"
   ok "Removed. Your ROMs ($ROMS) and settings ($CONF_DIR) were kept."
@@ -142,6 +142,19 @@ EOF
 chmod +x "$BIN/wiiuu"
 ok "Launcher: $BIN/wiiuu"
 case ":$PATH:" in *":$BIN:"*) ;; *) warn "$BIN is not on your PATH; add it or start WII-UU from the app menu." ;; esac
+
+# Choccy Milk on its own (WII-UU's game player as a program of its own; same games, saves and settings)
+CHOCCY_JAR=""
+for c in "$HERE/ChoccyMilk.jar" "$(dirname "$JAR")/ChoccyMilk.jar"; do [ -f "$c" ] && { CHOCCY_JAR="$c"; break; }; done
+if [ -n "$CHOCCY_JAR" ]; then
+  cp "$CHOCCY_JAR" "$PREFIX/ChoccyMilk.jar"
+  cat > "$BIN/choccymilk" <<EOF
+#!/usr/bin/env bash
+exec java -Xmx256m -jar "$PREFIX/ChoccyMilk.jar" "\$@"
+EOF
+  chmod +x "$BIN/choccymilk"
+  ok "Choccy Milk on its own: $BIN/choccymilk"
+fi
 
 say "Creating ROM folders in $ROMS"
 for s in $SYSTEMS; do mkdir -p "$ROMS/$s"; done
@@ -246,6 +259,18 @@ Icon=wiiuu
 Terminal=false
 Categories=Game;Emulator;
 EOF
+    if [ -n "$CHOCCY_JAR" ]; then
+      cat > "$HOME/.local/share/applications/choccymilk.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Choccy Milk
+Comment=Plays games with libretro cores (WII-UU's player on its own)
+Exec=$BIN/choccymilk %f
+Icon=wiiuu
+Terminal=false
+Categories=Game;Emulator;
+EOF
+    fi
     command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
     ok "Menu entry: WII-UU"
   fi

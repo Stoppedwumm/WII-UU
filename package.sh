@@ -12,9 +12,9 @@ fi
 ./build.sh
 rm -rf "dist/$NAME" "dist/$NAME.zip"
 mkdir -p "dist/$NAME/source"
-cp build/wiiuu.jar build/WII-UU-Reactions.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"
+cp build/wiiuu.jar build/ChoccyMilk.jar build/WII-UU-Reactions.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"
 cp -r console "dist/$NAME/"
-cp -r src src-choccy resources build.sh package.sh CHANGELOG.md "dist/$NAME/source/"
+cp -r engine src choccy-app resources build.sh package.sh CHANGELOG.md "dist/$NAME/source/"
 # the example reaction video is in wiiuu.jar already (the source builds without it)
 rm -f "dist/$NAME/source/resources/reactions/"*.zip
 chmod +x "dist/$NAME/install.sh" "dist/$NAME/emulators.sh" "dist/$NAME/console/wiiuu-console" "dist/$NAME/source/build.sh" "dist/$NAME/source/package.sh"
@@ -26,6 +26,8 @@ cp "dist/$NAME.zip" "docs/download/$NAME.zip"
 cp "dist/$NAME.zip" docs/download/WII-UU-latest.zip
 # the reactions editor on its own (it runs anywhere with Java 17+ and ffmpeg)
 cp build/WII-UU-Reactions.jar docs/download/WII-UU-Reactions.jar
+# Choccy Milk on its own (Java 17+; it gets the newer Java its player needs by itself)
+cp build/ChoccyMilk.jar docs/download/ChoccyMilk.jar
 # the notes, for the website and for installed copies about to update (next to version.json)
 cp CHANGELOG.md docs/changelog.md
 # version.json tells installed copies (Settings > Check for updates, wiiuu --upgrade) what's newest

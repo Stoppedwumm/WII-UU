@@ -35,8 +35,8 @@ public final class Choccy {
     private static volatile boolean looked;
     private static volatile Path home = Path.of(System.getProperty("user.home"), ".wiiuu");
 
-    /** WII-UU's folder: Choccy Milk's own Java goes into choccy/jre there. */
-    static synchronized void setHome(Path wiiuuHome) {
+    /** WII-UU's settings folder (shared by the Choccy Milk app): Choccy Milk's own Java goes into choccy/jre there. */
+    public static synchronized void setHome(Path wiiuuHome) {
         home = wiiuuHome;
         looked = false;
         javaExe = null;
@@ -307,7 +307,7 @@ public final class Choccy {
     }
 
     /** The command that plays rom with core. */
-    static List<String> command(Path core, Path rom, Path saves, Path system, Map<String, String> options) {
+    public static List<String> command(Path core, Path rom, Path saves, Path system, Map<String, String> options) {
         List<String> cmd = new ArrayList<>(List.of(java().toString(), "--enable-native-access=ALL-UNNAMED",
                 "-XX:+DisplayVMOutputToStderr", "-cp", classPath(), "wiiuu.choccy.ChoccyMilk",
                 core.toString(), rom.toAbsolutePath().toString(), saves.toString(), system.toString()));
@@ -401,10 +401,48 @@ public final class Choccy {
         public void quit() {
             send("q");
         }
+
+        /** The player process. */
+        public Process process() {
+            return process;
+        }
+
+        private final Map<Integer, java.util.Set<PadButton>> stickDpad = new java.util.concurrent.ConcurrentHashMap<>();
+
+        /** A stick that also works the d-pad (for consoles without analog sticks, see {@link #stickIsDpad}). */
+        public void stickAsDpad(int port, float x, float y) {
+            java.util.Set<PadButton> was = stickDpad.computeIfAbsent(port, k -> java.util.EnumSet.noneOf(PadButton.class));
+            java.util.Set<PadButton> now = java.util.EnumSet.noneOf(PadButton.class);
+            if (x < -0.5f) now.add(PadButton.LEFT);
+            if (x > 0.5f) now.add(PadButton.RIGHT);
+            if (y < -0.5f) now.add(PadButton.UP);
+            if (y > 0.5f) now.add(PadButton.DOWN);
+            for (PadButton b : PadButton.values()) {
+                if (now.contains(b) != was.contains(b)) button(port, b, now.contains(b));
+            }
+            was.clear();
+            was.addAll(now);
+        }
     }
 
     static Session start(Process p, Screen screen, Path log) {
         return new Session(p, screen, log);
+    }
+
+    /**
+     * Starts a game: core plays rom, saves in saves, BIOS files from system, core options; the
+     * player's messages go to log, its frames to screen.
+     */
+    public static Session play(Path core, Path rom, Path saves, Path system, Map<String, String> options,
+                               Screen screen, Path log) throws IOException {
+        ProcessBuilder pb = new ProcessBuilder(command(core, rom, saves, system, options));
+        try {
+            Files.createDirectories(log.getParent());
+            pb.redirectError(log.toFile());
+        } catch (IOException e) {
+            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
+        }
+        return start(pb.start(), screen, log);
     }
 
     /** RetroPad button ids (libretro's RETRO_DEVICE_ID_JOYPAD_*): WII-UU's layout is the same as the RetroPad's. */
@@ -431,7 +469,7 @@ public final class Choccy {
     }
 
     /** Consoles whose games don't use an analog stick: there the left stick works the d-pad too. */
-    static boolean stickIsDpad(String system) {
+    public static boolean stickIsDpad(String system) {
         return switch (system) {
             case "nes", "snes", "gb", "gba", "sms", "genesis", "saturn", "nds" -> true;
             default -> false;

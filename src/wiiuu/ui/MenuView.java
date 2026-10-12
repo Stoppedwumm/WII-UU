@@ -562,8 +562,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     public void setPlaying(Game g) {
         if (g == null) {
-            choccyImg = null;                             // Choccy Milk's last picture goes with its game
-            choccyShown = 0;
+            choccyScreen.clear();                         // Choccy Milk's last picture goes with its game
         }
         if (g == null && playing != null) {
             mascot.sayOne("Welcome back! How was it?", "Back already? Did you win?", "Welcome back! I kept your seat warm.");
@@ -813,9 +812,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     // ---- Choccy Milk: games playing inside WII-UU's window ----------------------------------------------
 
-    private volatile BufferedImage choccyImg;
-    private volatile float choccyAspect = 4f / 3;
-    private long choccyShown;
+    private final wiiuu.engine.GameScreen choccyScreen = new wiiuu.engine.GameScreen();
     private java.util.function.BiConsumer<wiiuu.input.PadButton, Boolean> choccyKeys = (b, d) -> { };
 
     public void setChoccyKeys(java.util.function.BiConsumer<wiiuu.input.PadButton, Boolean> keys) {
@@ -825,62 +822,18 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     /** A frame from Choccy Milk (on its reading thread). */
     public void choccyFrame(int[] rgb, int w, int h, float aspect) {
         if (playing == null) return;
-        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        System.arraycopy(rgb, 0, ((java.awt.image.DataBufferInt) img.getRaster().getDataBuffer()).getData(), 0, w * h);
-        choccyAspect = aspect > 0 ? aspect : (float) w / h;
-        choccyImg = img;
+        choccyScreen.frame(rgb, w, h, aspect);
         repaint();
     }
 
     private void choccyKey(int code, boolean down) {
-        wiiuu.input.PadButton b = switch (code) {
-            case KeyEvent.VK_UP -> wiiuu.input.PadButton.UP;
-            case KeyEvent.VK_DOWN -> wiiuu.input.PadButton.DOWN;
-            case KeyEvent.VK_LEFT -> wiiuu.input.PadButton.LEFT;
-            case KeyEvent.VK_RIGHT -> wiiuu.input.PadButton.RIGHT;
-            case KeyEvent.VK_X -> wiiuu.input.PadButton.A;
-            case KeyEvent.VK_Z -> wiiuu.input.PadButton.B;
-            case KeyEvent.VK_S -> wiiuu.input.PadButton.X;
-            case KeyEvent.VK_A -> wiiuu.input.PadButton.Y;
-            case KeyEvent.VK_Q -> wiiuu.input.PadButton.L;
-            case KeyEvent.VK_W -> wiiuu.input.PadButton.R;
-            case KeyEvent.VK_ENTER -> wiiuu.input.PadButton.PLUS;
-            case KeyEvent.VK_SPACE, KeyEvent.VK_SHIFT -> wiiuu.input.PadButton.MINUS;
-            default -> null;
-        };
+        wiiuu.input.PadButton b = wiiuu.engine.GameScreen.key(code);
         if (b != null) choccyKeys.accept(b, down);
     }
 
     /** The game, as big as fits at its aspect ratio, on black; "Choccy Milk" for a moment at the start. */
     private void paintChoccy(Graphics2D g, int w, int h) {
-        BufferedImage img = choccyImg;
-        g.setColor(Color.BLACK);
-        g.fillRect(0, 0, w, h);
-        float a = choccyAspect;
-        int dh = h, dw = Math.round(h * a);
-        if (dw > w) {
-            dw = w;
-            dh = Math.round(w / a);
-        }
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
-        g.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh, null);
-        long now = System.currentTimeMillis();
-        if (choccyShown == 0) choccyShown = now;
-        long since = now - choccyShown;
-        if (since < 4000) {
-            float alpha = since < 3400 ? 1f : (4000 - since) / 600f;
-            Composite c = g.getComposite();
-            g.setComposite(AlphaComposite.SrcOver.derive(Math.max(0, alpha)));
-            g.setFont(font(Font.BOLD, h * 0.028f));
-            FontMetrics fm = g.getFontMetrics();
-            String text = "Choccy Milk  \u00B7  HOME (or Esc): back to WII-UU";
-            float tw = fm.stringWidth(text) + h * 0.04f, th = h * 0.05f;
-            g.setColor(new Color(0, 0, 0, 170));
-            g.fill(new RoundRectangle2D.Float(h * 0.03f, h * 0.03f, tw, th, th, th));
-            g.setColor(new Color(0xD7A27A));
-            g.drawString(text, h * 0.05f, h * 0.03f + th / 2 + fm.getAscent() * 0.36f);
-            g.setComposite(c);
-        }
+        choccyScreen.paint(g, w, h, "Choccy Milk  \u00B7  HOME (or Esc): back to WII-UU", font(Font.BOLD, h * 0.028f));
     }
 
     // ---- the boss fight (Settings > Developer) -------------------------------------------------------
@@ -1582,7 +1535,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             @Override
             public void keyReleased(KeyEvent e) {
                 if (boss != null) boss.key(e.getKeyCode(), false);
-                if (choccyImg != null && playing != null) choccyKey(e.getKeyCode(), false);
+                if (choccyScreen.showing() && playing != null) choccyKey(e.getKeyCode(), false);
             }
 
             @Override
@@ -1591,7 +1544,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     boss.key(e.getKeyCode(), true);
                     return;
                 }
-                if (choccyImg != null && playing != null) {
+                if (choccyScreen.showing() && playing != null) {
                     if (e.getKeyCode() == KeyEvent.VK_ESCAPE) actions.closeGame();
                     else choccyKey(e.getKeyCode(), true);
                     return;
@@ -2248,7 +2201,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             Toolkit.getDefaultToolkit().sync();
             return;
         }
-        if (choccyImg != null && playing != null) {
+        if (choccyScreen.showing() && playing != null) {
             paintChoccy(g, getWidth(), getHeight());
             g.dispose();
             Toolkit.getDefaultToolkit().sync();

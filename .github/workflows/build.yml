@@ -45,6 +45,7 @@ jobs:
           java -Djava.awt.headless=true -jar build/wiiuu.jar --home "$RUNNER_TEMP/wiiuu" \
             --snapshot "$RUNNER_TEMP/menu.png" --snapshot-view home
           test -s "$RUNNER_TEMP/menu.png"
+          java -jar build/ChoccyMilk.jar --help
 
       - name: Check shell scripts
         run: bash -n install.sh emulators.sh build.sh package.sh

@@ -413,6 +413,21 @@ Q / W = L / R, Enter = Start, Space = Select.
   is used instead when there is one.
 - *Settings → Games → Play with Choccy Milk* (`choccy.enabled=false`) goes back to RetroArch.
 
+### Choccy Milk on its own
+
+Choccy Milk is also a program of its own, without WII-UU's menu: `choccymilk` (the installer puts
+it next to `wiiuu`, with a menu entry on Linux), or `java -jar ChoccyMilk.jar` (from the release zip
+or [the website](https://wiiuu.stoppedwumm.net/download/ChoccyMilk.jar); Java 17 or newer). It lists
+the games in WII-UU's ROM folders, for every console it has cores for, and plays them in its window.
+It shares WII-UU's settings folder (`~/.wiiuu`, or `--home DIR`), so saves, cores and its Java are the
+same in both.
+
+- Arrows choose (left / right: consoles / games), Enter plays, Esc saves and goes back; in a game the
+  same keys as in WII-UU (E / R = ZL / ZR too). O opens any game file, F5 looks for new games, F11
+  is full screen. Controllers work in the list and in games (Linux), HOME goes back.
+- `choccymilk GAME` plays a file right away (`.nes`, `.sfc`, `.gba`, `.z64`, ...).
+- It has no phone GamePad: that's WII-UU's.
+
 ## RetroArch mode
 
 Turn on *Settings → Games → RetroArch mode* (`retroarch.enabled=true`) to run every system that has
@@ -944,7 +959,7 @@ in space, points flip into place and soft tiles float in the background.
 ## Build from source
 
 ```sh
-./build.sh      # -> build/wiiuu.jar   (JDK 17+)
+./build.sh      # -> build/wiiuu.jar, build/ChoccyMilk.jar, build/wiiuu-engine.jar   (JDK 17+)
 ./package.sh    # -> dist/WII-UU-<version>.zip
 java -jar build/wiiuu.jar
 ```
@@ -957,11 +972,20 @@ zip as an artifact of the run. Each push to the default branch also publishes th
 * For this to work, set *Settings → Pages → Source* to **GitHub Actions**.
 * A `v*` tag also creates a GitHub release with the zip.
 
-The code is in `src/wiiuu`:
+The code is in three parts:
 
-* `core`: system catalogue, ROM scanner, config and emulator launcher
-* `ui`: the Wii U–style Swing menu and the settings dialog
-* `net`: the GamePad HTTP server (`com.sun.net.httpserver`) and a small QR encoder
-* `input`: routes GamePad input to menu navigation, or to key presses via `java.awt.Robot`
+* `engine/`: the **WII-UU engine**, the library WII-UU and Choccy Milk share (`build/wiiuu-engine.jar`).
+  It's built first and on its own, so it can't depend on either program. Settings (`Config`),
+  consoles and games (`Systems`, `Game`, the ROM scanner `Library`), controllers (`LocalPads`,
+  `PadButton`, `PadSink`), libretro cores (`Cores`: finding and downloading them), Choccy Milk
+  (`Choccy`: its Java, starting and talking to a game; `engine/src-choccy`: the player itself, Java
+  22) and the game's picture (`wiiuu.engine.GameScreen`).
+* `src/wiiuu`: WII-UU (the engine is inside `wiiuu.jar` too)
+  * `core`: the emulator launcher, RetroArch mode, OpenBased, achievements, updates
+  * `ui`: the Wii U–style Swing menu and the settings dialog
+  * `net`: the GamePad HTTP server (`com.sun.net.httpserver`) and a small QR encoder
+  * `screen`: the GamePad screen (capture, or Choccy Milk's own frames) and sound
+  * `input`: routes GamePad input to menu navigation, or to key presses via `java.awt.Robot`
+* `choccy-app/`: Choccy Milk on its own (`build/ChoccyMilk.jar`, `choccymilk.App`)
 
 The phone page is `resources/web/pad.html`.

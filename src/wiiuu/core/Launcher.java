@@ -113,7 +113,6 @@ public final class Launcher {
 
     private volatile Choccy.Screen choccyScreen = (px, w, h, a) -> { };
     private volatile Choccy.Session choccy;
-    private final java.util.Map<Integer, java.util.Set<PadButton>> stickDpad = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** Where Choccy Milk's frames go (WII-UU's window). */
     public void setChoccyScreen(Choccy.Screen screen) {
@@ -178,32 +177,24 @@ public final class Launcher {
                     for (Listener l : listeners) l.message(e.getMessage());
                 }
             });
-        } catch (RetroArch.Downloading d) {
+        } catch (Cores.Downloading d) {
             throw new LaunchException(d.getMessage());
         }
         if (core == null) throw new LaunchException("No core for " + game.system().name() + " found: install one in RetroArch's Online Updater");
         Path log = config.logDir().resolve(game.system().id() + ".log");
-        List<String> cmd = Choccy.command(core, game.path(), config.home().resolve("saves").resolve(game.system().id()),
-                retroArch.systemDir(), retroArch.choccyOptions(game.system().id()));
-        ProcessBuilder pb = new ProcessBuilder(cmd);
+        Choccy.Session session;
         try {
-            Files.createDirectories(log.getParent());
-            pb.redirectError(log.toFile());
-        } catch (IOException e) {
-            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
-        }
-        final Process p;
-        try {
-            p = pb.start();
+            session = Choccy.play(core, game.path(), config.home().resolve("saves").resolve(game.system().id()),
+                    retroArch.systemDir(), retroArch.choccyOptions(game.system().id()),
+                    (px, w, h, a) -> choccyScreen.frame(px, w, h, a), log);
         } catch (IOException e) {
             throw new LaunchException("Choccy Milk didn't start: " + e.getMessage());
         }
-        Choccy.Session session = Choccy.start(p, (px, w, h, a) -> choccyScreen.frame(px, w, h, a), log);
+        final Process p = session.process();
         process = p;
         current = game;
         inRetroArch = false;
         choccy = session;
-        stickDpad.clear();
         System.out.println("[choccy] " + game.name() + " with " + core.getFileName());
         long startedAt = System.currentTimeMillis();
         for (Listener l : listeners) l.started(game);
@@ -257,17 +248,7 @@ public final class Launcher {
         int port = port(player);
         s.stick(port, stick, x, y);
         if (stick == 0 && g != null && Choccy.stickIsDpad(g.system().id())) {
-            java.util.Set<PadButton> was = stickDpad.computeIfAbsent(port, k -> java.util.EnumSet.noneOf(PadButton.class));
-            java.util.Set<PadButton> now = java.util.EnumSet.noneOf(PadButton.class);
-            if (x < -0.5f) now.add(PadButton.LEFT);
-            if (x > 0.5f) now.add(PadButton.RIGHT);
-            if (y < -0.5f) now.add(PadButton.UP);
-            if (y > 0.5f) now.add(PadButton.DOWN);
-            for (PadButton b : PadButton.values()) {
-                if (now.contains(b) != was.contains(b)) s.button(port, b, now.contains(b));
-            }
-            was.clear();
-            was.addAll(now);
+            s.stickAsDpad(port, x, y);
         }
         return true;
     }
@@ -302,7 +283,7 @@ public final class Launcher {
                         for (Listener l : listeners) l.message(e.getMessage());
                     }
                 }, where);
-            } catch (RetroArch.Downloading d) {
+            } catch (Cores.Downloading d) {
                 throw new LaunchException(d.getMessage());
             }
         }

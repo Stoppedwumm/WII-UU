@@ -3,6 +3,14 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.78 (2026-10-12)
+- Choccy Milk on its own: `choccymilk` (or `java -jar ChoccyMilk.jar`) lists the games in WII-UU's ROM
+  folders and plays them in its own window, without WII-UU. It shares WII-UU's settings, saves,
+  cores and Java. Keyboard, mouse and controllers; F11 for full screen; `choccymilk GAME` plays a file.
+- WII-UU's engine is a library now (engine/, build/wiiuu-engine.jar), which WII-UU and Choccy Milk
+  both use: settings, consoles and games, controllers, cores, Choccy Milk and the game screen.
+- Choccy Milk: E / R on the keyboard are ZL / ZR.
+
 ## 1.9.77 (2026-10-12)
 - GamePad screen with Choccy Milk: the phones get the game's own picture instead of a screen capture.
   The exact picture (sharp pixels, the game's shape), up to 60 frames a second, less delay, less
