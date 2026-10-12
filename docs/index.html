@@ -95,6 +95,7 @@
   #choccy code { background: rgba(215, 162, 122, .18); color: #f3e6da; }
   #choccy a { color: #d7a27a; }
   .changelog { display: grid; gap: 14px; margin: 18px 0; }
+  .release h4 { margin: 14px 0 0; font-size: 16px; }
   .release { background: var(--card); border-radius: var(--radius); padding: 18px 22px; box-shadow: var(--shadow); }
   .release h3 { margin: 0 0 4px; font-size: 19px; }
   .release h3 small { font-weight: normal; color: var(--dim); font-size: 14px; margin-left: 6px; }
@@ -626,7 +627,9 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
 
   // release notes from the same CHANGELOG.md that ships in the app
   const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const inline = t => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  const inline = t => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/(^|[^\w*])\*([^*\s][^*]*?)\*(?![\w*])/g, "$1<i>$2</i>");
+  const heading = t => /^\*\*[^*]+\*\*$/.test(t);       // a line all in bold: a heading among the points
   function parseChangelog(md) {
     const out = [];
     let cur = null, blank = true;
@@ -637,6 +640,7 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
       if (!cur || blank) continue;
       const line = raw.trim();
       if (/^[-*] /.test(line)) cur.points.push(line.slice(2).trim());
+      else if (heading(line)) cur.points.push(line);
       else if (/^\s/.test(raw) && cur.points.length) cur.points[cur.points.length - 1] += " " + line;
       else if (!cur.points.length && cur.summary.length && !wasBlank) cur.summary[cur.summary.length - 1] += " " + line;
       else if (!cur.points.length) cur.summary.push(line);
@@ -648,7 +652,22 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
     document.getElementById("changelog").innerHTML = list.map(e =>
       `<article class="release"><h3>${esc(e.version)}${e.date ? `<small>${esc(e.date)}</small>` : ""}</h3>`
       + e.summary.map(t => `<p>${inline(t)}</p>`).join("")
-      + (e.points.length ? `<ul>${e.points.map(t => `<li>${inline(t)}</li>`).join("")}</ul>` : "") + `</article>`).join("");
+      + points(e.points) + `</article>`).join("");
+  }
+  function points(list) {
+    let html = "", open = false;
+    for (const t of list) {
+      if (heading(t)) {
+        if (open) html += "</ul>";
+        open = false;
+        html += `<h4>${esc(t.slice(2, -2))}</h4>`;
+        continue;
+      }
+      if (!open) html += "<ul>";
+      open = true;
+      html += `<li>${inline(t)}</li>`;
+    }
+    return open ? html + "</ul>" : html;
   }
   fetch("changelog.md", { cache: "no-store" }).then(r => r.ok ? r.text() : Promise.reject())
     .then(md => {
