@@ -48,6 +48,7 @@ public final class Changelog {
             if (version == null || raw.isBlank()) continue;
             String line = raw.strip();
             if (line.startsWith("- ") || line.startsWith("* ")) points.add(line.substring(2).strip());
+            else if (line.matches("\\*\\*[^*]+\\*\\*")) points.add(line);           // a heading among the points
             else if (raw.startsWith(" ") && !points.isEmpty()) points.set(points.size() - 1, points.get(points.size() - 1) + " " + line);
             else if (points.isEmpty() && !summary.isEmpty() && !blank) summary.set(summary.size() - 1, summary.get(summary.size() - 1) + " " + line);
             else if (points.isEmpty()) summary.add(line);
@@ -85,7 +86,10 @@ public final class Changelog {
         for (Entry e : list) {
             sb.append(e.version()).append(e.date().isEmpty() ? "" : " (" + e.date() + ")").append('\n');
             for (String s : e.summary()) sb.append("  ").append(plain(s)).append('\n');
-            for (String p : e.points()) sb.append("  - ").append(plain(p)).append('\n');
+            for (String p : e.points()) {
+                if (p.matches("\\*\\*[^*]+\\*\\*")) sb.append(" ").append(plain(p).toUpperCase(java.util.Locale.ROOT)).append('\n');
+                else sb.append("  - ").append(plain(p)).append('\n');
+            }
             sb.append('\n');
         }
         return sb.toString().stripTrailing();
@@ -99,22 +103,31 @@ public final class Changelog {
             if (!e.date().isEmpty()) sb.append(" <span style='font-weight:normal;color:#888888'>").append(esc(e.date())).append("</span>");
             sb.append("</h2>");
             for (String s : e.summary()) sb.append("<p style='margin:2px 0'>").append(inline(s)).append("</p>");
-            if (!e.points().isEmpty()) {
-                sb.append("<ul style='margin-top:2px;margin-bottom:4px'>");
-                for (String p : e.points()) sb.append("<li>").append(inline(p)).append("</li>");
-                sb.append("</ul>");
+            boolean open = false;
+            for (String p : e.points()) {
+                if (p.matches("\\*\\*[^*]+\\*\\*")) {           // a line all in bold: a heading of its own
+                    if (open) sb.append("</ul>");
+                    open = false;
+                    sb.append("<h3 style='margin:8px 0 0 0'>").append(esc(p.substring(2, p.length() - 2))).append("</h3>");
+                    continue;
+                }
+                if (!open) sb.append("<ul style='margin-top:2px;margin-bottom:4px'>");
+                open = true;
+                sb.append("<li>").append(inline(p)).append("</li>");
             }
+            if (open) sb.append("</ul>");
         }
         return sb.append("</body></html>").toString();
     }
 
     private static String plain(String s) {
-        return s.replace("`", "").replace("**", "");
+        return s.replace("`", "").replace("*", "");
     }
 
-    /** `code` and **bold**, the only markdown the notes use inside a line. */
+    /** `code`, **bold** and *italic*, the only markdown the notes use inside a line. */
     private static String inline(String s) {
-        return esc(s).replaceAll("`([^`]+)`", "<font face='monospace'>$1</font>").replaceAll("\\*\\*([^*]+)\\*\\*", "<b>$1</b>");
+        return esc(s).replaceAll("`([^`]+)`", "<font face='monospace'>$1</font>").replaceAll("\\*\\*([^*]+)\\*\\*", "<b>$1</b>")
+                .replaceAll("(?<![\\w*])\\*([^*\\s][^*]*?)\\*(?![\\w*])", "<i>$1</i>");
     }
 
     private static String esc(String s) {

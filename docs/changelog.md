@@ -3,6 +3,79 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.10.0 (2026-10-12)
+Everything new since 1.9, in one place (the 1.9.x notes below have the details).
+
+**Choccy Milk, WII-UU's own game player**
+- Games play inside WII-UU's window with libretro cores: no second window, no RetroArch needed,
+  and no Java of your own either (it downloads its cores, and Java 25 once, by itself).
+  *Settings > Games > Play with Choccy Milk* switches it on for every console it has cores for.
+- A program of its own too (`choccymilk`, or ChoccyMilk.jar from the website), with its own look
+  (Cocoa in dark mode, Milk in light mode), a start animation and its own icon. WII-UU and Choccy
+  Milk share one engine library, and their settings, games, saves and cores.
+- N64 with the software renderer, fast enough for a Raspberry Pi 5; if the recompiler crashes it
+  switches to the interpreter by itself and says how to fix it (kernel8.img). Native on Apple
+  Silicon even when WII-UU runs through Rosetta.
+- Sound at the right pitch (resampled to 48 kHz), frames skipped instead of crackling when the
+  computer can't keep up, and the GamePad shows the game's own picture at up to 60 frames a second.
+- Save states (F2 / F4, ten slots with F6 / F7, and buttons on the phone), and the game's own saves
+  (like Super Mario 64's stars) written within a second of saving.
+- RetroAchievements unlock while you play (softcore), with a trophy card on the TV and a notice on
+  the phones; ROM versions RetroAchievements doesn't support are named as such.
+- Upscaling per console (Scale2x / Scale3x for pixel art, Smooth, PlayStation 3D at 2x / 4x) and
+  widescreen (PlayStation 3D games and the Mega Drive really widen, other consoles stretch).
+
+**Controllers, players and several WII-UUs**
+- USB and Bluetooth controllers are players of their own, like phones: on Linux and Raspberry Pi as
+  virtual Xbox 360 controllers every emulator is set up for, on a Mac in the menu and in Choccy Milk.
+  They steer the menu too, and can be remapped button for button.
+- Pick your player number on the phone (tap P1), or set the order on the TV (*Player order*).
+- Several WII-UUs on one network link up with a pairing code: send the controllers plugged into one
+  to the other (a Raspberry Pi's USB pad playing on your MacBook), keep Choccy Milk's saves in sync,
+  and copy the games one has and the other doesn't.
+- The phone says when WII-UU isn't running (and why), and reconnects by itself; sign in to accounts
+  by typing on the phone instead of the TV.
+
+**Watching**
+- OpenBased: your own movies and series from an OpenBased media server, signed in with OpenBased's
+  own sign-in page, continuing where you stopped, with the GamePad as remote. Its channel is a
+  cinema now: dim lights, the focused title's backdrop and story on top, rows of Continue
+  watching, Series and Movies below, and seasons and episodes for each series.
+- Reaction mode: the WII-UU-Reactions editor makes video packs where WII-UU reacts on a timeline,
+  played in the Reactions channel with WII-UU saying each reaction on the GamePad.
+
+**Achievements and covers**
+- RetroAchievements progress on every game's tile, found by the ROM's hash; after playing, WII-UU
+  says what you unlocked. RetroArch mode signs RetroArch in too, with an optional hardcore mode.
+- Covers found online for games without one (libretro thumbnails, or ScreenScraper with an account).
+
+**The menu**
+- Settings drawn on the TV, for the phone, controllers, keyboard and mouse, with an on-screen
+  keyboard and a file browser.
+- Themes in WII-UU's own theme language (.wtheme files that redraw the menu as you save them), and
+  seven that come with it: Sunset, Choccy Milk, Midnight Arcade, Game Boy, Famicom, Ocean and Paper.
+- A setup guide for the first start, opened by an intro on its own beat, with a live controller
+  test; WII-UU itself, a googly-eyed helper, walks you through it out loud and keeps you company in
+  the menu.
+- Menu music: more tunes, each also as a WII-UU, Future House and Color House remix, the non-stop
+  Extended Mix, a music visualizer (V), and your own music files.
+- When nobody plays, WII-UU does: Tetris and Pong (and cheats when it's losing, if you don't catch
+  it), the free ROM website, online shopping, decorating the menu, fan mail, late-night reading and
+  making music. Plus a hidden Developer tab, a boss fight and a secret code.
+- On Linux and Raspberry Pi the menu is drawn with the graphics chip when there's a driver for one.
+
+**Emulators**
+- Split DS / 3DS screens: the top screen on the TV, the touch screen on the phone (Linux, and
+  Windows with a virtual display).
+- RetroArch: the phones' controller layout set up for it, the Snap version understood, borderless
+  full screen, and nothing WII-UU sets for a game left behind in RetroArch's own settings; N64
+  switches to the software renderer or the interpreter by itself where OpenGL or the recompiler fail.
+- Mupen64Plus: the phone's buttons laid out right, GLideN64, OpenGL ES on the Raspberry Pi, and the
+  picture filling the screen.
+- Mac: the computer's sound and the menu music on the phone, the phone making the menu music
+  itself; Windows: WII-UU's logo on its shortcuts and taskbar button.
+- What's new: these notes in WII-UU after an update, in Settings and with `wiiuu --changelog`.
+
 ## 1.9.90 (2026-10-12)
 - OpenBased is a cinema now: its home tile is dark with film-strip edges and a gold marquee name,
   and opening it dims the lights (the menu music fades) into a streaming-style screen. The focused
