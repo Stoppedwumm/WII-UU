@@ -427,6 +427,10 @@ Q / W = L / R, Enter = Start, Space = Select.
   then starts by itself. An installed one (`sudo apt install openjdk-25-jre`, `brew install openjdk`)
   is used instead when there is one.
 - *Settings → Games → Play with Choccy Milk* (`choccy.enabled=false`) goes back to RetroArch.
+- **Saves:** the game's own saves (battery saves) are written every 30 s and when you leave, to
+  `~/.wiiuu/saves/<console>/<game>.srm`. **Save states** too: F2 saves, F4 loads, F6 / F7 change the
+  slot (0-9, as in RetroArch), or *Save state* / *Load state* on the phone's GamePad screen. They're
+  `<game>.state`, `<game>.state1` ... next to the saves, RetroArch's names.
 
 ### Choccy Milk on its own
 

@@ -355,6 +355,13 @@ public final class Choccy {
                         System.out.println("[choccy] playing with " + core);
                     } else if (kind == 'X') {
                         ending = line(s);
+                    } else if (kind == 'N') {                   // something to show ("State 1 saved")
+                        String text = line(s);
+                        try {
+                            onNotice.accept(text);
+                        } catch (RuntimeException e) {
+                            System.err.println("[choccy] " + e);
+                        }
                     } else if (kind == 'A') {                   // an achievement unlocked
                         String id = line(s);
                         try {
@@ -387,6 +394,60 @@ public final class Choccy {
         }
 
         private volatile java.util.function.IntConsumer onAchievement = id -> { };
+        private volatile java.util.function.Consumer<String> onNotice = t -> { };
+
+        /** Gets what the player has to say ("State 1 saved"), on the reading thread. */
+        public void onNotice(java.util.function.Consumer<String> listener) {
+            onNotice = listener;
+        }
+
+        /** The save-state slot in use (0-9; 0 is the plain ROM.state). */
+        private volatile int slot;
+
+        public int slot() {
+            return slot;
+        }
+
+        /** Another slot (wraps around 0-9); returns it. */
+        public int slot(int step) {
+            slot = Math.floorMod(slot + step, 10);
+            return slot;
+        }
+
+        /** Saves the game as it is now into the slot (a save state). */
+        public void saveState() {
+            send("save " + slot);
+        }
+
+        /** Goes back to the state saved in the slot. */
+        public void loadState() {
+            send("load " + slot);
+        }
+
+        /** Saves, loads ("save", "load") or changes the slot ("slotup", "slotdown", "slot3"); the text to show for a slot change, else null. */
+        public String state(String action) {
+            switch (action) {
+                case "save" -> saveState();
+                case "load" -> loadState();
+                case "slotup" -> {
+                    return "State slot " + slot(1);
+                }
+                case "slotdown" -> {
+                    return "State slot " + slot(-1);
+                }
+                default -> {
+                    if (action.startsWith("slot")) {
+                        try {
+                            slot = Math.max(0, Math.min(9, Integer.parseInt(action.substring(4))));
+                            return "State slot " + slot;
+                        } catch (NumberFormatException ignored) {
+                            // not a slot
+                        }
+                    }
+                }
+            }
+            return null;
+        }
 
         /** Gets the ids of achievements as they unlock (on the reading thread). */
         public void onAchievement(java.util.function.IntConsumer listener) {

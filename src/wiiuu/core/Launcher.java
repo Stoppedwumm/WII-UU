@@ -209,6 +209,7 @@ public final class Launcher {
             throw new LaunchException("Choccy Milk didn't start: " + e.getMessage());
         }
         final Process p = session.process();
+        session.onNotice(text -> announcer.announce(text, null, false));
         ChoccyCheevos.start(ra, session, game, new ChoccyCheevos.Events() {
             @Override
             public void found(RaConnect.GameSet set) {
@@ -283,6 +284,21 @@ public final class Launcher {
             }
             for (Listener l : listeners) l.exited(game, code, quick, log);
         });
+    }
+
+    /** Save states of the Choccy Milk game ("save", "load", "slotup", "slotdown", "slotN"); false when none runs. */
+    public boolean choccyState(String action) {
+        Choccy.Session s = choccy;
+        if (s == null) return false;
+        String text = s.state(action);
+        if (text != null) announcer.announce(text, null, false);
+        return true;
+    }
+
+    /** The Choccy Milk game's save-state slot, or -1 when none runs. */
+    public int choccySlot() {
+        Choccy.Session s = choccy;
+        return s == null ? -1 : s.slot();
     }
 
     /** A button for Choccy Milk; false when it isn't running (then the router does as usual). */

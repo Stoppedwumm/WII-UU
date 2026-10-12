@@ -819,6 +819,13 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         choccyKeys = keys;
     }
 
+    private java.util.function.Consumer<String> choccyStates = a -> { };
+
+    /** Where F2 / F4 / F6 / F7 (save state, load state, slot down / up) go in a Choccy Milk game. */
+    public void setChoccyStates(java.util.function.Consumer<String> states) {
+        choccyStates = states;
+    }
+
     /** A frame from Choccy Milk (on its reading thread). */
     public void choccyFrame(int[] rgb, int w, int h, float aspect) {
         if (playing == null) return;
@@ -839,7 +846,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** The game, as big as fits at its aspect ratio, on black; "Choccy Milk" for a moment at the start. */
     private void paintChoccy(Graphics2D g, int w, int h) {
-        choccyScreen.paint(g, w, h, "Choccy Milk  \u00B7  HOME (or Esc): back to WII-UU", font(Font.BOLD, h * 0.028f));
+        choccyScreen.paint(g, w, h, "Choccy Milk  \u00B7  HOME (or Esc): back to WII-UU  \u00B7  F2 / F4: save / load state", font(Font.BOLD, h * 0.028f));
     }
 
     // ---- the boss fight (Settings > Developer) -------------------------------------------------------
@@ -1551,7 +1558,15 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     return;
                 }
                 if (choccyScreen.showing() && playing != null) {
-                    if (e.getKeyCode() == KeyEvent.VK_ESCAPE) actions.closeGame();
+                    String state = switch (e.getKeyCode()) {          // save states, with RetroArch's keys
+                        case KeyEvent.VK_F2 -> "save";
+                        case KeyEvent.VK_F4 -> "load";
+                        case KeyEvent.VK_F6 -> "slotdown";
+                        case KeyEvent.VK_F7 -> "slotup";
+                        default -> null;
+                    };
+                    if (state != null) choccyStates.accept(state);
+                    else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) actions.closeGame();
                     else choccyKey(e.getKeyCode(), true);
                     return;
                 }

@@ -94,6 +94,16 @@ public final class GamepadServer {
             return false;
         }
 
+        /** Save states of a Choccy Milk game ("save", "load", "slotup", "slotdown"): null when done, else why not. */
+        default String choccyState(String action) {
+            return "Save states are for games in Choccy Milk";
+        }
+
+        /** The Choccy Milk game's save-state slot, or -1 when none runs. */
+        default int choccySlot() {
+            return -1;
+        }
+
         /** What the TV asks the phones to fill in (a sign-in, say), or null. */
         default Form form() {
             return null;
@@ -459,6 +469,11 @@ public final class GamepadServer {
                             String err = setPlayer(c.id, want);
                             json(ex, err == null ? 200 : 409, err == null ? new Json().obj().kv("player", c.player).endObj() : error(err));
                         }
+                        case "/api/state" -> {
+                            if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
+                            String err = host.choccyState(form(body(ex)).getOrDefault("a", ""));
+                            json(ex, err == null ? 200 : 409, err == null ? new Json().obj().kv("slot", host.choccySlot()).endObj() : error(err));
+                        }
                         case "/api/close" -> {
                             host.closeGame();
                             json(ex, 200, new Json().obj().kv("ok", true).endObj());
@@ -730,7 +745,8 @@ public final class GamepadServer {
                 .kv("captureBlocked", screen != null && screen.captureBlocked())
                 .kv("buzz", g != null && wiiuu.core.Buzz.active(config, g))
                 .kv("maxPlayers", wiiuu.core.Buzz.players(config))
-                .kv("choosePlayer", choosePlayer());
+                .kv("choosePlayer", choosePlayer())
+                .kv("stateSlot", host.choccySlot());
         j.key("taken").arr();                           // numbers other connected phones have
         for (Client o : clients.values()) if (o != c && o.active && o.player > 0) j.val(o.player);
         j.endArr();

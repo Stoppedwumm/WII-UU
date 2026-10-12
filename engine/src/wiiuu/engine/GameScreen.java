@@ -122,7 +122,7 @@ public final class GameScreen {
         FontMetrics fb = g.getFontMetrics(big), fs = g.getFontMetrics(small);
         float icon = noteTrophy ? 8 * u : 0, pad = 2.2f * u;
         float tw = Math.max(fb.stringWidth(noteTitle), noteText == null ? 0 : fs.stringWidth(noteText));
-        float cw = Math.min(w - 4 * u, tw + icon + pad * (noteTrophy ? 3 : 2)), ch = 12 * u;
+        float cw = Math.min(w - 4 * u, tw + icon + pad * (noteTrophy ? 3 : 2)), ch = noteText == null ? 7.5f * u : 12 * u;
         float x = (w - cw) / 2, y = h - ch - 4 * u + (1 - in) * 3 * u;
         g.setColor(new Color(20, 14, 10, 225));
         g.fill(new RoundRectangle2D.Float(x, y, cw, ch, ch * 0.5f, ch * 0.5f));
@@ -142,7 +142,7 @@ public final class GameScreen {
         }
         g.setFont(big);
         g.setColor(new Color(0xF3E6DA));
-        g.drawString(noteTitle, tx, y + ch * 0.46f);
+        g.drawString(noteTitle, tx, noteText == null ? y + ch / 2 + fb.getAscent() * 0.36f : y + ch * 0.46f);
         if (noteText != null) {
             g.setFont(small);
             g.setColor(new Color(0xD7A27A));

@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.82 (2026-10-12)
+- Save states in Choccy Milk: F2 saves the game as it is, F4 loads it again, F6 / F7 pick one of 10
+  slots (RetroArch's keys). On the phone, *Save state*, *Load state* and the slot are on the GamePad
+  screen while a Choccy Milk game runs. The files are RetroArch's names (game.state, game.state1...)
+  next to the in-game saves in ~/.wiiuu/saves/<console>. The Choccy Milk app has them too.
+
 ## 1.9.81 (2026-10-12)
 - RetroAchievements in Choccy Milk: achievements unlock while you play, in WII-UU and in the Choccy
   Milk app. With your RetroAchievements password in Settings > Games > RetroAchievements account,

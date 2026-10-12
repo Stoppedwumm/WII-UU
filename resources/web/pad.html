@@ -88,6 +88,10 @@
   .pill { padding: 2px 9px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 12px; }
   .pill.off { background: #c3c8ce; }
   button.pill { border: 0; font: inherit; font-size: 12px; cursor: pointer; }
+  /* save states (games in Choccy Milk) */
+  .row.states { align-items: center; flex-wrap: wrap; }
+  .row.states .slot { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+  .slotbtn { border: 0; border-radius: 999px; width: 32px; height: 32px; background: #eceff1; color: #202124; font-size: 13px; cursor: pointer; }
   /* "which player are you?" */
   #playerMenu { position: fixed; inset: 0; z-index: 55; background: rgba(8,12,18,.78); display: flex; align-items: center;
     justify-content: center; padding: 16px; }
@@ -354,6 +358,11 @@
               <button class="bigbtn" id="playTv">Show TV here</button>
               <button class="bigbtn grey" id="closeGame">Close game</button>
             </div>
+            <div class="row states hidden" id="stateRow">
+              <button class="bigbtn" id="stateSave">Save state</button>
+              <button class="bigbtn grey" id="stateLoad">Load state</button>
+              <span class="slot"><button class="slotbtn" id="slotDown" aria-label="Previous slot">&#9664;</button><b id="slotNum">Slot 0</b><button class="slotbtn" id="slotUp" aria-label="Next slot">&#9654;</button></span>
+            </div>
           </div>
         </div>
         <div class="sheet hidden" id="homeSheet">
@@ -551,6 +560,9 @@ async function poll() {
     syncTunes();
     S.player = j.player;
     S.maxPlayers = j.maxPlayers || 4; S.taken = j.taken || []; S.choosePlayer = j.choosePlayer !== false;
+    S.stateSlot = typeof j.stateSlot === "number" ? j.stateSlot : -1;
+    $("stateRow").classList.toggle("hidden", S.stateSlot < 0);
+    if (S.stateSlot >= 0) $("slotNum").textContent = "Slot " + S.stateSlot;
     $("player").textContent = j.player > 0 ? "P" + j.player : "Viewer";
     if (!$("playerMenu").classList.contains("hidden")) renderPlayerMenu();
     $("keysWarn").classList.toggle("hidden", j.keys !== false);
@@ -1257,6 +1269,23 @@ async function closeGame() {
 }
 
 let toastTimer;
+// ---------------------------------------------------------------- save states (games in Choccy Milk)
+async function stateAction(a) {
+  try {
+    const r = await api("/api/state", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form({ a }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { toast(j.error || "Couldn't do that"); return; }
+    if (typeof j.slot === "number") { S.stateSlot = j.slot; $("slotNum").textContent = "Slot " + j.slot; }
+    if (S.haptics && navigator.vibrate) navigator.vibrate(15);
+    if (a === "save") toast("Saving state " + S.stateSlot + "\u2026");
+    else if (a === "load") toast("Loading state " + S.stateSlot + "\u2026");
+  } catch (e) { toast("Couldn't reach the TV"); }
+}
+$("stateSave").onclick = () => stateAction("save");
+$("stateLoad").onclick = () => stateAction("load");
+$("slotDown").onclick = () => stateAction("slotdown");
+$("slotUp").onclick = () => stateAction("slotup");
+
 // ---------------------------------------------------------------- player number
 function renderPlayerMenu() {
   const box = $("playerNums");

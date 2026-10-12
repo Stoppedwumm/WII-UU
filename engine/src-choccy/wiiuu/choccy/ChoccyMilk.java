@@ -51,9 +51,13 @@ import static java.lang.foreign.ValueLayout.JAVA_SHORT;
  * stdin:  b PORT ID 0|1     a RetroPad button (ids as libretro's RETRO_DEVICE_ID_JOYPAD_*)
  *         s PORT STICK X Y  an analog stick, X / Y in -1..1
  *         q                 quit (saves first)
+ *         save N / load N   a save state in slot N (0-9): ROM.state, ROM.state1 ... next to the saves
+ *         c / a / x         achievements (see checkAchievements)
  * stdout: 'R' name\n        running, with this core
  *         'F' w h aspect(float) then w*h pixels as 0xRRGGBB ints (big-endian)
  *         'X' message\n     stopped: why (empty: all well)
+ *         'N' message\n     something to show the player ("State 1 saved")
+ *         'A' id\n          an achievement unlocked
  * </pre>
  */
 public final class ChoccyMilk {
@@ -223,6 +227,9 @@ public final class ChoccyMilk {
         fn(linker, lib, "retro_get_system_av_info", FunctionDescriptor.ofVoid(ADDRESS)).invokeExact(av);
         readAv(av);
         getMemoryData = fn(linker, lib, "retro_get_memory_data", FunctionDescriptor.of(ADDRESS, JAVA_INT));
+        serializeSize = fn(linker, lib, "retro_serialize_size", FunctionDescriptor.of(JAVA_LONG));
+        serialize = fn(linker, lib, "retro_serialize", FunctionDescriptor.of(JAVA_BOOLEAN, ADDRESS, JAVA_LONG));
+        unserialize = fn(linker, lib, "retro_unserialize", FunctionDescriptor.of(JAVA_BOOLEAN, ADDRESS, JAVA_LONG));
         getMemorySize = fn(linker, lib, "retro_get_memory_size", FunctionDescriptor.of(JAVA_LONG, JAVA_INT));
         loadSave();
         openAudio();
@@ -252,6 +259,7 @@ public final class ChoccyMilk {
             if (hideFrame) framesSkipped++;
             run.invokeExact();
             flushSingle();
+            doStates();
             checkAchievements();
             framesRun++;
             if (audio == null && !BENCH) {                  // no sound: keep time by the clock (with sound, the sound card does)
@@ -699,6 +707,10 @@ public final class ChoccyMilk {
                 String[] p = line.trim().split(" ");
                 try {
                     if (p[0].equals("q")) break;
+                    if ((p[0].equals("save") || p[0].equals("load")) && p.length == 2) {     // save states: on the core's thread
+                        stateQueue.add(p);
+                        continue;
+                    }
                     if (p[0].equals("c") || p[0].equals("a") || p[0].equals("x")) {    // achievements: for the core's thread
                         cheevoQueue.add(line.trim().split(" ", 3));
                         continue;
@@ -804,6 +816,76 @@ public final class ChoccyMilk {
     }
 
     // ---- saves -------------------------------------------------------------------------------------
+
+    // ---- save states ---------------------------------------------------------------------------------
+
+    private MethodHandle serializeSize, serialize, unserialize;
+    private final java.util.concurrent.ConcurrentLinkedQueue<String[]> stateQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    /** ROM.state for slot 0, ROM.state1 ... ROM.state9 (as RetroArch names them), next to the in-game saves. */
+    private Path stateFile(int slot) {
+        String base = romPath.getFileName().toString().replaceFirst("\\.[^.]+$", "");
+        return saveDir.resolve(base + ".state" + (slot == 0 ? "" : Integer.toString(slot)));
+    }
+
+    /** Saves or loads the states asked for (between frames, on the core's thread). */
+    private void doStates() {
+        for (String[] m; (m = stateQueue.poll()) != null; ) {
+            int slot;
+            try {
+                slot = Math.max(0, Math.min(9, Integer.parseInt(m[1])));
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            String which = slot == 0 ? "State" : "State " + slot;
+            try (Arena a = Arena.ofConfined()) {
+                if (m[0].equals("save")) {
+                    long size = (long) serializeSize.invokeExact();
+                    if (size <= 0) {
+                        notice("This core can't save states");
+                        continue;
+                    }
+                    MemorySegment buf = a.allocate(size);
+                    if (!(boolean) serialize.invokeExact(buf, size)) {
+                        notice("Couldn't save " + which.toLowerCase(Locale.ROOT));
+                        continue;
+                    }
+                    Path f = stateFile(slot), tmp = f.resolveSibling(f.getFileName() + ".tmp");
+                    Files.createDirectories(f.getParent());
+                    Files.write(tmp, buf.toArray(JAVA_BYTE));
+                    Files.move(tmp, f, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                    System.err.println("[choccy] saved " + f);
+                    notice(which + " saved");
+                } else {
+                    Path f = stateFile(slot);
+                    if (!Files.isRegularFile(f)) {
+                        notice("No " + which.toLowerCase(Locale.ROOT) + " yet");
+                        continue;
+                    }
+                    byte[] data = Files.readAllBytes(f);
+                    MemorySegment buf = a.allocate(Math.max(1, data.length));
+                    MemorySegment.copy(data, 0, buf, JAVA_BYTE, 0, data.length);
+                    if (!(boolean) unserialize.invokeExact(buf, (long) data.length)) {
+                        notice(which + " doesn't fit this game or core");
+                        continue;
+                    }
+                    System.err.println("[choccy] loaded " + f);
+                    notice(which + " loaded");
+                }
+            } catch (Throwable t) {
+                System.err.println("[choccy] state: " + t);
+                notice("Couldn't " + m[0] + " the state: " + t.getMessage());
+            }
+        }
+    }
+
+    private void notice(String text) {
+        try {
+            send('N', text);
+        } catch (IOException e) {
+            running = false;
+        }
+    }
 
     private Path saveFile() {
         String base = romPath.getFileName().toString().replaceFirst("\\.[^.]+$", "");

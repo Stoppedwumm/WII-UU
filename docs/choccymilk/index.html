@@ -180,6 +180,8 @@
           <p>The player runs on Java 22 or newer. If your computer has none, it downloads one once (Eclipse Temurin, about 50 MB) and then starts the game by itself.</p></div>
         <div class="card"><div class="icon">★</div><h3>RetroAchievements</h3>
           <p>Sign in once and achievements unlock while you play, with a trophy card when you earn one. <a href="#achievements">How it works</a>.</p></div>
+        <div class="card"><div class="icon">⎙</div><h3>Saves and save states</h3>
+          <p>In-game saves are written as you play. Save states in 10 slots: <kbd>F2</kbd> to save, <kbd>F4</kbd> to load, or the buttons on the phone in WII-UU.</p></div>
         <div class="card"><div class="icon">▣</div><h3>Pixels as they are</h3>
           <p>The picture is drawn at the game's own shape with whole pixels, no smoothing. Sound plays at 48 kHz and is converted from the core's rate, so the pitch is right.</p></div>
         <div class="card"><div class="icon">⌘</div><h3>Native everywhere</h3>
@@ -283,6 +285,8 @@ java -jar ChoccyMilk.jar --home ~/choccy</code></pre>
             <dt><kbd>X</kbd> <kbd>Z</kbd> <kbd>S</kbd> <kbd>A</kbd></dt><dd>A, B, X, Y</dd>
             <dt><kbd>Q</kbd> <kbd>W</kbd> · <kbd>E</kbd> <kbd>R</kbd></dt><dd>L, R · ZL, ZR</dd>
             <dt><kbd>Enter</kbd> · <kbd>Space</kbd></dt><dd>Start · Select</dd>
+            <dt><kbd>F2</kbd> · <kbd>F4</kbd></dt><dd>save state · load state</dd>
+            <dt><kbd>F6</kbd> <kbd>F7</kbd></dt><dd>state slot down / up (0-9)</dd>
             <dt><kbd>Esc</kbd></dt><dd>save and go back to the list (HOME on a controller)</dd>
           </dl>
         </div>
@@ -309,8 +313,8 @@ java -jar ChoccyMilk.jar --home ~/choccy</code></pre>
         <p>No. Choccy Milk loads the cores itself. If RetroArch is installed, it uses the cores RetroArch already has; if not, it downloads them into <code>~/.wiiuu/choccy/cores</code>.</p></details>
       <details><summary>Which Java do I need?</summary>
         <p>Java 17 or newer to open the program. Games run on Java 22 or newer, and if your computer has none, Choccy Milk downloads one once into <code>~/.wiiuu/choccy/jre</code>.</p></details>
-      <details><summary>Where are my saves?</summary>
-        <p>In <code>~/.wiiuu/saves/&lt;console&gt;</code>, written every 30 seconds and when you leave a game. WII-UU uses the same folder, so a game saved in one continues in the other.</p></details>
+      <details><summary>Where are my saves? Are there save states?</summary>
+        <p>The game's own saves go to <code>~/.wiiuu/saves/&lt;console&gt;</code>, written every 30 seconds and when you leave a game. Save states too: <kbd>F2</kbd> saves, <kbd>F4</kbd> loads, <kbd>F6</kbd> / <kbd>F7</kbd> pick one of 10 slots, and in WII-UU the phone has <i>Save state</i> and <i>Load state</i> buttons. They're named like RetroArch's (<code>game.state</code>, <code>game.state1</code> ...). WII-UU uses the same folder, so a game saved in one continues in the other.</p></details>
       <details><summary>Does it do hardcore achievements?</summary>
         <p>No, softcore only. Unlocks show on your RetroAchievements profile as softcore.</p></details>
       <details><summary>Why can't it play GameCube or PSP?</summary>

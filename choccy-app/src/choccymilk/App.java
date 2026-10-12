@@ -199,6 +199,10 @@ public final class App extends JPanel implements PadSink {
             return;
         }
         session = s;
+        s.onNotice(text -> {
+            screen.announce(text, null, false, 2500);
+            repaint();
+        });
         playing = game;
         status = "";
         wiiuu.core.ChoccyCheevos.start(ra, s, game, new wiiuu.core.ChoccyCheevos.Events() {
@@ -272,6 +276,21 @@ public final class App extends JPanel implements PadSink {
         if (s != null) {
             if (k == KeyEvent.VK_ESCAPE && down) {
                 stop();
+                return;
+            }
+            String state = !down ? null : switch (k) {           // save states, with RetroArch's keys
+                case KeyEvent.VK_F2 -> "save";
+                case KeyEvent.VK_F4 -> "load";
+                case KeyEvent.VK_F6 -> "slotdown";
+                case KeyEvent.VK_F7 -> "slotup";
+                default -> null;
+            };
+            if (state != null) {
+                String text = s.state(state);
+                if (text != null) {
+                    screen.announce(text, null, false, 2500);
+                    repaint();
+                }
                 return;
             }
             PadButton b = GameScreen.key(k);
@@ -451,7 +470,7 @@ public final class App extends JPanel implements PadSink {
         Graphics2D g = (Graphics2D) g0;
         if (playing != null && screen.showing()) {
             int h = getHeight();
-            screen.paint(g, getWidth(), h, NAME + "  ·  Esc (or HOME): back to the list",
+            screen.paint(g, getWidth(), h, NAME + "  ·  Esc (or HOME): back to the list  ·  F2 / F4: save / load state",
                     new Font(Font.SANS_SERIF, Font.BOLD, Math.max(11, Math.round(h * 0.028f))));
             return;
         }

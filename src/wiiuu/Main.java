@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.81";
+    public static final String VERSION = "1.9.82";
 
     private final Config config;
     private final Library library;
@@ -344,6 +344,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             if (s != null) s.directFrame(px, w, h, aspect);
         });
         view.setChoccyKeys((b, down) -> launcher.choccyButton(1, b, down));
+        view.setChoccyStates(launcher::choccyState);
         launcher.setAnnouncer((title, text, trophy) -> {
             view.choccyAnnounce(title, text, trophy);
             GamepadServer s = server;
@@ -688,6 +689,16 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         if (dsuServer != null) dsuServer.stop();
         if (vpads != null) vpads.stop();
         System.exit(code);
+    }
+
+    @Override
+    public String choccyState(String action) {
+        return launcher.choccyState(action) ? null : "Save states are for games in Choccy Milk";
+    }
+
+    @Override
+    public int choccySlot() {
+        return launcher.choccySlot();
     }
 
     @Override
