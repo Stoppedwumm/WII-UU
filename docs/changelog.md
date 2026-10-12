@@ -3,6 +3,18 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.79 (2026-10-12)
+- Choccy Milk plays N64 much faster, especially on a Raspberry Pi:
+  - the RSP runs high-level (ParaLLEl N64) or recompiled (Mupen64Plus-Next) instead of the slow
+    cxd4 interpreter, and the software renderer explicitly uses every processor core;
+  - the recompiler is used unless it crashed in Choccy Milk itself (RetroArch's crashes no longer
+    count). If it crashes, Choccy Milk switches to the interpreter by itself and, on a Raspberry Pi 5
+    with 16 KB memory pages, says how to fix that (kernel=kernel8.img in /boot/firmware/config.txt).
+- Choccy Milk's sound: more room (100 ms), and when the game can't keep up, frames are skipped
+  (not drawn) so the sound keeps going instead of crackling.
+- Frames go to WII-UU on their own thread: a busy WII-UU no longer slows the game down.
+- The log (logs/n64.log) says how fast the game runs every 10 s, and has the core's messages.
+
 ## 1.9.78 (2026-10-12)
 - Choccy Milk on its own: `choccymilk` (or `java -jar ChoccyMilk.jar`) lists the games in WII-UU's ROM
   folders and plays them in its own window, without WII-UU. It shares WII-UU's settings, saves,

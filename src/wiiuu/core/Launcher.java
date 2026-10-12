@@ -228,6 +228,28 @@ public final class Launcher {
                 return;
             }
             boolean quick = code != 0 && System.currentTimeMillis() - startedAt < 4000;
+            boolean early = code != 0 && System.currentTimeMillis() - startedAt < 10000;   // a Pi takes a while to start
+            if (early && "n64".equals(game.system().id()) && !retroArch.cores().choccyN64Interpreter()
+                    && RetroArch.dynarecCrashed(log, code)) {
+                // the N64 recompiler crashed (16 KB memory pages on a Raspberry Pi 5, for one): the interpreter from now on
+                config.set("choccy.n64.dynarecFailed", "true");
+                config.save();
+                String advice = Cores.dynarecAdvice();
+                System.out.println("[choccy] " + advice);
+                for (Listener l : listeners) l.exited(game, 0, false, log);
+                for (Listener l : listeners) l.message(advice);
+                Thread again = new Thread(() -> {
+                    try {
+                        Thread.sleep(1500);
+                        launch(game);
+                    } catch (Exception e) {
+                        for (Listener l : listeners) l.message(e.getMessage());
+                    }
+                }, "choccy-interpreter");
+                again.setDaemon(true);
+                again.start();
+                return;
+            }
             for (Listener l : listeners) l.exited(game, code, quick, log);
         });
     }

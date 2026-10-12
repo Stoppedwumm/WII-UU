@@ -85,8 +85,19 @@ public final class ChoccyMilk {
 
     private SourceDataLine audio;
     private byte[] audioBytes = new byte[16384];
-    private int[] pixels = new int[0];
+    // frames go to WII-UU on their own thread, so a busy WII-UU never holds up the game: the core's
+    // thread fills a free buffer (none free: the frame is dropped), the writer sends the newest
+    private final Object frameLock = new Object();
+    private int[] pixels = new int[0], sending = new int[0];
+    private int pendingW, pendingH;
+    private boolean pending;
     private ByteBuffer frameBuffer = ByteBuffer.allocate(0);
+    // speed: falling behind (sound running dry) skips drawing frames, so the sound keeps up
+    private static final boolean BENCH = System.getenv("CHOCCY_BENCH") != null;
+    private boolean hideFrame;
+    private int skippedInARow;
+    private long framesRun, framesSkipped, framesDropped;
+    private int audioBufferBytes;
     private volatile boolean running = true;
 
     private ChoccyMilk(Path core, Path rom, Path saves, Path system, OutputStream stdout) {
@@ -219,15 +230,41 @@ public final class ChoccyMilk {
         input.setDaemon(true);
         input.start();
         run = fn(linker, lib, "retro_run", FunctionDescriptor.ofVoid());
+        Thread writer = new Thread(this::writeFrames, "choccy-frames");
+        writer.setDaemon(true);
+        writer.start();
         long frameNanos = (long) (1e9 / fps), next = System.nanoTime(), lastSave = System.currentTimeMillis();
+        long statAt = System.nanoTime(), statFrames = 0, statSkipped = 0;
         while (running) {
+            boolean behind;
+            if (BENCH) {
+                behind = false;
+            } else if (audio != null) {
+                // the sound card's queue: under a third left means the game runs slower than real time
+                behind = audioBufferBytes - audio.available() < audioBufferBytes / 3;
+            } else {
+                behind = System.nanoTime() - next > 2 * frameNanos;
+            }
+            hideFrame = behind && skippedInARow < 3;        // at least every 4th frame is drawn
+            skippedInARow = hideFrame ? skippedInARow + 1 : 0;
+            if (hideFrame) framesSkipped++;
             run.invokeExact();
-            out.flush();
-            if (audio == null) {                            // no sound: keep time by the clock (with sound, the sound card does)
+            framesRun++;
+            if (audio == null && !BENCH) {                  // no sound: keep time by the clock (with sound, the sound card does)
                 next += frameNanos;
                 long wait = next - System.nanoTime();
                 if (wait > 0) Thread.sleep(wait / 1_000_000, (int) (wait % 1_000_000));
                 else if (wait < -frameNanos * 5) next = System.nanoTime();
+            }
+            long now = System.nanoTime();
+            if (now - statAt > (BENCH ? 5_000_000_000L : 10_000_000_000L)) {
+                double secs = (now - statAt) / 1e9, rate = (framesRun - statFrames) / secs;
+                System.err.printf(Locale.ROOT, "[choccy] speed: %.1f of %.1f frames a second (%.0f %%), %d not drawn, %d not shown%n",
+                        rate, fps, 100 * rate / fps, framesSkipped - statSkipped, framesDropped);
+                statAt = now;
+                statFrames = framesRun;
+                statSkipped = framesSkipped;
+                framesDropped = 0;
             }
             if (System.currentTimeMillis() - lastSave > 30_000) {
                 writeSave();
@@ -265,7 +302,7 @@ public final class ChoccyMilk {
 
     private void log(int level, MemorySegment fmt) {
         try {
-            if (level < 2 && !DEBUG) return;                 // debug and info: only when debugging
+            if (level < 1 && !DEBUG) return;                 // debug messages: only when debugging
             String text = cString(fmt).strip();
             if (!text.isEmpty()) System.err.println("[core] " + text);
         } catch (Throwable ignored) {
@@ -402,7 +439,7 @@ public final class ChoccyMilk {
                 return true;
             }
             case 47 | EXPERIMENTAL -> {                     // GET_AUDIO_VIDEO_ENABLE
-                if (data.address() != 0) data.reinterpret(4).set(JAVA_INT, 0, 3);
+                if (data.address() != 0) data.reinterpret(4).set(JAVA_INT, 0, hideFrame ? 2 : 3);   // 2: sound only
                 return true;
             }
             case 51 | EXPERIMENTAL -> {                     // GET_INPUT_BITMASKS
@@ -443,6 +480,12 @@ public final class ChoccyMilk {
     private void video(MemorySegment data, int w, int h, long pitch) {
         try {
             if (data.address() == 0 || w <= 0 || h <= 0) return;           // the same frame again
+            synchronized (frameLock) {
+                if (pending) {                              // WII-UU hasn't taken the last one yet: skip this
+                    framesDropped++;
+                    return;
+                }
+            }
             MemorySegment src = data.reinterpret(pitch * h);
             int n = w * h;
             if (pixels.length < n) pixels = new int[n];
@@ -470,18 +513,50 @@ public final class ChoccyMilk {
                     }
                 }
             }
-            int bytes = 13 + n * 4;
-            if (frameBuffer.capacity() < bytes) frameBuffer = ByteBuffer.allocate(bytes).order(ByteOrder.BIG_ENDIAN);
-            frameBuffer.clear();
-            frameBuffer.put((byte) 'F').putInt(w).putInt(h).putFloat(aspect);
-            frameBuffer.asIntBuffer().put(pixels, 0, n);
-            synchronized (out) {
-                out.write(frameBuffer.array(), 0, bytes);
+            synchronized (frameLock) {
+                int[] t = sending;                          // hand it over; the writer's old buffer is free again
+                sending = pixels;
+                pixels = t;
+                pendingW = w;
+                pendingH = h;
+                pending = true;
+                frameLock.notifyAll();
+            }
+        } catch (Throwable t) {
+            System.err.println("[choccy] video: " + t);
+        }
+    }
+
+    /** The writer: sends each frame the core's thread hands over (on its own, so the pipe can be slow). */
+    private void writeFrames() {
+        try {
+            while (running) {
+                int w, h;
+                int[] px;
+                synchronized (frameLock) {
+                    while (!pending && running) frameLock.wait(200);
+                    if (!pending) continue;
+                    w = pendingW;
+                    h = pendingH;
+                    px = sending;
+                }
+                int n = w * h, bytes = 13 + n * 4;
+                if (frameBuffer.capacity() < bytes) frameBuffer = ByteBuffer.allocate(bytes).order(ByteOrder.BIG_ENDIAN);
+                frameBuffer.clear();
+                frameBuffer.put((byte) 'F').putInt(w).putInt(h).putFloat(aspect);
+                frameBuffer.asIntBuffer().put(px, 0, n);
+                synchronized (frameLock) {
+                    pending = false;                        // copied out: the core may fill it again
+                }
+                synchronized (out) {
+                    out.write(frameBuffer.array(), 0, bytes);
+                    out.flush();
+                }
             }
         } catch (IOException e) {
             running = false;                                // WII-UU stopped listening
-        } catch (Throwable t) {
-            System.err.println("[choccy] video: " + t);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -491,8 +566,10 @@ public final class ChoccyMilk {
         try {
             AudioFormat f = new AudioFormat((float) sampleRate, 16, 2, true, false);
             SourceDataLine line = AudioSystem.getSourceDataLine(f);
-            line.open(f, (int) (sampleRate * 0.08) * 4);    // ~80 ms: the sound card keeps the game's pace
+            // ~100 ms: the sound card keeps the game's pace, with some room for a slow frame
+            line.open(f, (int) (sampleRate * 0.1) * 4);
             line.start();
+            audioBufferBytes = line.getBufferSize();
             audio = line;
         } catch (Exception | LinkageError e) {
             System.err.println("[choccy] no sound: " + e.getMessage());

@@ -178,16 +178,71 @@ public final class Cores {
     public java.util.Map<String, String> choccyOptions(String systemId) {
         java.util.Map<String, String> o = new java.util.LinkedHashMap<>();
         if (systemId.equals("n64")) {
+            // the software renderer (Angrylion: no OpenGL needed) on every processor core
             o.put("mupen64plus-rdp-plugin", "angrylion");
-            o.put("mupen64plus-rsp-plugin", "cxd4");
+            o.put("mupen64plus-angrylion-multithread", "all threads");
             o.put("parallel-n64-gfxplugin", "angrylion");
-            o.put("parallel-n64-rspplugin", "cxd4");
-            if (n64Interpreter()) {
+            o.put("parallel-n64-angrylion-multithread", "all threads");
+            // the fastest RSP that works with it: Mupen64Plus-Next turns "hle" into its recompiling RSP
+            // (parallel) there; ParaLLEl N64 serves retail games with HLE and homebrew with cxd4 on "auto"
+            // (not on a Mac, where it played well already: the recompiling RSP may not get JIT memory there)
+            o.put("mupen64plus-rsp-plugin", MAC ? "cxd4" : "hle");
+            o.put("parallel-n64-rspplugin", "auto");
+            if (choccyN64Interpreter()) {
                 o.put("mupen64plus-cpucore", "cached_interpreter");
                 o.put("parallel-n64-cpucore", "cached_interpreter");
             }
         }
         return o;
+    }
+
+    /**
+     * Whether Choccy Milk runs N64 games on the cached interpreter: {@code retroarch.n64.cpu} =
+     * interpreter, or auto after the recompiler crashed in Choccy Milk ({@code choccy.n64.dynarecFailed};
+     * RetroArch's own crashes don't count: they can have other causes).
+     */
+    public boolean choccyN64Interpreter() {
+        String c = config.get("retroarch.n64.cpu", "auto");
+        return c.equals("interpreter") || c.equals("auto") && config.getBool("choccy.n64.dynarecFailed", false);
+    }
+
+    /** The memory page size (4096 mostly; 16384 with the Raspberry Pi 5's default kernel), 0 if unknown. */
+    public static int pageSize() {
+        if (MAC || WINDOWS) return 0;
+        try {
+            Process p = new ProcessBuilder("getconf", "PAGESIZE").redirectErrorStream(true).start();
+            String out = new String(p.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.US_ASCII).trim();
+            p.waitFor(5, TimeUnit.SECONDS);
+            return Integer.parseInt(out);
+        } catch (IOException | RuntimeException e) {
+            return 0;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return 0;
+        }
+    }
+
+    /** True when RetroArch or Choccy Milk crashed (a signal, not a normal error) right after the N64 core started its recompiler. */
+    public static boolean dynarecCrashed(Path log, int exitCode) {
+        if (exitCode != 139 && exitCode != 134 && exitCode != 132 && exitCode != 135 && exitCode != -11 && exitCode != 11) return false;
+        if (log == null || !Files.isRegularFile(log)) return false;
+        try {
+            List<String> lines = Files.readAllLines(log, java.nio.charset.StandardCharsets.ISO_8859_1);
+            for (int i = Math.max(0, lines.size() - 80); i < lines.size(); i++) {      // (Java's crash report comes after it)
+                if (lines.get(i).toLowerCase(Locale.ROOT).contains("dynarec")) return true;
+            }
+        } catch (IOException e) {
+            return false;
+        }
+        return false;
+    }
+
+    /** What to tell about a crashed N64 recompiler: on 16 KB pages (Pi 5) how to get it working. */
+    public static String dynarecAdvice() {
+        return pageSize() == 16384
+                ? "The N64 recompiler can't run with this kernel's 16 KB memory pages (Raspberry Pi 5): add "
+                + "kernel=kernel8.img to /boot/firmware/config.txt and restart for full speed. Using the slower interpreter until then."
+                : "The N64 recompiler crashed here: using the slower interpreter (Settings > Games > N64 processor).";
     }
 
     public static boolean flatpak(List<String> exe) {

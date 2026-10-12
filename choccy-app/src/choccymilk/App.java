@@ -205,7 +205,13 @@ public final class App extends JPanel implements PadSink {
             playing = null;
             screen.clear();
             String why = s.ending() == null ? "" : s.ending();
-            if (why.contains("needs OpenGL")) {
+            if (id.equals("n64") && p.exitValue() != 0 && System.currentTimeMillis() - started < 10000
+                    && !cores.choccyN64Interpreter() && Cores.dynarecCrashed(log, p.exitValue())) {
+                config.set("choccy.n64.dynarecFailed", "true");            // the interpreter from now on, and again
+                config.save();
+                say(Cores.dynarecAdvice());
+                play(game);
+            } else if (why.contains("needs OpenGL")) {
                 say(game.system().name() + "'s core needs OpenGL, which " + NAME + " doesn't have (WII-UU plays it in RetroArch)");
             } else if (p.exitValue() != 0 && System.currentTimeMillis() - started < 4000) {
                 say(game.name() + " stopped" + (why.isEmpty() ? " (error " + p.exitValue() + "): see " + log : ": " + why));

@@ -397,8 +397,8 @@ keeps saves in `~/.wiiuu/saves/<console>`. On the keyboard: arrows, X = A, Z = B
 Q / W = L / R, Enter = Start, Space = Select.
 
 - It plays cores that draw in software: NES, SNES, Game Boy (Color / Advance), Master System, Mega
-  Drive, PS1 (PCSX ReARMed), DS (melonDS) and N64 with the software renderer (slow on small
-  computers). Cores that need OpenGL or Vulkan (PPSSPP, Dolphin, N64 with GLideN64...) play in
+  Drive, PS1 (PCSX ReARMed), DS (melonDS) and N64 with the software renderer (Angrylion, on all
+  processor cores, with the fast RSP). Cores that need OpenGL or Vulkan (PPSSPP, Dolphin, N64 with GLideN64...) play in
   RetroArch: the first time one asks for it, WII-UU switches that console to RetroArch by itself.
 - It runs in its own process, so a core that crashes can't take WII-UU along.
 - The GamePad screen shows the game's own picture (not a screen capture): sharp, in the game's
@@ -406,6 +406,11 @@ Q / W = L / R, Enter = Start, Space = Select.
   Recording permission needed on a Mac.
 - On an Apple Silicon Mac it runs natively even when WII-UU runs through Rosetta (an Intel Java):
   it gets an ARM Java and ARM cores of its own then (`~/.wiiuu/choccy/cores/arm64`).
+- The log (`~/.wiiuu/logs/<console>.log`) says every 10 s how fast the game runs ("speed: 59.8 of
+  60 frames a second"). When it can't keep up, frames are skipped so the sound doesn't crackle.
+- N64 on a **Raspberry Pi 5**: the N64 recompiler needs 4 KB memory pages, and the Pi 5's default
+  kernel uses 16 KB. Add `kernel=kernel8.img` to `/boot/firmware/config.txt` and restart; without
+  it Choccy Milk falls back to the interpreter, which is several times slower.
 - `CHOCCY_DEBUG=1` in WII-UU's environment logs everything the core asks Choccy Milk and all it says.
 - It runs on **Java 22 or newer** (WII-UU itself still needs only 17). If it finds none, the first
   game downloads one for it: Eclipse Temurin 25 (about 50 MB) into `~/.wiiuu/choccy/jre`, once, and

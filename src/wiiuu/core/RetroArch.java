@@ -200,19 +200,9 @@ public final class RetroArch {
     }
 
 
-    /** True when RetroArch crashed (a signal, not a normal error) right after the N64 core started its recompiler. */
+    /** True when RetroArch (or Choccy Milk) crashed right after the N64 core started its recompiler. */
     public static boolean dynarecCrashed(Path log, int exitCode) {
-        if (exitCode != 139 && exitCode != 134 && exitCode != 132 && exitCode != 135 && exitCode != -11 && exitCode != 11) return false;
-        if (log == null || !Files.isRegularFile(log)) return false;
-        try {
-            List<String> lines = Files.readAllLines(log, java.nio.charset.StandardCharsets.ISO_8859_1);
-            for (int i = Math.max(0, lines.size() - 25); i < lines.size(); i++) {
-                if (lines.get(i).toLowerCase(Locale.ROOT).contains("dynarec")) return true;
-            }
-        } catch (IOException e) {
-            return false;
-        }
-        return false;
+        return Cores.dynarecCrashed(log, exitCode);
     }
 
     /**
