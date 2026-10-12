@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.70";
+    public static final String VERSION = "1.9.71";
 
     private final Config config;
     private final Library library;
@@ -86,6 +86,23 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         // Typing keys into emulators is the fallback for when real virtual controllers aren't available:
         // input.keys = auto (default: only without virtual pads) | on | off; system.<id>.keys overrides.
         router.setKeysEnabled(() -> typesKeysFor(launcher.current()));
+        // Choccy Milk plays inside WII-UU: the pads go straight to it (HOME: back to the menu)
+        router.setPadSink(new InputRouter.PadSink() {
+            @Override
+            public boolean button(int player, wiiuu.input.PadButton b, boolean down) {
+                if (!launcher.inChoccy()) return false;
+                if (b == wiiuu.input.PadButton.HOME) {
+                    if (down) closeGame();
+                    return true;
+                }
+                return launcher.choccyButton(player, b, down);
+            }
+
+            @Override
+            public boolean stick(int player, int stick, float x, float y) {
+                return launcher.inChoccy() && launcher.choccyStick(player, stick, x, y);
+            }
+        });
         launcher.setTypesKeys(this::typesKeysFor);
         launcher.addListener(this);
         wiiuu.screen.WinScript.setDir(config.home().resolve("bin"));
@@ -321,6 +338,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         view = new MenuView(config, this);
         view.setAchievements(achievements);
+        launcher.setChoccyScreen(view::choccyFrame);
+        view.setChoccyKeys((b, down) -> launcher.choccyButton(1, b, down));
         achievements.addListener(() -> SwingUtilities.invokeLater(view::repaint));
         router.setMenu(view);
         // real USB / Bluetooth controllers in the menu too (Linux)
@@ -744,7 +763,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         playStarted = System.currentTimeMillis();
         SwingUtilities.invokeLater(() -> {
             view.setPlaying(game);
-            if (config.getBool("ui.minimizeOnLaunch", true)) frame.setState(Frame.ICONIFIED);
+            // (a Choccy Milk game plays in WII-UU's own window)
+            if (config.getBool("ui.minimizeOnLaunch", true) && !launcher.inChoccy()) frame.setState(Frame.ICONIFIED);
         });
         if (typesKeysFor(game)) checkMacKeys();
     }

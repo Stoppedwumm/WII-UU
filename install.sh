@@ -97,6 +97,15 @@ if [ "${JV:-0}" -lt 17 ] 2>/dev/null; then
   [ "${JV:-0}" -ge 17 ] || die "Java install did not work; install Java 17+ manually."
 fi
 ok "Java $JV"
+# Choccy Milk (WII-UU's own player for RetroArch's cores) runs on Java 22 or newer, next to this one
+if ! ls -d /usr/lib/jvm/*/ 2>/dev/null | grep -Eq 'java-(2[2-9]|[3-9][0-9])-|jdk-(2[2-9]|[3-9][0-9])'; then
+  if [ "${JV:-0}" -lt 22 ] 2>/dev/null && command -v apt-get >/dev/null 2>&1 \
+      && apt-cache show openjdk-25-jre >/dev/null 2>&1; then
+    if ask "Install Java 25 for Choccy Milk (WII-UU's own game player)?"; then
+      sudo apt-get install -y openjdk-25-jre || warn "Java 25 didn't install: games play in RetroArch then"
+    fi
+  fi
+fi
 
 # ---------------------------------------------------------------------------- the jar
 say "Locating $APP"

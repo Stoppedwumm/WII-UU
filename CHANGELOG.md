@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.71 (2026-10-12)
+- **Choccy Milk**: WII-UU's own player for RetroArch's cores. In RetroArch mode games now play inside
+  WII-UU's window instead of in RetroArch: no second window, no fullscreen switching, nothing to
+  freeze or lose focus. The phones' buttons and sticks go straight to the game; HOME saves and goes
+  back to the menu. It uses RetroArch's cores (the Snap's too) and BIOS files and keeps its own saves.
+  Cores that need OpenGL still play in RetroArch, by themselves. Choccy Milk needs Java 22 or newer
+  beside WII-UU's (`sudo apt install openjdk-25-jre`); *Settings > Games > Play with Choccy Milk*
+  turns it off.
+
 ## 1.9.70 (2026-10-11)
 - Two switches for finding out why RetroArch doesn't show a game: `retroarch.fullscreen=false` starts
   it without `-f`, `retroarch.appendConfig=false` without WII-UU's settings for it.

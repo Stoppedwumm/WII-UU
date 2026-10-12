@@ -110,12 +110,29 @@ public final class InputRouter {
         return robot != null && keysPermitted.getAsBoolean();
     }
 
+    /** Takes pad input before the menu or typed keys do (Choccy Milk, while it plays); true: taken. */
+    public interface PadSink {
+        boolean button(int player, PadButton b, boolean down);
+
+        boolean stick(int player, int stick, float x, float y);
+    }
+
+    private volatile PadSink sink;
+
+    public void setPadSink(PadSink sink) {
+        this.sink = sink;
+    }
+
     public void button(int player, PadButton b, boolean down) {
+        PadSink s = sink;
+        if (s != null && s.button(player, b, down)) return;
         exec.execute(() -> handle(player, b, down));
     }
 
     /** Analog stick update; stick 0 = left, 1 = right. Values in [-1, 1], +y is down. */
     public void stick(int player, int stick, float x, float y) {
+        PadSink s = sink;
+        if (s != null && s.stick(player, stick, x, y)) return;
         exec.execute(() -> {
             PadButton up = stick == 0 ? PadButton.LS_UP : PadButton.RS_UP;
             PadButton dn = stick == 0 ? PadButton.LS_DOWN : PadButton.RS_DOWN;

@@ -302,8 +302,62 @@ public final class RetroArch {
         return null;
     }
 
+    /**
+     * The core to play this game with in Choccy Milk (installed, or downloaded first: then
+     * {@link Downloading} is thrown and afterDownload runs once it's there). Null when there is none.
+     */
+    public Path coreFor(Game game, Runnable afterDownload) throws Downloading {
+        List<String> exe = executable();
+        String id = game.system().id();
+        Path core = findCore(id, exe);
+        if (core != null) return core;
+        // RetroArch's own cores (its Snap / Flatpak folders) even when it isn't the one WII-UU would start
+        for (List<String> other : List.of(List.of("/snap/bin/retroarch"), List.of("flatpak", "run", "org.libretro.RetroArch"))) {
+            core = findCore(id, other);
+            if (core != null) return core;
+        }
+        if (!config.getBool("retroarch.download", true) || buildbot() == null || !triedDownload.add(id)) return null;
+        Thread t = new Thread(() -> {
+            for (String n : CORES.get(id)) {
+                if (download(n, exe) != null) break;
+            }
+            afterDownload.run();
+        }, "core-download");
+        t.setDaemon(true);
+        t.start();
+        throw new Downloading("Getting the core for " + game.system().name() + " (" + CORES.get(id).get(0)
+                + ")\u2026 the game starts by itself in a moment");
+    }
+
+    /** RetroArch's system folder (BIOS files), when there is one. */
+    public Path systemDir() {
+        List<String> exe = executable();
+        for (List<String> e : java.util.Arrays.asList(exe, List.of("/snap/bin/retroarch"))) {
+            if (e == null) continue;
+            Path dir = userCoreDir(e).getParent().resolve("system");
+            if (Files.isDirectory(dir)) return dir;
+        }
+        return config.home().resolve("system");
+    }
+
+    /** Core options Choccy Milk gives this console's cores: N64 without OpenGL (and without the recompiler if it crashed). */
+    public java.util.Map<String, String> choccyOptions(String systemId) {
+        java.util.Map<String, String> o = new java.util.LinkedHashMap<>();
+        if (systemId.equals("n64")) {
+            o.put("mupen64plus-rdp-plugin", "angrylion");
+            o.put("mupen64plus-rsp-plugin", "cxd4");
+            o.put("parallel-n64-gfxplugin", "angrylion");
+            o.put("parallel-n64-rspplugin", "cxd4");
+            if (n64Interpreter()) {
+                o.put("mupen64plus-cpucore", "cached_interpreter");
+                o.put("parallel-n64-cpucore", "cached_interpreter");
+            }
+        }
+        return o;
+    }
+
     private boolean flatpak(List<String> exe) {
-        return exe.size() > 2 && exe.get(0).endsWith("flatpak");
+        return exe != null && exe.size() > 2 && exe.get(0).endsWith("flatpak");
     }
 
     /** Where RetroArch keeps its downloaded cores. */
@@ -341,9 +395,10 @@ public final class RetroArch {
         String home = System.getProperty("user.home");
         if (MAC) return Path.of(home, "Library", "Application Support", "RetroArch", "cores");
         if (WINDOWS) {
-            String exePath = exe.get(0);
-            Path besideExe = Path.of(exePath).getParent().resolve("cores");       // portable installs
-            if (Files.isDirectory(besideExe)) return besideExe;
+            if (exe != null && !exe.isEmpty() && Path.of(exe.get(0)).getParent() != null) {
+                Path besideExe = Path.of(exe.get(0)).getParent().resolve("cores");     // portable installs
+                if (Files.isDirectory(besideExe)) return besideExe;
+            }
             String appdata = System.getenv("APPDATA");
             return Path.of(appdata == null ? home : appdata, "RetroArch", "cores");
         }

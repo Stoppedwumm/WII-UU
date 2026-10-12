@@ -383,6 +383,26 @@ ra.retroarch=true           # sign RetroArch in, in RetroArch mode
 ra.hardcore=false
 ```
 
+## Choccy Milk
+
+**Choccy Milk** is WII-UU's own player for RetroArch's cores. In RetroArch mode, WII-UU starts games
+with it instead of RetroArch: the game plays **inside WII-UU's window**, so there's no second window,
+no fullscreen switching and no focus to lose; the phones' buttons and sticks go straight to the game
+(quick taps included), HOME (or Esc) saves and goes back to the menu. It uses the cores RetroArch has
+(its Snap's and Flatpak's too, or downloads them), BIOS files from RetroArch's `system` folder, and
+keeps saves in `~/.wiiuu/saves/<console>`. On the keyboard: arrows, X = A, Z = B, S = X, A = Y,
+Q / W = L / R, Enter = Start, Space = Select.
+
+- It plays cores that draw in software: NES, SNES, Game Boy (Color / Advance), Master System, Mega
+  Drive, PS1 (PCSX ReARMed), DS (melonDS) and N64 with the software renderer (slow on small
+  computers). Cores that need OpenGL or Vulkan (PPSSPP, Dolphin, N64 with GLideN64...) play in
+  RetroArch: the first time one asks for it, WII-UU switches that console to RetroArch by itself.
+- It runs in its own process, so a core that crashes can't take WII-UU along.
+- It needs **Java 22 or newer** next to the Java WII-UU runs on (WII-UU itself still needs only 17):
+  `sudo apt install openjdk-25-jre` (Ubuntu 24.04 and newer; the installer offers it). WII-UU finds it
+  by itself.
+- *Settings → Games → Play with Choccy Milk* (`choccy.enabled=false`) goes back to RetroArch.
+
 ## RetroArch mode
 
 Turn on *Settings → Games → RetroArch mode* (`retroarch.enabled=true`) to run every system that has

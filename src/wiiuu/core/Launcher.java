@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import wiiuu.input.PadButton;
+
 /** Starts one emulator process at a time and reports when it ends. */
 public final class Launcher {
 
@@ -106,8 +108,143 @@ public final class Launcher {
         this.reactions = reactions;
     }
 
+    // ---- Choccy Milk: WII-UU's own frontend for RetroArch's cores --------------------------------
+
+    private volatile Choccy.Screen choccyScreen = (px, w, h, a) -> { };
+    private volatile Choccy.Session choccy;
+    private final java.util.Map<Integer, java.util.Set<PadButton>> stickDpad = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Where Choccy Milk's frames go (WII-UU's window). */
+    public void setChoccyScreen(Choccy.Screen screen) {
+        this.choccyScreen = screen;
+    }
+
+    /** True while the running game plays in Choccy Milk (inside WII-UU's window). */
+    public boolean inChoccy() {
+        return choccy != null && isRunning();
+    }
+
+    /** Whether this game plays in Choccy Milk: RetroArch mode, Choccy on, a Java 22+, and a core that didn't need OpenGL before. */
+    private boolean choccyFor(Game game) {
+        return retroArch.handles(game.system()) && config.getBool("choccy.enabled", true) && Choccy.available()
+                && !config.getBool("choccy.hardware." + game.system().id(), false);
+    }
+
+    private void launchChoccy(Game game) throws LaunchException {
+        Path core;
+        try {
+            core = retroArch.coreFor(game, () -> {
+                try {
+                    launch(game);
+                } catch (LaunchException e) {
+                    for (Listener l : listeners) l.message(e.getMessage());
+                }
+            });
+        } catch (RetroArch.Downloading d) {
+            throw new LaunchException(d.getMessage());
+        }
+        if (core == null) throw new LaunchException("No core for " + game.system().name() + " found: install one in RetroArch's Online Updater");
+        Path log = config.logDir().resolve(game.system().id() + ".log");
+        List<String> cmd = Choccy.command(core, game.path(), config.home().resolve("saves").resolve(game.system().id()),
+                retroArch.systemDir(), retroArch.choccyOptions(game.system().id()));
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        try {
+            Files.createDirectories(log.getParent());
+            pb.redirectError(log.toFile());
+        } catch (IOException e) {
+            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
+        }
+        final Process p;
+        try {
+            p = pb.start();
+        } catch (IOException e) {
+            throw new LaunchException("Choccy Milk didn't start: " + e.getMessage());
+        }
+        Choccy.Session session = Choccy.start(p, (px, w, h, a) -> choccyScreen.frame(px, w, h, a), log);
+        process = p;
+        current = game;
+        inRetroArch = false;
+        choccy = session;
+        stickDpad.clear();
+        System.out.println("[choccy] " + game.name() + " with " + core.getFileName());
+        long startedAt = System.currentTimeMillis();
+        for (Listener l : listeners) l.started(game);
+        p.onExit().thenAccept(done -> {
+            synchronized (Launcher.this) {
+                if (process == done) {
+                    process = null;
+                    current = null;
+                    choccy = null;
+                }
+            }
+            int code = done.exitValue();
+            String why = session.ending() == null ? "" : session.ending();
+            if (why.contains("needs OpenGL")) {
+                // a core that draws with the graphics chip: this console plays in RetroArch from now on
+                config.set("choccy.hardware." + game.system().id(), "true");
+                config.save();
+                System.out.println("[choccy] " + why);
+                for (Listener l : listeners) l.exited(game, 0, false, log);
+                for (Listener l : listeners) l.message(game.system().name() + " needs OpenGL: it plays in RetroArch instead");
+                Thread again = new Thread(() -> {
+                    try {
+                        Thread.sleep(800);
+                        launch(game);
+                    } catch (Exception e) {
+                        for (Listener l : listeners) l.message(e.getMessage());
+                    }
+                }, "choccy-to-retroarch");
+                again.setDaemon(true);
+                again.start();
+                return;
+            }
+            boolean quick = code != 0 && System.currentTimeMillis() - startedAt < 4000;
+            for (Listener l : listeners) l.exited(game, code, quick, log);
+        });
+    }
+
+    /** A button for Choccy Milk; false when it isn't running (then the router does as usual). */
+    public boolean choccyButton(int player, PadButton b, boolean down) {
+        Choccy.Session s = choccy;
+        if (s == null) return false;
+        s.button(port(player), b, down);
+        return true;
+    }
+
+    /** A stick for Choccy Milk (and the d-pad too, on consoles without analog sticks). */
+    public boolean choccyStick(int player, int stick, float x, float y) {
+        Choccy.Session s = choccy;
+        Game g = current;
+        if (s == null) return false;
+        int port = port(player);
+        s.stick(port, stick, x, y);
+        if (stick == 0 && g != null && Choccy.stickIsDpad(g.system().id())) {
+            java.util.Set<PadButton> was = stickDpad.computeIfAbsent(port, k -> java.util.EnumSet.noneOf(PadButton.class));
+            java.util.Set<PadButton> now = java.util.EnumSet.noneOf(PadButton.class);
+            if (x < -0.5f) now.add(PadButton.LEFT);
+            if (x > 0.5f) now.add(PadButton.RIGHT);
+            if (y < -0.5f) now.add(PadButton.UP);
+            if (y > 0.5f) now.add(PadButton.DOWN);
+            for (PadButton b : PadButton.values()) {
+                if (now.contains(b) != was.contains(b)) s.button(port, b, now.contains(b));
+            }
+            was.clear();
+            was.addAll(now);
+        }
+        return true;
+    }
+
+    /** Phones are players 1..8, real controllers -1, -2...: both start at port 0. */
+    private static int port(int player) {
+        return player > 0 ? player - 1 : Math.max(0, -player - 1);
+    }
+
     public synchronized void launch(Game game) throws LaunchException {
         if (isRunning()) throw new LaunchException(current.name() + " is already running");
+        if (!OpenBased.handles(game) && !Reactions.handles(game) && choccyFor(game)) {
+            launchChoccy(game);
+            return;
+        }
         List<String> cmd = null;
         boolean video = OpenBased.handles(game) || Reactions.handles(game);
         if (Reactions.handles(game)) {
@@ -220,6 +357,26 @@ public final class Launcher {
             mac = macApp;
         }
         if (p == null || !p.isAlive()) return;
+        Choccy.Session s = choccy;
+        if (s != null) {
+            // Choccy Milk saves first, then stops; only if it doesn't, it's stopped like any other
+            Runnable gently = () -> {
+                s.quit();
+                try {
+                    if (p.waitFor(3, TimeUnit.SECONDS)) return;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                signalTree(p, p.pid(), null, null, true);
+            };
+            if (wait) gently.run();
+            else {
+                Thread t = new Thread(gently, "choccy-stop");
+                t.setDaemon(true);
+                t.start();
+            }
+            return;
+        }
         long pid = p.pid();
         // Emulators that fork or show an "are you sure?" dialog survive a plain destroy(), so signal
         // the whole process group / tree, and force it after a grace period.
