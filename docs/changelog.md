@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.76 (2026-10-12)
+- Choccy Milk plays N64 (Mupen64Plus-Next, software renderer). It crashed at once before: the core
+  logs without checking for a log interface, which Choccy Milk didn't give it (it gives log, perf and
+  rumble interfaces now). Cores that run games on their own stacks (libco) no longer die at random
+  with a StackOverflowError either.
+- Whatever a core prints goes to its log instead of into the picture.
+- On an Apple Silicon Mac where WII-UU runs through Rosetta (an Intel Java), Choccy Milk still runs
+  natively: an ARM Java and ARM cores of its own (~/.wiiuu/choccy/cores/arm64). Much faster.
+
 ## 1.9.75 (2026-10-12)
 - Building from source (install.sh in a git clone) no longer leaves out Choccy Milk when the default
   JDK is older than 22 ("This copy of WII-UU was built without Choccy Milk"): build.sh uses a newer

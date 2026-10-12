@@ -102,22 +102,54 @@ public final class ChoccyMilk {
             System.err.println("usage: ChoccyMilk CORE ROM SAVES SYSTEM [key=value ...]");
             System.exit(2);
         }
-        OutputStream stdout = new java.io.FileOutputStream(java.io.FileDescriptor.out);
+        OutputStream stdout = framesOut();
         System.setOut(System.err);                          // stdout is for frames only; anything printed goes to the log
         ChoccyMilk m = new ChoccyMilk(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), Path.of(args[3]), stdout);
         for (int i = 4; i < args.length; i++) {
             int eq = args[i].indexOf('=');
             if (eq > 0) m.overrides.put(args[i].substring(0, eq), args[i].substring(eq + 1));
         }
-        String why = "";
-        try {
-            m.play();
-        } catch (Throwable t) {
-            why = t.getMessage() == null ? t.toString() : t.getMessage();
-            System.err.println("[choccy] " + why);
+        // the core runs on a thread with a big stack: some (N64) go deep in native code, and running out
+        // of stack there kills the whole process instead of just ending the game
+        String[] why = {""};
+        Runnable game = () -> {
+            try {
+                m.play();
+            } catch (Throwable t) {
+                why[0] = t.getMessage() == null ? t.toString() : t.getMessage();
+                System.err.println("[choccy] " + why[0]);
+            }
+        };
+        if (!LowStack.run(game)) {
+            Thread core = new Thread(null, game, "choccy-core", 256L << 20);
+            core.start();
+            core.join();
         }
-        m.finish(why);
-        System.exit(why.isEmpty() ? 0 : 1);
+        m.finish(why[0]);
+        System.exit(why[0].isEmpty() ? 0 : 1);
+    }
+
+    /**
+     * Where the frames go: stdout, but on Linux and macOS a copy of it, with the real stdout (file 1)
+     * then pointed at stderr: cores printf to stdout, and that mustn't land in the middle of a frame.
+     */
+    private static OutputStream framesOut() {
+        OutputStream plain = new java.io.FileOutputStream(java.io.FileDescriptor.out);
+        if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")) return plain;
+        try {
+            Linker linker = Linker.nativeLinker();
+            SymbolLookup libc = linker.defaultLookup();
+            MethodHandle dup = linker.downcallHandle(libc.find("dup").orElseThrow(), FunctionDescriptor.of(JAVA_INT, JAVA_INT));
+            MethodHandle dup2 = linker.downcallHandle(libc.find("dup2").orElseThrow(), FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT));
+            int copy = (int) dup.invokeExact(1);
+            if (copy < 0) return plain;
+            OutputStream frames = new java.io.FileOutputStream("/dev/fd/" + copy);
+            if ((int) dup2.invokeExact(2, 1) < 0) return plain;
+            return frames;
+        } catch (Throwable t) {
+            System.err.println("[choccy] stdout stays shared: " + t);
+            return plain;
+        }
     }
 
     // ---- running a game ----------------------------------------------------------------------------
@@ -134,6 +166,7 @@ public final class ChoccyMilk {
 
         // callbacks, then init
         MethodHandles.Lookup me = MethodHandles.lookup();
+        interfaces(linker, me);
         set(linker, lib, "retro_set_environment", me.bind(this, "environment",
                 MethodType.methodType(boolean.class, int.class, MemorySegment.class)), FunctionDescriptor.of(JAVA_BOOLEAN, JAVA_INT, ADDRESS));
         set(linker, lib, "retro_set_video_refresh", me.bind(this, "video",
@@ -206,6 +239,56 @@ public final class ChoccyMilk {
         fn(linker, lib, "retro_deinit", FunctionDescriptor.ofVoid()).invokeExact();
     }
 
+    // ---- interfaces cores ask for (some call them without checking that they got one) -------------
+
+    private MemorySegment logInterface, perfInterface, rumbleInterface;
+
+    private void interfaces(Linker linker, MethodHandles.Lookup me) throws ReflectiveOperationException {
+        // retro_log_callback: void (*log)(level, const char *fmt, ...); the extra arguments are left alone
+        logInterface = arena.allocate(ADDRESS);
+        logInterface.set(ADDRESS, 0, linker.upcallStub(me.bind(this, "log", MethodType.methodType(void.class, int.class, MemorySegment.class)),
+                FunctionDescriptor.ofVoid(JAVA_INT, ADDRESS), arena));
+        // retro_perf_callback: get_time_usec, get_cpu_features, get_perf_counter, perf_register, perf_start, perf_stop, perf_log
+        perfInterface = arena.allocate(ADDRESS.byteSize() * 7);
+        MemorySegment usec = linker.upcallStub(me.findStatic(ChoccyMilk.class, "usec", MethodType.methodType(long.class)), FunctionDescriptor.of(JAVA_LONG), arena);
+        MemorySegment none = linker.upcallStub(me.findStatic(ChoccyMilk.class, "noFeatures", MethodType.methodType(long.class)), FunctionDescriptor.of(JAVA_LONG), arena);
+        MemorySegment ticks = linker.upcallStub(me.findStatic(System.class, "nanoTime", MethodType.methodType(long.class)), FunctionDescriptor.of(JAVA_LONG), arena);
+        MemorySegment counter = linker.upcallStub(me.findStatic(ChoccyMilk.class, "ignore", MethodType.methodType(void.class, MemorySegment.class)), FunctionDescriptor.ofVoid(ADDRESS), arena);
+        MemorySegment nothing = linker.upcallStub(me.findStatic(ChoccyMilk.class, "nothing", MethodType.methodType(void.class)), FunctionDescriptor.ofVoid(), arena);
+        MemorySegment[] perf = {usec, none, ticks, counter, counter, counter, nothing};
+        for (int i = 0; i < perf.length; i++) perfInterface.set(ADDRESS, i * ADDRESS.byteSize(), perf[i]);
+        // retro_rumble_interface: bool (*set_rumble_state)(port, effect, strength) (no rumble here)
+        rumbleInterface = arena.allocate(ADDRESS);
+        rumbleInterface.set(ADDRESS, 0, linker.upcallStub(me.findStatic(ChoccyMilk.class, "rumble", MethodType.methodType(boolean.class, int.class, int.class, short.class)),
+                FunctionDescriptor.of(JAVA_BOOLEAN, JAVA_INT, JAVA_INT, JAVA_SHORT), arena));
+    }
+
+    private void log(int level, MemorySegment fmt) {
+        try {
+            if (level < 2 && !DEBUG) return;                 // debug and info: only when debugging
+            String text = cString(fmt).strip();
+            if (!text.isEmpty()) System.err.println("[core] " + text);
+        } catch (Throwable ignored) {
+            // never into native code
+        }
+    }
+
+    private static long usec() {
+        return System.nanoTime() / 1000;
+    }
+
+    private static long noFeatures() {
+        return 0;
+    }
+
+    private static void ignore(MemorySegment counter) {}
+
+    private static void nothing() {}
+
+    private static boolean rumble(int port, int effect, short strength) {
+        return false;
+    }
+
     private static MethodHandle fn(Linker linker, SymbolLookup lib, String name, FunctionDescriptor d) {
         return linker.downcallHandle(lib.find(name).orElseThrow(() -> new IllegalStateException("not a libretro core (no " + name + ")")), d);
     }
@@ -226,9 +309,13 @@ public final class ChoccyMilk {
 
     // ---- the core asks things (on its thread; never let anything escape into native code) -----------
 
+    private static final boolean DEBUG = System.getenv("CHOCCY_DEBUG") != null;
+
     private boolean environment(int cmd, MemorySegment data) {
         try {
-            return env(cmd, data);
+            boolean ok = env(cmd, data);
+            if (DEBUG) System.err.println("[choccy] env " + (cmd & ~EXPERIMENTAL) + ((cmd & EXPERIMENTAL) != 0 ? "x" : "") + " -> " + ok);
+            return ok;
         } catch (Throwable t) {
             System.err.println("[choccy] environment " + cmd + ": " + t);
             return false;
@@ -237,6 +324,18 @@ public final class ChoccyMilk {
 
     private boolean env(int cmd, MemorySegment data) {
         switch (cmd) {
+            case 27 -> {                                    // GET_LOG_INTERFACE
+                data.reinterpret(8).copyFrom(logInterface);
+                return true;
+            }
+            case 28 -> {                                    // GET_PERF_INTERFACE
+                data.reinterpret(perfInterface.byteSize()).copyFrom(perfInterface);
+                return true;
+            }
+            case 23 -> {                                    // GET_RUMBLE_INTERFACE
+                data.reinterpret(8).copyFrom(rumbleInterface);
+                return true;
+            }
             case 3 -> {                                     // GET_CAN_DUPE
                 data.reinterpret(1).set(JAVA_BOOLEAN, 0, true);
                 return true;

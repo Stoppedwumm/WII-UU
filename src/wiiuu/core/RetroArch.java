@@ -314,21 +314,29 @@ public final class RetroArch {
     public Path coreFor(Game game, Runnable afterDownload) throws Downloading {
         List<String> exe = executable();
         String id = game.system().id();
-        Path core = findCore(id, exe);
-        if (core != null) return core;
-        // RetroArch's own cores (its Snap / Flatpak folders) even when it isn't the one WII-UU would start
-        for (List<String> other : List.of(List.of("/snap/bin/retroarch"), List.of("flatpak", "run", "org.libretro.RetroArch"))) {
-            core = findCore(id, other);
+        // WII-UU translated (Rosetta): Choccy Milk runs natively, so RetroArch's cores (for WII-UU's
+        // processor) won't do; it keeps its own, by processor
+        boolean translated = Choccy.translated();
+        Path own = translated ? choccyCoreDir().resolve(Choccy.arch()) : choccyCoreDir();
+        Path core;
+        if (!translated) {
+            core = findCore(id, exe);
             if (core != null) return core;
+            // RetroArch's own cores (its Snap / Flatpak folders) even when it isn't the one WII-UU would start
+            for (List<String> other : List.of(List.of("/snap/bin/retroarch"), List.of("flatpak", "run", "org.libretro.RetroArch"))) {
+                core = findCore(id, other);
+                if (core != null) return core;
+            }
         }
         // Choccy Milk's own cores (downloaded when there's no RetroArch at all)
-        core = findCore(id, List.of(), choccyCoreDir());
+        core = findCore(id, List.of(), own);
         if (core != null) return core;
-        if (!config.getBool("retroarch.download", true) || buildbot() == null || !triedDownload.add(id)) return null;
-        Path into = exe == null ? choccyCoreDir() : userCoreDir(exe);
+        String from = buildbot(Choccy.arch());
+        if (!config.getBool("retroarch.download", true) || from == null || !triedDownload.add(id)) return null;
+        Path into = translated || exe == null ? own : userCoreDir(exe);
         Thread t = new Thread(() -> {
             for (String n : CORES.get(id)) {
-                if (download(n, into) != null) break;
+                if (download(n, into, from) != null) break;
             }
             afterDownload.run();
         }, "core-download");
@@ -464,9 +472,14 @@ public final class RetroArch {
 
     /** The libretro buildbot folder for this computer, or null where there is none. */
     static String buildbot() {
-        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
+        return buildbot(System.getProperty("os.arch", ""));
+    }
+
+    /** The buildbot folder for a processor ("arm64", "aarch64", "x64", "amd64"...). */
+    static String buildbot(String arch) {
+        arch = arch.toLowerCase(Locale.ROOT);
         boolean arm = arch.contains("aarch64") || arch.contains("arm64");
-        boolean x64 = arch.contains("amd64") || arch.contains("x86_64");
+        boolean x64 = arch.contains("amd64") || arch.contains("x86_64") || arch.equals("x64");
         String base = "https://buildbot.libretro.com/nightly/";
         if (MAC) return base + "apple/osx/" + (arm ? "arm64" : "x86_64") + "/latest/";
         if (WINDOWS) return x64 ? base + "windows/x86_64/latest/" : null;
@@ -482,7 +495,11 @@ public final class RetroArch {
 
     /** Downloads one core into dir; null if it isn't available. */
     Path download(String name, Path dir) {
-        String url = buildbot() + name + "_libretro." + EXT + ".zip";
+        return download(name, dir, buildbot());
+    }
+
+    private Path download(String name, Path dir, String from) {
+        String url = from + name + "_libretro." + EXT + ".zip";
         Path target = dir.resolve(name + "_libretro." + EXT);
         try {
             Files.createDirectories(dir);

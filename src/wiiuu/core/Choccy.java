@@ -73,7 +73,7 @@ public final class Choccy {
         if (looked) return javaExe;
         synchronized (Choccy.class) {
             if (looked) return javaExe;
-            if (Runtime.version().feature() >= 22) {
+            if (Runtime.version().feature() >= 22 && !translated()) {
                 javaExe = ProcessHandle.current().info().command().map(Path::of).orElse(null);
             }
             if (javaExe == null) javaExe = findJava(List.of(ownJre()));
@@ -147,7 +147,7 @@ public final class Choccy {
     /** Where Eclipse Adoptium has a Java 25 runtime for this computer, or null. */
     private static String jreUrl() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        String a = arch(System.getProperty("os.arch", ""));
+        String a = arch();
         String o = os.contains("mac") ? "mac" : os.contains("win") ? "windows" : os.contains("linux") ? "linux" : null;
         String ar = a.equals("arm64") ? "aarch64" : a.equals("x64") ? "x64" : null;
         if (o == null || ar == null) return null;
@@ -247,7 +247,7 @@ public final class Choccy {
      * Intel Java (a Mac with Rosetta, say). Unknown counts as the same.
      */
     private static boolean sameArch(Path javaHome) {
-        String mine = arch(System.getProperty("os.arch", ""));
+        String mine = arch();
         try {
             for (String line : Files.readAllLines(javaHome.resolve("release"))) {
                 if (line.startsWith("OS_ARCH=")) return arch(line.substring(8).replace("\"", "").trim()).equals(mine);
@@ -256,6 +256,38 @@ public final class Choccy {
             // can't tell
         }
         return true;
+    }
+
+    private static volatile String nativeArch;
+
+    /**
+     * The processor Choccy Milk runs on ("arm64", "x64"...): this computer's own, also when WII-UU
+     * itself runs translated (an Intel Java on an Apple Silicon Mac, through Rosetta), because it's
+     * its own process and a game is much faster without translation.
+     */
+    public static String arch() {
+        String a = nativeArch;
+        if (a != null) return a;
+        a = arch(System.getProperty("os.arch", ""));
+        if (a.equals("x64") && System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac")) {
+            try {
+                Process p = new ProcessBuilder("sysctl", "-n", "hw.optional.arm64").redirectErrorStream(true).start();
+                String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+                p.waitFor();
+                if (out.equals("1")) a = "arm64";
+            } catch (IOException | RuntimeException e) {
+                // an Intel Mac, then
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        nativeArch = a;
+        return a;
+    }
+
+    /** Whether WII-UU runs translated (Rosetta): then Choccy Milk needs its own Java and cores. */
+    public static boolean translated() {
+        return !arch().equals(arch(System.getProperty("os.arch", "")));
     }
 
     private static String arch(String a) {
@@ -277,7 +309,7 @@ public final class Choccy {
     /** The command that plays rom with core. */
     static List<String> command(Path core, Path rom, Path saves, Path system, Map<String, String> options) {
         List<String> cmd = new ArrayList<>(List.of(java().toString(), "--enable-native-access=ALL-UNNAMED",
-                "-Xss2m", "-cp", classPath(), "wiiuu.choccy.ChoccyMilk",
+                "-XX:+DisplayVMOutputToStderr", "-cp", classPath(), "wiiuu.choccy.ChoccyMilk",
                 core.toString(), rom.toAbsolutePath().toString(), saves.toString(), system.toString()));
         for (var e : options.entrySet()) cmd.add(e.getKey() + "=" + e.getValue());
         return cmd;

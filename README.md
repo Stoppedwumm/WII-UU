@@ -401,6 +401,9 @@ Q / W = L / R, Enter = Start, Space = Select.
   computers). Cores that need OpenGL or Vulkan (PPSSPP, Dolphin, N64 with GLideN64...) play in
   RetroArch: the first time one asks for it, WII-UU switches that console to RetroArch by itself.
 - It runs in its own process, so a core that crashes can't take WII-UU along.
+- On an Apple Silicon Mac it runs natively even when WII-UU runs through Rosetta (an Intel Java):
+  it gets an ARM Java and ARM cores of its own then (`~/.wiiuu/choccy/cores/arm64`).
+- `CHOCCY_DEBUG=1` in WII-UU's environment logs everything the core asks Choccy Milk and all it says.
 - It runs on **Java 22 or newer** (WII-UU itself still needs only 17). If it finds none, the first
   game downloads one for it: Eclipse Temurin 25 (about 50 MB) into `~/.wiiuu/choccy/jre`, once, and
   then starts by itself. An installed one (`sudo apt install openjdk-25-jre`, `brew install openjdk`)
