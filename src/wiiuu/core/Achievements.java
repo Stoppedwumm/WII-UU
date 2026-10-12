@@ -37,15 +37,19 @@ import java.util.zip.ZipInputStream;
  */
 public final class Achievements {
 
-    /** Your progress on one game. */
-    public record Progress(int gameId, String title, int awarded, int total, boolean hardcore) {
+    /**
+     * Your progress on one game. unsupported: this ROM is a version of the game RetroAchievements
+     * doesn't support (say a European release when only the American one is), so nothing can be
+     * earned with it.
+     */
+    public record Progress(int gameId, String title, int awarded, int total, boolean hardcore, boolean unsupported) {
         public boolean complete() {
             return total > 0 && awarded >= total;
         }
 
-        /** "12/40", or "100%". */
+        /** "12/40", "100%", or "Wrong version" when nothing can be earned with this ROM. */
         public String label() {
-            return complete() ? "100%" : awarded + "/" + total;
+            return complete() ? "100%" : unsupported ? "Wrong version" : awarded + "/" + total;
         }
     }
 
@@ -174,7 +178,21 @@ public final class Achievements {
             int[] p = mine.get(id);
             int total = p != null ? p[1] : totalFor(id, consoles, lists);
             if (total <= 0) continue;
-            out.put(g.path(), new Progress(id, titleFor(id, consoles, lists), p == null ? 0 : p[0], total, p != null && p[2] >= total));
+            // a ROM the game list's hashes don't include (found by its title): maybe a version without achievements
+            String uKey = "unsupported." + idKey;
+            if (!ids.containsKey(uKey) && HASHED.contains(g.system().id())) {
+                String md5 = hash(g);
+                Map<String, Object> e = entry(id, consoles, lists);
+                boolean listed = false;
+                if (e != null && md5 != null) {
+                    for (Object h : MiniJson.array(e.get("Hashes"))) listed |= md5.equalsIgnoreCase(MiniJson.string(h));
+                }
+                Boolean u = listed ? Boolean.FALSE : RaConnect.unsupportedVersion(md5, "WII-UU (achievement progress)");
+                if (u != null) ids.setProperty(uKey, u.toString());
+            }
+            boolean unsupported = Boolean.parseBoolean(ids.getProperty(uKey, "false"));
+            out.put(g.path(), new Progress(id, titleFor(id, consoles, lists), p == null ? 0 : p[0], total, p != null && p[2] >= total,
+                    unsupported));
         }
         saveIds(ids);
         return out;

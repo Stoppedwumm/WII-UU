@@ -211,6 +211,11 @@ public final class App extends JPanel implements PadSink {
         wiiuu.core.ChoccyCheevos.start(ra, s, game, new wiiuu.core.ChoccyCheevos.Events() {
             @Override
             public void found(wiiuu.core.RaConnect.GameSet set) {
+                if (set.warning() != null) {
+                    screen.announce("Achievements off: unsupported version of " + set.title(),
+                            "RetroAchievements doesn't support this ROM's version (see the log for which ones work)", false, 8000);
+                    return;
+                }
                 screen.announce("RetroAchievements: " + set.title(), set.unlocked().size() + " of "
                         + set.achievements().size() + " achievements unlocked", false, 4000);
             }

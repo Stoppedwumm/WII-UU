@@ -14,7 +14,7 @@ public final class ChoccyCheevos {
 
     /** What to show. */
     public interface Events {
-        /** The game has achievements: how many, how many unlocked already. */
+        /** The game has achievements: how many, how many unlocked already (or, with a warning, why none can be earned). */
         void found(RaConnect.GameSet set);
 
         /** One unlocked now (error: RetroAchievements didn't take it, null when it did). */
@@ -36,6 +36,11 @@ public final class ChoccyCheevos {
                 RaConnect.GameSet set = ra.load(game);
                 if (set == null) {
                     System.out.println("[achievements] " + game.name() + " isn't on RetroAchievements");
+                    return;
+                }
+                if (set.warning() != null) {
+                    System.out.println("[achievements] " + set.warning());
+                    events.found(set);
                     return;
                 }
                 System.out.println("[achievements] " + set.title() + ": " + set.unlocked().size() + " of "

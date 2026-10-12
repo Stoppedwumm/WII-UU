@@ -213,6 +213,11 @@ public final class Launcher {
         ChoccyCheevos.start(ra, session, game, new ChoccyCheevos.Events() {
             @Override
             public void found(RaConnect.GameSet set) {
+                if (set.warning() != null) {
+                    announcer.announce("Achievements off: unsupported version of " + set.title(),
+                            "RetroAchievements doesn't support this ROM's version (see the log for which ones work)", false);
+                    return;
+                }
                 announcer.announce("RetroAchievements: " + set.title(), set.unlocked().size() + " of "
                         + set.achievements().size() + " achievements unlocked", false);
             }

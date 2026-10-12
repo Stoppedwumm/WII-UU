@@ -387,6 +387,12 @@ Advance), N64, DS, Master System and Mega Drive games, in softcore. Choccy Milk 
 achievements the way rcheevos does (RetroArch's achievement library, ported to Java) on the game's
 memory, mapped the way RetroArch maps it. `ra.choccy=false` turns it off.
 
+**Only some versions of a game work.** RetroAchievements makes each set for particular ROMs (often
+just the US release: Super Mario 64's works with the USA ROM, not the European or Japanese one). With
+another version the game's tile says *Wrong version* instead of your progress, and Choccy Milk shows
+*Achievements off: unsupported version* when the game starts. The game's *Supported Game Files* page
+on retroachievements.org lists the ROMs that work.
+
 The other emulators unlock achievements themselves. In RetroArch mode WII-UU signs RetroArch in with
 the same password for the games it starts
 (`cheevos_*` in `~/.wiiuu/retroarch.cfg`, which is then readable only by you), with *Hardcore mode*

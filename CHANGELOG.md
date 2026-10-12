@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.86 (2026-10-12)
+- RetroAchievements: a ROM that is a version of a game RetroAchievements doesn't support (Super
+  Mario 64's European or Japanese release, for example: only the USA one works) no longer shows
+  "Unsupported Game Version" as an achievement you unlocked after a few seconds. Choccy Milk now
+  says "Achievements off: unsupported version of ..." when the game starts, and the game's tile in
+  the menu says "Wrong version" instead of a 0/114 that could never go up. The game's Supported
+  Game Files page on retroachievements.org lists the ROMs that work.
+- RetroAchievements' other made-up warning achievements (like "Warning: Unknown Emulator", which
+  is about hardcore mode) don't pop up as unlocks either.
+
 ## 1.9.85 (2026-10-12)
 - Choccy Milk has its own look: Cocoa in dark mode and Milk in light mode (T switches, and it's
   remembered), with a chocolate band dripping across the top, the glass of chocolate milk as its

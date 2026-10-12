@@ -28,9 +28,13 @@ public final class RaConnect {
     /** One achievement: its id, what it's called, and its logic (MemAddr). */
     public record Achievement(int id, String title, String description, int points, String memAddr, String badge) {}
 
-    /** A game's achievements for this player: which ones they have already, and its hash. */
+    /**
+     * A game's achievements for this player: which ones they have already, and its hash. warning
+     * (null when fine) says why there are none to earn: RetroAchievements knows the ROM but not as
+     * a version its achievements work with.
+     */
     public record GameSet(int id, String title, int console, List<Achievement> achievements, Set<Integer> unlocked,
-                          String hash) {
+                          String hash, String warning) {
         public int points() {
             return achievements.stream().mapToInt(Achievement::points).sum();
         }
@@ -39,6 +43,14 @@ public final class RaConnect {
             return achievements.stream().filter(a -> !unlocked.contains(a.id())).toList();
         }
     }
+
+    /**
+     * RetroAchievements' answer for a ROM it knows but doesn't support: the game's id plus one of
+     * these (its VirtualGameIdService), and only a made-up "warning" achievement to go with it.
+     */
+    private static final int INCOMPATIBLE = 1_000_000_000, UNTESTED = 1_100_000_000, PATCH_REQUIRED = 1_200_000_000;
+    /** The id of the made-up achievements RetroAchievements adds to warn about something (they unlock by themselves). */
+    static final int WARNING_ID = 101000001;
 
     private static final String URL = System.getProperty("wiiuu.raConnect", "https://retroachievements.org/dorequest.php");
 
@@ -124,6 +136,24 @@ public final class RaConnect {
         Map<String, Object> id = post("r", "gameid", "m", hash);
         int gameId = num(id.get("GameID"));
         if (!ok(id) || gameId <= 0) return null;
+        if (gameId > INCOMPATIBLE) {
+            // a version of the game the achievements don't work with: say so, earn nothing
+            String reason = gameId > PATCH_REQUIRED ? "it needs a patch first"
+                    : gameId > UNTESTED ? "it hasn't been tested with them" : "they're known not to work with it";
+            int real = gameId - (gameId > PATCH_REQUIRED ? PATCH_REQUIRED : gameId > UNTESTED ? UNTESTED : INCOMPATIBLE);
+            String title = "";
+            try {
+                Map<String, Object> patch = post("r", "patch", "u", user(), "t", token(), "g", Integer.toString(gameId));
+                Map<String, Object> data = MiniJson.object(patch.get("PatchData"));
+                if (data != null) title = str(data.get("Title")).replaceFirst("^Unsupported Game Version \\((.*)\\)$", "$1");
+            } catch (IOException e) {
+                // the title is only for the message
+            }
+            if (title.isEmpty()) title = game.name();
+            return new GameSet(real, title, 0, List.of(), Set.of(), hash,
+                    "This ROM is a version of " + title + " RetroAchievements doesn't support: " + reason
+                            + ". Its Supported Game Files page on retroachievements.org lists the ones that work.");
+        }
         Map<String, Object> patch = post("r", "patch", "u", user(), "t", token(), "g", Integer.toString(gameId));
         if (!ok(patch)) throw new IOException(error(patch, "no achievement list"));
         Map<String, Object> data = MiniJson.object(patch.get("PatchData"));
@@ -134,6 +164,11 @@ public final class RaConnect {
             for (Object o : all) {
                 Map<String, Object> a = MiniJson.object(o);
                 if (a == null || num(a.get("Flags")) != 3) continue;          // 3: official (5: unofficial)
+                if (num(a.get("ID")) == WARNING_ID) {
+                    // "Warning: Unknown Emulator" and the like: about hardcore, which Choccy Milk doesn't do
+                    System.out.println("[achievements] RetroAchievements says: " + str(a.get("Title")) + " (" + str(a.get("Description")) + ")");
+                    continue;
+                }
                 String logic = MiniJson.string(a.get("MemAddr"));
                 if (logic == null || logic.isEmpty()) continue;
                 list.add(new Achievement(num(a.get("ID")), str(a.get("Title")), str(a.get("Description")),
@@ -156,7 +191,31 @@ public final class RaConnect {
             List<Object> u = MiniJson.array(old.get("UserUnlocks"));
             if (u != null) for (Object o : u) unlocked.add(num(o));
         }
-        return new GameSet(gameId, str(data.get("Title")), num(data.get("ConsoleID")), List.copyOf(list), unlocked, hash);
+        return new GameSet(gameId, str(data.get("Title")), num(data.get("ConsoleID")), List.copyOf(list), unlocked, hash, null);
+    }
+
+    /**
+     * Whether RetroAchievements knows this ROM hash only as a version its achievements don't work
+     * with (incompatible, untested, or needing a patch). Null when it can't be told (offline...).
+     * Needs no sign-in.
+     */
+    public static Boolean unsupportedVersion(String hash, String product) {
+        if (hash == null) return null;
+        try {
+            HttpRequest req = HttpRequest.newBuilder(URI.create(URL)).timeout(Duration.ofSeconds(20))
+                    .header("User-Agent", product).header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString("r=gameid&m=" + URLEncoder.encode(hash, StandardCharsets.UTF_8))).build();
+            HttpResponse<String> r = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build()
+                    .send(req, HttpResponse.BodyHandlers.ofString());
+            Map<String, Object> j = MiniJson.object(MiniJson.parse(r.body()));
+            if (j == null || !ok(j)) return null;
+            return num(j.get("GameID")) > INCOMPATIBLE;
+        } catch (IOException | RuntimeException e) {
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
     }
 
     /** Unlocks an achievement (softcore). Null when done (or the player had it already), else why not. */
