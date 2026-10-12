@@ -141,6 +141,8 @@ public final class GamepadServer {
         volatile String label = "Phone";
         /** a real controller plugged into the PC (not a phone): connected for as long as it's plugged in */
         final boolean controller;
+        /** a controller another WII-UU sends (Peers): forgotten when it stops */
+        volatile boolean remote;
 
         Client(String id, int player) {
             this(id, player, false);
@@ -224,7 +226,7 @@ public final class GamepadServer {
 
     private synchronized void saveClients() {
         Properties p = new Properties();
-        for (Client c : clients.values()) if (!c.controller) p.setProperty(c.id, c.player + "," + c.lastSeen);
+        for (Client c : clients.values()) if (!c.controller && !c.remote) p.setProperty(c.id, c.player + "," + c.lastSeen);
         try {
             Files.createDirectories(config.home());
             try (var out = Files.newOutputStream(clientsFile())) {
@@ -297,7 +299,8 @@ public final class GamepadServer {
     public void setVirtualPads(VirtualPads pads) {
         this.pads = pads;
         if (pads != null && config.getBool("input.controllersAsPlayers", true)) {
-            pads.watchControllers(new Controllers());
+            controllers = new Controllers();
+            pads.watchControllers(controllers);
             wiiuu.input.LocalPads.setTaken(() -> {
                 Map<Integer, String> m = new HashMap<>();
                 for (Client c : clients.values()) if (c.controller && c.player > 0) m.put(c.player, c.label);
@@ -313,7 +316,53 @@ public final class GamepadServer {
      * player like a phone - a number in the player order, the menu, and in games its own virtual
      * Xbox 360 pad, the one every emulator is set up for. So no emulator needs setting up for it.
      */
+    private volatile Controllers controllers;
+    private volatile Peers peers;
+
+    /** Other WII-UUs on the network (null when the server is off or peers.enabled=false). */
+    public Peers peers() {
+        return peers;
+    }
+
+    /** What the other WII-UUs get from this one's server. */
+    private final class PeerHost implements Peers.Host {
+        @Override
+        public boolean codeOk(String given) {
+            return !requiresCode() || code.equals(given == null ? "" : given.trim());
+        }
+
+        @Override
+        public String remotePad(String label) {
+            Client c;
+            synchronized (GamepadServer.this) {
+                c = new Client(UUID.randomUUID().toString(), 0);
+                c.remote = true;
+                c.label = label;
+                c.player = freePlayer(c);
+                clients.put(c.id, c);
+            }
+            System.out.println("[gamepad] " + label + " (from another WII-UU) is " + (c.player > 0 ? "player " + c.player : "a viewer"));
+            if (dsu != null && c.player > 0) dsu.setConnected(c.player, true);
+            host.padsChanged(connectedPads());
+            return c.id;
+        }
+
+        @Override
+        public boolean playing() {
+            return launcher.isRunning();
+        }
+
+        @Override
+        public void forwardingChanged() {
+            Controllers c = controllers;
+            if (c != null) c.rehome();
+        }
+    }
+
     private final class Controllers implements VirtualPads.Controllers {
+        /** the controllers plugged in here: id -> name */
+        private final Map<String, String> known = new ConcurrentHashMap<>();
+
         /** one at a time and in order, never on the helper's reader thread (it must keep reading) */
         private final java.util.concurrent.ExecutorService exec = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "controllers");
@@ -323,27 +372,59 @@ public final class GamepadServer {
 
         @Override
         public void connected(String id, String name) {
+            known.put(id, name);
+            exec.execute(() -> here(id, name));
+        }
+
+        /** Plays here, or on the WII-UU controllers are sent to (Peers). */
+        private void here(String id, String name) {
+            Peers pr = peers;
+            if (pr != null && pr.forwardTarget() != null) {
+                pr.padConnected(id, name);
+                System.out.println("[input] " + name + " plays on " + pr.forwardTarget().name());
+                return;
+            }
+            Client c;
+            synchronized (GamepadServer.this) {
+                c = new Client("pad:" + id, 0, true);
+                c.label = name;
+                c.player = freePlayer(c);
+                clients.put(c.id, c);
+            }
+            System.out.println("[input] " + name + " plays as " + (c.player > 0 ? "player " + c.player : "a viewer (all players taken)"));
+            if (c.player > 0) {
+                if (dsu != null) dsu.setConnected(c.player, true);
+                VirtualPads v = pads;
+                if (v != null) v.ensure(c.player);         // there before a game starts, so emulators count it
+            }
+            host.padsChanged(connectedPads());
+        }
+
+        /** Sending controllers to another WII-UU was turned on or off: each one moves. */
+        void rehome() {
             exec.execute(() -> {
-                Client c;
-                synchronized (GamepadServer.this) {
-                    c = new Client("pad:" + id, 0, true);
-                    c.label = name;
-                    c.player = freePlayer(c);
-                    clients.put(c.id, c);
+                for (Map.Entry<String, String> e : known.entrySet()) {
+                    gone(e.getKey());
+                    here(e.getKey(), e.getValue());
                 }
-                System.out.println("[input] " + name + " plays as " + (c.player > 0 ? "player " + c.player : "a viewer (all players taken)"));
-                if (c.player > 0) {
-                    if (dsu != null) dsu.setConnected(c.player, true);
-                    VirtualPads v = pads;
-                    if (v != null) v.ensure(c.player);         // there before a game starts, so emulators count it
-                }
-                host.padsChanged(connectedPads());
             });
+        }
+
+        private void gone(String id) {
+            Peers pr = peers;
+            if (pr != null) pr.padDisconnected(id);
+            Client c = clients.remove("pad:" + id);
+            if (c == null) return;
+            release(c);
+            host.padsChanged(connectedPads());
         }
 
         @Override
         public void disconnected(String id) {
+            known.remove(id);
             exec.execute(() -> {
+                Peers pr = peers;
+                if (pr != null) pr.padDisconnected(id);
                 Client c = clients.remove("pad:" + id);
                 if (c == null) return;
                 release(c);
@@ -355,6 +436,11 @@ public final class GamepadServer {
         @Override
         public void input(String id, String line) {
             exec.execute(() -> {
+                Peers pr = peers;
+                if (pr != null && pr.sending(id)) {
+                    pr.padInput(id, line);
+                    return;
+                }
                 Client c = clients.get("pad:" + id);
                 if (c != null) GamepadServer.this.input(c, line);
             });
@@ -375,6 +461,11 @@ public final class GamepadServer {
         http.setExecutor(pool);
         http.createContext("/", this::handle);
         http.start();
+        if (config.getBool("peers.enabled", true)) {
+            peers = new Peers(config, new PeerHost(), port, wiiuu.Main.VERSION);
+            peers.start();
+            if (peers.forwardTarget() != null && controllers != null) controllers.rehome();
+        }
         if (config.getBool("server.https", true)) {
             // phones only give web pages the gyro over https, so offer a second, secure address
             int hp = config.getInt("server.httpsPort", 8443);
@@ -421,6 +512,7 @@ public final class GamepadServer {
 
     public void stop() {
         stopped = true;
+        if (peers != null) peers.stop();
         saveClients();
         if (http != null) http.stop(0);
         if (https != null) https.stop(0);
@@ -451,7 +543,7 @@ public final class GamepadServer {
 
     /** Phones connected now (not counting controllers plugged into the PC). */
     public int connectedPads() {
-        return (int) clients.values().stream().filter(c -> c.active && !c.controller).count();
+        return (int) clients.values().stream().filter(c -> c.active && !c.controller && !c.remote).count();
     }
 
     public static String lanAddress() {
@@ -489,6 +581,8 @@ public final class GamepadServer {
                 case "/icon.png" -> send(ex, 200, "image/png", icon());
                 case "/api/hello" -> hello(ex);
                 default -> {
+                    Peers pr = peers;
+                    if (pr != null && pr.handle(ex, path)) return;
                     if (!path.startsWith("/api/")) {
                         send(ex, 404, "text/plain", "not found".getBytes(StandardCharsets.UTF_8));
                         return;
@@ -655,7 +749,7 @@ public final class GamepadServer {
     /** The connected phones and controllers, by player number (viewers last). */
     public List<Pad> pads() {
         List<Pad> list = new ArrayList<>();
-        for (Client c : clients.values()) if (c.active) list.add(new Pad(c.id, c.player, c.label, c.controller));
+        for (Client c : clients.values()) if (c.active) list.add(new Pad(c.id, c.player, c.label, c.controller || c.remote));
         list.sort(java.util.Comparator.comparingInt(p -> p.player() <= 0 ? Integer.MAX_VALUE : p.player()));
         return list;
     }
@@ -736,6 +830,7 @@ public final class GamepadServer {
             if (c.controller) continue;            // there until unplugged
             if (c.active && now - c.lastSeen > STALE_MS) {
                 c.active = false;
+                if (c.remote) clients.remove(c.id);              // it registers again when it comes back
                 if (c.player > 0) {
                     router.releaseAll(c.player);
                     if (dsu != null) dsu.setConnected(c.player, false);

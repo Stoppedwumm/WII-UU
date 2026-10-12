@@ -152,6 +152,11 @@ if ($isAdmin) {
         # 8443: the secure GamePad address, needed for gyro on phones
         New-NetFirewallRule -DisplayName $rule -Direction Inbound -Protocol TCP -LocalPort $Port,8443 -Action Allow -Profile Private | Out-Null
     }
+    # 26780: other WII-UUs on the network find this one (Settings > GamePad & players > Other WII-UUs)
+    $peers = "WII-UU finding other WII-UUs (UDP 26780)"
+    if (-not (Get-NetFirewallRule -DisplayName $peers -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName $peers -Direction Inbound -Protocol UDP -LocalPort 26780 -Action Allow -Profile Private | Out-Null
+    }
     Ok "Firewall rule '$rule' (private networks)"
 } else {
     Warn "Not running as administrator: when Windows asks on first start, allow Java on Private networks."

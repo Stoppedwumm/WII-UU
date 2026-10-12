@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.87 (2026-10-12)
+- Several WII-UUs on one network work together: Settings > GamePad & players > Other WII-UUs
+  lists the ones nearby. Link two once with the other one's pairing code, then:
+  - Send my controllers there: controllers plugged into this WII-UU play on the other one, each
+    as a player of its own (a Raspberry Pi's USB controller playing Choccy Milk on your MacBook).
+  - Sync saves: Choccy Milk's saves and save states stay the same on both. The newer copy wins,
+    the one it replaces is kept in saves/.backup, and nothing syncs while a game runs.
+- Linked WII-UUs use a key of their own for each other; the pairing code is only needed to link.
+  WII-UUs find each other on UDP port 26780 (the Windows installer allows it on private networks).
+
 ## 1.9.86 (2026-10-12)
 - RetroAchievements: a ROM that is a version of a game RetroAchievements doesn't support (Super
   Mario 64's European or Japanese release, for example: only the USA one works) no longer shows

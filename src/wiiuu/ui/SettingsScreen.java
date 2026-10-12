@@ -1006,6 +1006,14 @@ public final class SettingsScreen {
         r.add(toggle("Controllers are players", "Controllers plugged into the PC play like phones: each one gets a player number "
                 + "here and works in every emulator, nothing to set up (Linux). Off: emulators read them themselves. "
                 + "From the next start.", "input.controllersAsPlayers", true, null));
+        r.add(new Link("Other WII-UUs", "Another WII-UU on this network: send it the controllers plugged in here, and keep "
+                + "your saves the same on both.", () -> {
+                    wiiuu.net.GamepadServer g = sv.gamepad().get();
+                    wiiuu.net.Peers pr = g == null ? null : g.peers();
+                    if (pr == null) return "off";
+                    int n = pr.links().size();
+                    return n == 0 ? (pr.nearby().isEmpty() ? "none linked" : pr.nearby().size() + " nearby") : n + " linked";
+                }, this::peersPage));
         r.add(toggle("Phones choose their player", "A player menu on the phone (tap P1 at its top). Off: player numbers are only "
                 + "changed here on the TV.", "pads.choosePlayer", true, null));
         r.add(new Toggle("8-player mode", "Up to 8 phones at once instead of 4. From the next start.",
@@ -1026,6 +1034,86 @@ public final class SettingsScreen {
             r.add(new Link("Player " + p, null, null, () -> keysPage(player)));
         }
         return r;
+    }
+
+    /** Other WII-UUs on the network: the ones nearby (to link with) and the linked ones. */
+    private Page peersPage() {
+        return new Page("Other WII-UUs", () -> {
+            List<Row> r = new ArrayList<>();
+            wiiuu.net.GamepadServer g = sv.gamepad().get();
+            wiiuu.net.Peers pr = g == null ? null : g.peers();
+            if (pr == null) {
+                r.add(new Info("The GamePad server is off, so other WII-UUs can't find this one."));
+                return r;
+            }
+            r.add(new Info("Link two WII-UUs on the same network once, with the pairing code of the other one (its "
+                    + "Settings > GamePad & players). Then controllers plugged in here can play there, as players of "
+                    + "their own, and Choccy Milk's saves stay the same on both."));
+            r.add(new Info("This one: " + pr.myName() + " · " + g.url().replaceFirst("^http://", "").replaceFirst("/$", "")
+                    + (g.requiresCode() ? " · code " + g.code() : " · no code needed")));
+            List<wiiuu.net.Peers.Link> links = pr.links();
+            if (!links.isEmpty()) r.add(new Header("Linked"));
+            for (wiiuu.net.Peers.Link l : links) {
+                r.add(new Link(l.name(), null, () -> (pr.online(l) ? "" : "not reached · ") + (l.forward() ? "gets controllers" : l.sync() ? "syncs saves" : "linked"),
+                        () -> peerPage(pr, l)));
+            }
+            List<wiiuu.net.Peers.Seen> near = pr.nearby();
+            r.add(new Header("Nearby"));
+            if (near.isEmpty()) r.add(new Info("No other WII-UU heard on this network yet (they need 1.9.87 or newer, and "
+                    + "their GamePad server on). You can also link one by its address below."));
+            for (wiiuu.net.Peers.Seen n : near) {
+                r.add(new Action("Link with " + n.name(), n.host() + " · WII-UU " + n.version(), () -> askCode(pr, n.name(), n.host() + ":" + n.port()),
+                        null, null));
+            }
+            r.add(new Action("Link by address", "Its address and port, as its GamePad page shows them (like 192.168.1.20:8080).",
+                    () -> edit("Address of the other WII-UU", "", false, a -> {
+                        if (!a.isBlank()) askCode(pr, a.trim(), a.trim());
+                    }), null, null));
+            return r;
+        });
+    }
+
+    /** Asks for the other WII-UU's pairing code, then links (in the background). */
+    private void askCode(wiiuu.net.Peers pr, String name, String address) {
+        edit("Pairing code on " + name + "'s TV", "", false, code -> {
+            say("Linking with " + name + "…");
+            Thread t = new Thread(() -> {
+                String err = pr.link(address, config.port(), code);
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    say(err == null ? "Linked with " + name + ": saves sync from now on" : err);
+                    reload(false);
+                });
+            }, "peers-link");
+            t.setDaemon(true);
+            t.start();
+        });
+    }
+
+    private Page peerPage(wiiuu.net.Peers pr, wiiuu.net.Peers.Link l) {
+        return new Page(l.name(), () -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info(l.host() + (pr.online(l) ? "" : " · not reached lately (off, or on another network)")
+                    + (l.state().isEmpty() ? "" : " · " + l.state())));
+            r.add(new Toggle("Send my controllers there", "The controllers plugged in here play on " + l.name() + " instead, "
+                    + "each as a player of its own (Linux: needs the virtual controllers). Only one WII-UU at a time.",
+                    l::forward, on -> {
+                pr.setForward(l, on);
+                say(on ? "Controllers plugged in here now play on " + l.name() : "Controllers play here again");
+            }));
+            r.add(new Toggle("Sync saves", "Choccy Milk's saves and save states (~/.wiiuu/saves) both ways: the newer copy "
+                    + "wins, the one it replaces is kept in saves/.backup. Never while a game runs on either.",
+                    l::sync, on -> pr.setSync(l, on)));
+            r.add(new Action("Sync now", null, () -> {
+                pr.syncSoon(l);
+                say("Syncing saves with " + l.name() + "…");
+            }, l::state, null));
+            r.add(new Action("Unlink", "Forget " + l.name() + " (it forgets this one too).", () -> {
+                pr.unlink(l);
+                say("Unlinked " + l.name());
+                back();
+            }, null, "Press A again to unlink"));
+            return r;
+        });
     }
 
     /** The connected phones and controllers and their player numbers; changing one swaps it with the one that had it. */

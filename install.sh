@@ -354,9 +354,9 @@ fi
 
 # ---------------------------------------------------------------------------- network hint
 if command -v ufw >/dev/null 2>&1 && sudo -n ufw status 2>/dev/null | grep -q "Status: active"; then
-  warn "Firewall active: run 'sudo ufw allow $PORT/tcp && sudo ufw allow 8443/tcp' so phones can reach the GamePad (8443 = secure address for gyro)."
+  warn "Firewall active: run 'sudo ufw allow $PORT/tcp && sudo ufw allow 8443/tcp && sudo ufw allow 26780/udp' so phones can reach the GamePad (8443 = secure address for gyro, 26780 = other WII-UUs finding this one)."
 elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
-  warn "Firewall active: run 'sudo firewall-cmd --add-port=$PORT/tcp --add-port=8443/tcp --permanent && sudo firewall-cmd --reload'."
+  warn "Firewall active: run 'sudo firewall-cmd --add-port=$PORT/tcp --add-port=8443/tcp --add-port=26780/udp --permanent && sudo firewall-cmd --reload'."
 fi
 if [ "$OS" = "Linux" ] && [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
   warn "Wayland session: GamePad keys, screen streaming and touch work with X11/XWayland windows. If an emulator ignores it, run it with QT_QPA_PLATFORM=xcb or log into an X11 session."

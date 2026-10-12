@@ -540,6 +540,31 @@ switches to the cores' cached interpreter, which works everywhere but is slower,
 the software renderer and the interpreter, many N64 games will run slowly on a small computer; a
 graphics driver with OpenGL 3.3 (or the standalone mupen64plus) does better there.
 
+## Several WII-UUs
+
+WII-UUs on the same network find each other (*Settings → GamePad & players → Other WII-UUs*). Link
+two once: choose the other one under *Nearby* (or *Link by address*, with the address and port its
+GamePad page shows) and type the pairing code from its TV. Then, on either one:
+
+* **Send my controllers there:** the controllers plugged in here play on the other WII-UU instead,
+  each as a player of its own, just like a phone there: a number in its *Player order* (named
+  "Raspberry Pi: 8BitDo Pro 2"), Choccy Milk and every emulator. So a USB controller on a Raspberry
+  Pi plays the Choccy Milk game on your MacBook. It needs the controllers to be players here
+  (Linux with the virtual controllers, see *Controllers* above); one WII-UU at a time. Turn it off
+  and they play here again.
+* **Sync saves** (on by default): Choccy Milk's game saves and save states (`~/.wiiuu/saves`, the
+  Choccy Milk app's too) are kept the same on both, every minute and as soon as a game ends.
+  Files only one has are copied over; for the rest the newer copy wins, and the one it replaces is
+  kept in `saves/.backup`. Nothing is synced while a game runs on either. Saves of RetroArch and
+  the standalone emulators stay where those keep them. The newer copy is told apart by the files'
+  times, so both computers' clocks should be right (they are, when they set the time online).
+
+Linking gives each WII-UU a random key for the other (kept in `~/.wiiuu/peers.properties`, readable
+only by you); saves and controllers need it, and the pairing code is only used to link. Five
+wrong codes in a row stop linking for a minute. *Unlink* forgets the other one (and it forgets
+this one). WII-UUs find each other on UDP port 26780; where a firewall blocks it, link by address.
+`peers.enabled=false` turns all of this off.
+
 ## Phone as GamePad
 
 **Player numbers:** tap the player badge (P1, P2...) at the top of the GamePad to pick another
