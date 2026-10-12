@@ -382,7 +382,7 @@ final class SetupGuide {
                 tickled = true;
                 say("tickle");
             }
-            String name = player < 0 ? LocalPads.name(player) : null;
+            String name = LocalPads.name(player);
             who = name != null ? name : "Phone " + player;
         } else {
             held.remove(b);

@@ -47,14 +47,23 @@ public final class LocalPads {
     /** controller names by player (-1, -2, ...), for the setup guide's controller test */
     private static final ConcurrentHashMap<Integer, String> NAMES = new ConcurrentHashMap<>();
 
-    /** The name of the real controller playing as {@code player} (below 0), or null. */
+    /** Controllers WII-UU took over as players of their own (WII-UU's GamePad server knows them): player to name. */
+    private static volatile java.util.function.Supplier<java.util.Map<Integer, String>> taken = java.util.Map::of;
+
+    public static void setTaken(java.util.function.Supplier<java.util.Map<Integer, String>> controllers) {
+        taken = controllers;
+    }
+
+    /** The name of the real controller playing as {@code player} (below 0 here, above for one taken over), or null. */
     public static String name(int player) {
-        return NAMES.get(player);
+        return player < 0 ? NAMES.get(player) : taken.get().get(player);
     }
 
     /** The names of the real controllers connected now. */
     public static java.util.List<String> names() {
-        return NAMES.values().stream().sorted().toList();
+        java.util.List<String> all = new java.util.ArrayList<>(NAMES.values());
+        all.addAll(taken.get().values());
+        return all.stream().sorted().toList();
     }
 
     public LocalPads(PadSink router, boolean confirmEast) {
@@ -68,7 +77,7 @@ public final class LocalPads {
         Thread t = new Thread(() -> {
             while (true) {
                 for (Joysticks.Device d : Joysticks.list()) {
-                    if (d.ours() || d.event() == null) continue;
+                    if (d.ours() || d.event() == null || Joysticks.claimed(d.event())) continue;
                     int player = players.computeIfAbsent(d.event(), k -> -(players.size() + 1));
                     if (open.add(d.event())) start("event-" + d.event(), () -> readEvents(d, player));
                     if (open.add(d.js())) start("js-" + d.js(), () -> readSticks(d, player));

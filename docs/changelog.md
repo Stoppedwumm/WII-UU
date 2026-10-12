@@ -3,6 +3,17 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.84 (2026-10-12)
+- Plug in a controller and play (Linux and Raspberry Pi): any USB or Bluetooth controller now
+  becomes a player like a phone. It gets the next free player number, shows by name under
+  Settings > GamePad & players > Player order (reorder phones and controllers together), and in
+  games plays through that player's virtual Xbox 360 controller, the one every emulator is already
+  set up for: RetroArch, Choccy Milk, Mupen64Plus, Dolphin, PCSX2, DuckStation and the rest need no
+  setting up for it. WII-UU takes the controller over while it runs, so no game sees it twice or as
+  the wrong player. Buttons go by position (bottom B, right A, as on the GamePad); triggers, both
+  sticks, d-pad, Start / Select and the guide button all work. Settings > GamePad & players >
+  Controllers are players turns it off.
+
 ## 1.9.83 (2026-10-12)
 - Choccy Milk writes the game's own saves (battery saves; N64 EEPROM, SRAM, FlashRAM and Controller
   Pak, like Super Mario 64's stars) within a second of the game saving instead of every 30 seconds,

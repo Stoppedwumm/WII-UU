@@ -59,11 +59,20 @@ sudo wiiuu-console install                                                    # 
 * **Power → Desktop Mode** logs you into your normal desktop. The **Return to WII-UU** icon on the
   desktop, or in the app menu, goes back.
 * **Power** also offers Restart and Shut Down, so a keyboard is never needed.
-* **Controllers:** besides the phones, USB and Bluetooth controllers work in the menu (on Linux):
-  the stick or d-pad moves, the bottom button opens and the right one goes back
-  (`input.padConfirm=east` swaps them, Nintendo style), the shoulders and triggers turn the page,
-  Start shows the GamePad info and Select refreshes. In a game the emulator reads the controller
-  itself. `input.localPads=false` turns this off.
+* **Controllers:** besides the phones, plug in any USB or Bluetooth controller and play (on
+  Linux). Each one becomes a player like a phone: it gets the next free player number (*Settings →
+  GamePad & players → Player order* shows it by name, and you can reorder phones and controllers
+  together), and in games it plays through that player's virtual Xbox 360 controller, the one every
+  emulator is already set up for, so no emulator needs setting up for it. WII-UU takes the controller
+  over while it runs (only it reads it, so a game never sees it twice or as the wrong player);
+  quitting WII-UU gives it back. Buttons go by position: the bottom one is B and the right one A,
+  as on the GamePad. In the menu the stick or d-pad moves, the bottom button opens and the right one
+  goes back (`input.padConfirm=east` swaps them, Nintendo style), the shoulders and triggers turn
+  the page, Start shows the GamePad info and Select refreshes. *Controllers are players* off
+  (`input.controllersAsPlayers=false`) leaves controllers to the emulators again (they then only
+  steer the menu here; `input.localPads=false` turns that off too). This needs the virtual
+  controllers (`install.sh` sets them up); without them, controllers steer the menu and each
+  emulator reads them itself. On macOS and Windows the emulators read controllers themselves.
 * **Every boot** starts in console mode again, like on a Steam Deck.
 * **If WII-UU crashes,** it is started again. If it fails three times in a row, the computer switches
   to the desktop, so you can never get locked out.
@@ -519,7 +528,7 @@ graphics driver with OpenGL 3.3 (or the standalone mupen64plus) does better ther
 ## Phone as GamePad
 
 **Player numbers:** tap the player badge (P1, P2...) at the top of the GamePad to pick another
-number; if another phone has it, you swap. Games read player 1's controller first, so when player
+number; if another phone (or a controller plugged into the PC) has it, you swap. Games read player 1's controller first, so when player
 1's phone leaves, the next phone becomes player 1 here. On the TV: *Settings → GamePad & players →
 Player order* (and *Number them 1, 2, 3... again*). *Phones choose their player* off
 (`pads.choosePlayer=false`) leaves the numbers to the TV.

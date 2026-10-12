@@ -995,12 +995,17 @@ public final class SettingsScreen {
             config.set("server.port", Integer.toString(v));
             config.save();
         }));
-        r.add(new Link("Player order", "Which phone is player 1, 2, 3... Games read player 1's controller first.",
+        r.add(new Link("Player order", "Which phone or controller is player 1, 2, 3... Games read player 1's controller first.",
                 () -> {
                     wiiuu.net.GamepadServer g = sv.gamepad().get();
-                    int n = g == null ? 0 : g.pads().size();
-                    return n == 1 ? "1 phone" : n + " phones";
+                    List<wiiuu.net.GamepadServer.Pad> all = g == null ? List.of() : g.pads();
+                    long pads = all.stream().filter(wiiuu.net.GamepadServer.Pad::controller).count(), phones = all.size() - pads;
+                    String s = phones == 1 ? "1 phone" : phones + " phones";
+                    return pads == 0 ? s : s + ", " + (pads == 1 ? "1 controller" : pads + " controllers");
                 }, this::playerOrderPage));
+        r.add(toggle("Controllers are players", "Controllers plugged into the PC play like phones: each one gets a player number "
+                + "here and works in every emulator, nothing to set up (Linux). Off: emulators read them themselves. "
+                + "From the next start.", "input.controllersAsPlayers", true, null));
         r.add(toggle("Phones choose their player", "A player menu on the phone (tap P1 at its top). Off: player numbers are only "
                 + "changed here on the TV.", "pads.choosePlayer", true, null));
         r.add(new Toggle("8-player mode", "Up to 8 phones at once instead of 4. From the next start.",
@@ -1023,7 +1028,7 @@ public final class SettingsScreen {
         return r;
     }
 
-    /** The connected phones and their player numbers; changing one swaps it with the phone that had it. */
+    /** The connected phones and controllers and their player numbers; changing one swaps it with the one that had it. */
     private Page playerOrderPage() {
         return new Page("Player order", () -> {
             List<Row> r = new ArrayList<>();
@@ -1034,18 +1039,19 @@ public final class SettingsScreen {
             }
             List<wiiuu.net.GamepadServer.Pad> pads = g.pads();
             if (pads.isEmpty()) {
-                r.add(new Info("No phone is connected. Press + in the menu and scan the QR code with a phone."));
+                r.add(new Info("No phone is connected and no controller plugged in. Press + in the menu and scan the QR code "
+                        + "with a phone, or plug in a controller."));
                 return r;
             }
-            r.add(new Info("Left / right changes a phone's number. A number another phone has is swapped with it."));
+            r.add(new Info("Left / right changes a number. A number another phone or controller has is swapped with it."));
             int max = config.getInt("server.maxPlayers", 4) > 4 ? 8 : 4;
             List<String> names = new ArrayList<>();
             names.add("Viewer");
             for (int p = 1; p <= max; p++) names.add("Player " + p);
-            int n = 0;
+            int n = 0, k = 0;
             for (wiiuu.net.GamepadServer.Pad pad : pads) {
                 String id = pad.id();
-                r.add(new Choice("Phone " + (++n) + ": " + pad.label(), null, () -> names, () -> {
+                r.add(new Choice((pad.controller() ? "Controller " + (++k) : "Phone " + (++n)) + ": " + pad.label(), null, () -> names, () -> {
                     for (wiiuu.net.GamepadServer.Pad now : g.pads()) if (now.id().equals(id)) return now.player();
                     return 0;
                 }, i -> {
@@ -1055,7 +1061,7 @@ public final class SettingsScreen {
             }
             r.add(new Action("Number them 1, 2, 3... again", "Closes gaps: after player 1 left, player 2 becomes player 1.", () -> {
                 g.renumber();
-                say("The phones are players 1 to " + Math.min(pads.size(), max) + " now");
+                say("Numbered 1 to " + Math.min(pads.size(), max) + " now");
                 reload(false);
             }, null, null));
             return r;

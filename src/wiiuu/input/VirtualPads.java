@@ -17,12 +17,18 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import wiiuu.core.Joysticks;
+
 /**
  * Real virtual controllers on Linux: each phone GamePad becomes an Xbox 360 pad created through
  * /dev/uinput by a small Python helper ({@code vpad.py}), so emulators see analog sticks and
  * buttons natively - no key mapping and no dependence on which window has focus.
  *
  * <p>Buttons are mapped by position (Nintendo A = east, B = south, X = north, Y = west).
+ *
+ * <p>The helper also takes over real controllers when asked ({@link #watchControllers}): it grabs
+ * each one (so emulators only see the virtual pads) and passes its input on, already as the
+ * GamePad's buttons, for WII-UU to play it as a player of its own like a phone.
  */
 public final class VirtualPads {
     private static final int BTN_SOUTH = 0x130, BTN_EAST = 0x131, BTN_NORTH = 0x133, BTN_WEST = 0x134;
@@ -38,9 +44,29 @@ public final class VirtualPads {
     private final Set<Integer> created = ConcurrentHashMap.newKeySet();
     private final ConcurrentHashMap<Integer, CompletableFuture<Boolean>> pending = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, Set<PadButton>> held = new ConcurrentHashMap<>();
+    private volatile Controllers controllers;
+
+    /** Real controllers the helper took over: when they come and go, and their input. */
+    public interface Controllers {
+        void connected(String id, String name);
+
+        void disconnected(String id);
+
+        /** One line as a phone sends it: "b BUTTON 0|1" or "s STICK X Y". */
+        void input(String id, String line);
+    }
+
+    /** Takes over real controllers from now on (also ones plugged in later), telling {@code to} about them. */
+    public void watchControllers(Controllers to) {
+        if (!usable || controllers != null) return;
+        controllers = to;
+        send("watch");
+    }
 
     /** Starts the helper and creates pad 1 to check it works. */
     public boolean start(Path home) {
+        String fake = System.getProperty("wiiuu.vpad");          // for tests: a stand-in helper
+        if (fake != null) return start(new ProcessBuilder("python3", fake));
         if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux")) {
             problem = "virtual controllers are Linux-only";
             return false;
@@ -51,14 +77,23 @@ public final class VirtualPads {
                     : "/dev/uinput missing (sudo modprobe uinput)";
             return false;
         }
+        Path script = home.resolve("vpad.py");
         try {
-            Path script = home.resolve("vpad.py");
             try (InputStream res = VirtualPads.class.getResourceAsStream("/vpad.py")) {
                 if (res == null) throw new IOException("vpad.py missing from jar");
                 Files.createDirectories(home);
                 Files.copy(res, script, StandardCopyOption.REPLACE_EXISTING);
             }
-            helper = new ProcessBuilder("python3", script.toString()).redirectErrorStream(true).start();
+        } catch (IOException e) {
+            problem = "vpad.py: " + e.getMessage();
+            return false;
+        }
+        return start(new ProcessBuilder("python3", script.toString()));
+    }
+
+    private boolean start(ProcessBuilder command) {
+        try {
+            helper = command.redirectErrorStream(true).start();
             in = new OutputStreamWriter(helper.getOutputStream(), StandardCharsets.UTF_8);
             Thread reader = new Thread(this::readReplies, "vpad-replies");
             reader.setDaemon(true);
@@ -94,6 +129,7 @@ public final class VirtualPads {
         try (BufferedReader r = new BufferedReader(new InputStreamReader(helper.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = r.readLine()) != null) {
+                if (controllerLine(line)) continue;
                 String[] p = line.split(" ", 3);
                 if (p.length < 2) continue;
                 try {
@@ -113,8 +149,33 @@ public final class VirtualPads {
         usable = false;
     }
 
+    /** A line about a real controller; false when it's something else. */
+    boolean controllerLine(String line) {
+        Controllers c = controllers;
+        String[] p = line.split(" ", 3);
+        if (p.length < 2) return false;
+        switch (p[0]) {
+            case "pad+" -> {
+                Joysticks.claim(p[1], true);
+                if (c != null) c.connected(p[1], p.length > 2 ? p[2] : "Controller");
+            }
+            case "pad-" -> {
+                Joysticks.claim(p[1], false);
+                if (c != null) c.disconnected(p[1]);
+            }
+            case "in" -> {
+                if (c != null && p.length > 2) c.input(p[1], p[2]);
+            }
+            case "padfail" -> System.err.println("[input] can't take over controller " + (p.length > 2 ? p[1] + " " + p[2] : p[1]));
+            default -> {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** Creates pad {@code n} the first time it is used. */
-    private boolean ensure(int n) {
+    public boolean ensure(int n) {
         if (created.contains(n)) return true;
         if (!usable) return false;
         CompletableFuture<Boolean> f = pending.computeIfAbsent(n, k -> new CompletableFuture<>());

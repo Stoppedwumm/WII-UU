@@ -139,10 +139,17 @@ public final class GamepadServer {
         volatile boolean active = true;
         /** what kind of phone it is ("iPhone", "Android: Pixel 8"...), for the player order on the TV */
         volatile String label = "Phone";
+        /** a real controller plugged into the PC (not a phone): connected for as long as it's plugged in */
+        final boolean controller;
 
         Client(String id, int player) {
+            this(id, player, false);
+        }
+
+        Client(String id, int player, boolean controller) {
             this.id = id;
             this.player = player;
+            this.controller = controller;
         }
     }
 
@@ -217,7 +224,7 @@ public final class GamepadServer {
 
     private synchronized void saveClients() {
         Properties p = new Properties();
-        for (Client c : clients.values()) p.setProperty(c.id, c.player + "," + c.lastSeen);
+        for (Client c : clients.values()) if (!c.controller) p.setProperty(c.id, c.player + "," + c.lastSeen);
         try {
             Files.createDirectories(config.home());
             try (var out = Files.newOutputStream(clientsFile())) {
@@ -289,6 +296,69 @@ public final class GamepadServer {
     /** Real virtual controllers (Linux uinput), fed alongside keys and DSU. */
     public void setVirtualPads(VirtualPads pads) {
         this.pads = pads;
+        if (pads != null && config.getBool("input.controllersAsPlayers", true)) {
+            pads.watchControllers(new Controllers());
+            wiiuu.input.LocalPads.setTaken(() -> {
+                Map<Integer, String> m = new HashMap<>();
+                for (Client c : clients.values()) if (c.controller && c.player > 0) m.put(c.player, c.label);
+                return m;
+            });
+        }
+    }
+
+    // ---- real controllers ----------------------------------------------------------------
+
+    /**
+     * Controllers plugged into the PC (Linux, through vpad.py, which grabs them): each one is a
+     * player like a phone - a number in the player order, the menu, and in games its own virtual
+     * Xbox 360 pad, the one every emulator is set up for. So no emulator needs setting up for it.
+     */
+    private final class Controllers implements VirtualPads.Controllers {
+        /** one at a time and in order, never on the helper's reader thread (it must keep reading) */
+        private final java.util.concurrent.ExecutorService exec = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "controllers");
+            t.setDaemon(true);
+            return t;
+        });
+
+        @Override
+        public void connected(String id, String name) {
+            exec.execute(() -> {
+                Client c;
+                synchronized (GamepadServer.this) {
+                    c = new Client("pad:" + id, 0, true);
+                    c.label = name;
+                    c.player = freePlayer(c);
+                    clients.put(c.id, c);
+                }
+                System.out.println("[input] " + name + " plays as " + (c.player > 0 ? "player " + c.player : "a viewer (all players taken)"));
+                if (c.player > 0) {
+                    if (dsu != null) dsu.setConnected(c.player, true);
+                    VirtualPads v = pads;
+                    if (v != null) v.ensure(c.player);         // there before a game starts, so emulators count it
+                }
+                host.padsChanged(connectedPads());
+            });
+        }
+
+        @Override
+        public void disconnected(String id) {
+            exec.execute(() -> {
+                Client c = clients.remove("pad:" + id);
+                if (c == null) return;
+                release(c);
+                System.out.println("[input] " + c.label + " unplugged");
+                host.padsChanged(connectedPads());
+            });
+        }
+
+        @Override
+        public void input(String id, String line) {
+            exec.execute(() -> {
+                Client c = clients.get("pad:" + id);
+                if (c != null) GamepadServer.this.input(c, line);
+            });
+        }
     }
 
     public void start(int port) throws IOException {
@@ -379,8 +449,9 @@ public final class GamepadServer {
         return requiresCode() ? url() + "?code=" + code : url();
     }
 
+    /** Phones connected now (not counting controllers plugged into the PC). */
     public int connectedPads() {
-        return (int) clients.values().stream().filter(c -> c.active).count();
+        return (int) clients.values().stream().filter(c -> c.active && !c.controller).count();
     }
 
     public static String lanAddress() {
@@ -522,6 +593,7 @@ public final class GamepadServer {
             return;
         }
         Client c = clients.get(f.getOrDefault("id", ""));
+        if (c != null && c.controller) c = null;           // that's a controller's, not this phone's
         if (c == null) {
             c = new Client(UUID.randomUUID().toString(), freePlayer(null));
             c.label = deviceName(ex.getRequestHeaders().getFirst("User-Agent"));
@@ -541,6 +613,7 @@ public final class GamepadServer {
         if (id == null) id = query(ex).get("c");     // <img> stream requests can't send headers
         if (id == null) return null;
         Client c = clients.get(id);
+        if (c != null && c.controller) return null;         // controllers don't use the page
         if (c != null) touch(c);
         return c;
     }
@@ -576,13 +649,13 @@ public final class GamepadServer {
         return config.getBool("pads.choosePlayer", true);
     }
 
-    /** A connected phone, for the player order on the TV. */
-    public record Pad(String id, int player, String label) {}
+    /** A connected phone (or a controller plugged into the PC), for the player order on the TV. */
+    public record Pad(String id, int player, String label, boolean controller) {}
 
-    /** The connected phones, by player number (viewers last). */
+    /** The connected phones and controllers, by player number (viewers last). */
     public List<Pad> pads() {
         List<Pad> list = new ArrayList<>();
-        for (Client c : clients.values()) if (c.active) list.add(new Pad(c.id, c.player, c.label));
+        for (Client c : clients.values()) if (c.active) list.add(new Pad(c.id, c.player, c.label, c.controller));
         list.sort(java.util.Comparator.comparingInt(p -> p.player() <= 0 ? Integer.MAX_VALUE : p.player()));
         return list;
     }
@@ -593,7 +666,7 @@ public final class GamepadServer {
      */
     public synchronized String setPlayer(String id, int want) {
         Client c = clients.get(id);
-        if (c == null || !c.active) return "That phone isn't connected";
+        if (c == null || !c.active) return c != null && c.controller ? "That controller isn't plugged in" : "That phone isn't connected";
         int max = wiiuu.core.Buzz.players(config);
         if (want < 0 || want > max) return "Players are 1 to " + max;
         int old = c.player;
@@ -660,6 +733,7 @@ public final class GamepadServer {
         long now = System.currentTimeMillis();
         boolean changed = false;
         for (Client c : clients.values()) {
+            if (c.controller) continue;            // there until unplugged
             if (c.active && now - c.lastSeen > STALE_MS) {
                 c.active = false;
                 if (c.player > 0) {
@@ -679,13 +753,16 @@ public final class GamepadServer {
 
     private void input(Client c, String body) {
         if (c.player <= 0) return;
+        // a controller in the menu: its bottom button confirms, as on most controllers (input.padConfirm=east: the right one)
+        boolean swap = c.controller && !launcher.isRunning() && !"east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim());
         for (String line : body.split("\n")) {
             String[] p = line.trim().split(" ");
             try {
                 if (p.length == 3 && p[0].equals("b")) {
                     PadButton b = PadButton.parse(p[1]);
                     if (b != null) {
-                        router.button(c.player, b, p[2].equals("1"));
+                        PadButton menu = !swap ? b : b == PadButton.A ? PadButton.B : b == PadButton.B ? PadButton.A : b;
+                        router.button(c.player, menu, p[2].equals("1"));
                         if (dsu != null) dsu.button(c.player, b, p[2].equals("1"));
                         if (pads != null && launcher.isRunning()) pads.button(c.player, b, p[2].equals("1"));
                     }
