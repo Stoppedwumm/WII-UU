@@ -86,6 +86,69 @@ public final class GameScreen {
             g.drawString(hint, h * 0.05f, h * 0.03f + th / 2 + fm.getAscent() * 0.36f);
             g.setComposite(c);
         }
+        paintNote(g, w, h, font);
+    }
+
+    // ---- announcements (an achievement unlocked...) at the bottom ------------------------------------
+
+    private volatile String noteTitle, noteText;
+    private volatile boolean noteTrophy;
+    private volatile long noteFrom, noteUntil;
+
+    /** Shows a card at the bottom for a while: a title, a line under it, with a trophy for achievements. */
+    public void announce(String title, String text, boolean trophy, long millis) {
+        noteTitle = title;
+        noteText = text;
+        noteTrophy = trophy;
+        noteFrom = System.currentTimeMillis();
+        noteUntil = noteFrom + millis;
+    }
+
+    /** Whether a card is showing (keep repainting). */
+    public boolean announcing() {
+        return System.currentTimeMillis() < noteUntil;
+    }
+
+    private void paintNote(Graphics2D g, int w, int h, Font font) {
+        long now = System.currentTimeMillis();
+        if (now >= noteUntil || noteTitle == null) return;
+        float in = Math.min(1f, (now - noteFrom) / 250f), out = Math.min(1f, (noteUntil - now) / 400f), a = Math.min(in, out);
+        Composite c = g.getComposite();
+        g.setComposite(AlphaComposite.SrcOver.derive(Math.max(0, a)));
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        float u = h / 100f;
+        Font big = font.deriveFont(Font.BOLD, 3.2f * u), small = font.deriveFont(Font.PLAIN, 2.5f * u);
+        FontMetrics fb = g.getFontMetrics(big), fs = g.getFontMetrics(small);
+        float icon = noteTrophy ? 8 * u : 0, pad = 2.2f * u;
+        float tw = Math.max(fb.stringWidth(noteTitle), noteText == null ? 0 : fs.stringWidth(noteText));
+        float cw = Math.min(w - 4 * u, tw + icon + pad * (noteTrophy ? 3 : 2)), ch = 12 * u;
+        float x = (w - cw) / 2, y = h - ch - 4 * u + (1 - in) * 3 * u;
+        g.setColor(new Color(20, 14, 10, 225));
+        g.fill(new RoundRectangle2D.Float(x, y, cw, ch, ch * 0.5f, ch * 0.5f));
+        g.setColor(new Color(0xD7A27A));
+        g.draw(new RoundRectangle2D.Float(x, y, cw, ch, ch * 0.5f, ch * 0.5f));
+        float tx = x + pad;
+        if (noteTrophy) {                                     // a gold cup
+            float cx = x + pad + icon / 2, cy = y + ch / 2;
+            g.setColor(new Color(0xF2C14E));
+            g.fill(new java.awt.geom.Ellipse2D.Float(cx - icon / 2, cy - icon / 2, icon, icon));
+            g.setColor(new Color(0x8A5A12));
+            float cup = icon * 0.42f;
+            g.fill(new RoundRectangle2D.Float(cx - cup / 2, cy - cup * 0.62f, cup, cup * 0.75f, cup * 0.5f, cup * 0.5f));
+            g.fill(new java.awt.geom.Rectangle2D.Float(cx - cup * 0.09f, cy + cup * 0.1f, cup * 0.18f, cup * 0.3f));
+            g.fill(new RoundRectangle2D.Float(cx - cup * 0.32f, cy + cup * 0.38f, cup * 0.64f, cup * 0.14f, cup * 0.1f, cup * 0.1f));
+            tx = x + pad * 2 + icon;
+        }
+        g.setFont(big);
+        g.setColor(new Color(0xF3E6DA));
+        g.drawString(noteTitle, tx, y + ch * 0.46f);
+        if (noteText != null) {
+            g.setFont(small);
+            g.setColor(new Color(0xD7A27A));
+            g.drawString(noteText, tx, y + ch * 0.46f + fs.getAscent() * 1.15f);
+        }
+        g.setComposite(c);
     }
 
     /** Whether the hint is still showing (keep repainting until it has faded). */

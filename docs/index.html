@@ -572,7 +572,8 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
       <details><summary>N64 is slow on my Raspberry Pi 5.</summary>
         <p>The N64 recompiler needs 4 KB memory pages, and the Pi 5's default kernel uses 16 KB. Add <code>kernel=kernel8.img</code> to <code>/boot/firmware/config.txt</code> and restart. Without it, WII-UU falls back to the much slower interpreter and says so. <code>~/.wiiuu/logs/n64.log</code> shows how fast the game runs.</p></details>
       <details><summary>How do I get RetroAchievements?</summary>
-        <p>Enter your user name and Web API key under Settings (F1) → Games → RetroAchievements account, or tap <b>Enter on your phone</b> and type them there. Each game's tile then shows your progress.</p></details>
+        <p>Enter your user name and Web API key under Settings (F1) → Games → RetroAchievements account, or tap <b>Enter on your phone</b> and type them there. Each game's tile then shows your progress.
+          Add your password and Choccy Milk unlocks achievements while you play (NES, SNES, Game Boy, GBA, N64, DS, Master System, Mega Drive), with a trophy card on the TV and a notice on the phones.</p></details>
       <details><summary>Can it run everything through RetroArch?</summary>
         <p>Yes. Turn on <b>RetroArch mode</b> in Settings (F1) → General. Every system with a libretro core then starts in RetroArch: NES through PSP and PS2, including GameCube/Wii (Dolphin) and DS (melonDS).
           WII-UU picks the best installed core and downloads one if it is missing. It gives RetroArch the GamePad's key layout. Wii U, Switch, PS3 and PS4 keep their standalone emulators.

@@ -65,6 +65,7 @@ public final class App extends JPanel implements PadSink {
     private final Cores cores;
     private final Library library;
     private final GameScreen screen = new GameScreen();
+    private final wiiuu.core.RaConnect ra;
     private JFrame frame;
 
     /** consoles with games and cores, and the games of the chosen one */
@@ -80,6 +81,8 @@ public final class App extends JPanel implements PadSink {
         this.config = config;
         this.cores = new Cores(config);
         this.library = new Library(config);
+        String version = App.class.getPackage().getImplementationVersion();
+        this.ra = new wiiuu.core.RaConnect(config, "ChoccyMilk/" + (version == null ? "dev" : version));
         Choccy.setHome(config.home());
         setBackground(BG);
         setPreferredSize(new Dimension(1100, 680));
@@ -198,6 +201,19 @@ public final class App extends JPanel implements PadSink {
         session = s;
         playing = game;
         status = "";
+        wiiuu.core.ChoccyCheevos.start(ra, s, game, new wiiuu.core.ChoccyCheevos.Events() {
+            @Override
+            public void found(wiiuu.core.RaConnect.GameSet set) {
+                screen.announce("RetroAchievements: " + set.title(), set.unlocked().size() + " of "
+                        + set.achievements().size() + " achievements unlocked", false, 4000);
+            }
+
+            @Override
+            public void unlocked(wiiuu.core.RaConnect.Achievement a, int have, int total, String error) {
+                screen.announce(a.title(), "Achievement unlocked \u00B7 " + a.points() + " points \u00B7 " + have + " of " + total
+                        + (error != null ? " (not sent: " + error + ")" : ""), true, 6000);
+            }
+        });
         long started = System.currentTimeMillis();
         System.out.println("[choccy] " + game.name() + " with " + core.getFileName());
         s.process().onExit().thenAccept(p -> SwingUtilities.invokeLater(() -> {
@@ -278,6 +294,7 @@ public final class App extends JPanel implements PadSink {
             }
             case KeyEvent.VK_ENTER, KeyEvent.VK_X, KeyEvent.VK_SPACE -> choose();
             case KeyEvent.VK_O -> openFile();
+            case KeyEvent.VK_F2 -> signIn();
             case KeyEvent.VK_F5 -> {
                 say("Looking for games…");
                 library.rescanAsync();
@@ -341,6 +358,28 @@ public final class App extends JPanel implements PadSink {
         Choccy.Session s = session;
         int port = player > 0 ? player - 1 : Math.max(0, -player - 1);
         if (s != null) for (PadButton b : PadButton.values()) s.button(port, b, false);
+    }
+
+    /** F2: RetroAchievements sign-in (the user name and password; only the token it gives is kept). */
+    private void signIn() {
+        javax.swing.JTextField user = new javax.swing.JTextField(config.get("ra.user", ""), 18);
+        javax.swing.JPasswordField pass = new javax.swing.JPasswordField(18);
+        javax.swing.JPanel p = new javax.swing.JPanel(new java.awt.GridLayout(0, 1, 4, 4));
+        p.add(new javax.swing.JLabel("RetroAchievements user name"));
+        p.add(user);
+        p.add(new javax.swing.JLabel("Password (only the sign-in token is kept)"));
+        p.add(pass);
+        int ok = javax.swing.JOptionPane.showConfirmDialog(frame, p, "RetroAchievements", javax.swing.JOptionPane.OK_CANCEL_OPTION,
+                javax.swing.JOptionPane.PLAIN_MESSAGE);
+        if (ok != javax.swing.JOptionPane.OK_OPTION || user.getText().isBlank()) return;
+        String name = user.getText().trim(), password = new String(pass.getPassword());
+        say("Signing in to RetroAchievements\u2026");
+        Thread t = new Thread(() -> {
+            String why = ra.login(name, password);
+            SwingUtilities.invokeLater(() -> say(why == null ? "Signed in as " + ra.user() + ": achievements unlock while you play" : why));
+        }, "ra-signin");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void openFile() {
@@ -511,7 +550,8 @@ public final class App extends JPanel implements PadSink {
         g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, Math.round(14 * u)));
         FontMetrics fm = g.getFontMetrics();
         String text = !status.isEmpty() && System.currentTimeMillis() - statusAt < 12000 ? status
-                : "↑↓ choose   Enter play   ←→ consoles / games   O open a file   F5 look again   F11 full screen";
+                : "↑↓ choose   Enter play   ←→ consoles / games   O open a file   F5 look again   F11 full screen   F2 "
+                + (ra.signedIn() ? "RetroAchievements: " + ra.user() : "RetroAchievements sign-in");
         g.setColor(!status.isEmpty() && text.equals(status) ? MILK : DIM);
         g.drawString(fit(text, fm, l.w - 60 * u), 32 * u, l.h - 22 * u);
     }

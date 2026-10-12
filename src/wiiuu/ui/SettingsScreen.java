@@ -55,7 +55,8 @@ public final class SettingsScreen {
                     Runnable showGuide, Runnable restartIntoGuide, Updater updater, Runnable exitForUpgrade,
                     Runnable onClosed, wiiuu.core.Scraper scraper, Runnable findCovers,
                     wiiuu.core.Achievements achievements, Consumer<String> askPhone, BooleanSupplier phoneAsked,
-                    BooleanSupplier phonesConnected, Supplier<wiiuu.net.GamepadServer> gamepad) {}
+                    BooleanSupplier phonesConnected, Supplier<wiiuu.net.GamepadServer> gamepad,
+                    Supplier<wiiuu.core.RaConnect> ra) {}
 
     // ---- rows -----------------------------------------------------------------------------------
 
@@ -881,11 +882,11 @@ public final class SettingsScreen {
         return new Page("RetroAchievements account", () -> {
             List<Row> r = new ArrayList<>();
             r.add(new Info("Make an account on retroachievements.org, then find your Web API key there under Settings > Keys. "
-                    + "WII-UU uses it to show your progress. To unlock achievements, RetroArch signs in with your password."));
+                    + "WII-UU uses it to show your progress. To unlock achievements, Choccy Milk and RetroArch sign in with your password."));
             r.add(phoneAction("ra"));
             r.add(text("User name", "ra.user", false, "not set"));
             r.add(text("Web API key", "ra.apikey", true, "not set"));
-            r.add(text("Password (for RetroArch)", "ra.password", true, "not set"));
+            r.add(text("Password (for unlocking)", "ra.password", true, "not set"));
             r.add(new Action("Check", "Signs in to see that the user name and key work.", () -> {
                 raCheck = "checking...";
                 Thread t = new Thread(() -> {
@@ -896,6 +897,30 @@ public final class SettingsScreen {
                 t.setDaemon(true);
                 t.start();
             }, () -> raCheck.isEmpty() ? null : raCheck, null));
+            r.add(new Header("In Choccy Milk"));
+            r.add(toggle("Achievements in Choccy Milk", "Choccy Milk unlocks achievements while you play (softcore). "
+                    + "NES, SNES, Game Boy (Color / Advance), N64, DS, Master System and Mega Drive games.", "ra.choccy", true, null));
+            r.add(new Action("Sign in for Choccy Milk", "Gets a sign-in token with your password (Choccy Milk keeps only the token).", () -> {
+                choccyCheck = "signing in...";
+                Thread t = new Thread(() -> {
+                    wiiuu.core.RaConnect ra = sv.ra().get();
+                    if (ra == null) {
+                        choccyCheck = "not available";
+                    } else {
+                        ra.logout();
+                        String why = ra.ensureSignedIn();
+                        choccyCheck = why == null ? "signed in as " + ra.user() : why;
+                    }
+                    say(choccyCheck);
+                    touch();
+                }, "ra-signin");
+                t.setDaemon(true);
+                t.start();
+            }, () -> {
+                if (!choccyCheck.isEmpty()) return choccyCheck;
+                wiiuu.core.RaConnect ra = sv.ra().get();
+                return ra != null && ra.signedIn() ? "signed in as " + ra.user() : null;
+            }, null));
             r.add(new Header("In RetroArch mode"));
             r.add(toggle("Achievements in RetroArch", "RetroArch signs in as you and unlocks achievements while you play.",
                     "ra.retroarch", true, null));
@@ -905,6 +930,8 @@ public final class SettingsScreen {
             return r;
         });
     }
+
+    private volatile String choccyCheck = "";
 
     /** "Enter on your phone": the phones show the fields, with a real keyboard. Again: stop asking. */
     private Action phoneAction(String id) {

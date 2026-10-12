@@ -18,7 +18,9 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -250,6 +252,7 @@ public final class ChoccyMilk {
             if (hideFrame) framesSkipped++;
             run.invokeExact();
             flushSingle();
+            checkAchievements();
             framesRun++;
             if (audio == null && !BENCH) {                  // no sound: keep time by the clock (with sound, the sound card does)
                 next += frameNanos;
@@ -378,7 +381,23 @@ public final class ChoccyMilk {
                 data.reinterpret(1).set(JAVA_BOOLEAN, 0, true);
                 return true;
             }
-            case 8, 11, 18, 35, 36 | EXPERIMENTAL, 6, 60 -> {  // performance level, input descriptors, no game, controller info, memory maps, messages
+            case 8, 11, 18, 35, 6, 60 -> {                  // performance level, input descriptors, no game, controller info, messages
+                return true;
+            }
+            case 36 | EXPERIMENTAL -> {                     // SET_MEMORY_MAPS: where the console's memory is (for achievements)
+                MemorySegment map = data.reinterpret(16);
+                MemorySegment descs = map.get(ADDRESS, 0);
+                int n = map.get(JAVA_INT, 8);
+                List<CheevosMemory.Descriptor> list = new ArrayList<>();
+                MemorySegment all = descs.reinterpret(64L * n);
+                for (int i = 0; i < n; i++) {
+                    long at = 64L * i;
+                    list.add(new CheevosMemory.Descriptor(all.get(JAVA_LONG, at), all.get(ADDRESS, at + 8),
+                            all.get(JAVA_LONG, at + 16), all.get(JAVA_LONG, at + 24), all.get(JAVA_LONG, at + 32),
+                            all.get(JAVA_LONG, at + 40), all.get(JAVA_LONG, at + 48)));
+                }
+                memoryMap = list;
+                cheevoMemory = null;                        // made again from this map
                 return true;
             }
             case 9 -> {                                     // GET_SYSTEM_DIRECTORY
@@ -680,6 +699,10 @@ public final class ChoccyMilk {
                 String[] p = line.trim().split(" ");
                 try {
                     if (p[0].equals("q")) break;
+                    if (p[0].equals("c") || p[0].equals("a") || p[0].equals("x")) {    // achievements: for the core's thread
+                        cheevoQueue.add(line.trim().split(" ", 3));
+                        continue;
+                    }
                     int port = Integer.parseInt(p[1]);
                     if (port < 0 || port >= buttons.length) continue;
                     if (p[0].equals("b") && p.length == 4) {
@@ -702,6 +725,78 @@ public final class ChoccyMilk {
             // WII-UU went away
         }
         running = false;
+    }
+
+    // ---- achievements (RetroAchievements) -------------------------------------------------------------
+
+    private final java.util.concurrent.ConcurrentLinkedQueue<String[]> cheevoQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private final Map<Integer, Cheevos.Trigger> cheevos = new java.util.LinkedHashMap<>();
+    private int cheevoConsole;
+    private List<CheevosMemory.Descriptor> memoryMap;
+    private CheevosMemory cheevoMemory;
+    private boolean memoryReported;
+
+    /**
+     * After each frame: takes achievements WII-UU sent ("c CONSOLE", "a ID MEMADDR", "x" for none),
+     * and checks them against the game's memory; one that unlocks is reported as 'A' ID.
+     */
+    private void checkAchievements() {
+        for (String[] m; (m = cheevoQueue.poll()) != null; ) {
+            try {
+                switch (m[0]) {
+                    case "c" -> {
+                        cheevoConsole = Integer.parseInt(m[1]);
+                        cheevoMemory = null;
+                    }
+                    case "x" -> cheevos.clear();
+                    case "a" -> {
+                        int id = Integer.parseInt(m[1]);
+                        try {
+                            cheevos.put(id, Cheevos.parse(m[2]));
+                        } catch (RuntimeException e) {
+                            System.err.println("[choccy] achievement " + id + " can't be read: " + e.getMessage());
+                        }
+                    }
+                    default -> { }
+                }
+            } catch (RuntimeException ignored) {
+                // a garbled line
+            }
+        }
+        if (cheevos.isEmpty()) return;
+        if (cheevoMemory == null) {
+            cheevoMemory = new CheevosMemory(cheevoConsole, memoryMap, this::coreMemory);
+            if (!memoryReported) {
+                memoryReported = true;
+                System.err.println("[choccy] achievements: " + cheevos.size() + ", memory "
+                        + (memoryMap != null ? "from the core's map" : "from its RAM blocks") + ": " + cheevoMemory);
+                if (!cheevoMemory.usable()) System.err.println("[choccy] achievements: this core shows no memory");
+            }
+        }
+        var it = cheevos.entrySet().iterator();
+        while (it.hasNext()) {
+            var e = it.next();
+            if (e.getValue().frame(cheevoMemory)) {
+                it.remove();
+                System.err.println("[choccy] achievement " + e.getKey() + " unlocked");
+                try {
+                    send('A', Integer.toString(e.getKey()));
+                } catch (IOException ex) {
+                    running = false;
+                }
+            }
+        }
+    }
+
+    /** One of the core's memory blocks (0 save RAM, 2 system RAM, 3 video RAM), or null. */
+    private MemorySegment coreMemory(int type) {
+        try {
+            long size = (long) getMemorySize.invokeExact(type);
+            MemorySegment data = (MemorySegment) getMemoryData.invokeExact(type);
+            return size <= 0 || data.address() == 0 ? null : data.reinterpret(size);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private static short axis(float v) {

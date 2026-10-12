@@ -59,6 +59,7 @@ find choccy-app/src -name '*.java' > build/sources-app.txt
 javac --release 17 -encoding UTF-8 -cp build/engine -d build/choccy-classes @build/sources-app.txt
 cp -r build/engine/. build/choccy-classes/
 [ -d choccy-app/resources ] && cp -r choccy-app/resources/. build/choccy-classes/
-printf 'Main-Class: choccymilk.App\nEnable-Native-Access: ALL-UNNAMED\n' > build/manifest-choccy.txt
+APP_VERSION="$(grep -o 'VERSION = "[^"]*"' src/wiiuu/Main.java | cut -d'"' -f2)"
+printf 'Main-Class: choccymilk.App\nEnable-Native-Access: ALL-UNNAMED\nImplementation-Version: %s\n' "$APP_VERSION" > build/manifest-choccy.txt
 jar --create --file build/ChoccyMilk.jar --manifest build/manifest-choccy.txt -C build/choccy-classes .
 echo "Built build/ChoccyMilk.jar"

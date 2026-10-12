@@ -355,6 +355,13 @@ public final class Choccy {
                         System.out.println("[choccy] playing with " + core);
                     } else if (kind == 'X') {
                         ending = line(s);
+                    } else if (kind == 'A') {                   // an achievement unlocked
+                        String id = line(s);
+                        try {
+                            onAchievement.accept(Integer.parseInt(id.trim()));
+                        } catch (RuntimeException e) {
+                            System.err.println("[achievements] " + e);
+                        }
                     } else {
                         break;                               // out of step: stop reading
                     }
@@ -377,6 +384,19 @@ public final class Choccy {
 
         public String core() {
             return core;
+        }
+
+        private volatile java.util.function.IntConsumer onAchievement = id -> { };
+
+        /** Gets the ids of achievements as they unlock (on the reading thread). */
+        public void onAchievement(java.util.function.IntConsumer listener) {
+            onAchievement = listener;
+        }
+
+        /** Gives the player achievements to watch for: the console (RetroAchievements' number) and their logic. */
+        public void achievements(int console, java.util.List<RaConnect.Achievement> list) {
+            send("c " + console);
+            for (RaConnect.Achievement a : list) send("a " + a.id() + " " + a.memAddr().replace('\n', ' '));
         }
 
         private synchronized void send(String line) {

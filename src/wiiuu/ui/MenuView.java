@@ -826,6 +826,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }
 
+    /** A card over the Choccy Milk game (an achievement unlocked...). */
+    public void choccyAnnounce(String title, String text, boolean trophy) {
+        choccyScreen.announce(title, text, trophy, trophy ? 6000 : 4000);
+        repaint();
+    }
+
     private void choccyKey(int code, boolean down) {
         wiiuu.input.PadButton b = wiiuu.engine.GameScreen.key(code);
         if (b != null) choccyKeys.accept(b, down);

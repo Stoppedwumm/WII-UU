@@ -368,8 +368,17 @@ every connected phone instead, to type with its keyboard. WII-UU checks it and s
 whether it worked. Phones only see this while the TV asks for it, and never the secrets already set
 (leave one empty to keep it). The ScreenScraper account page has the same button.
 
-The achievements themselves unlock in the emulator. In RetroArch mode, also enter your
-RetroAchievements **password**: WII-UU then signs RetroArch in for the games it starts
+**Choccy Milk unlocks achievements itself** (in WII-UU and in the Choccy Milk app): enter your
+RetroAchievements **password** too, and the first game gets a sign-in token with it (only the token
+is kept for Choccy Milk; *Sign in for Choccy Milk* on the same page checks it, F2 in the Choccy Milk
+app). When a game starts, a card says how many of its achievements you have; when one unlocks, a
+card with a trophy shows it on the TV and the phones get a notice. NES, SNES, Game Boy (Color /
+Advance), N64, DS, Master System and Mega Drive games, in softcore. Choccy Milk evaluates the
+achievements the way rcheevos does (RetroArch's achievement library, ported to Java) on the game's
+memory, mapped the way RetroArch maps it. `ra.choccy=false` turns it off.
+
+The other emulators unlock achievements themselves. In RetroArch mode WII-UU signs RetroArch in with
+the same password for the games it starts
 (`cheevos_*` in `~/.wiiuu/retroarch.cfg`, which is then readable only by you), with *Hardcore mode*
 if you want it. Dolphin, DuckStation, PCSX2 and PPSSPP have their own RetroAchievements sign-in in
 their settings.
@@ -377,7 +386,8 @@ their settings.
 ```properties
 ra.user=YourName
 ra.apikey=...               # Web API key, for your progress
-ra.password=...             # for RetroArch to unlock achievements (optional)
+ra.password=...             # for unlocking achievements: Choccy Milk and RetroArch (optional)
+ra.choccy=true              # unlock achievements in Choccy Milk
 ra.enabled=true             # progress on the game tiles
 ra.retroarch=true           # sign RetroArch in, in RetroArch mode
 ra.hardcore=false

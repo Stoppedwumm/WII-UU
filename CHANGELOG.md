@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.81 (2026-10-12)
+- RetroAchievements in Choccy Milk: achievements unlock while you play, in WII-UU and in the Choccy
+  Milk app. With your RetroAchievements password in Settings > Games > RetroAchievements account,
+  Choccy Milk gets a sign-in token (only the token is kept), finds the game by its ROM, and shows how
+  many achievements you have; when one unlocks, a trophy card shows on the TV and the phones get a
+  notice. Softcore, for NES, SNES, Game Boy (Color / Advance), N64, DS, Master System and Mega Drive.
+  Choccy Milk checks the achievements itself, the way rcheevos (RetroArch's achievement library) does.
+- Choccy Milk app: F2 signs in to RetroAchievements.
+
 ## 1.9.80 (2026-10-12)
 - Choccy Milk's sound has the right pitch: it plays at 48 kHz and resamples the core's sound itself.
   Cores use odd rates (32040.5 Hz, 32768 Hz...), which some sound systems rounded instead of

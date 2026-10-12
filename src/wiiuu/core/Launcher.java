@@ -54,8 +54,26 @@ public final class Launcher {
                 new DolphinInput(config), new PadIniInput(config, PadIniInput.pcsx2()),
                 new PadIniInput(config, PadIniInput.duckstation()));
         this.retroArch = new RetroArch(config);
+        this.ra = new RaConnect(config, "WII-UU/" + wiiuu.Main.VERSION);
         Choccy.setHome(config.home());
         for (InputPatch p : inputPatches) p.recover();
+    }
+
+    private final RaConnect ra;
+    private volatile Announcer announcer = (title, text, trophy) -> { };
+
+    /** Shows a card over a Choccy Milk game (an achievement unlocked, ...). */
+    public interface Announcer {
+        void announce(String title, String text, boolean trophy);
+    }
+
+    public void setAnnouncer(Announcer announcer) {
+        this.announcer = announcer;
+    }
+
+    /** RetroAchievements for Choccy Milk (signing in, unlocking). */
+    public RaConnect ra() {
+        return ra;
     }
 
     /** Tells the launcher when WII-UU types keys for a game (see Main: input.keys, virtual pads). */
@@ -191,6 +209,19 @@ public final class Launcher {
             throw new LaunchException("Choccy Milk didn't start: " + e.getMessage());
         }
         final Process p = session.process();
+        ChoccyCheevos.start(ra, session, game, new ChoccyCheevos.Events() {
+            @Override
+            public void found(RaConnect.GameSet set) {
+                announcer.announce("RetroAchievements: " + set.title(), set.unlocked().size() + " of "
+                        + set.achievements().size() + " achievements unlocked", false);
+            }
+
+            @Override
+            public void unlocked(RaConnect.Achievement a, int have, int total, String error) {
+                announcer.announce(a.title(), "Achievement unlocked \u00B7 " + a.points() + " points \u00B7 " + have + " of " + total
+                        + (error != null ? " (not sent: " + error + ")" : ""), true);
+            }
+        });
         process = p;
         current = game;
         inRetroArch = false;

@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.80";
+    public static final String VERSION = "1.9.81";
 
     private final Config config;
     private final Library library;
@@ -344,6 +344,11 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             if (s != null) s.directFrame(px, w, h, aspect);
         });
         view.setChoccyKeys((b, down) -> launcher.choccyButton(1, b, down));
+        launcher.setAnnouncer((title, text, trophy) -> {
+            view.choccyAnnounce(title, text, trophy);
+            GamepadServer s = server;
+            if (s != null && trophy) s.notice("\uD83C\uDFC6 " + title + " (" + text + ")");     // the phones show it too
+        });
         achievements.addListener(() -> SwingUtilities.invokeLater(view::repaint));
         router.setMenu(view);
         // real USB / Bluetooth controllers in the menu too (Linux)
@@ -423,7 +428,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             openBased.refreshAsync();
             reactions.refreshAsync();
         }, scraper, () -> findCovers(true), achievements, this::askPhone, () -> phoneForm != null,
-                () -> server != null && view.padCount() > 0, () -> server));
+                () -> server != null && view.padCount() > 0, () -> server, launcher::ra));
         view.requestFocusInWindow();
     }
 
