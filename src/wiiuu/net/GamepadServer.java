@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -126,6 +127,8 @@ public final class GamepadServer {
         volatile int player;
         volatile long lastSeen = System.currentTimeMillis();
         volatile boolean active = true;
+        /** what kind of phone it is ("iPhone", "Android: Pixel 8"...), for the player order on the TV */
+        volatile String label = "Phone";
 
         Client(String id, int player) {
             this.id = id;
@@ -443,6 +446,19 @@ public final class GamepadServer {
                             String err = host.launchFromPad(game.get());
                             json(ex, err == null ? 200 : 409, err == null ? new Json().obj().kv("ok", true).endObj() : error(err));
                         }
+                        case "/api/player" -> {
+                            if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
+                            if (!choosePlayer()) { json(ex, 403, error("Choosing your player number is turned off on the TV")); return; }
+                            int want;
+                            try {
+                                want = Integer.parseInt(form(body(ex)).getOrDefault("p", "").trim());
+                            } catch (NumberFormatException e) {
+                                json(ex, 400, error("Which player?"));
+                                return;
+                            }
+                            String err = setPlayer(c.id, want);
+                            json(ex, err == null ? 200 : 409, err == null ? new Json().obj().kv("player", c.player).endObj() : error(err));
+                        }
                         case "/api/close" -> {
                             host.closeGame();
                             json(ex, 200, new Json().obj().kv("ok", true).endObj());
@@ -493,9 +509,11 @@ public final class GamepadServer {
         Client c = clients.get(f.getOrDefault("id", ""));
         if (c == null) {
             c = new Client(UUID.randomUUID().toString(), freePlayer(null));
+            c.label = deviceName(ex.getRequestHeaders().getFirst("User-Agent"));
             clients.put(c.id, c);
             if (dsu != null && c.player > 0) dsu.setConnected(c.player, true);
         } else {
+            c.label = deviceName(ex.getRequestHeaders().getFirst("User-Agent"));
             touch(c);
         }
         saveClients();
@@ -534,6 +552,93 @@ public final class GamepadServer {
             if (clients.values().stream().noneMatch(o -> o != self && o.active && o.player == pp)) return p;
         }
         return 0; // spectator: can browse and launch, input is ignored
+    }
+
+    // ---- player numbers -------------------------------------------------------------------
+
+    /** Whether phones may pick their own player number (the player menu on the phone). */
+    private boolean choosePlayer() {
+        return config.getBool("pads.choosePlayer", true);
+    }
+
+    /** A connected phone, for the player order on the TV. */
+    public record Pad(String id, int player, String label) {}
+
+    /** The connected phones, by player number (viewers last). */
+    public List<Pad> pads() {
+        List<Pad> list = new ArrayList<>();
+        for (Client c : clients.values()) if (c.active) list.add(new Pad(c.id, c.player, c.label));
+        list.sort(java.util.Comparator.comparingInt(p -> p.player() <= 0 ? Integer.MAX_VALUE : p.player()));
+        return list;
+    }
+
+    /**
+     * Gives a phone a player number (0 = viewer). A connected phone that has it already gets this
+     * one's old number instead (they swap). Null when done, else why not.
+     */
+    public synchronized String setPlayer(String id, int want) {
+        Client c = clients.get(id);
+        if (c == null || !c.active) return "That phone isn't connected";
+        int max = wiiuu.core.Buzz.players(config);
+        if (want < 0 || want > max) return "Players are 1 to " + max;
+        int old = c.player;
+        if (old == want) return null;
+        Client other = null;
+        for (Client o : clients.values()) if (o != c && o.active && o.player == want && want > 0) other = o;
+        release(c);
+        if (other != null) release(other);
+        c.player = want;
+        if (other != null) other.player = old;
+        if (dsu != null) {
+            if (c.player > 0) dsu.setConnected(c.player, true);
+            if (other != null && other.player > 0) dsu.setConnected(other.player, true);
+        }
+        // a remembered phone that isn't connected keeps no claim on the number
+        for (Client o : clients.values()) if (!o.active && o.player == want && want > 0) o.player = 0;
+        System.out.println("[gamepad] " + c.label + " is now " + (want > 0 ? "player " + want : "a viewer")
+                + (other != null ? ", " + other.label + " " + (old > 0 ? "player " + old : "a viewer") : ""));
+        saveClients();
+        host.padsChanged(connectedPads());
+        return null;
+    }
+
+    /** Numbers the connected phones 1, 2, 3... again, in their current order (no gaps). */
+    public synchronized void renumber() {
+        int max = wiiuu.core.Buzz.players(config), next = 1;
+        for (Pad p : pads()) {
+            Client c = clients.get(p.id());
+            if (c == null) continue;
+            int want = next <= max ? next++ : 0;
+            if (c.player != want) {
+                release(c);
+                c.player = want;
+                if (dsu != null && want > 0) dsu.setConnected(want, true);
+            }
+        }
+        saveClients();
+        host.padsChanged(connectedPads());
+    }
+
+    /** Lets go of everything a phone holds down, before its number changes. */
+    private void release(Client c) {
+        if (c.player <= 0) return;
+        router.releaseAll(c.player);
+        if (dsu != null) dsu.setConnected(c.player, false);
+        if (pads != null) pads.release(c.player);
+    }
+
+    /** "iPhone", "iPad", "Android: Pixel 8"... from a browser's User-Agent. */
+    static String deviceName(String ua) {
+        if (ua == null) return "Phone";
+        if (ua.contains("iPhone")) return "iPhone";
+        if (ua.contains("iPad")) return "iPad";
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("Android[^;)]*;\\s*([^;)]+?)(?:\\s+Build/[^;)]*)?[;)]").matcher(ua);
+        if (m.find() && !m.group(1).equals("K") && !m.group(1).startsWith("wv")) return "Android: " + m.group(1).trim();
+        if (ua.contains("Android")) return "Android phone";
+        if (ua.contains("Macintosh")) return "Mac";
+        if (ua.contains("Windows")) return "Windows PC";
+        if (ua.contains("Linux")) return "Linux PC";
+        return "Phone";
     }
 
     private void reap() {
@@ -624,7 +729,11 @@ public final class GamepadServer {
                 .kv("audio", audio != null)
                 .kv("captureBlocked", screen != null && screen.captureBlocked())
                 .kv("buzz", g != null && wiiuu.core.Buzz.active(config, g))
-                .kv("maxPlayers", wiiuu.core.Buzz.players(config));
+                .kv("maxPlayers", wiiuu.core.Buzz.players(config))
+                .kv("choosePlayer", choosePlayer());
+        j.key("taken").arr();                           // numbers other connected phones have
+        for (Client o : clients.values()) if (o != c && o.active && o.player > 0) j.val(o.player);
+        j.endArr();
         String secure = httpsUrl();
         j.key("https");
         if (secure == null) j.val((String) null);

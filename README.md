@@ -500,6 +500,13 @@ graphics driver with OpenGL 3.3 (or the standalone mupen64plus) does better ther
 
 ## Phone as GamePad
 
+**Player numbers:** tap the player badge (P1, P2...) at the top of the GamePad to pick another
+number; if another phone has it, you swap. Games read player 1's controller first, so when player
+1's phone leaves, the next phone becomes player 1 here. On the TV: *Settings → GamePad & players →
+Player order* (and *Number them 1, 2, 3... again*). *Phones choose their player* off
+(`pads.choosePlayer=false`) leaves the numbers to the TV.
+
+
 Press **+** or **F2** on the TV and scan the QR code. You can also open the URL shown there on a phone
 connected to the same Wi-Fi and enter the 4-digit pairing code.
 

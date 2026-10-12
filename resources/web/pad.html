@@ -87,6 +87,22 @@
   .logo b { color: var(--accent); }
   .pill { padding: 2px 9px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 12px; }
   .pill.off { background: #c3c8ce; }
+  button.pill { border: 0; font: inherit; font-size: 12px; cursor: pointer; }
+  /* "which player are you?" */
+  #playerMenu { position: fixed; inset: 0; z-index: 55; background: rgba(8,12,18,.78); display: flex; align-items: center;
+    justify-content: center; padding: 16px; }
+  #playerMenu .card { background: #fff; color: #202124; border-radius: 18px; padding: 20px; width: min(520px, 100%); }
+  #playerMenu h2 { margin: 0 0 4px; font-size: 21px; }
+  #playerMenu .note { margin: 0 0 14px; color: #5f6368; font-size: 14px; }
+  #playerMenu .nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  #playerMenu .nums button { font-size: 20px; font-weight: 800; padding: 14px 0 10px; border-radius: 14px; border: 2px solid #dfe3e7;
+    background: #f4f6f8; color: #202124; }
+  #playerMenu .nums button small { display: block; font-size: 11px; font-weight: 600; color: #5f6368; margin-top: 2px; }
+  #playerMenu .nums button.me { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #playerMenu .nums button.me small { color: #e8f6fd; }
+  #playerMenu .row { display: flex; gap: 10px; margin-top: 14px; }
+  #playerMenu .row button { flex: 1; font-size: 16px; font-weight: 700; padding: 11px; border-radius: 999px; border: 0;
+    background: #eceff1; color: #202124; }
   .grow { flex: 1; }
   .iconbtn { border: 0; background: #eef0f2; color: var(--screen-ink); border-radius: 99px; padding: 4px 10px;
     font: inherit; font-size: 12px; font-weight: 700; }
@@ -296,7 +312,7 @@
       <div class="lcd">
         <div class="bar">
           <span class="logo">WII-<b>UU</b></span>
-          <span class="pill off" id="player">&ndash;</span>
+          <button class="pill off" id="player" title="Your player number (tap to change)">&ndash;</button>
           <span class="grow"></span>
           <button class="iconbtn" id="tvBtn" title="Show the TV on the GamePad">&#9635; TV</button>
           <button class="iconbtn" id="gyroBtn" title="Motion controls">&#10227; Gyro</button>
@@ -414,6 +430,18 @@
   <button id="idleCatch" class="hidden">Catch it cheating!</button>
   <div id="idleBusted" class="hidden"><span>BUSTED!</span></div>
 </div>
+<div id="playerMenu" class="hidden">
+  <div class="card">
+    <h2>Which player are you?</h2>
+    <p class="note">Games read player 1's controller first. Pick a number that another phone has and you two swap.</p>
+    <div class="nums" id="playerNums"></div>
+    <div class="row">
+      <button type="button" id="playerViewer">Just watch (viewer)</button>
+      <button type="button" id="playerClose">Done</button>
+    </div>
+  </div>
+</div>
+
 <div id="signin" class="hidden">
   <form class="card" id="signinForm" autocomplete="off">
     <h2 id="signinTitle">Sign in</h2>
@@ -522,7 +550,9 @@ async function poll() {
     tunes.want = j.music || null;
     syncTunes();
     S.player = j.player;
+    S.maxPlayers = j.maxPlayers || 4; S.taken = j.taken || []; S.choosePlayer = j.choosePlayer !== false;
     $("player").textContent = j.player > 0 ? "P" + j.player : "Viewer";
+    if (!$("playerMenu").classList.contains("hidden")) renderPlayerMenu();
     $("keysWarn").classList.toggle("hidden", j.keys !== false);
     if (j.keysWhy) $("keysWarn").textContent = j.keysWhy;
     if (j.keys === false && j.keysWhy && !S.keysToast) { S.keysToast = true; toast(j.keysWhy); }
@@ -1227,6 +1257,44 @@ async function closeGame() {
 }
 
 let toastTimer;
+// ---------------------------------------------------------------- player number
+function renderPlayerMenu() {
+  const box = $("playerNums");
+  box.innerHTML = "";
+  for (let p = 1; p <= (S.maxPlayers || 4); p++) {
+    const b = document.createElement("button");
+    b.type = "button";
+    const mine = p === S.player, taken = (S.taken || []).includes(p);
+    b.className = mine ? "me" : "";
+    b.innerHTML = "P" + p + "<small>" + (mine ? "you" : taken ? "swap" : "free") + "</small>";
+    b.onclick = () => choosePlayer(p);
+    box.appendChild(b);
+  }
+}
+async function choosePlayer(p) {
+  if (p === S.player) { $("playerMenu").classList.add("hidden"); return; }
+  try {
+    const r = await api("/api/player", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form({ p }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { toast(j.error || "Couldn't change the player number"); return; }
+    S.player = j.player;
+    $("player").textContent = j.player > 0 ? "P" + j.player : "Viewer";
+    if (S.haptics && navigator.vibrate) navigator.vibrate(15);
+    toast(j.player > 0 ? "You're player " + j.player : "You're watching");
+    $("playerMenu").classList.add("hidden");
+    poll();
+  } catch (e) { toast("Couldn't reach the TV"); }
+}
+$("player").addEventListener("click", () => {
+  if (!S.online) return;
+  if (!S.choosePlayer) { toast("Player numbers are set on the TV (Settings > GamePad & players)"); return; }
+  renderPlayerMenu();
+  $("playerMenu").classList.remove("hidden");
+});
+$("playerViewer").addEventListener("click", () => choosePlayer(0));
+$("playerClose").addEventListener("click", () => $("playerMenu").classList.add("hidden"));
+$("playerMenu").addEventListener("click", (e) => { if (e.target === $("playerMenu")) $("playerMenu").classList.add("hidden"); });
+
 function toast(text) {
   const t = $("toast"); t.textContent = text; t.classList.add("show");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2500);

@@ -249,6 +249,7 @@ public final class ChoccyMilk {
             skippedInARow = hideFrame ? skippedInARow + 1 : 0;
             if (hideFrame) framesSkipped++;
             run.invokeExact();
+            flushSingle();
             framesRun++;
             if (audio == null && !BENCH) {                  // no sound: keep time by the clock (with sound, the sound card does)
                 next += frameNanos;
@@ -455,14 +456,7 @@ public final class ChoccyMilk {
         readGeometry(av);
         double f = av.get(JAVA_DOUBLE, 24), rate = av.get(JAVA_DOUBLE, 32);
         if (f > 1 && f < 500) fps = f;
-        if (rate > 1000 && rate != sampleRate) {
-            sampleRate = rate;
-            if (audio != null) {                            // a new rate: a new line
-                audio.close();
-                audio = null;
-                openAudio();
-            }
-        }
+        if (rate > 1000) sampleRate = rate;                 // the resampler follows it; the sound card stays at 48 kHz
     }
 
     private void readGeometry(MemorySegment g) {
@@ -562,12 +556,20 @@ public final class ChoccyMilk {
 
     // ---- sound -------------------------------------------------------------------------------------
 
+    /**
+     * The sound card always runs at 48 kHz and Choccy Milk resamples the core's sound to it. Cores
+     * use all kinds of rates (32040.5 Hz for the SNES, 32768 for the GBA, odd ones for the N64), and
+     * sound systems that don't support a rate exactly may round it instead of converting: then
+     * everything plays at the wrong pitch (and speed).
+     */
+    private static final int OUT_RATE = 48000;
+
     private void openAudio() {
         try {
-            AudioFormat f = new AudioFormat((float) sampleRate, 16, 2, true, false);
+            AudioFormat f = new AudioFormat(OUT_RATE, 16, 2, true, false);
             SourceDataLine line = AudioSystem.getSourceDataLine(f);
             // ~100 ms: the sound card keeps the game's pace, with some room for a slow frame
-            line.open(f, (int) (sampleRate * 0.1) * 4);
+            line.open(f, (int) (OUT_RATE * 0.1) * 4);
             line.start();
             audioBufferBytes = line.getBufferSize();
             audio = line;
@@ -577,27 +579,68 @@ public final class ChoccyMilk {
         }
     }
 
+    // single samples (some cores send them one by one): collected, then resampled once a frame
+    private short[] single = new short[4096];
+    private int singleFrames;
+
     private void sample(short l, short r) {
         try {
             if (audio == null) return;
-            byte[] b = {(byte) l, (byte) (l >> 8), (byte) r, (byte) (r >> 8)};
-            audio.write(b, 0, 4);
+            if (singleFrames * 2 + 2 > single.length) single = java.util.Arrays.copyOf(single, single.length * 2);
+            single[singleFrames * 2] = l;
+            single[singleFrames * 2 + 1] = r;
+            singleFrames++;
         } catch (Throwable t) {
             System.err.println("[choccy] sample: " + t);
         }
     }
 
+    /** Sends the single samples of this frame on (after each retro_run). */
+    private void flushSingle() {
+        if (singleFrames == 0) return;
+        int n = singleFrames;
+        singleFrames = 0;
+        resample(single, n);
+    }
+
+    private short[] batch = new short[8192];
+
     private long samples(MemorySegment data, long frames) {
         try {
             if (audio == null || frames <= 0) return frames;
-            int bytes = (int) (frames * 4);
-            if (audioBytes.length < bytes) audioBytes = new byte[bytes];
-            MemorySegment.copy(data.reinterpret(bytes), JAVA_BYTE, 0, audioBytes, 0, bytes);   // little-endian already
-            audio.write(audioBytes, 0, bytes);
+            int n = (int) frames;
+            if (batch.length < n * 2) batch = new short[n * 2];
+            MemorySegment.copy(data.reinterpret(n * 4L), JAVA_SHORT, 0, batch, 0, n * 2);
+            resample(batch, n);
         } catch (Throwable t) {
             System.err.println("[choccy] samples: " + t);
         }
         return frames;
+    }
+
+    private final Resampler resampler = new Resampler(OUT_RATE);
+
+    /** Resamples n stereo frames from the core's rate to 48 kHz and plays them. */
+    void resample(short[] in, int n) {
+        SourceDataLine line = audio;
+        if (line == null || n <= 0) return;
+        if (Math.abs(sampleRate - OUT_RATE) < 0.5) {        // already 48 kHz
+            play(line, in, n);
+            return;
+        }
+        int out = resampler.push(in, n, sampleRate);
+        play(line, resampler.out(), out);
+    }
+
+
+    private void play(SourceDataLine line, short[] pcm, int frames) {
+        int bytes = frames * 4;
+        if (audioBytes.length < bytes) audioBytes = new byte[bytes];
+        for (int i = 0, j = 0; i < frames * 2; i++, j += 2) {
+            audioBytes[j] = (byte) pcm[i];
+            audioBytes[j + 1] = (byte) (pcm[i] >> 8);
+        }
+        line.write(audioBytes, 0, bytes);
     }
 
     // ---- input -------------------------------------------------------------------------------------

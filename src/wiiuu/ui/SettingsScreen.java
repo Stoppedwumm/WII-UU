@@ -55,7 +55,7 @@ public final class SettingsScreen {
                     Runnable showGuide, Runnable restartIntoGuide, Updater updater, Runnable exitForUpgrade,
                     Runnable onClosed, wiiuu.core.Scraper scraper, Runnable findCovers,
                     wiiuu.core.Achievements achievements, Consumer<String> askPhone, BooleanSupplier phoneAsked,
-                    BooleanSupplier phonesConnected) {}
+                    BooleanSupplier phonesConnected, Supplier<wiiuu.net.GamepadServer> gamepad) {}
 
     // ---- rows -----------------------------------------------------------------------------------
 
@@ -968,6 +968,14 @@ public final class SettingsScreen {
             config.set("server.port", Integer.toString(v));
             config.save();
         }));
+        r.add(new Link("Player order", "Which phone is player 1, 2, 3... Games read player 1's controller first.",
+                () -> {
+                    wiiuu.net.GamepadServer g = sv.gamepad().get();
+                    int n = g == null ? 0 : g.pads().size();
+                    return n == 1 ? "1 phone" : n + " phones";
+                }, this::playerOrderPage));
+        r.add(toggle("Phones choose their player", "A player menu on the phone (tap P1 at its top). Off: player numbers are only "
+                + "changed here on the TV.", "pads.choosePlayer", true, null));
         r.add(new Toggle("8-player mode", "Up to 8 phones at once instead of 4. From the next start.",
                 () -> config.getInt("server.maxPlayers", 4) > 4, on -> {
             config.set("server.maxPlayers", on ? "8" : null);
@@ -986,6 +994,45 @@ public final class SettingsScreen {
             r.add(new Link("Player " + p, null, null, () -> keysPage(player)));
         }
         return r;
+    }
+
+    /** The connected phones and their player numbers; changing one swaps it with the phone that had it. */
+    private Page playerOrderPage() {
+        return new Page("Player order", () -> {
+            List<Row> r = new ArrayList<>();
+            wiiuu.net.GamepadServer g = sv.gamepad().get();
+            if (g == null) {
+                r.add(new Info("The phone GamePad server is off."));
+                return r;
+            }
+            List<wiiuu.net.GamepadServer.Pad> pads = g.pads();
+            if (pads.isEmpty()) {
+                r.add(new Info("No phone is connected. Press + in the menu and scan the QR code with a phone."));
+                return r;
+            }
+            r.add(new Info("Left / right changes a phone's number. A number another phone has is swapped with it."));
+            int max = config.getInt("server.maxPlayers", 4) > 4 ? 8 : 4;
+            List<String> names = new ArrayList<>();
+            names.add("Viewer");
+            for (int p = 1; p <= max; p++) names.add("Player " + p);
+            int n = 0;
+            for (wiiuu.net.GamepadServer.Pad pad : pads) {
+                String id = pad.id();
+                r.add(new Choice("Phone " + (++n) + ": " + pad.label(), null, () -> names, () -> {
+                    for (wiiuu.net.GamepadServer.Pad now : g.pads()) if (now.id().equals(id)) return now.player();
+                    return 0;
+                }, i -> {
+                    String err = g.setPlayer(id, i);
+                    if (err != null) say(err);
+                }));
+            }
+            r.add(new Action("Number them 1, 2, 3... again", "Closes gaps: after player 1 left, player 2 becomes player 1.", () -> {
+                g.renumber();
+                say("The phones are players 1 to " + Math.min(pads.size(), max) + " now");
+                reload(false);
+            }, null, null));
+            return r;
+        });
     }
 
     private Page keysPage(int player) {

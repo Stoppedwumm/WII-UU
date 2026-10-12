@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.80 (2026-10-12)
+- Choccy Milk's sound has the right pitch: it plays at 48 kHz and resamples the core's sound itself.
+  Cores use odd rates (32040.5 Hz, 32768 Hz...), which some sound systems rounded instead of
+  converting, so everything sounded too high or too low.
+- Pick your player number: tap P1 (P2...) at the top of the GamePad. A number another phone has is
+  swapped with it. Games read player 1's controller first, so after player 1's phone leaves, the
+  next phone can simply become player 1.
+- Settings > GamePad & players > *Player order* changes the numbers on the TV (and *Number them 1,
+  2, 3... again* closes the gaps). *Phones choose their player* turns the menu on the phone off.
+
 ## 1.9.79 (2026-10-12)
 - Choccy Milk plays N64 much faster, especially on a Raspberry Pi:
   - the RSP runs high-level (ParaLLEl N64) or recompiled (Mupen64Plus-Next) instead of the slow
