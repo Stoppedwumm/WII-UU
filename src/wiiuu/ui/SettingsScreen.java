@@ -786,9 +786,12 @@ public final class SettingsScreen {
         r.add(new Header("Playing"));
         r.add(toggle("RetroArch mode", "Runs every console that has a RetroArch core in RetroArch.", "retroarch.enabled", false, null));
         String choccyWhy = wiiuu.core.Choccy.unavailable();
-        r.add(toggle("Play with Choccy Milk", choccyWhy != null ? choccyWhy
-                : "In RetroArch mode: WII-UU plays the games itself, in its own window, with RetroArch's cores. "
-                + "Cores that need OpenGL still use RetroArch.", "choccy.enabled", true, null));
+        r.add(new Toggle("Play with Choccy Milk", choccyWhy != null ? choccyWhy
+                : "WII-UU plays the games itself, in its own window, with RetroArch's cores (every console that has them). "
+                + "Cores that need OpenGL still use RetroArch.", () -> wiiuu.core.Launcher.choccyOn(config), on -> {
+            config.set("choccy.enabled", Boolean.toString(on));
+            config.save();
+        }));
         List<String> n64Ids = List.of("auto", "opengl", "software");
         r.add(new Choice("N64 renderer", "In RetroArch mode. Software needs no OpenGL (slower); Automatic switches to it "
                 + "by itself if the N64 core can't get OpenGL on this computer.",

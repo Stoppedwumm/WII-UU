@@ -124,10 +124,27 @@ public final class Launcher {
         return choccy != null && isRunning();
     }
 
-    /** Whether this game plays in Choccy Milk: RetroArch mode, Choccy on, a Java 22+, and a core that didn't need OpenGL before. */
+    /**
+     * Whether Choccy Milk is on: choccy.enabled when it's set, otherwise whenever RetroArch mode is
+     * (it plays what RetroArch would). Set on, it plays every console it has cores for.
+     */
+    public static boolean choccyOn(Config config) {
+        String set = config.get("choccy.enabled", "").trim();
+        return set.isEmpty() ? config.getBool("retroarch.enabled", false) : Boolean.parseBoolean(set);
+    }
+
+    private boolean choccyMissingSaid;
+
+    /** Whether this game plays in Choccy Milk: it's on, there are cores for the console, and none needed OpenGL before. */
     private boolean choccyFor(Game game) {
-        return retroArch.handles(game.system()) && config.getBool("choccy.enabled", true) && Choccy.available()
-                && !config.getBool("choccy.hardware." + game.system().id(), false);
+        if (!choccyOn(config) || !retroArch.hasCores(game.system())
+                || config.getBool("choccy.hardware." + game.system().id(), false)) return false;
+        if (Choccy.available()) return true;
+        if (!choccyMissingSaid) {                          // on, but can't: say so instead of quietly using something else
+            choccyMissingSaid = true;
+            for (Listener l : listeners) l.message(Choccy.unavailable());
+        }
+        return false;
     }
 
     private void launchChoccy(Game game) throws LaunchException {

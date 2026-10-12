@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.72 (2026-10-12)
+- Choccy Milk is a switch of its own now: switched on, it plays every console it has cores for, not
+  only in RetroArch mode (on a Mac, N64 went to mupen64plus instead). Left alone it follows RetroArch
+  mode as before.
+- Choccy Milk finds Homebrew's Java on a Mac (`brew install openjdk`; the installer offers it), and
+  when it's on but there's no Java 22+, WII-UU says so instead of quietly using another emulator.
+
 ## 1.9.71 (2026-10-12)
 - **Choccy Milk**: WII-UU's own player for RetroArch's cores. In RetroArch mode games now play inside
   WII-UU's window instead of in RetroArch: no second window, no fullscreen switching, nothing to

@@ -98,7 +98,12 @@ if [ "${JV:-0}" -lt 17 ] 2>/dev/null; then
 fi
 ok "Java $JV"
 # Choccy Milk (WII-UU's own player for RetroArch's cores) runs on Java 22 or newer, next to this one
-if ! ls -d /usr/lib/jvm/*/ 2>/dev/null | grep -Eq 'java-(2[2-9]|[3-9][0-9])-|jdk-(2[2-9]|[3-9][0-9])'; then
+if [ "$(uname)" = Darwin ] && command -v brew >/dev/null 2>&1 && [ "${JV:-0}" -lt 22 ] 2>/dev/null \
+    && ! ls -d /opt/homebrew/opt/openjdk/libexec/openjdk.jdk /usr/local/opt/openjdk/libexec/openjdk.jdk >/dev/null 2>&1; then
+  if ask "Install the current Java for Choccy Milk (WII-UU's own game player)?"; then
+    brew install openjdk || warn "Java didn't install: games play in RetroArch / the emulators then"
+  fi
+elif ! ls -d /usr/lib/jvm/*/ 2>/dev/null | grep -Eq 'java-(2[2-9]|[3-9][0-9])-|jdk-(2[2-9]|[3-9][0-9])'; then
   if [ "${JV:-0}" -lt 22 ] 2>/dev/null && command -v apt-get >/dev/null 2>&1 \
       && apt-cache show openjdk-25-jre >/dev/null 2>&1; then
     if ask "Install Java 25 for Choccy Milk (WII-UU's own game player)?"; then

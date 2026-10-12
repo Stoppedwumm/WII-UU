@@ -76,6 +76,11 @@ public final class RetroArch {
     }
 
     /** Whether this system should run in RetroArch (mode on, a core exists, not opted out). */
+    /** Whether there are libretro cores for this console (and it isn't sent elsewhere): Choccy Milk can play it. */
+    public boolean hasCores(GameSystem s) {
+        return CORES.containsKey(s.id()) && config.getBool("system." + s.id() + ".retroarch", true);
+    }
+
     public boolean handles(GameSystem s) {
         return enabled() && CORES.containsKey(s.id()) && config.getBool("system." + s.id() + ".retroarch", true);
     }

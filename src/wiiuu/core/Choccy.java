@@ -47,9 +47,10 @@ public final class Choccy {
     public static String unavailable() {
         if (!built()) return "This copy of WII-UU was built without Choccy Milk";
         if (java() == null) {
+            String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
             return "Choccy Milk needs Java 22 or newer next to WII-UU's"
-                    + (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux")
-                    ? ": sudo apt install openjdk-25-jre" : ": install a current Java (JDK 25)");
+                    + (os.contains("linux") ? ": sudo apt install openjdk-25-jre"
+                    : os.contains("mac") ? ": brew install openjdk" : ": install a current Java (JDK 25)");
         }
         return null;
     }
@@ -89,13 +90,18 @@ public final class Choccy {
             roots.add(Path.of(System.getProperty("user.home"), ".sdkman", "candidates", "java"));
             roots.add(Path.of(System.getProperty("user.home"), ".jdks"));
         }
+        if (os.contains("mac")) {
+            // Homebrew: /opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home (and /usr/local on Intel)
+            for (String brew : new String[]{"/opt/homebrew/opt", "/usr/local/opt"}) roots.add(Path.of(brew));
+        }
         Path best = null;
         int bestVersion = 0;
         for (Path root : roots) {
             if (!Files.isDirectory(root)) continue;
             try (var dirs = Files.list(root)) {
                 for (Path d : dirs.toList()) {
-                    for (Path home : new Path[]{d, d.resolve("Contents").resolve("Home")}) {
+                    Path brewJdk = d.resolve("libexec").resolve("openjdk.jdk").resolve("Contents").resolve("Home");
+                    for (Path home : new Path[]{d, d.resolve("Contents").resolve("Home"), brewJdk}) {
                         Path exe = home.resolve("bin").resolve(windows ? "java.exe" : "java");
                         if (!Files.isExecutable(exe)) continue;
                         int v = version(home);
