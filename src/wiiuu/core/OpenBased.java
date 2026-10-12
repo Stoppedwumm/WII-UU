@@ -68,6 +68,68 @@ public final class OpenBased implements Launcher.Listener {
     private final ExecutorService posters = Executors.newFixedThreadPool(4, daemon("openbased-posters"));
     private final String secret = HexFormat.of().formatHex(new SecureRandom().generateSeed(16));
 
+    /**
+     * One video for the cinema screen: what it is (MOVIE, EPISODE, VIDEO...), its poster, how far
+     * it was watched (seconds, 0: not started), and the Game that plays it.
+     */
+    public record Item(String id, String type, String title, Integer year, double seconds, String series, Integer season,
+                       Integer episode, Path poster, Game game, double position, boolean continuing) {
+        public boolean isEpisode() {
+            return "EPISODE".equals(type) && series != null;
+        }
+
+        /** How far it was watched, 0..1. */
+        public double progress() {
+            return seconds > 0 ? Math.max(0, Math.min(1, position / seconds)) : 0;
+        }
+    }
+
+    /** What the cinema screen shows of a video once asked: its story, genres, length, and a backdrop. */
+    public record Detail(String overview, List<String> genres, Integer runtime, Path backdrop) {}
+
+    private volatile List<Item> items = List.of();
+    private final Map<String, Detail> details = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Set<String> asked = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** The videos, as last fetched: the ones being watched first. */
+    public List<Item> items() {
+        return items;
+    }
+
+    /**
+     * A video's details, or null while they're being fetched (once; {@code loaded} runs when they
+     * are, backdrop included).
+     */
+    public Detail detail(String id, Runnable loaded) {
+        Detail d = details.get(id);
+        if (d != null || !configured(config) || !asked.add(id)) return d;
+        posters.submit(() -> {
+            try {
+                Map<String, Object> m = MiniJson.object(get("/api/v1/media/" + URLEncoder.encode(id, StandardCharsets.UTF_8)));
+                List<String> genres = new ArrayList<>();
+                List<Object> g = m == null ? null : MiniJson.array(m.get("genres"));
+                if (g != null) for (Object o : g) if (MiniJson.string(o) != null) genres.add(MiniJson.string(o));
+                Path backdrop = null;
+                Map<String, Object> art = m == null ? null : MiniJson.object(m.get("artwork"));
+                String b = art == null ? null : MiniJson.string(art.get("backdrop"));
+                if (b != null && b.startsWith("/api/v1/artwork/")) {
+                    Path file = config.home().resolve("cache").resolve("openbased").resolve("backdrops")
+                            .resolve(b.substring(b.lastIndexOf('/') + 1).replaceAll("[^A-Za-z0-9_-]", ""));
+                    Files.createDirectories(file.getParent());
+                    if (!Files.exists(file)) download(b, file);
+                    if (Files.exists(file)) backdrop = file;
+                }
+                Double runtime = m == null ? null : MiniJson.number(m.get("runtime"));
+                details.put(id, new Detail(m == null ? null : MiniJson.string(m.get("overview")), List.copyOf(genres),
+                        runtime == null ? null : runtime.intValue(), backdrop));
+            } catch (Exception e) {
+                details.put(id, new Detail(null, List.of(), null, null));
+            }
+            loaded.run();
+        });
+        return null;
+    }
+
     /** mediaId -> duration in seconds (0 if unknown), for progress */
     private final Map<String, Double> durations = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile String problem;
@@ -342,10 +404,15 @@ public final class OpenBased implements Launcher.Listener {
     private List<Game> fetch() throws IOException, InterruptedException {
         // started but not finished first, like "continue watching" in OpenBased's own apps
         Set<String> first = new LinkedHashSet<>();
+        Map<String, Double> positions = new java.util.HashMap<>();
         try {
             for (Object o : MiniJson.array(MiniJson.object(get("/api/v1/continue-watching?pageSize=50")).get("items"))) {
-                String id = MiniJson.string(MiniJson.object(o).get("mediaId"));
-                if (id != null) first.add(id);
+                Map<String, Object> c = MiniJson.object(o);
+                String id = MiniJson.string(c.get("mediaId"));
+                if (id == null) continue;
+                first.add(id);
+                Double pos = MiniJson.number(c.get("position"));
+                if (pos != null) positions.put(id, pos);
             }
         } catch (IOException e) {
             // no history.read scope: just the list
@@ -370,6 +437,7 @@ public final class OpenBased implements Launcher.Listener {
 
         List<java.util.concurrent.Future<?>> downloads = new ArrayList<>();
         List<Game> games = new ArrayList<>();
+        List<Item> list = new ArrayList<>();
         for (String id : order) {
             Map<String, Object> m = all.get(id);
             Double ms = MiniJson.number(m.get("duration"));
@@ -381,8 +449,16 @@ public final class OpenBased implements Launcher.Listener {
                 covers.add(file);
                 if (!Files.exists(file)) downloads.add(posters.submit(() -> download(poster, file)));
             }
-            games.add(new Game(Systems.OPENBASED, title(m), cache.resolve("media").resolve(id), covers));
+            Game game = new Game(Systems.OPENBASED, title(m), cache.resolve("media").resolve(id), covers);
+            games.add(game);
+            Double year = MiniJson.number(m.get("year")), season = MiniJson.number(m.get("seasonNumber")),
+                    episode = MiniJson.number(m.get("episodeNumber"));
+            list.add(new Item(id, String.valueOf(MiniJson.string(m.get("type"))), String.valueOf(MiniJson.string(m.get("title"))),
+                    year == null ? null : year.intValue(), ms == null ? 0 : ms / 1000, MiniJson.string(m.get("seriesTitle")),
+                    season == null ? null : season.intValue(), episode == null ? null : episode.intValue(),
+                    covers.isEmpty() ? null : covers.get(0), game, positions.getOrDefault(id, 0.0), first.contains(id)));
         }
+        items = List.copyOf(list);
         for (var d : downloads) {
             try {
                 d.get(30, TimeUnit.SECONDS);

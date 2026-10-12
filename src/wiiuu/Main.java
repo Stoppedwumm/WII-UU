@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.89";
+    public static final String VERSION = "1.9.90";
 
     private final Config config;
     private final Library library;
@@ -320,6 +320,14 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             } else {
                 System.out.println("[input] virtual controllers unavailable (" + v.problem() + "); typing keys instead");
             }
+        }
+        // controllers plugged into a Mac (Linux: the virtual controllers' helper above takes them)
+        if (vpads == null && config.getBool("input.controllersAsPlayers", true)
+                && System.getProperty("os.name", "").toLowerCase().contains("mac")) {
+            GamepadServer sink = server;
+            Thread t = new Thread(() -> new wiiuu.input.MacPads().start(config, sink.controllerSink()), "mac-pads-start");
+            t.setDaemon(true);                              // building the helper the first time takes a while
+            t.start();
         }
         try {
             server.start(config.port());

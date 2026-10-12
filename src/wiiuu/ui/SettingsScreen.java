@@ -1130,7 +1130,8 @@ public final class SettingsScreen {
                     return pads == 0 ? s : s + ", " + (pads == 1 ? "1 controller" : pads + " controllers");
                 }, this::playerOrderPage));
         r.add(toggle("Controllers are players", "Controllers plugged into the PC play like phones: each one gets a player number "
-                + "here and works in every emulator, nothing to set up (Linux). Off: emulators read them themselves. "
+                + "here and works in every emulator, nothing to set up (Linux; on a Mac in the menu and Choccy Milk, other "
+                + "emulators read them themselves). Off: emulators read them themselves. "
                 + "From the next start.", "input.controllersAsPlayers", true, null));
         r.add(new Link("Controller buttons", "Remap a controller plugged in here, button for button.", () -> {
                     wiiuu.net.GamepadServer g = sv.gamepad().get();
@@ -1175,7 +1176,8 @@ public final class SettingsScreen {
             List<String[]> list = g == null ? List.of() : g.localControllers();
             if (list.isEmpty()) {
                 r.add(new Info("No controller is plugged in. Controllers can be remapped while they're players of their own "
-                        + "(Linux, with Controllers are players on and the virtual controllers working)."));
+                        + "(Controllers are players on; Linux: with the virtual controllers working, Mac: with the Xcode Command "
+                        + "Line Tools, which build its controller helper)."));
                 return r;
             }
             r.add(new Info("Each controller's buttons, button for button, for every game and emulator (and on another "
@@ -1265,7 +1267,7 @@ public final class SettingsScreen {
             r.add(new Info(l.host() + (pr.online(l) ? "" : " · not reached lately (off, or on another network)")
                     + (l.state().isEmpty() ? "" : " · " + l.state())));
             r.add(new Toggle("Send my controllers there", "The controllers plugged in here play on " + l.name() + " instead, "
-                    + "each as a player of its own (Linux: needs the virtual controllers). Only one WII-UU at a time.",
+                    + "each as a player of its own (Linux with the virtual controllers, or a Mac). Only one WII-UU at a time.",
                     l::forward, on -> {
                 pr.setForward(l, on);
                 say(on ? "Controllers plugged in here now play on " + l.name() : "Controllers play here again");
@@ -1273,6 +1275,17 @@ public final class SettingsScreen {
             r.add(new Toggle("Sync saves", "Choccy Milk's saves and save states (~/.wiiuu/saves) both ways: the newer copy "
                     + "wins, the one it replaces is kept in saves/.backup. Never while a game runs on either.",
                     l::sync, on -> pr.setSync(l, on)));
+            r.add(new Toggle("Copy its games", "Games " + l.name() + " has and this one doesn't are copied here, into the same "
+                    + "console folders (resuming where a copy stopped, paused while a game runs). Nothing is replaced or deleted: "
+                    + "a game deleted here comes back while this is on. Turn it on on both to have the same games on both.",
+                    l::games, on -> {
+                pr.setGames(l, on);
+                say(on ? "Copying the games " + l.name() + " has and this one doesn't…" : "Games stay as they are");
+            }));
+            r.add(new Action("Copy games now", null, () -> {
+                pr.gamesSoon(l);
+                say("Looking at " + l.name() + "'s games…");
+            }, () -> l.games() ? l.gameState() : "off", null));
             r.add(new Action("Sync now", null, () -> {
                 pr.syncSoon(l);
                 say("Syncing saves with " + l.name() + "…");

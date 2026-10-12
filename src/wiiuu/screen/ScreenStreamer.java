@@ -935,10 +935,10 @@ public final class ScreenStreamer {
             System.err.println("[screen] capture helper unavailable: " + e.getMessage());
             return;
         }
-        macHelper = buildSwift("wiiuu-capture", "capture");
+        macHelper = buildSwift(config, "wiiuu-capture", "capture");
         if (macHelper != null) System.out.println("[screen] GamePad streaming via ScreenCaptureKit");
-        macTrustHelper = buildSwift("wiiuu-trust", "trust");
-        macAudioHelper = buildSwift("wiiuu-audio", "audio");
+        macTrustHelper = buildSwift(config, "wiiuu-trust", "trust");
+        macAudioHelper = buildSwift(config, "wiiuu-audio", "audio");
     }
 
     /**
@@ -949,7 +949,7 @@ public final class ScreenStreamer {
      * compiler"). The Command Line Tools usually ship older SDKs too, so those are tried next. A
      * build that failed is only tried again once the source or the compiler changes.
      */
-    private java.nio.file.Path buildSwift(String exeName, String source) {
+    public static java.nio.file.Path buildSwift(Config config, String exeName, String source) {
         java.nio.file.Path dir = config.home().resolve("bin");
         java.nio.file.Path exe = dir.resolve(exeName), stamp = dir.resolve(exeName + ".sha256");
         java.nio.file.Path failed = dir.resolve(exeName + ".failed");
@@ -973,7 +973,8 @@ public final class ScreenStreamer {
             java.nio.file.Files.createDirectories(buildLog.getParent());
             java.nio.file.Path swift = dir.resolve(source + ".swift");
             java.nio.file.Files.write(swift, src);
-            System.out.println("[screen] building the macOS " + (source.equals("audio") ? "sound" : source.equals("trust") ? "permission" : "capture")
+            System.out.println("[screen] building the macOS " + (source.equals("audio") ? "sound" : source.equals("trust") ? "permission"
+                    : source.equals("pads") ? "controller" : "capture")
                     + " helper (first start only, about a minute)...");
             StringBuilder log = new StringBuilder();
             for (String sdk : sdks()) {

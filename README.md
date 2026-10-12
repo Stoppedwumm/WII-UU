@@ -72,7 +72,13 @@ sudo wiiuu-console install                                                    # 
   (`input.controllersAsPlayers=false`) leaves controllers to the emulators again (they then only
   steer the menu here; `input.localPads=false` turns that off too). This needs the virtual
   controllers (`install.sh` sets them up); without them, controllers steer the menu and each
-  emulator reads them itself. On macOS and Windows the emulators read controllers themselves.
+  emulator reads them itself. On Windows the emulators read controllers themselves.
+* **Controllers on a Mac:** controllers plugged into the Mac running WII-UU (Xbox, PlayStation,
+  Switch Pro, MFi...) are players of their own too, in WII-UU's menu and in Choccy Milk games, with
+  remapping, the player order and sending them to another WII-UU. WII-UU reads them through Apple's
+  GameController framework with a small helper it builds the first time (it needs the Xcode Command
+  Line Tools, like the screen capture helper: `xcode-select --install`). Other emulators (Dolphin,
+  PPSSPP...) read the controller themselves, so WII-UU leaves it to them while one runs.
 * **Remapping a controller:** *Settings → GamePad & players → Controller buttons* lists the
   controllers plugged in. Pick one, then a GamePad button (A, B, X, Y, L, R, ZL, ZR, +, −, HOME,
   L3, R3, the d-pad) and press the controller's button that should be it. The button that was it
@@ -138,8 +144,20 @@ that page): tick `media.read media.stream history.read history.write`, plus `pro
 can revoke it, and choose 1 year. If the GamePad address changes, update the redirect URI in OpenBased (or set
 `openbased.redirectUri` in WII-UU to a fixed name).
 
-The **OpenBased** tile then comes first on the home screen, with your server's posters as covers and
-what you started but didn't finish at the front. The phone's Library lists the videos too.
+The **OpenBased** tile then comes first on the home screen, dressed as a cinema rather than a console
+(dark, film-strip edges, its name in marquee gold). Opening it dims the lights: the menu music fades
+and a dark screen of films and series opens, like a streaming service's:
+
+* The **focused title fills the top**: its backdrop, story, year, length, genres, and a **Play** or
+  **Resume** button with how much is left.
+* **Rows below**, browsed with the d-pad or stick: **Continue watching** (with how far you got),
+  **Series**, **Movies** and **More**. L / R jump a row; the mouse works too.
+* A **series opens to its seasons**, a row each, at the episode you're on; B goes back to all titles,
+  B again back to the menu.
+* Stories, genres and backdrops come from OpenBased (its TMDB matching, or `fanart.jpg` /
+  `<video>-fanart.jpg` next to the files); without them the poster stands in.
+
+The phone's Library lists the videos too.
 
 * **Player:** mpv if it is installed (Console Mode installs it), else VLC, else ffplay, or your own
   command in `openbased.player` (`{url}`, `{title}`, `{start}` in seconds).
@@ -593,6 +611,12 @@ GamePad page shows) and type the pairing code from its TV. Then, on either one:
   kept in `saves/.backup`. Nothing is synced while a game runs on either. Saves of RetroArch and
   the standalone emulators stay where those keep them. The newer copy is told apart by the files'
   times, so both computers' clocks should be right (they are, when they set the time online).
+* **Copy its games** (off until you turn it on): the games the other WII-UU has and this one doesn't
+  are copied into the same console folders here, every ten minutes and when you turn it on (*Copy
+  games now* shows how it goes). Big games copy in the background and go on where they stopped
+  after an interruption; copying pauses while a game runs, and a game doesn't start copying without
+  room for it (plus 512 MB). Nothing is replaced or deleted, so a game deleted here comes back while
+  this is on. Turn it on on both WII-UUs to have the same games on both.
 
 Linking gives each WII-UU a random key for the other (kept in `~/.wiiuu/peers.properties`, readable
 only by you); saves and controllers need it, and the pairing code is only used to link. Five

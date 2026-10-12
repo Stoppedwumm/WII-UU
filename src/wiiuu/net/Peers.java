@@ -80,8 +80,9 @@ public final class Peers {
         volatile int port;
         /** token this side sends (out) and expects from it (in) */
         final String out, in;
-        volatile boolean forward, sync;
-        volatile String state = "";
+        volatile boolean forward, sync, games;
+        volatile String state = "", gameState = "";
+        volatile long lastGames;
         volatile long lastSync, contact;
 
         Link(String id, String name, String host, int port, String out, String in, boolean forward, boolean sync) {
@@ -105,6 +106,16 @@ public final class Peers {
 
         public boolean forward() {
             return forward;
+        }
+
+        /** Whether games this one lacks are copied from it. */
+        public boolean games() {
+            return games;
+        }
+
+        /** How copying its games goes: "copying 3 of 12: Mario Kart 64.z64 (45%)"... */
+        public String gameState() {
+            return gameState;
         }
 
         public boolean sync() {
@@ -133,6 +144,9 @@ public final class Peers {
 
         /** Sending controllers was turned on or off. */
         void forwardingChanged();
+
+        /** Games were copied in from another WII-UU (time to look for games again). */
+        void gamesAdded();
     }
 
     private final Config config;
@@ -212,6 +226,7 @@ public final class Peers {
 
     void stop() {
         if (timer != null) timer.shutdownNow();
+        copier.shutdownNow();
         if (socket != null) socket.close();
         for (RemotePad p : remotePads.values()) p.close();
     }
@@ -365,6 +380,19 @@ public final class Peers {
         host.forwardingChanged();
     }
 
+    /** Copy the games this WII-UU lacks from that one (in the background, resuming where it stopped). */
+    public void setGames(Link l, boolean on) {
+        l.games = on;
+        save();
+        if (on) gamesSoon(l);
+        else l.gameState = "";
+    }
+
+    public void gamesSoon(Link l) {
+        l.lastGames = 0;
+        copier.execute(() -> pullGames(l));
+    }
+
     public void setSync(Link l, boolean on) {
         l.sync = on;
         save();
@@ -407,6 +435,12 @@ public final class Peers {
         Map<String, String> q = query(ex);
         switch (path) {
             case "/api/peer/ping" -> reply(ex, 200, new Json().obj().kv("ok", true).endObj());
+            case "/api/peer/roms" -> {
+                Json j = new Json().obj().key("files").arr();
+                for (String[] f : localGames()) j.obj().kv("s", f[0]).kv("f", f[1]).kv("n", Long.parseLong(f[2])).endObj();
+                reply(ex, 200, j.endArr().endObj());
+            }
+            case "/api/peer/rom" -> sendGame(ex, q);
             case "/api/peer/unlink" -> {
                 links.remove(l.id);
                 if (l.forward) host.forwardingChanged();
@@ -633,7 +667,27 @@ public final class Peers {
         timer.execute(() -> sync(l));
     }
 
+    /** one copy at a time, apart from the saves (games can take long) */
+    private final ExecutorService copier = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "peers-games");
+        t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
+        return t;
+    });
+    private static final long GAMES_EVERY_MS = 10 * 60_000;
+    /** a game being copied in, until it's complete */
+    private static final String PART = ".wiiuu-part";
+
     private void syncTick() {
+        long t = System.currentTimeMillis();
+        if (!host.playing()) {
+            for (Link l : links.values()) {
+                if (l.games && t - l.lastGames > GAMES_EVERY_MS) {
+                    l.lastGames = t;
+                    copier.execute(() -> pullGames(l));
+                }
+            }
+        }
         boolean playing = host.playing();
         boolean justStopped = wasPlaying && !playing;
         wasPlaying = playing;
@@ -789,6 +843,171 @@ public final class Peers {
         return f.startsWith(saves) && !f.equals(saves) ? f : null;
     }
 
+    // ---- games ------------------------------------------------------------------------------------
+
+    /** The consoles whose games are copied (not the video channels). */
+    private static List<wiiuu.core.GameSystem> gameSystems() {
+        List<wiiuu.core.GameSystem> out = new ArrayList<>();
+        for (wiiuu.core.GameSystem s : wiiuu.core.Systems.ALL) {
+            if (!s.id().equals("openbased") && !s.id().equals("reactions")) out.add(s);
+        }
+        return out;
+    }
+
+    /** Every game file here: {console, path in its games folder (with /), size}. */
+    List<String[]> localGames() {
+        List<String[]> out = new ArrayList<>();
+        for (wiiuu.core.GameSystem s : gameSystems()) {
+            Path dir = config.romDir(s);
+            if (!Files.isDirectory(dir)) continue;
+            try (Stream<Path> all = Files.walk(dir, 4)) {
+                for (Path f : (Iterable<Path>) all::iterator) {
+                    if (out.size() >= 50_000) break;
+                    String rel = dir.relativize(f).toString().replace('\\', '/');
+                    if (!Files.isRegularFile(f, java.nio.file.LinkOption.NOFOLLOW_LINKS) || gamePath(s.id(), rel) == null) continue;
+                    out.add(new String[]{s.id(), rel, Long.toString(Files.size(f))});
+                }
+            } catch (IOException ignored) {
+                // what was found
+            }
+        }
+        return out;
+    }
+
+    /** A game's file from its console and path in that console's games folder, or null when it isn't one. */
+    Path gamePath(String system, String rel) {
+        if (system == null || rel == null || rel.isBlank() || rel.length() > 400 || rel.contains("\\") || rel.contains("\0")) return null;
+        wiiuu.core.GameSystem s = null;
+        for (wiiuu.core.GameSystem g : gameSystems()) if (g.id().equals(system)) s = g;
+        if (s == null) return null;
+        for (String part : rel.split("/")) {
+            if (part.isEmpty() || part.startsWith(".") || part.equals("..")) return null;
+        }
+        if (rel.endsWith(PART) || rel.endsWith(".tmp")) return null;
+        Path dir = config.romDir(s).toAbsolutePath().normalize();
+        Path f = dir.resolve(rel).normalize();
+        return f.startsWith(dir) && !f.equals(dir) ? f : null;
+    }
+
+    /** Sends a game file (from an offset, "Range: bytes=N-", so a copy can go on where it stopped). */
+    private void sendGame(HttpExchange ex, Map<String, String> q) throws IOException {
+        Path f = gamePath(q.get("s"), q.get("f"));
+        if (f == null || !Files.isRegularFile(f)) {
+            reply(ex, 404, new Json().obj().kv("error", "no such game").endObj());
+            return;
+        }
+        long size = Files.size(f), from = 0;
+        String range = ex.getRequestHeaders().getFirst("Range");
+        if (range != null && range.matches("bytes=\\d+-")) from = Math.min(size, Long.parseLong(range.substring(6, range.length() - 1)));
+        ex.getResponseHeaders().set("Content-Type", "application/octet-stream");
+        if (from > 0) ex.getResponseHeaders().set("Content-Range", "bytes " + from + "-" + (size - 1) + "/" + size);
+        ex.sendResponseHeaders(from > 0 ? 206 : 200, size - from == 0 ? -1 : size - from);
+        try (var in = Files.newByteChannel(f); OutputStream out = ex.getResponseBody()) {
+            in.position(from);
+            java.nio.channels.Channels.newInputStream(in).transferTo(out);
+        }
+    }
+
+    /** Copies the games this WII-UU lacks from a linked one. */
+    private void pullGames(Link l) {
+        if (!l.games) return;
+        try {
+            HttpResponse<String> r = get(l.base() + "/api/peer/roms", l);
+            if (r.statusCode() == 404) {
+                l.gameState = "it's an older WII-UU: update it to copy its games";
+                return;
+            }
+            Map<String, Object> j = MiniJson.object(MiniJson.parse(r.body()));
+            if (r.statusCode() != 200 || j == null) {
+                l.gameState = "couldn't list its games (" + r.statusCode() + ")";
+                return;
+            }
+            List<String[]> missing = new ArrayList<>();
+            for (Object o : MiniJson.array(j.get("files"))) {
+                Map<String, Object> e = MiniJson.object(o);
+                String s = MiniJson.string(e.get("s")), f = MiniJson.string(e.get("f"));
+                Path to = gamePath(s, f);
+                if (to != null && !Files.exists(to)) missing.add(new String[]{s, f, str(e.get("n"), "0")});
+            }
+            int done = 0;
+            for (String[] m : missing) {
+                if (!l.games || !links.containsKey(l.id)) return;
+                if (host.playing()) {
+                    l.gameState = "paused while a game runs";
+                    l.lastGames = 0;                        // goes on when it ends
+                    break;
+                }
+                l.gameState = "copying " + (done + 1) + " of " + missing.size() + ": " + Path.of(m[1]).getFileName();
+                if (pullGame(l, m[0], m[1], Long.parseLong(num(m[2])), done + 1, missing.size())) done++;
+            }
+            if (done > 0) {
+                System.out.println("[peers] copied " + done + (done == 1 ? " game file" : " game files") + " from " + l.name);
+                host.gamesAdded();
+            }
+            if (!l.gameState.startsWith("paused") && !l.gameState.startsWith("not enough")) {
+                l.gameState = missing.isEmpty() ? "has no games this one lacks"
+                        : done == missing.size() ? "copied " + done + (done == 1 ? " file" : " files") : "copied " + done + " of " + missing.size() + " files";
+            }
+        } catch (IOException e) {
+            l.gameState = "can't reach it";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException e) {
+            l.gameState = "copying failed: " + e.getMessage();
+        }
+    }
+
+    /** One game, into a part file first (kept to go on from next time), then put in place. */
+    private boolean pullGame(Link l, String system, String rel, long size, int n, int of) throws IOException, InterruptedException {
+        Path to = gamePath(system, rel);
+        if (to == null) return false;
+        Files.createDirectories(to.getParent());
+        Path part = to.resolveSibling(to.getFileName() + PART);
+        long have = Files.exists(part) ? Files.size(part) : 0;
+        if (have > size) {
+            Files.delete(part);
+            have = 0;
+        }
+        long free = Files.getFileStore(to.getParent()).getUsableSpace();
+        if (free < size - have + (512L << 20)) {
+            l.gameState = "not enough room for " + to.getFileName() + " (" + (size >> 20) + " MB)";
+            return false;
+        }
+        HttpRequest.Builder b = request(l.base() + "/api/peer/rom?s=" + enc(system) + "&f=" + enc(rel), l);
+        if (have > 0) b.header("Range", "bytes=" + have + "-");
+        HttpResponse<InputStream> r = http.send(b.timeout(Duration.ofHours(6)).GET().build(), HttpResponse.BodyHandlers.ofInputStream());
+        if (r.statusCode() != 200 && r.statusCode() != 206) {
+            r.body().close();
+            return false;
+        }
+        if (r.statusCode() == 200) have = 0;                // it sent everything: start over
+        try (InputStream in = r.body(); OutputStream out = Files.newOutputStream(part,
+                have > 0 ? new java.nio.file.OpenOption[]{java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND}
+                        : new java.nio.file.OpenOption[]{java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+                        java.nio.file.StandardOpenOption.WRITE})) {
+            byte[] buf = new byte[1 << 20];
+            long got = have, shown = -1;
+            int k;
+            while ((k = in.read(buf)) > 0) {
+                out.write(buf, 0, k);
+                got += k;
+                long pct = size > 0 ? got * 100 / size : 100;
+                if (pct != shown) {
+                    shown = pct;
+                    l.gameState = "copying " + n + " of " + of + ": " + to.getFileName() + " (" + pct + "%)";
+                }
+                if (host.playing() || !l.games) {
+                    l.gameState = "paused while a game runs";
+                    l.lastGames = 0;
+                    return false;                           // the part file stays: it goes on from there
+                }
+            }
+        }
+        if (Files.size(part) != size) return false;          // cut short: next time
+        Files.move(part, to, StandardCopyOption.ATOMIC_MOVE);
+        return true;
+    }
+
     // ---- remembered links --------------------------------------------------------------------------
 
     private Path file() {
@@ -809,6 +1028,7 @@ public final class Peers {
                 links.put(id, new Link(id, p.getProperty(id + ".name", id), p.getProperty(id + ".host", ""),
                         Integer.parseInt(p.getProperty(id + ".port", "8080")), p.getProperty(id + ".out"), p.getProperty(id + ".in", ""),
                         Boolean.parseBoolean(p.getProperty(id + ".forward")), !"false".equals(p.getProperty(id + ".sync"))));
+                links.get(id).games = Boolean.parseBoolean(p.getProperty(id + ".games"));
             } catch (NumberFormatException ignored) {
                 // a broken entry
             }
@@ -826,6 +1046,7 @@ public final class Peers {
             p.setProperty(l.id + ".in", l.in);
             p.setProperty(l.id + ".forward", Boolean.toString(l.forward));
             p.setProperty(l.id + ".sync", Boolean.toString(l.sync));
+            p.setProperty(l.id + ".games", Boolean.toString(l.games));
         }
         try {
             Files.createDirectories(config.home());

@@ -301,13 +301,7 @@ public final class GamepadServer {
     public void setVirtualPads(VirtualPads pads) {
         this.pads = pads;
         if (pads != null && config.getBool("input.controllersAsPlayers", true)) {
-            controllers = new Controllers();
-            pads.watchControllers(controllers);
-            wiiuu.input.LocalPads.setTaken(() -> {
-                Map<Integer, String> m = new HashMap<>();
-                for (Client c : clients.values()) if (c.controller && c.player > 0) m.put(c.player, c.label);
-                return m;
-            });
+            pads.watchControllers(controllerSink());
         }
     }
 
@@ -368,6 +362,18 @@ public final class GamepadServer {
         });
     }
 
+    /** Where a controller helper reports controllers (the Linux one through VirtualPads, the Mac one directly). */
+    public synchronized VirtualPads.Controllers controllerSink() {
+        if (controllers != null) return controllers;
+        controllers = new Controllers();
+        wiiuu.input.LocalPads.setTaken(() -> {
+            Map<Integer, String> m = new HashMap<>();
+            for (Client c : clients.values()) if (c.controller && c.player > 0) m.put(c.player, c.label);
+            return m;
+        });
+        return controllers;
+    }
+
     /** Other WII-UUs on the network (null when the server is off or peers.enabled=false). */
     public Peers peers() {
         return peers;
@@ -399,6 +405,11 @@ public final class GamepadServer {
         @Override
         public boolean playing() {
             return launcher.isRunning();
+        }
+
+        @Override
+        public void gamesAdded() {
+            library.rescanAsync();
         }
 
         @Override
@@ -918,6 +929,8 @@ public final class GamepadServer {
 
     private void input(Client c, String body) {
         if (c.player <= 0) return;
+        // a controller plugged into a Mac: an emulator WII-UU started reads it itself (only Choccy Milk needs it passed on)
+        if (c.controller && c.id.startsWith("pad:mac") && launcher.isRunning() && !launcher.inChoccy()) return;
         // a controller in the menu: its bottom button confirms, as on most controllers (input.padConfirm=east: the right one)
         boolean swap = c.controller && !launcher.isRunning() && !"east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())
                 && !remapsAOrB(c.label);

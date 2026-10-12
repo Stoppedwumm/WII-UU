@@ -81,6 +81,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         void refresh();
 
         void closeGame();
+
+        /** OpenBased, for its cinema screen (null: none). */
+        default wiiuu.core.OpenBased openBased() {
+            return null;
+        }
     }
 
     // ---- colours: one set per theme (see applyTheme); only changed on the Swing thread ------
@@ -400,6 +405,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private volatile Library.Snapshot snap = new Library.Snapshot(0, Map.of());
     private Screen screen = Screen.HOME;
     private GameSystem openSystem;
+    /** OpenBased's cinema screen, while it's open */
+    private Cinema cinema;
     private int homeSel;
     private final List<Tile> tiles = new ArrayList<>();
     private int sel;
@@ -1238,7 +1245,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private void updateMusic() {
         // not while the first boot's intro (with its own beat) is pending or playing
-        MenuAudio.get().musicOn(musicEnabled && revealed && playing == null && intro == null && !introPending && !idleOwnMusic && boss == null);
+        MenuAudio.get().musicOn(musicEnabled && revealed && playing == null && intro == null && !introPending && !idleOwnMusic && boss == null
+                && cinema == null);                         // the cinema is quiet
     }
 
     private void buildHomeTiles() {
@@ -1273,6 +1281,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (settings != null) {
             settings.navigate(dx, dy);
             settings.touch();
+            repaint();
+            return;
+        }
+        if (cinema != null && playing == null) {
+            cinema.navigate(dx, dy);
             repaint();
             return;
         }
@@ -1356,6 +1369,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             repaint();
             return;
         }
+        if (cinema != null && playing == null) {
+            cinema.activate();
+            repaint();
+            return;
+        }
         if (secret('A')) return;
         if (guide != null) {
             guide.activate();
@@ -1397,7 +1415,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
         Tile t = tiles.get(sel);
         Sfx.select();
-        if (screen == Screen.HOME) {
+        if (screen == Screen.HOME && t.system == Systems.OPENBASED && actions.openBased() != null) {
+            homeSel = sel;
+            cinema = new Cinema(this, actions.openBased(), actions::launch);   // the lights go down
+            updateMusic();
+        } else if (screen == Screen.HOME) {
             homeSel = sel;
             openSystem = t.system;
             screen = Screen.GAMES;
@@ -1422,6 +1444,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (settings != null) {
             settings.back();
             settings.touch();
+            repaint();
+            return;
+        }
+        if (cinema != null && playing == null) {
+            cinema.back();
             repaint();
             return;
         }
@@ -1467,6 +1494,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (settings != null) {
             settings.page(delta);
             settings.touch();
+            repaint();
+            return;
+        }
+        if (cinema != null && playing == null) {
+            cinema.page(delta);
             repaint();
             return;
         }
@@ -1631,6 +1663,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     return;
                 }
                 if (playing != null) return;
+                if (cinema != null) {
+                    if (e.getButton() == MouseEvent.BUTTON3) cinema.back();
+                    else cinema.click(e.getX(), e.getY(), e.getClickCount());
+                    repaint();
+                    return;
+                }
                 if (vizFull) {
                     back();
                     return;
@@ -1687,6 +1725,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     repaint();
                     return;
                 }
+                if (cinema != null && playing == null) {
+                    cinema.wheel(e.getWheelRotation());
+                    repaint();
+                    return;
+                }
                 page(e.getWheelRotation() > 0 ? 1 : -1);
             }
         };
@@ -1704,6 +1747,16 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             return;
         }
         if (tickIntro()) return;
+        if (cinema != null && settings == null) {           // no idle play in the cinema; its motion keeps going
+            if (!cinema.tick()) {
+                cinema = null;
+                updateMusic();
+                repaint();
+            } else if (cinema.animating()) {
+                repaint();
+            }
+            return;
+        }
         if (tickIdle()) return;
         if (settings != null) {
             if (!settings.tick()) {
@@ -2246,6 +2299,14 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             Toolkit.getDefaultToolkit().sync();
             return;
         }
+        if (cinema != null && cinema.covers() && playing == null) {
+            cinema.paint(g, getWidth(), getHeight());        // it covers the menu: don't draw that too
+            if (settings != null) settings.paint(g, getWidth(), getHeight());
+            paintToast(g, L);
+            g.dispose();
+            Toolkit.getDefaultToolkit().sync();
+            return;
+        }
         if (settings != null && settings.covers()) {
             // the settings cover the whole screen too
             settings.paint(g, getWidth(), getHeight());
@@ -2280,6 +2341,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     !musicEnabled ? "Turn it on in Settings (F1) > Look & sound" : mix ? "WII-UU Extended Mix" : "Menu music");
         }
         if (guide != null && !booting) guide.paint(g, getWidth(), getHeight());
+        if (cinema != null) cinema.paint(g, getWidth(), getHeight());
         if (settings != null) settings.paint(g, getWidth(), getHeight());
         if (booting) paintBoot(g, L);
         g.dispose();
@@ -2605,6 +2667,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private void paintSystemTile(Graphics2D g, Tile t, RoundRectangle2D card) {
+        if (t.system == Systems.OPENBASED) {
+            paintCinemaTile(g, t, card);
+            return;
+        }
         float x = (float) card.getX(), y = (float) card.getY(), w = (float) card.getWidth(), h = (float) card.getHeight();
         float artH = h * 0.7f;
         Shape oldClip = g.getClip();
@@ -2637,6 +2703,44 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         String label = t.count == 0 ? (t.system == Systems.OPENBASED && wiiuu.core.OpenBased.lastProblem() != null
                 ? "Server not reachable" : "No " + unit + "s yet") : t.count == 1 ? "1 " + unit : t.count + " " + unit + "s";
         drawCentered(g, label, x + w / 2, y + artH + h * 0.24f);
+    }
+
+    /**
+     * OpenBased's tile: a cinema rather than a console. Dark all over, with film-strip edges, a soft
+     * spotlight and its name in marquee gold, so it stands apart from the games.
+     */
+    private void paintCinemaTile(Graphics2D g, Tile t, RoundRectangle2D card) {
+        float x = (float) card.getX(), y = (float) card.getY(), w = (float) card.getWidth(), h = (float) card.getHeight();
+        Color gold = new Color(0xF2B84B);
+        Shape oldClip = g.getClip();
+        g.clip(card);
+        g.setPaint(new GradientPaint(x, y, new Color(0x1B1922), x, y + h, new Color(0x0A0A0D)));
+        g.fill(new Rectangle2D.Float(x, y, w, h));
+        // a spotlight from above
+        g.setPaint(new java.awt.RadialGradientPaint(new java.awt.geom.Point2D.Float(x + w / 2, y + h * 0.42f), w * 0.62f,
+                new float[]{0f, 1f}, new Color[]{new Color(242, 184, 75, 46), new Color(242, 184, 75, 0)}));
+        g.fill(new Rectangle2D.Float(x, y, w, h));
+        // film strips along the top and bottom
+        float strip = h * 0.085f, hole = strip * 0.42f;
+        for (float sy : new float[]{y, y + h - strip}) {
+            g.setColor(new Color(0, 0, 0, 150));
+            g.fill(new Rectangle2D.Float(x, sy, w, strip));
+            g.setColor(new Color(255, 255, 255, 38));
+            for (float hx = x + hole * 0.9f; hx < x + w; hx += hole * 2.2f) {
+                g.fill(new RoundRectangle2D.Float(hx, sy + (strip - hole) / 2, hole, hole, hole * 0.4f, hole * 0.4f));
+            }
+        }
+        g.setClip(oldClip);
+        g.setColor(gold);
+        drawFitted(g, "OpenBased", Font.BOLD, x + w / 2, y + h * 0.47f, w * 0.78f, h * 0.2f);
+        g.setFont(font(Font.BOLD, h * 0.062f));
+        g.setColor(new Color(255, 255, 255, 150));
+        drawCentered(g, "C  I  N  E  M  A", x + w / 2, y + h * 0.62f);
+        g.setFont(font(Font.PLAIN, h * 0.068f));
+        g.setColor(t.count > 0 ? new Color(0xD9D4CC) : new Color(255, 255, 255, 110));
+        String label = t.count == 0 ? (wiiuu.core.OpenBased.lastProblem() != null ? "Server not reachable" : "Nothing on yet")
+                : t.count == 1 ? "1 title" : t.count + " titles";
+        drawCentered(g, label, x + w / 2, y + h * 0.79f);
     }
 
     private void paintGameTile(Graphics2D g, Tile t, RoundRectangle2D card) {

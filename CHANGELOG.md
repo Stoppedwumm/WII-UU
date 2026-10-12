@@ -3,6 +3,20 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.90 (2026-10-12)
+- OpenBased is a cinema now: its home tile is dark with film-strip edges and a gold marquee name,
+  and opening it dims the lights (the menu music fades) into a streaming-style screen. The focused
+  title fills the top with its backdrop, story, year, length and genres, and Play or Resume with
+  the time left; below are rows of Continue watching, Series, Movies and More. A series opens to
+  its seasons and episodes, at the one you're on.
+- Controllers plugged into a Mac are players of their own too, in the menu and in Choccy Milk games
+  (Xbox, PlayStation, Switch Pro and MFi controllers, through Apple's GameController framework),
+  with remapping, the player order and sending them to another WII-UU. Other emulators keep reading
+  them themselves.
+- Linked WII-UUs can copy each other's games: Copy its games (Settings > GamePad & players > Other
+  WII-UUs > the WII-UU) copies the games the other one has and this one doesn't, resuming big
+  copies where they stopped and pausing while a game runs. Nothing is replaced or deleted.
+
 ## 1.9.89 (2026-10-12)
 - Choccy Milk upscaling, per console (Settings > Games > Choccy Milk picture; U in the Choccy Milk
   app): Scale2x / Scale3x pixel-art upscaling for the 2D consoles, Smooth for all, and for the
