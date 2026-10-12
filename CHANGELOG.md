@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.88 (2026-10-12)
+- Remap a controller button for button: Settings > GamePad & players > Controller buttons. Pick a
+  GamePad button and press the controller's button that should be it; the two swap, so nothing
+  gets lost. Extra buttons (back paddles...) can be added too. The layout works everywhere the
+  controller plays (menu, Choccy Milk, every emulator, another WII-UU it's sent to) and is kept for
+  that kind of controller. Back to the standard layout undoes it.
+
 ## 1.9.87 (2026-10-12)
 - Several WII-UUs on one network work together: Settings > GamePad & players > Other WII-UUs
   lists the ones nearby. Link two once with the other one's pairing code, then:

@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -183,6 +184,7 @@ public final class GamepadServer {
         this.host = host;
         this.screen = screen;
         this.dsu = dsu;
+        this.remaps = new wiiuu.input.PadRemap(config);
         String fixed = config.get("server.code", "").trim();
         if (fixed.isEmpty()) {
             // generated once and remembered, so phones stay paired when WII-UU restarts
@@ -318,6 +320,53 @@ public final class GamepadServer {
      */
     private volatile Controllers controllers;
     private volatile Peers peers;
+    private final wiiuu.input.PadRemap remaps;
+    private final Set<String> swallow = ConcurrentHashMap.newKeySet();
+
+    /** Whether a controller's A or B were remapped (then they mean what was chosen, in the menu too). */
+    private boolean remapsAOrB(String controller) {
+        for (Map.Entry<String, String> e : remaps.changes(controller).entrySet()) {
+            if (e.getKey().equals("A") || e.getKey().equals("B") || e.getValue().equals("A") || e.getValue().equals("B")) return true;
+        }
+        return false;
+    }
+
+    /** Settings waiting for a button on one controller. */
+    private record Capture(String controller, java.util.function.Consumer<String> got) {}
+
+    private volatile Capture capture;
+
+    /** The controllers plugged in here: {id, name} (also ones sent to another WII-UU). */
+    public List<String[]> localControllers() {
+        Controllers c = controllers;
+        List<String[]> out = new ArrayList<>();
+        if (c != null) for (Map.Entry<String, String> e : c.known.entrySet()) out.add(new String[]{e.getKey(), e.getValue()});
+        out.sort(java.util.Comparator.comparing(a -> a[1]));
+        return out;
+    }
+
+    public wiiuu.input.PadRemap remaps() {
+        return remaps;
+    }
+
+    /**
+     * The next button pressed on controller {@code id} goes to {@code got} (as its name: "B",
+     * "K2C0"...) instead of playing; null cancels.
+     */
+    public void captureButton(String id, java.util.function.Consumer<String> got) {
+        capture = got == null ? null : new Capture(id, got);
+    }
+
+    /** Lets go of everything a controller holds (its mapping changed). */
+    public void releaseController(String id) {
+        Controllers c = controllers;
+        if (c == null) return;
+        c.exec.execute(() -> {
+            Client cl = clients.get("pad:" + id);
+            if (cl != null && cl.player > 0) router.releaseAll(cl.player);
+            if (cl != null && pads != null && cl.player > 0) pads.release(cl.player);
+        });
+    }
 
     /** Other WII-UUs on the network (null when the server is off or peers.enabled=false). */
     public Peers peers() {
@@ -400,6 +449,25 @@ public final class GamepadServer {
             host.padsChanged(connectedPads());
         }
 
+        /** A button line with the controller's remapping applied (or caught for Settings); null: nothing to pass on. */
+        private String remap(String id, String line) {
+            String[] p = line.split(" ");
+            if (p.length != 3 || !p[0].equals("b")) return line;           // sticks as they are
+            boolean down = p[1].length() > 0 && p[2].equals("1");
+            Capture cap = capture;
+            if (cap != null && cap.controller.equals(id)) {
+                if (down) {
+                    capture = null;
+                    swallow.add(id + "|" + p[1]);
+                    cap.got.accept(p[1]);
+                    return null;
+                }
+            }
+            if (!down && swallow.remove(id + "|" + p[1])) return null;     // the release of a caught button
+            PadButton to = remaps.target(known.getOrDefault(id, ""), p[1]);
+            return to == null ? null : "b " + to.name() + " " + p[2];
+        }
+
         /** Sending controllers to another WII-UU was turned on or off: each one moves. */
         void rehome() {
             exec.execute(() -> {
@@ -436,13 +504,15 @@ public final class GamepadServer {
         @Override
         public void input(String id, String line) {
             exec.execute(() -> {
+                String mapped = remap(id, line);
+                if (mapped == null) return;
                 Peers pr = peers;
                 if (pr != null && pr.sending(id)) {
-                    pr.padInput(id, line);
+                    pr.padInput(id, mapped);
                     return;
                 }
                 Client c = clients.get("pad:" + id);
-                if (c != null) GamepadServer.this.input(c, line);
+                if (c != null) GamepadServer.this.input(c, mapped);
             });
         }
     }
@@ -849,7 +919,8 @@ public final class GamepadServer {
     private void input(Client c, String body) {
         if (c.player <= 0) return;
         // a controller in the menu: its bottom button confirms, as on most controllers (input.padConfirm=east: the right one)
-        boolean swap = c.controller && !launcher.isRunning() && !"east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim());
+        boolean swap = c.controller && !launcher.isRunning() && !"east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())
+                && !remapsAOrB(c.label);
         for (String line : body.split("\n")) {
             String[] p = line.trim().split(" ");
             try {

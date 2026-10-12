@@ -320,6 +320,63 @@ public final class SettingsScreen {
         }
     }
 
+    /** A GamePad button on a controller's page: A waits for the controller button that should be it. */
+    private final class PadMapRow extends Row {
+        final String id, controller;
+        final PadButton target;
+        long since;
+
+        PadMapRow(String id, String controller, PadButton target) {
+            super(buttonLabel(target), "A, then press the button on the controller that should be " + buttonLabel(target)
+                    + ". The button that was it gets the other one's job (they swap).");
+            this.id = id;
+            this.controller = controller;
+            this.target = target;
+        }
+
+        @Override
+        String value() {
+            wiiuu.net.GamepadServer g = sv.gamepad().get();
+            if (waiting == this) {
+                if (System.currentTimeMillis() - since < 10_000) return "Press it on the controller… (Esc: cancel)";
+                stopWaiting();
+            }
+            if (g == null) return "";
+            List<String> from = g.remaps().sources(controller, target);
+            if (from.isEmpty()) return "(none)";
+            List<String> names = new ArrayList<>();
+            for (String f : from) names.add(wiiuu.input.PadRemap.describe(f));
+            String v = String.join(" + ", names);
+            return from.size() == 1 && from.get(0).equals(target.name()) ? v : "▸ " + v;
+        }
+
+        @Override
+        void activate() {
+            wiiuu.net.GamepadServer g = sv.gamepad().get();
+            if (g == null) return;
+            stopWaiting();
+            waiting = this;
+            since = System.currentTimeMillis();
+            Sfx.select();
+            g.captureButton(id, physical -> javax.swing.SwingUtilities.invokeLater(() -> {
+                if (waiting != this) return;
+                waiting = null;
+                g.remaps().assign(controller, target, physical);
+                g.releaseController(id);
+                say(wiiuu.input.PadRemap.describe(physical) + " is " + buttonLabel(target) + " now");
+                Sfx.select();
+                view.repaint();
+            }));
+        }
+    }
+
+    private void stopWaiting() {
+        if (waiting == null) return;
+        waiting = null;
+        wiiuu.net.GamepadServer g = sv.gamepad().get();
+        if (g != null) g.captureButton(null, null);
+    }
+
     private final class Info extends Row {
         Info(String text) {
             super(text, null);
@@ -383,6 +440,8 @@ public final class SettingsScreen {
     private String note;                                    // a passing message at the bottom
     private long noteAt;
     private KeyRow capturing;
+    /** a controller button row waiting for the button to be pressed on that controller */
+    private PadMapRow waiting;
     private Editor editor;
 
     SettingsScreen(MenuView view, Services services) {
@@ -456,6 +515,7 @@ public final class SettingsScreen {
             return;
         }
         capturing = null;
+        stopWaiting();
         if (inSidebar) {
             if (dy != 0) {
                 int c = category + dy;
@@ -528,6 +588,11 @@ public final class SettingsScreen {
             Sfx.back();
             return;
         }
+        if (waiting != null) {
+            stopWaiting();
+            Sfx.back();
+            return;
+        }
         if (!stack.isEmpty()) {
             pop();
             Sfx.back();
@@ -565,10 +630,17 @@ public final class SettingsScreen {
 
     /** Whether the keyboard's keys should come here as they are (typing, or waiting for a key). */
     boolean wantsKeys() {
-        return editor != null || capturing != null;
+        return editor != null || capturing != null || waiting != null;
     }
 
     void keyPressed(KeyEvent e) {
+        if (waiting != null) {
+            if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {         // the controller's button is awaited, not a key
+                stopWaiting();
+                Sfx.back();
+            }
+            return;
+        }
         if (capturing != null) {
             if (e.getKeyCode() != KeyEvent.VK_ESCAPE) {
                 String name = KeyMap.nameOf(e.getKeyCode());
@@ -1006,6 +1078,11 @@ public final class SettingsScreen {
         r.add(toggle("Controllers are players", "Controllers plugged into the PC play like phones: each one gets a player number "
                 + "here and works in every emulator, nothing to set up (Linux). Off: emulators read them themselves. "
                 + "From the next start.", "input.controllersAsPlayers", true, null));
+        r.add(new Link("Controller buttons", "Remap a controller plugged in here, button for button.", () -> {
+                    wiiuu.net.GamepadServer g = sv.gamepad().get();
+                    int n = g == null ? 0 : g.localControllers().size();
+                    return n == 0 ? "none plugged in" : n == 1 ? "1 controller" : n + " controllers";
+                }, this::controllersPage));
         r.add(new Link("Other WII-UUs", "Another WII-UU on this network: send it the controllers plugged in here, and keep "
                 + "your saves the same on both.", () -> {
                     wiiuu.net.GamepadServer g = sv.gamepad().get();
@@ -1034,6 +1111,45 @@ public final class SettingsScreen {
             r.add(new Link("Player " + p, null, null, () -> keysPage(player)));
         }
         return r;
+    }
+
+    /** The controllers plugged in here, to remap. */
+    private Page controllersPage() {
+        return new Page("Controller buttons", () -> {
+            List<Row> r = new ArrayList<>();
+            wiiuu.net.GamepadServer g = sv.gamepad().get();
+            List<String[]> list = g == null ? List.of() : g.localControllers();
+            if (list.isEmpty()) {
+                r.add(new Info("No controller is plugged in. Controllers can be remapped while they're players of their own "
+                        + "(Linux, with Controllers are players on and the virtual controllers working)."));
+                return r;
+            }
+            r.add(new Info("Each controller's buttons, button for button, for every game and emulator (and on another "
+                    + "WII-UU it's sent to). Controllers of the same kind share their layout."));
+            for (String[] c : list) {
+                r.add(new Link(c[1], null, () -> g.remaps().changed(c[1]) ? "remapped" : "standard", () -> controllerPage(c[0], c[1])));
+            }
+            return r;
+        });
+    }
+
+    private Page controllerPage(String id, String name) {
+        return new Page(name, () -> {
+            List<Row> r = new ArrayList<>();
+            wiiuu.net.GamepadServer g = sv.gamepad().get();
+            r.add(new Info("Choose a GamePad button, then press the button on " + name + " that should be it. The button "
+                    + "that was it takes over the pressed one's old job, so nothing is lost. Extra buttons (paddles...) can "
+                    + "be added too. Buttons go by place: A right, B bottom, X top, Y left."));
+            for (PadButton b : wiiuu.input.PadRemap.TARGETS) r.add(new PadMapRow(id, name, b));
+            r.add(new Action("Back to the standard layout", null, () -> {
+                if (g != null) {
+                    g.remaps().reset(name);
+                    g.releaseController(id);
+                }
+                say(name + ": standard layout");
+            }, null, "Press A again to reset"));
+            return r;
+        });
     }
 
     /** Other WII-UUs on the network: the ones nearby (to link with) and the linked ones. */

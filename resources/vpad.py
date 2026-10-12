@@ -21,7 +21,8 @@ player's virtual pad - the pad every emulator is set up for. Their lines:
     pad+ <id> <name>           a controller came (id: its event node, e.g. event7)
     pad- <id>                  ... went
     in <id> b <BUTTON> <0|1>   a button as the GamePad's (A, B, X, Y, L, R, ZL, ZR, PLUS, MINUS,
-                               HOME, L3, R3, UP, DOWN, LEFT, RIGHT), by position
+                               HOME, L3, R3, UP, DOWN, LEFT, RIGHT), by position; others as
+                               K<evdev code in hex> (WII-UU can remap them)
     in <id> s <0|1> <x> <y>    a stick (0 left, 1 right), -1..1 with +y down Needs write access to /dev/uinput
 (the WII-UU installer adds a udev rule for that). Uses only the standard library.
 """
@@ -211,7 +212,8 @@ class Controller:
     def event(self, typ, code, value):
         """The lines one event gives (sticks wait for the end of the report)."""
         if typ == EV_KEY and value != 2:
-            name = GAMEPAD.get(code) or JOYSTICK.get(code)
+            # buttons without a GamePad name (paddles, extra buttons) as K<code>, for remapping them
+            name = GAMEPAD.get(code) or JOYSTICK.get(code) or ("K%X" % code if code >= 0x100 else None)
             return self.button(name, value != 0) if name else []
         if typ == EV_ABS:
             if code == ABS_HAT0X:

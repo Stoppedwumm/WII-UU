@@ -73,6 +73,15 @@ sudo wiiuu-console install                                                    # 
   steer the menu here; `input.localPads=false` turns that off too). This needs the virtual
   controllers (`install.sh` sets them up); without them, controllers steer the menu and each
   emulator reads them itself. On macOS and Windows the emulators read controllers themselves.
+* **Remapping a controller:** *Settings → GamePad & players → Controller buttons* lists the
+  controllers plugged in. Pick one, then a GamePad button (A, B, X, Y, L, R, ZL, ZR, +, −, HOME,
+  L3, R3, the d-pad) and press the controller's button that should be it. The button that was it
+  takes over the pressed one's old job (they swap), so nothing gets lost; extra buttons such as
+  back paddles can be added as one more A, HOME... *Back to the standard layout* undoes it all.
+  The layout applies everywhere the controller plays: the menu, Choccy Milk, every emulator, and
+  on another WII-UU it's sent to. Controllers of the same kind (same name) share it
+  (`remap.<name>=B=A,A=B,K2C0=HOME` in the config). Once A or B are remapped, they mean what you
+  chose in the menu too. It works for controllers that are players of their own (see above).
 * **Every boot** starts in console mode again, like on a Steam Deck.
 * **If WII-UU crashes,** it is started again. If it fails three times in a row, the computer switches
   to the desktop, so you can never get locked out.
