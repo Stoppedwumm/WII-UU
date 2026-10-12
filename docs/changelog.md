@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.73 (2026-10-12)
+- Mac installer: Homebrew runs as ARM on Apple Silicon even from a terminal in Intel (Rosetta) mode,
+  which it refused before ("Cannot install under Rosetta 2"), and an outdated Java gets upgraded.
+- Choccy Milk finds Java in Homebrew's Cellar too, and only uses a Java built for the same processor
+  as WII-UU's (an ARM core can't load into an Intel Java).
+
 ## 1.9.72 (2026-10-12)
 - Choccy Milk is a switch of its own now: switched on, it plays every console it has cores for, not
   only in RetroArch mode (on a Mac, N64 went to mupen64plus instead). Left alone it follows RetroArch

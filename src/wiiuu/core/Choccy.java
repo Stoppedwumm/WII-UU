@@ -91,8 +91,14 @@ public final class Choccy {
             roots.add(Path.of(System.getProperty("user.home"), ".jdks"));
         }
         if (os.contains("mac")) {
-            // Homebrew: /opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home (and /usr/local on Intel)
+            // Homebrew: /opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home (and /usr/local on Intel),
+            // and its Cellar (/opt/homebrew/Cellar/openjdk/25.0.1/...)
             for (String brew : new String[]{"/opt/homebrew/opt", "/usr/local/opt"}) roots.add(Path.of(brew));
+            for (String cellar : new String[]{"/opt/homebrew/Cellar", "/usr/local/Cellar"}) {
+                for (String f : new String[]{"openjdk", "openjdk@25", "openjdk@24", "openjdk@23", "openjdk@22"}) {
+                    roots.add(Path.of(cellar, f));
+                }
+            }
         }
         Path best = null;
         int bestVersion = 0;
@@ -105,7 +111,7 @@ public final class Choccy {
                         Path exe = home.resolve("bin").resolve(windows ? "java.exe" : "java");
                         if (!Files.isExecutable(exe)) continue;
                         int v = version(home);
-                        if (v >= 22 && v > bestVersion) {
+                        if (v >= 22 && v > bestVersion && sameArch(home)) {
                             best = exe;
                             bestVersion = v;
                         }
@@ -129,6 +135,30 @@ public final class Choccy {
             // not a JDK we can read
         }
         return 0;
+    }
+
+    /**
+     * Whether that Java is built for the same processor as WII-UU's (its release file's OS_ARCH):
+     * the cores WII-UU finds and downloads are for this one, and an ARM core can't load into an
+     * Intel Java (a Mac with Rosetta, say). Unknown counts as the same.
+     */
+    private static boolean sameArch(Path javaHome) {
+        String mine = arch(System.getProperty("os.arch", ""));
+        try {
+            for (String line : Files.readAllLines(javaHome.resolve("release"))) {
+                if (line.startsWith("OS_ARCH=")) return arch(line.substring(8).replace("\"", "").trim()).equals(mine);
+            }
+        } catch (IOException | RuntimeException ignored) {
+            // can't tell
+        }
+        return true;
+    }
+
+    private static String arch(String a) {
+        a = a.toLowerCase(Locale.ROOT);
+        if (a.contains("aarch64") || a.contains("arm64")) return "arm64";
+        if (a.contains("amd64") || a.contains("x86_64")) return "x64";
+        return a;
     }
 
     /** What to put on the class path: WII-UU's jar (or its classes folder, when run from a build). */

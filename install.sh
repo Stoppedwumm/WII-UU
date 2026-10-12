@@ -79,7 +79,7 @@ java_major() {
 install_java() {
   if [ "$OS" = "Darwin" ]; then
     command -v brew >/dev/null 2>&1 || die "Install Java 17+ from https://adoptium.net (or install Homebrew) and re-run."
-    brew install openjdk@21 && sudo ln -sfn "$(brew --prefix)/opt/openjdk@21/libexec/openjdk.jdk" /Library/Java/JavaVirtualMachines/openjdk-21.jdk
+    $BREW install openjdk@21 && sudo ln -sfn "$(brew --prefix)/opt/openjdk@21/libexec/openjdk.jdk" /Library/Java/JavaVirtualMachines/openjdk-21.jdk
   elif command -v apt-get >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y openjdk-21-jre || sudo apt-get install -y openjdk-17-jre
   elif command -v dnf >/dev/null 2>&1; then sudo dnf install -y java-21-openjdk || sudo dnf install -y java-17-openjdk
   elif command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed --noconfirm jre-openjdk
@@ -87,6 +87,10 @@ install_java() {
   else die "Please install Java 17 or newer (e.g. from https://adoptium.net) and re-run."
   fi
 }
+
+# Homebrew on Apple Silicon refuses to run under Rosetta (a terminal in Intel mode): run it as ARM
+BREW=brew
+if [ "$(uname)" = Darwin ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then BREW="arch -arm64 brew"; fi
 
 say "Checking Java"
 JV="$(java_major)"
@@ -99,9 +103,11 @@ fi
 ok "Java $JV"
 # Choccy Milk (WII-UU's own player for RetroArch's cores) runs on Java 22 or newer, next to this one
 if [ "$(uname)" = Darwin ] && command -v brew >/dev/null 2>&1 && [ "${JV:-0}" -lt 22 ] 2>/dev/null \
-    && ! ls -d /opt/homebrew/opt/openjdk/libexec/openjdk.jdk /usr/local/opt/openjdk/libexec/openjdk.jdk >/dev/null 2>&1; then
+    && ! grep -Eqs 'JAVA_VERSION="(2[2-9]|[3-9][0-9])' /opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/release \
+         /usr/local/opt/openjdk/libexec/openjdk.jdk/Contents/Home/release; then
   if ask "Install the current Java for Choccy Milk (WII-UU's own game player)?"; then
-    brew install openjdk || warn "Java didn't install: games play in RetroArch / the emulators then"
+    { $BREW upgrade openjdk 2>/dev/null || $BREW install openjdk; } \
+      || warn "Java didn't install: games play in RetroArch / the emulators then (try: $BREW install openjdk)"
   fi
 elif ! ls -d /usr/lib/jvm/*/ 2>/dev/null | grep -Eq 'java-(2[2-9]|[3-9][0-9])-|jdk-(2[2-9]|[3-9][0-9])'; then
   if [ "${JV:-0}" -lt 22 ] 2>/dev/null && command -v apt-get >/dev/null 2>&1 \
