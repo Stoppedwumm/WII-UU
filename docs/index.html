@@ -81,6 +81,19 @@
   .meta { margin-top: 18px; color: var(--dim); font-size: 14px; }
 
   section { padding: 44px 0; }
+  /* Choccy Milk: WII-UU's own player, in chocolate and milk */
+  #choccy .box { border-radius: var(--radius); padding: 30px; box-shadow: var(--shadow);
+    background: linear-gradient(160deg, #2a1d15, #17110d); color: #f3e6da; }
+  #choccy h2 { color: #f3e6da; }
+  #choccy .sub, #choccy .card p, #choccy .meta { color: #c9b3a2; }
+  #choccy .card { background: rgba(255, 255, 255, .05); box-shadow: none; }
+  #choccy .card h3 { color: #f3e6da; }
+  #choccy .icon { background: #6b3e26; color: #d7a27a; }
+  #choccy .shot { outline-color: #d7a27a; }
+  #choccy .btn.primary { background: #d7a27a; color: #2a1d15; }
+  #choccy .btn { background: rgba(255, 255, 255, .08); color: #f3e6da; }
+  #choccy code { background: rgba(215, 162, 122, .18); color: #f3e6da; }
+  #choccy a { color: #d7a27a; }
   .changelog { display: grid; gap: 14px; margin: 18px 0; }
   .release { background: var(--card); border-radius: var(--radius); padding: 18px 22px; box-shadow: var(--shadow); }
   .release h3 { margin: 0 0 4px; font-size: 19px; }
@@ -225,6 +238,7 @@
     <nav>
       <a href="#features" class="hide-sm">Features</a>
       <a href="#gamepad" class="hide-sm">GamePad</a>
+      <a href="#choccy" class="hide-sm">Choccy Milk</a>
       <a href="#install">Install</a>
       <a href="#emulators" class="hide-sm">Emulators</a>
       <a href="#changes" class="hide-sm">What's new</a>
@@ -292,6 +306,12 @@
           <p>Set the ROM folders, emulator commands and GamePad key mapping in a settings screen, or in a plain properties file.</p></div>
         <div class="card"><div class="icon">⌂</div><h3>Runs where you do</h3>
           <p>Linux, Windows and macOS, on x86-64 or 64-bit ARM. Installers set up shortcuts, ROM folders and the firewall.</p></div>
+        <div class="card"><div class="icon">★</div><h3>Achievements &amp; covers</h3>
+          <p>Your RetroAchievements progress on each game's tile, and covers found online for games without one. Sign in by typing on your phone instead of the TV.</p></div>
+        <div class="card"><div class="icon">☻</div><h3>WII-UU, the character</h3>
+          <p>A googly-eyed helper walks you through setup and hangs around the menu. Leave it alone and it gets up to things: fan mail, late-night browsing, making music.</p></div>
+        <div class="card"><div class="icon">☕</div><h3>Choccy Milk</h3>
+          <p>WII-UU's own game player. Games play right inside the menu's window, with no RetroArch needed. <a href="#choccy">More below</a>.</p></div>
       </div>
     </div>
   </section>
@@ -337,6 +357,36 @@
       </div>
       <p class="meta">Games with a second screen switch to it automatically. For gyro, open the secure GamePad address (<code>https://&lt;pc&gt;:8443</code>) once, which the phone offers.
         The <a href="https://github.com/Stoppedwumm/WII-UU#the-gamepad-screen-wii-u-ds-and-3ds">README</a> has the one-time emulator setup.</p>
+    </div>
+  </section>
+
+  <section id="choccy">
+    <div class="wrap">
+      <div class="box">
+        <h2>Choccy Milk: WII-UU plays the games itself</h2>
+        <p class="sub">WII-UU's own player for libretro cores, the same cores RetroArch uses. Games play inside WII-UU's window, so there's no second window, no full-screen switching and no lost focus. It needs nothing installed: WII-UU downloads the cores, and the newer Java the player runs on, by itself.</p>
+        <div class="split" style="margin-bottom:28px">
+          <img class="shot" src="choccy-milk.png" width="1100" height="680" loading="lazy"
+               alt="The Choccy Milk app: a glass of chocolate milk next to the title, consoles on the left (NES, Super Nintendo, Game Boy, Nintendo 64, Game Boy Advance, Mega Drive, PlayStation) and the NES games on the right">
+          <div>
+            <h3 style="margin-top:0">Also a program of its own</h3>
+            <p class="meta" style="margin-top:0">Choccy Milk without the Wii U menu: a game list over the same ROM folders, with the same saves and settings. Keyboard, mouse and controllers, and F11 for full screen.</p>
+            <div class="buttons" style="margin:16px 0">
+              <a class="btn primary" href="download/ChoccyMilk.jar">⤓ ChoccyMilk.jar</a>
+            </div>
+            <p class="meta">Double-click it or run <code>java -jar ChoccyMilk.jar</code> (Java 17+). The installer also adds it as <code>choccymilk</code>, with a menu entry on Linux. <code>choccymilk game.nes</code> plays a file right away.</p>
+          </div>
+        </div>
+        <div class="cards">
+          <div class="card"><div class="icon">▶</div><h3>In the menu's window</h3>
+            <p>Turn on <b>Play with Choccy Milk</b> in Settings → Games. NES, SNES, Game Boy, GBA, Master System, Mega Drive, PS1, DS and N64 play in WII-UU. HOME (or Esc) saves and goes back.</p></div>
+          <div class="card"><div class="icon">▣</div><h3>Sharp GamePad picture</h3>
+            <p>The phone gets the game's own frames, not a screen capture: exact pixels in the game's shape, up to 60 frames a second, and no Screen Recording permission on a Mac.</p></div>
+          <div class="card"><div class="icon">⤓</div><h3>Nothing to install</h3>
+            <p>Cores come from the libretro buildbot, and the player's Java 22+ is downloaded once (about 50 MB) if your computer has none. On Apple Silicon it runs natively, even when WII-UU runs through Rosetta.</p></div>
+        </div>
+        <p class="meta">Cores that need OpenGL or Vulkan (Dolphin, PPSSPP, PS2) still play in RetroArch. N64 uses the software renderer on every processor core. On a Raspberry Pi 5, add <code>kernel=kernel8.img</code> to <code>/boot/firmware/config.txt</code> so the N64 recompiler can run.</p>
+      </div>
     </div>
   </section>
 
@@ -491,7 +541,7 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
     <div class="wrap">
       <h2>FAQ</h2>
       <details><summary>Does it emulate the consoles itself?</summary>
-        <p>No. WII-UU is the menu and the GamePad. It launches well-known emulators for each system and points them at your games.</p></details>
+        <p>Mostly not: WII-UU is the menu and the GamePad, and it launches well-known emulators for each system. The exception is <a href="#choccy">Choccy Milk</a>, WII-UU's own player, which runs libretro cores (the emulators RetroArch uses) inside WII-UU's window.</p></details>
       <details><summary>My phone can't connect.</summary>
         <p>Phone and computer must be on the same network, and the GamePad port (8080 by default) must be allowed through the firewall. The installer prints the command for ufw and firewalld, and Windows asks on first start.</p></details>
       <details><summary>How do I get the Wii U GamePad screen on my phone?</summary>
@@ -501,7 +551,7 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
       <details><summary>How do I update WII-UU?</summary>
         <p>Open Settings (F1) → General → <b>Check for updates</b>, or run <code>wiiuu --upgrade</code>. WII-UU also tells you when a new version is out. Settings, ROMs, paired phones and emulators are kept.</p></details>
       <details><summary>The GamePad screen is choppy.</summary>
-        <p>On Linux and Windows, install <code>ffmpeg</code> on the PC (the installers offer it). It captures and encodes the picture at 30 fps, even on a Raspberry Pi.
+        <p>Games in Choccy Milk send their own picture and need no capture at all. For everything else: on Linux and Windows, install <code>ffmpeg</code> on the PC (the installers offer it). It captures and encodes the picture at 30 fps, even on a Raspberry Pi.
           On macOS, install the Command Line Tools (<code>xcode-select --install</code>), so WII-UU can build its ScreenCaptureKit helper. The terminal then says <i>GamePad streaming via ScreenCaptureKit</i>.</p></details>
       <details><summary>The GamePad screen lags behind the TV.</summary>
         <p>Update to 1.1.6 or newer, which fetches frames one by one so delay can't build up. What remains comes from Wi-Fi: use 5 GHz Wi-Fi or a cable for the PC, and try <code>stream.fps=60</code> in the settings file.</p></details>
@@ -519,9 +569,14 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
         <p>The older consoles run well on a Pi 4/5. GameCube, Wii U, Switch, PS3 and PS4 are too demanding to play well on a Pi, and PS2 and PS4 emulators only run on x86-64.</p></details>
       <details><summary>The GamePad screen is black on my Mac.</summary>
         <p>macOS blocks screen capture until you allow it. Start WII-UU from ~/Applications/WII-UU.app, then turn on WII-UU under System Settings → Privacy &amp; Security → <b>Screen Recording</b> and <b>Accessibility</b> (Settings F1 → General → macOS permissions opens both), and restart WII-UU.</p></details>
+      <details><summary>N64 is slow on my Raspberry Pi 5.</summary>
+        <p>The N64 recompiler needs 4 KB memory pages, and the Pi 5's default kernel uses 16 KB. Add <code>kernel=kernel8.img</code> to <code>/boot/firmware/config.txt</code> and restart. Without it, WII-UU falls back to the much slower interpreter and says so. <code>~/.wiiuu/logs/n64.log</code> shows how fast the game runs.</p></details>
+      <details><summary>How do I get RetroAchievements?</summary>
+        <p>Enter your user name and Web API key under Settings (F1) → Games → RetroAchievements account, or tap <b>Enter on your phone</b> and type them there. Each game's tile then shows your progress.</p></details>
       <details><summary>Can it run everything through RetroArch?</summary>
         <p>Yes. Turn on <b>RetroArch mode</b> in Settings (F1) → General. Every system with a libretro core then starts in RetroArch: NES through PSP and PS2, including GameCube/Wii (Dolphin) and DS (melonDS).
-          WII-UU picks the best installed core and downloads one if it is missing. It gives RetroArch the GamePad's key layout. Wii U, Switch, PS3 and PS4 keep their standalone emulators.</p></details>
+          WII-UU picks the best installed core and downloads one if it is missing. It gives RetroArch the GamePad's key layout. Wii U, Switch, PS3 and PS4 keep their standalone emulators.
+          With <b>Play with Choccy Milk</b> on, the cores play inside WII-UU instead, without RetroArch.</p></details>
       <details><summary>Can more than 4 people play? What about Buzz!?</summary>
         <p>Turn on <b>8-player mode</b> in Settings (F1) → General and up to 8 phones can play at once. In PS2 <b>Buzz!</b> quiz games, every phone becomes a Buzz! buzzer, with the big red button and the four coloured answers, and PCSX2 gets its Buzz! controllers for up to 8 players.</p></details>
       <details><summary>Where does the menu music come from?</summary>
