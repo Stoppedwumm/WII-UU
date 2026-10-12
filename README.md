@@ -427,8 +427,10 @@ Q / W = L / R, Enter = Start, Space = Select.
   then starts by itself. An installed one (`sudo apt install openjdk-25-jre`, `brew install openjdk`)
   is used instead when there is one.
 - *Settings → Games → Play with Choccy Milk* (`choccy.enabled=false`) goes back to RetroArch.
-- **Saves:** the game's own saves (battery saves) are written every 30 s and when you leave, to
-  `~/.wiiuu/saves/<console>/<game>.srm`. **Save states** too: F2 saves, F4 loads, F6 / F7 change the
+- **Saves:** the game's own saves (battery saves; on the N64 EEPROM, SRAM, FlashRAM and the
+  Controller Pak, so Super Mario 64's stars stay) are written within a second of the game saving,
+  when you leave, and also when Choccy Milk is stopped hard, to `~/.wiiuu/saves/<console>/<game>.srm`
+  (RetroArch's format: the files work in both). **Save states** too: F2 saves, F4 loads, F6 / F7 change the
   slot (0-9, as in RetroArch), or *Save state* / *Load state* on the phone's GamePad screen. They're
   `<game>.state`, `<game>.state1` ... next to the saves, RetroArch's names.
 

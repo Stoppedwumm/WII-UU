@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.83 (2026-10-12)
+- Choccy Milk writes the game's own saves (battery saves; N64 EEPROM, SRAM, FlashRAM and Controller
+  Pak, like Super Mario 64's stars) within a second of the game saving instead of every 30 seconds,
+  and also when it's stopped hard (WII-UU giving up waiting, the system shutting down). A crash or
+  a power cut right after saving no longer loses it. The .srm files are RetroArch's format.
+
 ## 1.9.82 (2026-10-12)
 - Save states in Choccy Milk: F2 saves the game as it is, F4 loads it again, F6 / F7 pick one of 10
   slots (RetroArch's keys). On the phone, *Save state*, *Load state* and the slot are on the GamePad

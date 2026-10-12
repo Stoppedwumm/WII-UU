@@ -232,6 +232,9 @@ public final class ChoccyMilk {
         unserialize = fn(linker, lib, "retro_unserialize", FunctionDescriptor.of(JAVA_BOOLEAN, ADDRESS, JAVA_LONG));
         getMemorySize = fn(linker, lib, "retro_get_memory_size", FunctionDescriptor.of(JAVA_LONG, JAVA_INT));
         loadSave();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {                  // stopped hard (WII-UU, the system)
+            if (!unloaded) writeSave();
+        }, "choccy-save"));
         openAudio();
         send('R', name);
 
@@ -278,12 +281,13 @@ public final class ChoccyMilk {
                 statSkipped = framesSkipped;
                 framesDropped = 0;
             }
-            if (System.currentTimeMillis() - lastSave > 30_000) {
+            if (System.currentTimeMillis() - lastSave > 1000) {     // the game's own save: written soon after it changes
                 writeSave();
                 lastSave = System.currentTimeMillis();
             }
         }
         writeSave();
+        unloaded = true;                                    // from here on, the core's memory is going away
         fn(linker, lib, "retro_unload_game", FunctionDescriptor.ofVoid()).invokeExact();
         fn(linker, lib, "retro_deinit", FunctionDescriptor.ofVoid()).invokeExact();
     }
@@ -911,7 +915,13 @@ public final class ChoccyMilk {
         System.err.println("[choccy] loaded " + f);
     }
 
-    private void writeSave() {
+    /**
+     * Writes the game's own save (battery RAM, N64 EEPROM / SRAM / FlashRAM / Controller Pak...) when
+     * it changed. Also from the shutdown hook, when Choccy Milk is stopped without saying goodbye.
+     */
+    private volatile boolean unloaded;
+
+    private synchronized void writeSave() {
         try {
             MemorySegment ram = saveRam();
             if (ram == null) return;
