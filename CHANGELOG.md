@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.75 (2026-10-12)
+- Building from source (install.sh in a git clone) no longer leaves out Choccy Milk when the default
+  JDK is older than 22 ("This copy of WII-UU was built without Choccy Milk"): build.sh uses a newer
+  JDK on the computer (Homebrew's, say), or else takes Choccy Milk from the release zip in docs/.
+
 ## 1.9.74 (2026-10-12)
 - Choccy Milk needs neither RetroArch nor a Java of yours: when there's no Java 22+, the first game
   downloads one for it (Eclipse Temurin 25, about 50 MB, into ~/.wiiuu/choccy/jre) and then starts by

@@ -57,7 +57,8 @@ public final class Choccy {
 
     /** Why not, for Settings (null when it can). */
     public static String unavailable() {
-        if (!built()) return "This copy of WII-UU was built without Choccy Milk";
+        if (!built()) return "This copy of WII-UU was built without Choccy Milk (by a JDK older than 22): "
+                + "update WII-UU, or run install.sh again";
         if (java() == null && !canGetJava()) {
             String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
             return "Choccy Milk needs Java 22 or newer next to WII-UU's"
