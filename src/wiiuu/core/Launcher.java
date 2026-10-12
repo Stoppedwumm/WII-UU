@@ -54,6 +54,7 @@ public final class Launcher {
                 new DolphinInput(config), new PadIniInput(config, PadIniInput.pcsx2()),
                 new PadIniInput(config, PadIniInput.duckstation()));
         this.retroArch = new RetroArch(config);
+        Choccy.setHome(config.home());
         for (InputPatch p : inputPatches) p.recover();
     }
 
@@ -135,19 +136,39 @@ public final class Launcher {
 
     private boolean choccyMissingSaid;
 
-    /** Whether this game plays in Choccy Milk: it's on, there are cores for the console, and none needed OpenGL before. */
+    /**
+     * Whether this game plays in Choccy Milk: it's on, there are cores for the console, and none
+     * needed OpenGL before. It needs neither RetroArch (cores come from the libretro buildbot) nor
+     * a Java of the user's: without one, it gets its own.
+     */
     private boolean choccyFor(Game game) {
         if (!choccyOn(config) || !retroArch.hasCores(game.system())
                 || config.getBool("choccy.hardware." + game.system().id(), false)) return false;
-        if (Choccy.available()) return true;
+        if (Choccy.available() || Choccy.canGetJava()) return true;
         if (!choccyMissingSaid) {                          // on, but can't: say so instead of quietly using something else
             choccyMissingSaid = true;
+            System.out.println("[choccy] " + Choccy.unavailable());
             for (Listener l : listeners) l.message(Choccy.unavailable());
         }
         return false;
     }
 
     private void launchChoccy(Game game) throws LaunchException {
+        if (!Choccy.available()) {
+            // no Java 22+ here: Choccy Milk gets its own, then the game starts by itself
+            Choccy.getJava(() -> {
+                if (!Choccy.available()) {
+                    for (Listener l : listeners) l.message("Couldn't get Java for Choccy Milk (see the log)");
+                    return;
+                }
+                try {
+                    launch(game);
+                } catch (LaunchException e) {
+                    for (Listener l : listeners) l.message(e.getMessage());
+                }
+            });
+            throw new LaunchException("Getting Java for Choccy Milk (about 50 MB, once)\u2026 the game starts by itself");
+        }
         Path core;
         try {
             core = retroArch.coreFor(game, () -> {

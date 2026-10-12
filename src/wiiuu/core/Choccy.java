@@ -31,8 +31,20 @@ public final class Choccy {
 
     private Choccy() {}
 
-    private static volatile Path java;
+    private static volatile Path javaExe;
     private static volatile boolean looked;
+    private static volatile Path home = Path.of(System.getProperty("user.home"), ".wiiuu");
+
+    /** WII-UU's folder: Choccy Milk's own Java goes into choccy/jre there. */
+    static synchronized void setHome(Path wiiuuHome) {
+        home = wiiuuHome;
+        looked = false;
+        javaExe = null;
+    }
+
+    private static Path ownJre() {
+        return home.resolve("choccy").resolve("jre");
+    }
 
     /** Whether Choccy Milk can run here: it's in this build, and there is a Java 22 or newer. */
     public static boolean available() {
@@ -46,7 +58,7 @@ public final class Choccy {
     /** Why not, for Settings (null when it can). */
     public static String unavailable() {
         if (!built()) return "This copy of WII-UU was built without Choccy Milk";
-        if (java() == null) {
+        if (java() == null && !canGetJava()) {
             String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
             return "Choccy Milk needs Java 22 or newer next to WII-UU's"
                     + (os.contains("linux") ? ": sudo apt install openjdk-25-jre"
@@ -57,24 +69,27 @@ public final class Choccy {
 
     /** A Java 22+ to run Choccy Milk on: this one if it's new enough, else one installed beside it. */
     public static Path java() {
-        if (looked) return java;
+        if (looked) return javaExe;
         synchronized (Choccy.class) {
-            if (looked) return java;
+            if (looked) return javaExe;
             if (Runtime.version().feature() >= 22) {
-                java = ProcessHandle.current().info().command().map(Path::of).orElse(null);
+                javaExe = ProcessHandle.current().info().command().map(Path::of).orElse(null);
             }
-            if (java == null) java = findJava();
+            if (javaExe == null) javaExe = findJava(List.of(ownJre()));
+            if (javaExe == null) javaExe = findJava(List.of());
             looked = true;
-            if (java != null) System.out.println("[choccy] runs on " + java);
-            return java;
+            if (javaExe != null) System.out.println("[choccy] runs on " + javaExe);
+            return javaExe;
         }
     }
 
-    private static Path findJava() {
+    private static Path findJava(List<Path> only) {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         boolean windows = os.contains("win");
-        List<Path> roots = new ArrayList<>();
-        if (os.contains("mac")) {
+        List<Path> roots = new ArrayList<>(only);
+        if (!only.isEmpty()) {
+            // (just these)
+        } else if (os.contains("mac")) {
             roots.add(Path.of("/Library/Java/JavaVirtualMachines"));
             roots.add(Path.of(System.getProperty("user.home"), "Library", "Java", "JavaVirtualMachines"));
         } else if (windows) {
@@ -90,7 +105,7 @@ public final class Choccy {
             roots.add(Path.of(System.getProperty("user.home"), ".sdkman", "candidates", "java"));
             roots.add(Path.of(System.getProperty("user.home"), ".jdks"));
         }
-        if (os.contains("mac")) {
+        if (only.isEmpty() && os.contains("mac")) {
             // Homebrew: /opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home (and /usr/local on Intel),
             // and its Cellar (/opt/homebrew/Cellar/openjdk/25.0.1/...)
             for (String brew : new String[]{"/opt/homebrew/opt", "/usr/local/opt"}) roots.add(Path.of(brew));
@@ -122,6 +137,94 @@ public final class Choccy {
             }
         }
         return best;
+    }
+
+    // ---- Choccy Milk's own Java -------------------------------------------------------------------
+
+    private static volatile boolean downloading;
+
+    /** Where Eclipse Adoptium has a Java 25 runtime for this computer, or null. */
+    private static String jreUrl() {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String a = arch(System.getProperty("os.arch", ""));
+        String o = os.contains("mac") ? "mac" : os.contains("win") ? "windows" : os.contains("linux") ? "linux" : null;
+        String ar = a.equals("arm64") ? "aarch64" : a.equals("x64") ? "x64" : null;
+        if (o == null || ar == null) return null;
+        return "https://api.adoptium.net/v3/binary/latest/25/ga/" + o + "/" + ar + "/jre/hotspot/normal/eclipse";
+    }
+
+    /** Whether WII-UU can fetch a Java for Choccy Milk itself (when there's none). */
+    public static boolean canGetJava() {
+        return built() && jreUrl() != null;
+    }
+
+    /**
+     * Downloads a Java 25 runtime (Eclipse Temurin, about 50 MB) into ~/.wiiuu/choccy/jre, in the
+     * background; then runs done (with Choccy Milk available, or not if it failed).
+     */
+    public static void getJava(Runnable done) {
+        if (downloading) return;
+        downloading = true;
+        Thread t = new Thread(() -> {
+            Path dir = ownJre(), tmp = dir.resolveSibling("jre-download");
+            try {
+                String url = jreUrl();
+                boolean zip = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+                Files.createDirectories(dir.getParent());
+                Path file = dir.resolveSibling(zip ? "jre.zip" : "jre.tar.gz");
+                System.out.println("[choccy] getting Java for Choccy Milk: " + url);
+                java.net.http.HttpClient http = java.net.http.HttpClient.newBuilder()
+                        .followRedirects(java.net.http.HttpClient.Redirect.ALWAYS).connectTimeout(java.time.Duration.ofSeconds(20)).build();
+                java.net.http.HttpResponse<Path> res = http.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(url))
+                        .header("User-Agent", "WII-UU").build(), java.net.http.HttpResponse.BodyHandlers.ofFile(file));
+                if (res.statusCode() != 200) throw new IOException("download answered " + res.statusCode());
+                deleteTree(tmp);
+                Files.createDirectories(tmp);
+                if (zip) unzip(file, tmp);
+                else {
+                    Process p = new ProcessBuilder("tar", "-xzf", file.toString(), "-C", tmp.toString())
+                            .redirectErrorStream(true).start();
+                    String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    if (p.waitFor() != 0) throw new IOException("tar: " + out.trim());
+                }
+                deleteTree(dir);
+                Files.move(tmp, dir);
+                Files.deleteIfExists(file);
+                synchronized (Choccy.class) {
+                    looked = false;
+                    javaExe = null;
+                }
+                System.out.println("[choccy] Java for Choccy Milk: " + java());
+            } catch (Exception e) {
+                System.err.println("[choccy] couldn't get Java: " + e.getMessage());
+            } finally {
+                downloading = false;
+                done.run();
+            }
+        }, "choccy-java");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static void unzip(Path zip, Path to) throws IOException {
+        try (java.util.zip.ZipInputStream z = new java.util.zip.ZipInputStream(Files.newInputStream(zip))) {
+            for (java.util.zip.ZipEntry e; (e = z.getNextEntry()) != null; ) {
+                Path out = to.resolve(e.getName()).normalize();
+                if (!out.startsWith(to)) continue;
+                if (e.isDirectory()) Files.createDirectories(out);
+                else {
+                    Files.createDirectories(out.getParent());
+                    Files.copy(z, out, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+    }
+
+    private static void deleteTree(Path p) throws IOException {
+        if (!Files.exists(p)) return;
+        try (var walk = Files.walk(p)) {
+            for (Path q : walk.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(q);
+        }
     }
 
     /** A Java's major version, from its "release" file (JAVA_VERSION="25.0.4"); 0 if unknown. */

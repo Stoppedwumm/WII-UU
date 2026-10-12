@@ -787,8 +787,9 @@ public final class SettingsScreen {
         r.add(toggle("RetroArch mode", "Runs every console that has a RetroArch core in RetroArch.", "retroarch.enabled", false, null));
         String choccyWhy = wiiuu.core.Choccy.unavailable();
         r.add(new Toggle("Play with Choccy Milk", choccyWhy != null ? choccyWhy
-                : "WII-UU plays the games itself, in its own window, with RetroArch's cores (every console that has them). "
-                + "Cores that need OpenGL still use RetroArch.", () -> wiiuu.core.Launcher.choccyOn(config), on -> {
+                : "WII-UU plays the games itself, in its own window, with libretro cores it downloads (no RetroArch needed). "
+                + (wiiuu.core.Choccy.java() == null ? "The first game gets it its own Java (about 50 MB). " : "")
+                + "Cores that need OpenGL still use RetroArch if it's there.", () -> wiiuu.core.Launcher.choccyOn(config), on -> {
             config.set("choccy.enabled", Boolean.toString(on));
             config.save();
         }));

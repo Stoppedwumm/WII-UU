@@ -321,10 +321,14 @@ public final class RetroArch {
             core = findCore(id, other);
             if (core != null) return core;
         }
+        // Choccy Milk's own cores (downloaded when there's no RetroArch at all)
+        core = findCore(id, List.of(), choccyCoreDir());
+        if (core != null) return core;
         if (!config.getBool("retroarch.download", true) || buildbot() == null || !triedDownload.add(id)) return null;
+        Path into = exe == null ? choccyCoreDir() : userCoreDir(exe);
         Thread t = new Thread(() -> {
             for (String n : CORES.get(id)) {
-                if (download(n, exe) != null) break;
+                if (download(n, into) != null) break;
             }
             afterDownload.run();
         }, "core-download");
@@ -431,6 +435,15 @@ public final class RetroArch {
 
     /** The installed core to use for a system: retroarch.core.&lt;id&gt; (name or path), else the best found. */
     Path findCore(String systemId, List<String> exe) {
+        return findCore(systemId, exe, null);
+    }
+
+    /** Choccy Milk's core folder, for when RetroArch isn't installed: ~/.wiiuu/choccy/cores. */
+    Path choccyCoreDir() {
+        return config.home().resolve("choccy").resolve("cores");
+    }
+
+    private Path findCore(String systemId, List<String> exe, Path only) {
         String custom = config.get("retroarch.core." + systemId, "").trim();
         List<String> names = CORES.getOrDefault(systemId, List.of());
         if (!custom.isEmpty()) {
@@ -439,7 +452,7 @@ public final class RetroArch {
             names = List.of(custom.replace("_libretro", ""));
         }
         for (String n : names) {
-            for (Path dir : coreDirs(exe)) {
+            for (Path dir : only != null ? List.of(only) : coreDirs(exe)) {
                 Path core = dir.resolve(n + "_libretro." + EXT);
                 if (Files.isRegularFile(core)) return core;
             }
@@ -464,8 +477,12 @@ public final class RetroArch {
 
     /** Downloads one core into RetroArch's core folder; null if it isn't available. */
     Path download(String name, List<String> exe) {
+        return download(name, userCoreDir(exe));
+    }
+
+    /** Downloads one core into dir; null if it isn't available. */
+    Path download(String name, Path dir) {
         String url = buildbot() + name + "_libretro." + EXT + ".zip";
-        Path dir = userCoreDir(exe);
         Path target = dir.resolve(name + "_libretro." + EXT);
         try {
             Files.createDirectories(dir);

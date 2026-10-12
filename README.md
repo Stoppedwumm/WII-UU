@@ -385,12 +385,14 @@ ra.hardcore=false
 
 ## Choccy Milk
 
-**Choccy Milk** is WII-UU's own player for RetroArch's cores. It's on by itself in RetroArch mode
+**Choccy Milk** is WII-UU's own player for libretro cores (the ones RetroArch uses). It **doesn't
+need RetroArch installed**. It's on by itself in RetroArch mode
 (games start with it instead of RetroArch); switched on in Settings, it plays every console it has
 cores for, instead of the standalone emulators too (mupen64plus for N64, say): the game plays **inside WII-UU's window**, so there's no second window,
 no fullscreen switching and no focus to lose; the phones' buttons and sticks go straight to the game
-(quick taps included), HOME (or Esc) saves and goes back to the menu. It uses the cores RetroArch has
-(its Snap's and Flatpak's too, or downloads them), BIOS files from RetroArch's `system` folder, and
+(quick taps included), HOME (or Esc) saves and goes back to the menu. It uses the cores RetroArch has if
+it's there (its Snap's and Flatpak's too); otherwise it downloads them from the libretro buildbot into
+`~/.wiiuu/choccy/cores`. BIOS files from RetroArch's `system` folder, and
 keeps saves in `~/.wiiuu/saves/<console>`. On the keyboard: arrows, X = A, Z = B, S = X, A = Y,
 Q / W = L / R, Enter = Start, Space = Select.
 
@@ -399,9 +401,10 @@ Q / W = L / R, Enter = Start, Space = Select.
   computers). Cores that need OpenGL or Vulkan (PPSSPP, Dolphin, N64 with GLideN64...) play in
   RetroArch: the first time one asks for it, WII-UU switches that console to RetroArch by itself.
 - It runs in its own process, so a core that crashes can't take WII-UU along.
-- It needs **Java 22 or newer** next to the Java WII-UU runs on (WII-UU itself still needs only 17):
-  `sudo apt install openjdk-25-jre` (Ubuntu 24.04 and newer), `brew install openjdk` on a Mac (the
-  installer offers both). WII-UU finds it by itself, and says so when Choccy Milk is on but can't run.
+- It runs on **Java 22 or newer** (WII-UU itself still needs only 17). If it finds none, the first
+  game downloads one for it: Eclipse Temurin 25 (about 50 MB) into `~/.wiiuu/choccy/jre`, once, and
+  then starts by itself. An installed one (`sudo apt install openjdk-25-jre`, `brew install openjdk`)
+  is used instead when there is one.
 - *Settings → Games → Play with Choccy Milk* (`choccy.enabled=false`) goes back to RetroArch.
 
 ## RetroArch mode

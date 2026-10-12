@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.74 (2026-10-12)
+- Choccy Milk needs neither RetroArch nor a Java of yours: when there's no Java 22+, the first game
+  downloads one for it (Eclipse Temurin 25, about 50 MB, into ~/.wiiuu/choccy/jre) and then starts by
+  itself; without RetroArch, cores download into ~/.wiiuu/choccy/cores.
+
 ## 1.9.73 (2026-10-12)
 - Mac installer: Homebrew runs as ARM on Apple Silicon even from a terminal in Intel (Rosetta) mode,
   which it refused before ("Cannot install under Rosetta 2"), and an outdated Java gets upgraded.
