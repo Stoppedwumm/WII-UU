@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.77 (2026-10-12)
+- GamePad screen with Choccy Milk: the phones get the game's own picture instead of a screen capture.
+  The exact picture (sharp pixels, the game's shape), up to 60 frames a second, less delay, less
+  work for the computer, and no Screen Recording permission needed on a Mac. Settings:
+  stream.directFps (60), stream.directQuality (85), stream.maxWidth (854).
+
 ## 1.9.76 (2026-10-12)
 - Choccy Milk plays N64 (Mupen64Plus-Next, software renderer). It crashed at once before: the core
   logs without checking for a log interface, which Choccy Milk didn't give it (it gives log, perf and

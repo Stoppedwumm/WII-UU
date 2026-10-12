@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.9.76";
+    public static final String VERSION = "1.9.77";
 
     private final Config config;
     private final Library library;
@@ -338,7 +338,11 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         view = new MenuView(config, this);
         view.setAchievements(achievements);
-        launcher.setChoccyScreen(view::choccyFrame);
+        launcher.setChoccyScreen((px, w, h, aspect) -> {
+            view.choccyFrame(px, w, h, aspect);
+            ScreenStreamer s = screen;                  // the phones get the game's own picture, not a screen capture
+            if (s != null) s.directFrame(px, w, h, aspect);
+        });
         view.setChoccyKeys((b, down) -> launcher.choccyButton(1, b, down));
         achievements.addListener(() -> SwingUtilities.invokeLater(view::repaint));
         router.setMenu(view);

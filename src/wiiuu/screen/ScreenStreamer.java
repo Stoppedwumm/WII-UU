@@ -159,6 +159,36 @@ public final class ScreenStreamer {
         dual = d;
     }
 
+    // ---- games that hand over their own picture (Choccy Milk) -------------------------------
+
+    private final Object directLock = new Object();
+    private int[] directPixels;
+    private int directW, directH;
+    private float directAspect;
+    private long directSeq;
+    private volatile long directAt;
+
+    /**
+     * A frame of the game WII-UU itself plays (Choccy Milk): while these come, the TV picture on the
+     * phones is made from them instead of a screen capture: the exact picture, without capture
+     * permissions, with less delay and less work. Capture takes over again a moment after they stop.
+     */
+    public void directFrame(int[] pixels, int w, int h, float aspect) {
+        synchronized (directLock) {
+            directPixels = pixels;
+            directW = w;
+            directH = h;
+            directAspect = aspect;
+            directSeq++;
+            directAt = System.currentTimeMillis();
+            directLock.notifyAll();
+        }
+    }
+
+    private boolean direct() {
+        return System.currentTimeMillis() - directAt < 1000;
+    }
+
     // ---- phones watching ----------------------------------------------------------------
 
     /**
@@ -476,6 +506,12 @@ public final class ScreenStreamer {
                     if (p != null) p.destroy();
                     return;
                 }
+                if ("tv".equals(mode) && direct() != wasDirect) {
+                    wasDirect = !wasDirect;
+                    moved = true;                          // not a failure: capture stops / starts on purpose
+                    Process p = process;
+                    if (p != null) p.destroy();
+                }
                 Rectangle now = region(mode, why);
                 if (!java.util.Objects.equals(now, region)) {
                     region = now;
@@ -487,6 +523,7 @@ public final class ScreenStreamer {
             }
         }
 
+        private volatile boolean wasDirect;
         private boolean javaFallback;
         private boolean helperFailed;
         private int helperFailures;
@@ -497,6 +534,11 @@ public final class ScreenStreamer {
         private void produce() {
             int fps = Math.max(1, Math.min(60, config.getInt("stream.fps", 30)));
             while (!stopped) {
+                if ("tv".equals(mode) && direct()) {
+                    wasDirect = true;
+                    produceDirect();
+                    continue;
+                }
                 Rectangle r = region;
                 if (r == null) {
                     sleep(300);
@@ -532,6 +574,54 @@ public final class ScreenStreamer {
                 } else {
                     captureWithJava(r, fps);
                 }
+            }
+        }
+
+        /**
+         * The game's own frames, as they come (up to stream.directFps, 60), scaled to its shape: whole
+         * pixels as big as fit stream.maxWidth (854) without smoothing, so pixel art stays sharp.
+         */
+        private void produceDirect() {
+            int maxW = Math.max(160, config.getInt("stream.maxWidth", 854));
+            float quality = Math.max(0.2f, Math.min(0.95f, config.getInt("stream.directQuality", 85) / 100f));
+            long minNanos = 1_000_000_000L / Math.max(1, Math.min(60, config.getInt("stream.directFps", 60)));
+            ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
+            long seen = -1, last = 0;
+            try {
+                while (!stopped && direct()) {
+                    int[] px;
+                    int w, h;
+                    float aspect;
+                    synchronized (directLock) {
+                        long deadline = System.currentTimeMillis() + 500;
+                        while (directSeq == seen && System.currentTimeMillis() < deadline) {
+                            directLock.wait(Math.max(1, deadline - System.currentTimeMillis()));
+                        }
+                        if (directSeq == seen) continue;
+                        seen = directSeq;
+                        px = directPixels;
+                        w = directW;
+                        h = directH;
+                        aspect = directAspect;
+                    }
+                    if (idle()) {                         // nobody watching: don't encode
+                        sleep(100);
+                        continue;
+                    }
+                    long wait = minNanos - (System.nanoTime() - last);
+                    if (wait > 0) sleep(wait / 1_000_000);
+                    last = System.nanoTime();
+                    publish(encodeDirect(writer, px, w, h, aspect, maxW, quality));
+                    sawPicture = true;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                stopped = true;
+            } catch (IOException | RuntimeException e) {
+                System.err.println("[screen] game picture: " + e);
+                sleep(200);
+            } finally {
+                writer.dispose();
             }
         }
 
@@ -777,6 +867,35 @@ public final class ScreenStreamer {
     }
 
     // ---- helpers ------------------------------------------------------------------------
+
+    /** A game frame (0xRRGGBB) as a JPEG in its display shape, scaled up with whole source pixels. */
+    static byte[] encodeDirect(ImageWriter writer, int[] px, int w, int h, float aspect, int maxW, float quality) throws IOException {
+        if (aspect <= 0) aspect = (float) w / h;
+        // height: the largest whole multiple that keeps the width within maxW; width: the shape's
+        int k = Math.max(1, (int) Math.floor(maxW / (h * aspect)));
+        int oh = h * k, ow = Math.max(2, Math.round(oh * aspect)) & ~1;
+        if (ow > Math.max(maxW, w)) {                      // already wider than allowed: 1:1 height
+            oh = h;
+            ow = Math.max(2, Math.round(h * aspect)) & ~1;
+        }
+        BufferedImage img = new BufferedImage(ow, oh, BufferedImage.TYPE_INT_RGB);
+        int[] dst = ((java.awt.image.DataBufferInt) img.getRaster().getDataBuffer()).getData();
+        int[] col = new int[ow];
+        for (int x = 0; x < ow; x++) col[x] = Math.min(w - 1, (int) ((long) x * w / ow));
+        for (int y = 0; y < oh; y++) {
+            int src = Math.min(h - 1, y * h / oh) * w, d = y * ow;
+            for (int x = 0; x < ow; x++) dst[d + x] = px[src + col[x]];
+        }
+        ImageWriteParam param = writer.getDefaultWriteParam();
+        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+        param.setCompressionQuality(quality);
+        ByteArrayOutputStream buf = new ByteArrayOutputStream(64 * 1024);
+        try (MemoryCacheImageOutputStream ios = new MemoryCacheImageOutputStream(buf)) {
+            writer.setOutput(ios);
+            writer.write(null, new IIOImage(img, null, null), param);
+        }
+        return buf.toByteArray();
+    }
 
     private java.nio.file.Path captureLog() {
         java.nio.file.Path log = config.logDir().resolve("capture.log");
