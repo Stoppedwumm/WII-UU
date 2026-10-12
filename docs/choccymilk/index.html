@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choccy Milk — libretro cores, no RetroArch</title>
+<meta name="description" content="Choccy Milk plays libretro cores itself: NES, SNES, Game Boy, GBA, N64, DS, Master System, Mega Drive and PS1, in its own window, with RetroAchievements. No RetroArch, nothing to install. Part of WII-UU, and a program of its own.">
+<meta property="og:title" content="Choccy Milk">
+<meta property="og:description" content="Libretro cores, no RetroArch needed. Part of WII-UU, and a program of its own.">
+<meta property="og:image" content="https://wiiuu.stoppedwumm.net/choccy-milk.png">
+<meta property="og:url" content="https://wiiuu.stoppedwumm.net/choccymilk/">
+<meta name="theme-color" content="#17110d">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='7' y='6' width='18' height='24' rx='4' fill='none' stroke='%23d7a27a' stroke-width='2.5'/%3E%3Crect x='9.5' y='14' width='13' height='13.5' rx='2.5' fill='%236b3e26'/%3E%3Cpath d='M21 1 L18 15' stroke='%23d7a27a' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #fbf4ec; --bg2: #f3e6d8; --card: #ffffff; --ink: #3a2418; --dim: #7a5d4b; --line: rgba(58, 36, 24, .12);
+    --choc: #6b3e26; --milk: #b97a4c; --accent: #6b3e26; --accent-ink: #fff; --gold: #c9921f;
+    --code-bg: #2a1d15; --code-ink: #f3e6da; --shadow: 0 1px 2px rgba(58, 36, 24, .08), 0 8px 24px rgba(58, 36, 24, .10);
+    --radius: 22px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17110d; --bg2: #0f0b08; --card: #241a14; --ink: #f3e6da; --dim: #c9b3a2; --line: rgba(243, 230, 218, .10);
+      --choc: #6b3e26; --milk: #d7a27a; --accent: #d7a27a; --accent-ink: #2a1d15; --gold: #f2c14e;
+      --code-bg: #0f0b08; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px rgba(0, 0, 0, .35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17110d; --bg2: #0f0b08; --card: #241a14; --ink: #f3e6da; --dim: #c9b3a2; --line: rgba(243, 230, 218, .10);
+    --choc: #6b3e26; --milk: #d7a27a; --accent: #d7a27a; --accent-ink: #2a1d15; --gold: #f2c14e;
+    --code-bg: #0f0b08; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px rgba(0, 0, 0, .35);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; color: var(--ink); line-height: 1.6; background: var(--bg);
+    background-image: radial-gradient(1200px 600px at 80% -10%, color-mix(in srgb, var(--milk) 16%, transparent), transparent),
+                      linear-gradient(180deg, var(--bg), var(--bg2));
+    background-attachment: fixed;
+    font-family: "Nunito", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+  a { color: var(--milk); }
+  img { max-width: 100%; height: auto; display: block; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+
+  header { position: sticky; top: 0; z-index: 5; padding: 12px 0; backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--bg) 82%, transparent); }
+  header .wrap { display: flex; align-items: center; gap: 10px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font-weight: 900;
+    font-size: 20px; background: var(--card); padding: 7px 16px 7px 10px; border-radius: 999px; box-shadow: var(--shadow);
+    white-space: nowrap; }
+  .brand svg { width: 26px; height: 26px; }
+  nav { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  nav a { text-decoration: none; color: var(--dim); font-weight: 700; padding: 8px 12px; border-radius: 999px; white-space: nowrap; }
+  nav a:hover { color: var(--ink); background: var(--card); }
+  #theme { border: 0; cursor: pointer; font: inherit; font-weight: 800; color: var(--ink); background: var(--card);
+    box-shadow: var(--shadow); border-radius: 999px; width: 40px; height: 40px; }
+
+  .hero { display: grid; grid-template-columns: 1fr 1.15fr; gap: 44px; align-items: center; padding: 52px 0 36px; }
+  h1 { font-size: clamp(36px, 5.4vw, 62px); line-height: 1.04; margin: 0 0 16px; letter-spacing: -.015em; }
+  h1 span { color: var(--milk); }
+  .lead { font-size: 19px; color: var(--dim); margin: 0 0 26px; }
+  .buttons { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 999px; font-weight: 800;
+    text-decoration: none; box-shadow: var(--shadow); background: var(--card); color: var(--ink); border: 0; font: inherit; font-weight: 800; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn:hover { transform: translateY(-1px); }
+  .meta { margin-top: 18px; color: var(--dim); font-size: 14px; }
+  .shot { border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line);
+    outline: 4px solid var(--milk); outline-offset: 5px; background: #17110d; }
+  figure { margin: 0; }
+  figcaption { color: var(--dim); font-size: 13px; margin-top: 14px; text-align: center; }
+
+  section { padding: 46px 0; }
+  h2 { font-size: clamp(26px, 3.4vw, 34px); margin: 0 0 8px; line-height: 1.15; }
+  .sub { color: var(--dim); margin: 0 0 26px; max-width: 72ch; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { background: var(--card); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); }
+  .card h3 { margin: 10px 0 6px; font-size: 19px; }
+  .card p { margin: 0; color: var(--dim); }
+  .icon { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--choc);
+    color: #f2c9a4; font-size: 19px; }
+  .split { display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; align-items: center; }
+  ol.steps, ul.points { padding-left: 1.25em; margin: 0; }
+  ol.steps li, ul.points li { margin: 0 0 10px; }
+
+  .band { background: var(--card); border-radius: calc(var(--radius) + 6px); box-shadow: var(--shadow); padding: 34px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); font-size: 15px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+  tr:last-child td { border-bottom: 0; }
+  .tablewrap { overflow-x: auto; border-radius: var(--radius); box-shadow: var(--shadow); }
+  .tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+    background: color-mix(in srgb, var(--milk) 20%, transparent); color: var(--ink); }
+  .tag.no { background: color-mix(in srgb, var(--dim) 18%, transparent); color: var(--dim); }
+
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em;
+    background: color-mix(in srgb, var(--milk) 18%, transparent); padding: 1px 6px; border-radius: 6px; }
+  .code { position: relative; background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 16px 18px;
+    font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-x: auto; margin: 0 0 14px; }
+  .code code { background: none; padding: 0; }
+  .code .c { color: #a68b77; }
+  .copy { position: absolute; top: 8px; right: 8px; border: 0; border-radius: 8px; padding: 5px 10px; cursor: pointer;
+    font: 12px/1 inherit; font-weight: 800; background: rgba(255, 255, 255, .12); color: var(--code-ink); }
+
+  .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .keys dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: center; }
+  .keys dt { font-weight: 800; }
+  kbd { display: inline-block; min-width: 26px; padding: 2px 8px; border-radius: 7px; text-align: center; font: 700 13px/1.6 ui-monospace, Menlo, Consolas, monospace;
+    background: var(--bg); border: 1px solid var(--line); box-shadow: inset 0 -2px 0 var(--line); color: var(--ink); }
+  .keys dd { margin: 0; color: var(--dim); }
+
+  .tip { display: flex; gap: 16px; align-items: flex-start; }
+  .tip .icon { flex: none; }
+
+  details { background: var(--card); border-radius: 16px; padding: 14px 18px; box-shadow: var(--shadow); margin-bottom: 12px; }
+  summary { font-weight: 800; cursor: pointer; }
+  details p { color: var(--dim); margin: 10px 0 0; }
+
+  footer { padding: 40px 0 60px; color: var(--dim); font-size: 14px; }
+  footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+
+  @media (max-width: 900px) {
+    .hero, .split, .keys { grid-template-columns: 1fr; }
+    .cards { grid-template-columns: 1fr; }
+    .hero { padding-top: 24px; gap: 30px; }
+    nav a.hide-sm { display: none; }
+    nav { flex-wrap: nowrap; gap: 0; }
+    nav a { padding: 8px 9px; }
+    .brand { font-size: 17px; padding: 6px 12px 6px 8px; }
+    #theme { flex: none; }
+    .band { padding: 22px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Choccy Milk">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="7" y="6" width="18" height="24" rx="4" fill="none" stroke="#d7a27a" stroke-width="2.5"/><rect x="9.5" y="14" width="13" height="13.5" rx="2.5" fill="#6b3e26"/><path d="M21 1 L18 15" stroke="#d7a27a" stroke-width="2.5" stroke-linecap="round"/></svg>
+      Choccy Milk
+    </a>
+    <nav>
+      <a href="#features" class="hide-sm">Features</a>
+      <a href="#achievements" class="hide-sm">Achievements</a>
+      <a href="#consoles" class="hide-sm">Consoles</a>
+      <a href="#get">Download</a>
+      <a href="../">WII-UU</a>
+      <button id="theme" aria-label="Toggle dark mode" title="Toggle dark mode">◐</button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <h1>Libretro cores,<br><span>no RetroArch needed.</span></h1>
+        <p class="lead">Choccy Milk plays your NES, SNES, Game Boy, N64, DS and PlayStation games itself, with the same cores RetroArch uses, in its own window. It downloads what it needs, unlocks RetroAchievements, and gets out of the way. It's WII-UU's built-in player, and a program of its own.</p>
+        <div class="buttons">
+          <a class="btn primary" href="../download/ChoccyMilk.jar">⤓ Download ChoccyMilk.jar</a>
+          <a class="btn" href="../#install">Get WII-UU (it's inside)</a>
+        </div>
+        <p class="meta">Version <span id="ver">–</span> · Linux · Windows · macOS · Raspberry Pi · Java 17+</p>
+      </div>
+      <figure>
+        <img class="shot" src="../choccy-milk.png" width="1100" height="680"
+             alt="The Choccy Milk window: a glass of chocolate milk next to the title, consoles on the left (NES, Super Nintendo, Game Boy, Nintendo 64, Game Boy Advance, Mega Drive, PlayStation) and the NES games on the right">
+      </figure>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>One small player, nothing else to set up</h2>
+      <p class="sub">Choccy Milk loads a libretro core, hands it your game, and draws every frame itself. It doesn't need RetroArch, an emulator install or a Java of your own.</p>
+      <div class="cards">
+        <div class="card"><div class="icon">⤓</div><h3>Gets its own cores</h3>
+          <p>It uses RetroArch's cores if RetroArch is installed. Otherwise it downloads the right core from the libretro buildbot the first time you play a console.</p></div>
+        <div class="card"><div class="icon">☕</div><h3>Brings its own Java</h3>
+          <p>The player runs on Java 22 or newer. If your computer has none, it downloads one once (Eclipse Temurin, about 50 MB) and then starts the game by itself.</p></div>
+        <div class="card"><div class="icon">★</div><h3>RetroAchievements</h3>
+          <p>Sign in once and achievements unlock while you play, with a trophy card when you earn one. <a href="#achievements">How it works</a>.</p></div>
+        <div class="card"><div class="icon">▣</div><h3>Pixels as they are</h3>
+          <p>The picture is drawn at the game's own shape with whole pixels, no smoothing. Sound plays at 48 kHz and is converted from the core's rate, so the pitch is right.</p></div>
+        <div class="card"><div class="icon">⌘</div><h3>Native everywhere</h3>
+          <p>Linux, Windows and macOS on x86-64 or ARM. On an Apple Silicon Mac it runs natively even when WII-UU itself runs through Rosetta.</p></div>
+        <div class="card"><div class="icon">⧉</div><h3>Shares WII-UU's games</h3>
+          <p>It reads the same ROM folders and settings as WII-UU, so saves, cores and achievements carry over. Each game runs in its own process, so a crashing core can't take the window with it.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="achievements">
+    <div class="wrap">
+      <div class="band split">
+        <figure>
+          <img class="shot" src="../choccy-milk-playing.png" width="1100" height="680" loading="lazy"
+               alt="A game in Choccy Milk with a card at the bottom: a gold trophy, 'Moved', 'Achievement unlocked · 5 points · 2 of 2'">
+          <figcaption>An unlock card (shown here with nestest, a CPU test program, and an example achievement)</figcaption>
+        </figure>
+        <div>
+          <h2>Achievements, unlocked while you play</h2>
+          <p class="sub">Choccy Milk checks RetroAchievements itself, the same way RetroArch does: it reads the game's memory every frame with a Java port of rcheevos, RetroArch's achievement library.</p>
+          <ol class="steps">
+            <li>Press <kbd>F2</kbd> in Choccy Milk, or open WII-UU's <i>Settings → Games → RetroAchievements account</i>, and enter your user name and password. Only the sign-in token it gets is kept, not the password.</li>
+            <li>Start a game. A card shows how many of its achievements you already have.</li>
+            <li>When you earn one, a trophy card appears and it's on your RetroAchievements profile. In WII-UU, the phones get a notice too.</li>
+          </ol>
+          <p class="meta">Softcore. NES, SNES, Game Boy (Color / Advance), N64, DS, Master System and Mega Drive games, recognized by their ROM, the way RetroAchievements does it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="consoles">
+    <div class="wrap">
+      <h2>What it plays</h2>
+      <p class="sub">Every console with a libretro core that draws in software. Cores that need OpenGL or Vulkan play in RetroArch from WII-UU instead.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Console</th><th>Cores, best first</th><th>Achievements</th></tr></thead>
+          <tbody>
+            <tr><td>NES</td><td>Mesen, Nestopia, FCEUmm, QuickNES</td><td><span class="tag">yes</span></td></tr>
+            <tr><td>Super Nintendo</td><td>Snes9x, bsnes</td><td><span class="tag">yes</span></td></tr>
+            <tr><td>Game Boy / Color</td><td>SameBoy, Gambatte, mGBA</td><td><span class="tag">yes</span></td></tr>
+            <tr><td>Game Boy Advance</td><td>mGBA, VBA Next, gpSP</td><td><span class="tag">yes</span></td></tr>
+            <tr><td>Nintendo 64</td><td>Mupen64Plus-Next, ParaLLEl N64 (software renderer, on every processor core)</td><td><span class="tag">yes</span></td></tr>
+            <tr><td>Nintendo DS</td><td>melonDS DS, melonDS, DeSmuME</td><td><span class="tag">yes</span></td></tr>
+            <tr><td>Master System</td><td>Genesis Plus GX, PicoDrive, SMS Plus</td><td><span class="tag">yes</span></td></tr>
+            <tr><td>Mega Drive / Genesis</td><td>Genesis Plus GX, PicoDrive</td><td><span class="tag">yes</span></td></tr>
+            <tr><td>PlayStation</td><td>PCSX ReARMed (software rendering)</td><td><span class="tag no">not yet</span></td></tr>
+            <tr><td>GameCube, Wii, PSP, PS2, Dreamcast</td><td>need OpenGL or Vulkan: these play in RetroArch</td><td><span class="tag no">–</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="get">
+    <div class="wrap">
+      <h2>Get it</h2>
+      <p class="sub">Three ways in, all the same player.</p>
+      <div class="cards">
+        <div class="card"><div class="icon">⤓</div><h3>On its own</h3>
+          <p><a href="../download/ChoccyMilk.jar">Download ChoccyMilk.jar</a> and double-click it, or start it from a terminal. It needs Java 17 or newer to open; the newer Java for the games comes by itself.</p></div>
+        <div class="card"><div class="icon">▶</div><h3>With WII-UU</h3>
+          <p>The <a href="../#install">WII-UU installer</a> adds it as <code>choccymilk</code>, with a menu entry on Linux. WII-UU's updates keep it current.</p></div>
+        <div class="card"><div class="icon">▦</div><h3>Inside WII-UU</h3>
+          <p>Turn on <i>Settings → Games → Play with Choccy Milk</i>. Games then play inside WII-UU's menu window, with your phone as the GamePad.</p></div>
+      </div>
+      <pre class="code" style="margin-top:22px"><code><span class="c"># the game list (WII-UU's ROM folders: ~/WiiUU/roms/nes, snes, gb, n64, ...)</span>
+java -jar ChoccyMilk.jar
+
+<span class="c"># play a file right away</span>
+java -jar ChoccyMilk.jar "Some Game.sfc"
+
+<span class="c"># another settings folder (default: ~/.wiiuu, shared with WII-UU)</span>
+java -jar ChoccyMilk.jar --home ~/choccy</code></pre>
+    </div>
+  </section>
+
+  <section id="controls">
+    <div class="wrap">
+      <h2>Controls</h2>
+      <p class="sub">Keyboard, mouse and USB or Bluetooth controllers (controllers on Linux). In WII-UU, your phone is the controller.</p>
+      <div class="keys">
+        <div class="card">
+          <h3 style="margin-top:0">In the list</h3>
+          <dl>
+            <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>choose</dd>
+            <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>consoles / games</dd>
+            <dt><kbd>Enter</kbd></dt><dd>play (or double-click)</dd>
+            <dt><kbd>O</kbd></dt><dd>open any game file</dd>
+            <dt><kbd>F5</kbd></dt><dd>look for new games</dd>
+            <dt><kbd>F2</kbd></dt><dd>RetroAchievements sign-in</dd>
+            <dt><kbd>F11</kbd></dt><dd>full screen</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">In a game</h3>
+          <dl>
+            <dt><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd></dt><dd>D-pad</dd>
+            <dt><kbd>X</kbd> <kbd>Z</kbd> <kbd>S</kbd> <kbd>A</kbd></dt><dd>A, B, X, Y</dd>
+            <dt><kbd>Q</kbd> <kbd>W</kbd> · <kbd>E</kbd> <kbd>R</kbd></dt><dd>L, R · ZL, ZR</dd>
+            <dt><kbd>Enter</kbd> · <kbd>Space</kbd></dt><dd>Start · Select</dd>
+            <dt><kbd>Esc</kbd></dt><dd>save and go back to the list (HOME on a controller)</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pi">
+    <div class="wrap">
+      <div class="band tip">
+        <div class="icon">π</div>
+        <div>
+          <h2 style="font-size:24px">N64 on a Raspberry Pi 5</h2>
+          <p class="sub" style="margin:0">The N64 recompiler needs 4 KB memory pages, and the Pi 5's default kernel uses 16 KB. Add <code>kernel=kernel8.img</code> to <code>/boot/firmware/config.txt</code> and restart. Without it, Choccy Milk falls back to the interpreter by itself, which is several times slower, and says so. The log, <code>~/.wiiuu/logs/</code>, shows how fast a game runs every 10 seconds.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <h2>Questions</h2>
+      <details><summary>Do I need RetroArch?</summary>
+        <p>No. Choccy Milk loads the cores itself. If RetroArch is installed, it uses the cores RetroArch already has; if not, it downloads them into <code>~/.wiiuu/choccy/cores</code>.</p></details>
+      <details><summary>Which Java do I need?</summary>
+        <p>Java 17 or newer to open the program. Games run on Java 22 or newer, and if your computer has none, Choccy Milk downloads one once into <code>~/.wiiuu/choccy/jre</code>.</p></details>
+      <details><summary>Where are my saves?</summary>
+        <p>In <code>~/.wiiuu/saves/&lt;console&gt;</code>, written every 30 seconds and when you leave a game. WII-UU uses the same folder, so a game saved in one continues in the other.</p></details>
+      <details><summary>Does it do hardcore achievements?</summary>
+        <p>No, softcore only. Unlocks show on your RetroAchievements profile as softcore.</p></details>
+      <details><summary>Why can't it play GameCube or PSP?</summary>
+        <p>Those cores draw with the graphics chip (OpenGL or Vulkan), and Choccy Milk draws in software. WII-UU plays them in RetroArch instead, and switches a console over by itself the first time a core asks for OpenGL.</p></details>
+      <details><summary>Something doesn't work. Where do I look?</summary>
+        <p>Each console has a log in <code>~/.wiiuu/logs/</code> with the core's messages, the speed, and what happened with achievements (lines starting with <code>[achievements]</code>). Starting Choccy Milk with <code>CHOCCY_DEBUG=1</code> logs everything the core asks for.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Choccy Milk is part of <a href="../">WII-UU</a>. Achievement logic ported from <a href="https://github.com/RetroAchievements/rcheevos">rcheevos</a> (MIT). Cores from <a href="https://www.libretro.com">libretro</a>. Not affiliated with Nintendo, Sony, Sega or RetroAchievements.</span>
+    <a href="https://github.com/Stoppedwumm/WII-UU">Source on GitHub</a>
+  </div>
+</footer>
+
+<script>
+  // version from the release manifest (Choccy Milk ships with each WII-UU release)
+  fetch("../version.json", { cache: "no-store" }).then(r => r.json())
+    .then(j => { if (j.version) document.getElementById("ver").textContent = j.version; }).catch(() => {});
+
+  // copy buttons on code blocks (without the comment lines)
+  document.querySelectorAll(".code").forEach(pre => {
+    const b = document.createElement("button");
+    b.className = "copy"; b.textContent = "Copy";
+    b.onclick = async () => {
+      const text = [...pre.querySelector("code").childNodes].filter(n => !(n.classList && n.classList.contains("c")))
+        .map(n => n.textContent).join("").split("\n").map(l => l.trimEnd()).filter(Boolean).join("\n");
+      try { await navigator.clipboard.writeText(text); b.textContent = "Copied"; } catch (e) { b.textContent = "Select & copy"; }
+      setTimeout(() => b.textContent = "Copy", 1600);
+    };
+    pre.appendChild(b);
+  });
+
+  // theme toggle, shared with WII-UU's page (remembered per browser)
+  const root = document.documentElement;
+  try { const t = localStorage.getItem("wiiuu-theme"); if (t) root.dataset.theme = t; } catch (e) {}
+  document.getElementById("theme").onclick = () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("wiiuu-theme", root.dataset.theme); } catch (e) {}
+  };
+</script>
+</body>
+</html>

@@ -430,6 +430,8 @@ Q / W = L / R, Enter = Start, Space = Select.
 
 ### Choccy Milk on its own
 
+Its own page: [wiiuu.stoppedwumm.net/choccymilk](https://wiiuu.stoppedwumm.net/choccymilk/).
+
 Choccy Milk is also a program of its own, without WII-UU's menu: `choccymilk` (the installer puts
 it next to `wiiuu`, with a menu entry on Linux), or `java -jar ChoccyMilk.jar` (from the release zip
 or [the website](https://wiiuu.stoppedwumm.net/download/ChoccyMilk.jar); Java 17 or newer). It lists
