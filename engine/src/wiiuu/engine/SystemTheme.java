@@ -1,4 +1,4 @@
-package wiiuu.ui;
+package wiiuu.engine;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -7,14 +7,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
-/** Asks the desktop whether it is in dark mode (macOS, Windows, GNOME/KDE and other freedesktops). */
-final class SystemTheme {
+/** Asks the desktop whether it is in dark mode (macOS, Windows, GNOME/KDE and other freedesktops). Used by WII-UU and Choccy Milk. */
+public final class SystemTheme {
     private static final String OS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
 
     private SystemTheme() {}
 
     /** @return true for dark, false for light (also when it can't be told) */
-    static boolean isDark() {
+    public static boolean isDark() {
         try {
             if (OS.contains("mac")) {
                 // prints "Dark" in dark mode; fails (no such key) in light mode

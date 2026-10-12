@@ -53,6 +53,7 @@ import wiiuu.core.Game;
 import wiiuu.core.GameSystem;
 import wiiuu.core.Library;
 import wiiuu.core.Systems;
+import wiiuu.engine.SystemTheme;
 import wiiuu.input.InputRouter;
 import wiiuu.net.QrCode;
 

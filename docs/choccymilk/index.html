@@ -38,7 +38,7 @@
     background-attachment: fixed;
     font-family: "Nunito", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
   a { color: var(--milk); }
-  img { max-width: 100%; height: auto; display: block; }
+  img, video { max-width: 100%; height: auto; display: block; }
   .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
 
   header { position: sticky; top: 0; z-index: 5; padding: 12px 0; backdrop-filter: blur(10px);
@@ -164,7 +164,7 @@
       </div>
       <figure>
         <img class="shot" src="../choccy-milk.png" width="1100" height="680"
-             alt="The Choccy Milk window: a glass of chocolate milk next to the title, consoles on the left (NES, Super Nintendo, Game Boy, Nintendo 64, Game Boy Advance, Mega Drive, PlayStation) and the NES games on the right">
+             alt="The Choccy Milk window in its dark Cocoa look: a chocolate band dripping across the top with a glass of chocolate milk and the title, consoles on the left as coloured drops, and the NES games on a panel on the right">
       </figure>
     </div>
   </div>
@@ -186,8 +186,29 @@
           <p>The picture is drawn at the game's own shape with whole pixels, no smoothing. Sound plays at 48 kHz and is converted from the core's rate, so the pitch is right.</p></div>
         <div class="card"><div class="icon">⌘</div><h3>Native everywhere</h3>
           <p>Linux, Windows and macOS on x86-64 or ARM. On an Apple Silicon Mac it runs natively even when WII-UU itself runs through Rosetta.</p></div>
+        <div class="card"><div class="icon">◐</div><h3>Its own look</h3>
+          <p>Cocoa when your computer is in dark mode, Milk when it's light (<kbd>T</kbd> switches). It opens with a glass of milk getting its chocolate stirred in; any key skips it.</p></div>
         <div class="card"><div class="icon">⧉</div><h3>Shares WII-UU's games</h3>
           <p>It reads the same ROM folders and settings as WII-UU, so saves, cores and achievements carry over. Each game runs in its own process, so a crashing core can't take the window with it.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="intro">
+    <div class="wrap">
+      <div class="band split">
+        <figure>
+          <video class="shot" width="660" height="408" autoplay muted loop playsinline preload="metadata" poster="../choccy-milk.png"
+                 aria-label="Choccy Milk starting: a glass of milk drops in, chocolate syrup pours in and is stirred, a straw lands, chocolate drips down from the top and the name pops in letter by letter, then the game list fades in">
+            <source src="../choccy-milk-intro.webm" type="video/webm">
+            <source src="../choccy-milk-intro.mp4" type="video/mp4">
+          </video>
+        </figure>
+        <div>
+          <h2>Poured fresh every start</h2>
+          <p class="sub">A glass of milk drops in, the chocolate pours and gets stirred, a straw lands and the name pops in. Then it fades into your games, about three seconds in all.</p>
+          <p class="meta">Any key, click or controller button skips it. <code>choccymilk --no-intro</code> or <code>choccy.intro=false</code> turns it off. In WII-UU, <i>Settings → Look &amp; sound → Theme → Choccy Milk</i> dresses the whole menu the same way.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -275,6 +296,7 @@ java -jar ChoccyMilk.jar --home ~/choccy</code></pre>
             <dt><kbd>O</kbd></dt><dd>open any game file</dd>
             <dt><kbd>F5</kbd></dt><dd>look for new games</dd>
             <dt><kbd>F2</kbd></dt><dd>RetroAchievements sign-in</dd>
+            <dt><kbd>T</kbd></dt><dd>Cocoa (dark) or Milk (light) look</dd>
             <dt><kbd>F11</kbd></dt><dd>full screen</dd>
           </dl>
         </div>

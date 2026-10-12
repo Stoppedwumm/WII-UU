@@ -61,6 +61,7 @@ if [ "$UNINSTALL" = 1 ]; then
   rm -rf "$PREFIX" "$BIN/wiiuu" "$BIN/wiiuu-emulators" "$BIN/wiiuu-console" "$BIN/choccymilk" \
          "$HOME/.local/share/applications/wiiuu.desktop" "$HOME/.local/share/applications/choccymilk.desktop" \
          "$HOME/.local/share/icons/hicolor/256x256/apps/wiiuu.png" \
+         "$HOME/.local/share/icons/hicolor/256x256/apps/choccymilk.png" \
          "$HOME/Applications/WII-UU.app"
   ok "Removed. Your ROMs ($ROMS) and settings ($CONF_DIR) were kept."
   EMU_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/wiiuu-emulators"
@@ -153,6 +154,8 @@ if [ -n "$CHOCCY_JAR" ]; then
 exec java -Xmx256m -jar "$PREFIX/ChoccyMilk.jar" "\$@"
 EOF
   chmod +x "$BIN/choccymilk"
+  # its own icon (a glass of chocolate milk), drawn by the app itself
+  java -Djava.awt.headless=true -jar "$PREFIX/ChoccyMilk.jar" --write-icon "$PREFIX/choccymilk.png" 2>/dev/null || true
   ok "Choccy Milk on its own: $BIN/choccymilk"
 fi
 
@@ -260,13 +263,17 @@ Terminal=false
 Categories=Game;Emulator;
 EOF
     if [ -n "$CHOCCY_JAR" ]; then
+      CHOCCY_ICON=wiiuu
+      if [ -f "$PREFIX/choccymilk.png" ]; then
+        cp "$PREFIX/choccymilk.png" "$HOME/.local/share/icons/hicolor/256x256/apps/choccymilk.png" && CHOCCY_ICON=choccymilk
+      fi
       cat > "$HOME/.local/share/applications/choccymilk.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Choccy Milk
 Comment=Plays games with libretro cores (WII-UU's player on its own)
 Exec=$BIN/choccymilk %f
-Icon=wiiuu
+Icon=$CHOCCY_ICON
 Terminal=false
 Categories=Game;Emulator;
 EOF

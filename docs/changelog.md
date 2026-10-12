@@ -3,6 +3,18 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.9.85 (2026-10-12)
+- Choccy Milk has its own look: Cocoa in dark mode and Milk in light mode (T switches, and it's
+  remembered), with a chocolate band dripping across the top, the glass of chocolate milk as its
+  logo, panels and chocolate "pills" for the chosen console and game, consoles as coloured drops,
+  and rounded type when the computer has some.
+- Choccy Milk starts with its own animation: a glass of milk drops in, chocolate syrup pours in and
+  gets stirred, a straw lands and the name pops in, then it fades into the game list. Any key,
+  click or controller button skips it; --no-intro or choccy.intro=false turns it off.
+- Choccy Milk has its own icon (a glass of chocolate milk) for its window, the Dock / taskbar and,
+  on Linux, its menu entry.
+- WII-UU has a new theme to match: Settings > Look & sound > Theme > Choccy Milk.
+
 ## 1.9.84 (2026-10-12)
 - Plug in a controller and play (Linux and Raspberry Pi): any USB or Bluetooth controller now
   becomes a player like a phone. It gets the next free player number, shows by name under

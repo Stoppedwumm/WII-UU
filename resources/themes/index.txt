@@ -1,5 +1,6 @@
 # the themes that come with WII-UU (resources/themes/<id>.wtheme), in the order Settings lists them
 sunset
+choccy-milk
 midnight-arcade
 gameboy
 famicom

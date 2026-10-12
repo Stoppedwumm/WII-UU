@@ -1,0 +1,53 @@
+theme "Choccy Milk"
+by "WII-UU"
+base auto
+
+# the look of Choccy Milk, WII-UU's own game player: milk in light mode, cocoa in dark mode
+let choc = #6B3E26
+let caramel = #C47A45
+let milk = #FFF7EE
+
+font "Nunito", "Varela Round", "Quicksand", "Comfortaa", "Ubuntu", "DejaVu Sans"
+
+when light {
+    accent = #8C5232
+    text = #3B2417
+    text-dim = #8E7262
+    card = #FFFFFF
+    button = #F3E4D5
+    divider = #EADAC9
+    dot = #E2CDB9
+    icon = choc
+    background = gradient(#FFF9F2, #F2E2D1)
+    stripes = alpha(choc, 3%)
+    glow = alpha(caramel, 14%)
+    accent-glow = alpha(choc, 12%)
+    outline = alpha(choc, 14%)
+    shadow = alpha(#4E2B19, 22%)
+    toast = alpha(choc, 94%)
+    dim = alpha(#F6EADF, 86%)
+    boot = gradient(#FFF9F2, #F2E2D1)
+    boot-fade = milk
+    consoles = mix(it, choc, 18%)
+}
+
+when dark {
+    accent = #E3A877
+    text = #F7ECE2
+    text-dim = #B79C88
+    card = #2F1F16
+    button = #46301F
+    divider = #4A3324
+    dot = #5A3F2C
+    icon = #F2C9A0
+    background = gradient(#1F130D, #0F0906)
+    stripes = alpha(milk, 2%)
+    glow = alpha(caramel, 14%)
+    accent-glow = alpha(#E3A877, 16%)
+    outline = alpha(milk, 8%)
+    toast = alpha(#46301F, 94%)
+    dim = alpha(#0F0906, 85%)
+    boot = gradient(#2A1A12, #0F0906)
+    boot-fade = choc
+    consoles = mix(it, choc, 25%)
+}

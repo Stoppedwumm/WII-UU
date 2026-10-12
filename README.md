@@ -302,8 +302,9 @@ change it.
 
 ## Themes
 
-*Settings → Look & sound → Theme* also lists themes: Sunset, Midnight Arcade, Game Boy, Famicom,
-Ocean (light by day, deep sea in dark mode), Paper, and any you write yourself. Themes are small
+*Settings → Look & sound → Theme* also lists themes: Sunset, Choccy Milk (milk by day, cocoa in
+dark mode, like the Choccy Milk app), Midnight Arcade, Game Boy, Famicom, Ocean (light by day, deep
+sea in dark mode), Paper, and any you write yourself. Themes are small
 text files in WII-UU's own theme language. *Make your own theme* opens `~/.wiiuu/themes` with a
 commented theme to start from (`my-theme.wtheme`) and the full reference (`REFERENCE.txt`,
 also `wiiuu --theme-reference`). Pick your theme in Settings, then edit it: **WII-UU redraws
@@ -457,6 +458,14 @@ same in both.
 - Arrows choose (left / right: consoles / games), Enter plays, Esc saves and goes back; in a game the
   same keys as in WII-UU (E / R = ZL / ZR too). O opens any game file, F5 looks for new games, F11
   is full screen. Controllers work in the list and in games (Linux), HOME goes back.
+- **Its own look:** Cocoa (dark) when the computer is in dark mode, Milk (light) when it isn't: a
+  chocolate band dripping across the top, the glass of chocolate milk as its logo and icon, and
+  rounded type when the computer has some (Nunito, Varela Round, Quicksand...). T switches, and
+  the choice is kept (`choccy.theme=auto|cocoa|milk`).
+- **It starts with a little animation:** a glass of milk drops in, chocolate pours in and gets
+  stirred, a straw lands and the name pops in, then it fades into the list (about three seconds).
+  Any key, click or controller button skips it; `--no-intro` or `choccy.intro=false` turns it off.
+  It doesn't play when you start it with a game.
 - `choccymilk GAME` plays a file right away (`.nes`, `.sfc`, `.gba`, `.z64`, ...).
 - It has no phone GamePad: that's WII-UU's.
 
