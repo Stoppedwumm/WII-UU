@@ -15,18 +15,24 @@ import java.util.List;
 public final class Joysticks {
     private Joysticks() {}
 
-    /** Real controllers WII-UU took over (grabbed: only it reads them, as players of their own), by event node. */
+    /**
+     * Real controllers WII-UU took over (grabbed: only it reads them, as players of their own), by
+     * connection: the event node and a number (event7.3), as the same node comes back when a
+     * controller is plugged in again.
+     */
     private static final java.util.Set<String> CLAIMED = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    /** A controller (by event node, e.g. event7) is WII-UU's now, or no longer. */
-    public static void claim(String event, boolean claimed) {
-        if (claimed) CLAIMED.add(event);
-        else CLAIMED.remove(event);
+    /** A controller connection (event7.3, or just event7) is WII-UU's now, or no longer. */
+    public static void claim(String connection, boolean claimed) {
+        if (claimed) CLAIMED.add(connection);
+        else CLAIMED.remove(connection);
     }
 
-    /** Whether WII-UU took this controller over (it plays through a virtual pad then, like a phone). */
+    /** Whether WII-UU took this controller (by event node) over (it plays through a virtual pad then, like a phone). */
     public static boolean claimed(String event) {
-        return event != null && CLAIMED.contains(event);
+        if (event == null) return false;
+        for (String c : CLAIMED) if (c.equals(event) || c.startsWith(event + ".")) return true;
+        return false;
     }
 
     /** Names of joysticks that aren't WII-UU's (empty when unreadable, e.g. not Linux). */

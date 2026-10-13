@@ -3,6 +3,15 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.10.3 (2026-10-13)
+- Controllers plugged into the PC keep working when unplugged and plugged in again. Before, a
+  replugged controller could stop after a press or two: it comes back on the same device node, and
+  each connection now has an id of its own, so the old connection ending can't take the new one with
+  it. A controller is also picked up faster (twice a second), tried again when it can't be opened
+  the moment it appears (while its permissions are still being set), and the menu's own controller
+  reader leaves new ones to WII-UU's helper instead of racing it. On a Mac a replugged controller
+  can't be mistaken for the one before it.
+
 ## 1.10.2 (2026-10-13)
 - OpenBased: Sign out revokes WII-UU's token on the server when it was linked with a code (OpenBased's
   new DELETE /api/v1/tokens/current), so there's nothing left to clean up on the API tokens page.

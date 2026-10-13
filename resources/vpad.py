@@ -18,7 +18,7 @@ Real controllers (USB / Bluetooth) plugged in while it watches are grabbed (EVIO
 helper reads them, so an emulator never sees them besides the virtual pads) and their input is
 passed to WII-UU, which gives each one a player number like a phone and plays it through that
 player's virtual pad - the pad every emulator is set up for. Their lines:
-    pad+ <id> <name>           a controller came (id: its event node, e.g. event7)
+    pad+ <id> <name>           a controller came (id: its event node and a number, e.g. event7.3)
     pad- <id>                  ... went
     in <id> b <BUTTON> <0|1>   a button as the GamePad's (A, B, X, Y, L, R, ZL, ZR, PLUS, MINUS,
                                HOME, L3, R3, UP, DOWN, LEFT, RIGHT), by position; others as
@@ -136,7 +136,7 @@ def say(line):
 
 
 def joysticks(text):
-    """(name, event node, virtual?) of every device with a joystick handler, from /proc/bus/input/devices."""
+    """(name, event node, virtual?, sysfs path) of every device with a joystick handler, from /proc/bus/input/devices."""
     found = []
     for block in re.split(r"\n\s*\n", text):
         name, sysfs, event, js = None, "", None, False
@@ -152,7 +152,7 @@ def joysticks(text):
                     elif re.fullmatch(r"js\d+", h):
                         js = True
         if name and event and js:
-            found.append((name, event, sysfs.startswith("/devices/virtual/")))
+            found.append((name, event, sysfs.startswith("/devices/virtual/"), sysfs))
     return found
 
 
@@ -239,7 +239,7 @@ class Controller:
         return []
 
 
-def open_controller(event):
+def open_controller(event, ident):
     """Opens and grabs a controller; (fd, Controller) or None when it isn't a gamepad."""
     fd = os.open("/dev/input/" + event, os.O_RDONLY)
     try:
@@ -258,7 +258,7 @@ def open_controller(event):
                 _, lo, hi, _, flat, _ = ABSINFO.unpack(buf)
                 info[code] = (lo, hi, flat)
         fcntl.ioctl(fd, EVIOCGRAB, 1)
-        return fd, Controller(event, info, keys)
+        return fd, Controller(ident, info, keys)
     except OSError:
         os.close(fd)
         raise
@@ -285,35 +285,49 @@ def read_controller(fd, pad):
 
 
 def watch():
-    """Takes over controllers as they're plugged in (checks every 2 s)."""
-    taken, failed = {}, set()
+    """
+    Takes over controllers as they're plugged in (checks twice a second).
+
+    A device is its event node plus where it sits (sysfs): a controller plugged in again usually
+    gets the same node, and must count as a new one. Each connection gets an id of its own
+    (event7.3), so the "pad-" of the one before can never end the new one. A node that can't be
+    opened yet (udev still setting its permissions, just after it appears) is tried again.
+    """
+    taken, skipped, tries, count = {}, set(), {}, 0
     while True:
         try:
             with open(EVENT_DEVICES) as f:
                 devices = joysticks(f.read())
         except OSError:
             devices = []
-        here = {event for _, event, _ in devices}
-        for event in [e for e, t in taken.items() if not t.is_alive() or e not in here]:
-            del taken[event]
-        failed &= here
-        for name, event, virtual in devices:
-            if event in taken or event in failed or ours(name, virtual) or SKIP_NAMES.search(name):
+        here = {(event, sysfs) for _, event, _, sysfs in devices}
+        for key in [k for k, t in taken.items() if not t.is_alive() or k not in here]:
+            del taken[key]
+        skipped &= here
+        for key in [k for k in tries if k not in here]:
+            del tries[key]
+        for name, event, virtual, sysfs in devices:
+            key = (event, sysfs)
+            if key in taken or key in skipped or ours(name, virtual) or SKIP_NAMES.search(name):
                 continue
+            ident = "%s.%d" % (event, count + 1)
             try:
-                got = open_controller(event)
+                got = open_controller(event, ident)
             except OSError as e:
-                failed.add(event)
-                say("padfail %s %s: %s" % (event, name, e))
+                tries[key] = tries.get(key, 0) + 1
+                if tries[key] == 10:             # 5 s of trying: say so once, keep trying
+                    say("padfail %s %s: %s" % (event, name, e))
                 continue
+            tries.pop(key, None)
+            count += 1
             if got is None:
-                failed.add(event)
+                skipped.add(key)                 # not a gamepad
                 continue
-            say("pad+ %s %s" % (event, name))
+            say("pad+ %s %s" % (ident, name))
             t = threading.Thread(target=read_controller, args=got, daemon=True)
             t.start()
-            taken[event] = t
-        time.sleep(2)
+            taken[key] = t
+        time.sleep(0.5)
 
 
 def selftest():

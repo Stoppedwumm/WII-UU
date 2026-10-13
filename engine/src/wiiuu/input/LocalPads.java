@@ -75,13 +75,20 @@ public final class LocalPads {
     public void start() {
         if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux")) return;
         Thread t = new Thread(() -> {
+            java.util.Set<String> seen = new java.util.HashSet<>();
             while (true) {
+                java.util.Set<String> now = new java.util.HashSet<>();
                 for (Joysticks.Device d : Joysticks.list()) {
-                    if (d.ours() || d.event() == null || Joysticks.claimed(d.event())) continue;
+                    if (d.ours() || d.event() == null) continue;
+                    now.add(d.event());
+                    // only once it was there a scan ago: WII-UU's controller helper (which checks twice a
+                    // second) takes new ones over first, rather than both reading it at once
+                    if (!seen.contains(d.event()) || Joysticks.claimed(d.event())) continue;
                     int player = players.computeIfAbsent(d.event(), k -> -(players.size() + 1));
                     if (open.add(d.event())) start("event-" + d.event(), () -> readEvents(d, player));
                     if (open.add(d.js())) start("js-" + d.js(), () -> readSticks(d, player));
                 }
+                seen = now;
                 try {
                     Thread.sleep(2000);
                 } catch (InterruptedException e) {

@@ -18,7 +18,8 @@ import GameController
 setvbuf(stdout, nil, _IOLBF, 0)
 
 final class Pads {
-    private var ids: [ObjectIdentifier: String] = [:]
+    // the controller is kept with its id: a replugged one can't then get a gone one's identity
+    private var ids: [ObjectIdentifier: (GCController, String)] = [:]
     private var next = 0
     private var held: [String: Bool] = [:]
     private var sticks: [String: (Float, Float)] = [:]
@@ -54,7 +55,7 @@ final class Pads {
         guard let g = c.extendedGamepad else { return }      // only full gamepads
         let id = "mac\(next)"
         next += 1
-        ids[oid] = id
+        ids[oid] = (c, id)
         let name = (c.vendorName ?? c.productCategory).replacingOccurrences(of: "\n", with: " ")
         say("pad+ \(id) \(name.isEmpty ? "Controller" : name)")
 
@@ -84,7 +85,7 @@ final class Pads {
     }
 
     func detach(_ c: GCController) {
-        guard let id = ids.removeValue(forKey: ObjectIdentifier(c)) else { return }
+        guard let id = ids.removeValue(forKey: ObjectIdentifier(c))?.1 else { return }
         held = held.filter { !$0.key.hasPrefix(id + "|") }
         sticks = sticks.filter { !$0.key.hasPrefix(id + "|") }
         say("pad- \(id)")
