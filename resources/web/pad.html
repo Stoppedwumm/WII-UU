@@ -1266,9 +1266,10 @@ function obTokensUrl() {
 $("obUrl").addEventListener("input", () => { const u = obTokensUrl(); if (u) $("obTokensLink").href = u; else $("obTokensLink").removeAttribute("href"); });
 $("obOut").onclick = async () => {
   try {
-    await api("/api/openbased", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                                  body: form({ action: "signout" }) });
-    $("obSheet").classList.add("hidden"); toast("Signed out of OpenBased"); loadLibrary(); poll();
+    const r = await api("/api/openbased", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                            body: form({ action: "signout" }) });
+    const j = await r.json().catch(() => ({}));
+    $("obSheet").classList.add("hidden"); toast(j.message || "Signed out of OpenBased"); loadLibrary(); poll();
   } catch (e) { $("obErr").textContent = "Not connected to WII-UU"; }
 };
 $("obSheet").onsubmit = async (e) => {

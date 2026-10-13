@@ -440,13 +440,15 @@ public final class OpenBased implements Launcher.Listener {
                 if (code == 404 || code == 410) break;             // DEVICE_LINK_EXPIRED
                 Map<String, Object> j = code / 100 == 2 ? MiniJson.object(r[1]) : null;
                 if (j == null || !"APPROVED".equals(MiniJson.string(j.get("status")))) continue;
-                String token = MiniJson.string(j.get("token")), who = MiniJson.string(j.get("user"));
+                String token = MiniJson.string(j.get("token")), who = MiniJson.string(j.get("user")),
+                        tokenId = MiniJson.string(j.get("tokenId"));
                 if (token == null) continue;
                 synchronized (this) {
                     config.set("openbased.token", token);
                     config.set("openbased.tokenId", null);      // a linked token can't revoke itself (no profile scope)
                     config.set("openbased.user", who);
                     config.set("openbased.linked", "true");
+                    config.set("openbased.linkedTokenId", tokenId);   // as OpenBased's API tokens page shows it
                     config.save();
                     link = null;
                 }
@@ -510,21 +512,40 @@ public final class OpenBased implements Launcher.Listener {
         return config.getBool("openbased.linked", false);
     }
 
-    public synchronized void signOut() {
+    /**
+     * Revokes WII-UU's token on the server and forgets it here. A token from linking with a code
+     * revokes itself (DELETE /api/v1/tokens/current, which needs no scope); one WII-UU made after
+     * signing in with OpenBased's page is revoked by its id. Returns what to tell the user.
+     */
+    public synchronized String signOut() {
         String id = config.get("openbased.tokenId", "").trim(), token = token();
-        if (!id.isEmpty() && !token.isEmpty()) {
+        String said = "Signed out";
+        if (!token.isEmpty() && linked()) {
+            try {
+                HttpURLConnection c = open("/api/v1/tokens/current", "DELETE", token);
+                int code = c.getResponseCode();
+                if (code / 100 == 2 || code == 401) said = "Signed out, and WII-UU's token is revoked";
+                else said = "Signed out here: revoke \"WII-UU on " + computerName() + "\" on OpenBased's API tokens page too";
+            } catch (IOException e) {
+                said = "Signed out here (OpenBased wasn't reachable): revoke WII-UU's token on its API tokens page";
+            }
+        } else if (!id.isEmpty() && !token.isEmpty()) {
             try {
                 call("DELETE", "/api/v1/tokens/" + enc(id), null, token);
+                said = "Signed out, and WII-UU's token is revoked";
             } catch (IOException e) {
                 System.err.println("[openbased] could not revoke WII-UU's token: " + e.getMessage());
             }
         }
+        System.out.println("[openbased] " + said);
         config.set("openbased.token", null);
         config.set("openbased.tokenId", null);
         config.set("openbased.user", null);
         config.set("openbased.linked", null);
+        config.set("openbased.linkedTokenId", null);
         config.save();
         refresh();
+        return said;
     }
 
     private static String hostName() {

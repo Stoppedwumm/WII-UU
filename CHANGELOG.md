@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.10.2 (2026-10-13)
+- OpenBased: Sign out revokes WII-UU's token on the server when it was linked with a code (OpenBased's
+  new DELETE /api/v1/tokens/current), so there's nothing left to clean up on the API tokens page.
+  Servers from before that say so and point you there.
+
 ## 1.10.1 (2026-10-13)
 - OpenBased: **Link with a code** (Settings > OpenBased, or on the phone). WII-UU shows a code, you
   approve it in OpenBased's web app (the phone's Approve on OpenBased button opens the page), and

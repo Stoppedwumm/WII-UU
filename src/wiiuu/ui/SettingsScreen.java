@@ -1398,11 +1398,8 @@ public final class SettingsScreen {
             }, null, null));
         }
         if (hasToken && ob != null) {
-            r.add(new Action("Sign out", ob.linked() ? "Forgets WII-UU's token here. Revoke it on OpenBased's API tokens page too "
-                    + "(it's named \"WII-UU on …\")." : null, () -> {
-                boolean linked = ob.linked();
-                ob.signOut();
-                say(linked ? "Signed out: revoke \"WII-UU on …\" on OpenBased's API tokens page too" : "Signed out");
+            r.add(new Action("Sign out", "Revokes WII-UU's token on OpenBased and forgets it here.", () -> {
+                say(ob.signOut());
                 reload(false);
             }, null, "Press A again to sign out"));
         }

@@ -756,8 +756,7 @@ public final class GamepadServer {
                                 return;
                             }
                             if (ob != null && action.equals("signout")) {
-                                ob.signOut();
-                                json(ex, 200, new Json().obj().kv("ok", true).endObj());
+                                json(ex, 200, new Json().obj().kv("ok", true).kv("message", ob.signOut()).endObj());
                                 return;
                             }
                             String err = host.setUpOpenBased(f.getOrDefault("url", ""), f.getOrDefault("token", ""));

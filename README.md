@@ -124,8 +124,8 @@ code**. WII-UU shows a code; approve it in OpenBased's web app, signed in there 
 **Approve on OpenBased** button opens the right page). That's all: nothing to set up on the server,
 and a new address for WII-UU doesn't matter. WII-UU gets a token of its own, "WII-UU on (computer
 name)", with `media.read media.stream library.read history.read history.write`; it shows on
-OpenBased's **API tokens** page, where you revoke it (WII-UU's *Sign out* only forgets it here, since
-such a token can't revoke itself). With a server that sends stories, backdrops, genres and your
+OpenBased's **API tokens** page. WII-UU's *Sign out* revokes it on the server too (servers from before
+that was possible get a note to revoke it on that page). With a server that sends stories, backdrops, genres and your
 progress in its lists, the cinema needs no request per title, and it has a **Recently added** row.
 
 **Older OpenBased servers** (without device linking) sign in with OpenBased's own page instead:
