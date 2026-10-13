@@ -176,7 +176,7 @@ The phone's Library lists the videos too.
 * **Resume:** with mpv, a video starts where you stopped, and the position is saved to OpenBased every
   few seconds, so *continue watching* works across all your OpenBased apps.
 * **GamePad:** A or + pause, left/right seek, up/down jump a minute, ZL/ZR volume, Y mute, X subtitles,
-  L/R chapters. HOME → Close stops the video.
+  L/R chapters. HOME stops the video (on a phone and on a controller plugged into the computer).
 * **The token stays on this computer:** OpenBased never accepts personal tokens in links, so the
   player gets a link to a small proxy on `127.0.0.1` that adds the token (seeking works through it).
   The phone never sees the token.

@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.10.3";
+    public static final String VERSION = "1.10.4";
 
     private final Config config;
     private final Library library;
@@ -90,11 +90,14 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         router.setPadSink(new InputRouter.PadSink() {
             @Override
             public boolean button(int player, wiiuu.input.PadButton b, boolean down) {
-                if (!launcher.inChoccy()) return false;
-                if (b == wiiuu.input.PadButton.HOME) {
+                // HOME also ends a video (mpv, VLC...), the only way out with just a controller
+                Game g = launcher.current();
+                boolean video = g != null && (wiiuu.core.OpenBased.handles(g) || wiiuu.core.Reactions.handles(g));
+                if (b == wiiuu.input.PadButton.HOME && (launcher.inChoccy() || video)) {
                     if (down) closeGame();
                     return true;
                 }
+                if (!launcher.inChoccy()) return false;
                 return launcher.choccyButton(player, b, down);
             }
 

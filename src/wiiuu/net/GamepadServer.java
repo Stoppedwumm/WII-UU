@@ -937,10 +937,16 @@ public final class GamepadServer {
         if (changed) host.padsChanged(connectedPads());
     }
 
+    private boolean videoPlaying() {
+        Game g = launcher.current();
+        return g != null && (wiiuu.core.OpenBased.handles(g) || wiiuu.core.Reactions.handles(g));
+    }
+
     private void input(Client c, String body) {
         if (c.player <= 0) return;
-        // a controller plugged into a Mac: an emulator WII-UU started reads it itself (only Choccy Milk needs it passed on)
-        if (c.controller && c.id.startsWith("pad:mac") && launcher.isRunning() && !launcher.inChoccy()) return;
+        // a controller plugged into a Mac: an emulator WII-UU started reads it itself (only Choccy Milk and the
+        // video players, which only know keys, need it passed on)
+        if (c.controller && c.id.startsWith("pad:mac") && launcher.isRunning() && !launcher.inChoccy() && !videoPlaying()) return;
         // a controller in the menu: its bottom button confirms, as on most controllers (input.padConfirm=east: the right one)
         boolean swap = c.controller && !launcher.isRunning() && !"east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())
                 && !remapsAOrB(c.label);

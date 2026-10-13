@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.10.4 (2026-10-13)
+- Videos (OpenBased, Reactions): **HOME stops the video** and goes back to the menu, also on a
+  controller plugged into the computer. Before, there was no way out of mpv with just a controller.
+  The position is saved as always, so it continues where you stopped. On a Mac, controllers now
+  work in the video player too.
+
 ## 1.10.3 (2026-10-13)
 - Controllers plugged into the PC keep working when unplugged and plugged in again. Before, a
   replugged controller could stop after a press or two: it comes back on the same device node, and
