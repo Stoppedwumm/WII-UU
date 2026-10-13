@@ -118,6 +118,18 @@ WII-UU can show the movies and episodes on an [OpenBased](https://github.com/Sto
 media server as a channel on the home screen, and play them full screen on the TV, in Console Mode
 as on a desktop.
 
+**Link with a code** (OpenBased servers with device linking): in *Settings → OpenBased* (or on the
+phone: GamePad page → Library → **+ OpenBased**) enter the server address and press **Link with a
+code**. WII-UU shows a code; approve it in OpenBased's web app, signed in there (the phone's
+**Approve on OpenBased** button opens the right page). That's all: nothing to set up on the server,
+and a new address for WII-UU doesn't matter. WII-UU gets a token of its own, "WII-UU on (computer
+name)", with `media.read media.stream library.read history.read history.write`; it shows on
+OpenBased's **API tokens** page, where you revoke it (WII-UU's *Sign out* only forgets it here, since
+such a token can't revoke itself). With a server that sends stories, backdrops, genres and your
+progress in its lists, the cinema needs no request per title, and it has a **Recently added** row.
+
+**Older OpenBased servers** (without device linking) sign in with OpenBased's own page instead:
+
 1. **Once, on the OpenBased server:** add WII-UU as a client under `openbased.clients` in its
    `application.yml` (`/etc/openbased/application.yml` when installed as a systemd service) and restart
    it (`sudo systemctl restart openbased`). WII-UU shows the exact entry (*Settings → OpenBased*, or on the

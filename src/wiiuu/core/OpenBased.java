@@ -88,6 +88,28 @@ public final class OpenBased implements Launcher.Listener {
     public record Detail(String overview, List<String> genres, Integer runtime, Path backdrop) {}
 
     private volatile List<Item> items = List.of();
+    private volatile List<String> recent = List.of();
+    /** backdrops that list items named (newer servers), downloaded when first shown */
+    private final Map<String, String> listBackdrops = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The newest videos first (ids), as far as the server says. */
+    public List<String> recentlyAdded() {
+        return recent;
+    }
+
+    /** A backdrop, downloaded into the cache once; null when there's none. */
+    private Path backdropFile(String artwork) {
+        if (artwork == null || !artwork.startsWith("/api/v1/artwork/")) return null;
+        try {
+            Path file = config.home().resolve("cache").resolve("openbased").resolve("backdrops")
+                    .resolve(artwork.substring(artwork.lastIndexOf('/') + 1).replaceAll("[^A-Za-z0-9_-]", ""));
+            Files.createDirectories(file.getParent());
+            if (!Files.exists(file)) download(artwork, file);
+            return Files.exists(file) ? file : null;
+        } catch (IOException e) {
+            return null;
+        }
+    }
     private final Map<String, Detail> details = new java.util.concurrent.ConcurrentHashMap<>();
     private final Set<String> asked = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -102,6 +124,15 @@ public final class OpenBased implements Launcher.Listener {
      */
     public Detail detail(String id, Runnable loaded) {
         Detail d = details.get(id);
+        String fromList = listBackdrops.get(id);
+        if (d != null && d.backdrop() == null && fromList != null && asked.add(id)) {
+            // the list told it all but the picture: fetch just that
+            posters.submit(() -> {
+                Path file = backdropFile(fromList);
+                if (file != null) details.put(id, new Detail(d.overview(), d.genres(), d.runtime(), file));
+                loaded.run();
+            });
+        }
         if (d != null || !configured(config) || !asked.add(id)) return d;
         posters.submit(() -> {
             try {
@@ -109,16 +140,8 @@ public final class OpenBased implements Launcher.Listener {
                 List<String> genres = new ArrayList<>();
                 List<Object> g = m == null ? null : MiniJson.array(m.get("genres"));
                 if (g != null) for (Object o : g) if (MiniJson.string(o) != null) genres.add(MiniJson.string(o));
-                Path backdrop = null;
                 Map<String, Object> art = m == null ? null : MiniJson.object(m.get("artwork"));
-                String b = art == null ? null : MiniJson.string(art.get("backdrop"));
-                if (b != null && b.startsWith("/api/v1/artwork/")) {
-                    Path file = config.home().resolve("cache").resolve("openbased").resolve("backdrops")
-                            .resolve(b.substring(b.lastIndexOf('/') + 1).replaceAll("[^A-Za-z0-9_-]", ""));
-                    Files.createDirectories(file.getParent());
-                    if (!Files.exists(file)) download(b, file);
-                    if (Files.exists(file)) backdrop = file;
-                }
+                Path backdrop = backdropFile(art == null ? null : MiniJson.string(art.get("backdrop")));
                 Double runtime = m == null ? null : MiniJson.number(m.get("runtime"));
                 details.put(id, new Detail(m == null ? null : MiniJson.string(m.get("overview")), List.copyOf(genres),
                         runtime == null ? null : runtime.intValue(), backdrop));
@@ -338,6 +361,155 @@ public final class OpenBased implements Launcher.Listener {
     }
 
     /** Revokes the token WII-UU made (if it did) and forgets it. */
+    // ---- linking with a code (OpenBased's device links: no OAuth client to set up) -------------------
+
+    /** A link waiting for the user to approve it: the code to show and where to enter it. */
+    public record Link(String userCode, String verificationUri, String verificationUriComplete, long expiresAt) {}
+
+    private volatile Link link;
+    private volatile String linkState = "";
+    private volatile Thread linkPoller;
+
+    /** The code being shown, or null. */
+    public Link pendingLink() {
+        Link l = link;
+        return l != null && System.currentTimeMillis() < l.expiresAt() ? l : null;
+    }
+
+    /** How linking goes: "Waiting for you to approve it", "Linked as Ada", "The code expired"... */
+    public String linkState() {
+        return linkState;
+    }
+
+    /**
+     * Starts linking WII-UU with the OpenBased server at {@code url}: OpenBased gives a code to
+     * show, the user approves it in OpenBased's web app (on the phone, say), and WII-UU gets a
+     * token of its own (media.read media.stream library.read history.read history.write) without
+     * OpenBased knowing WII-UU as an OAuth client. Waits for the approval in the background.
+     */
+    public synchronized Link startLink(String url) throws IOException {
+        String server = url == null ? "" : url.trim();
+        if (server.isEmpty()) server = config.get("openbased.url", "").trim();
+        if (server.isEmpty()) throw new IOException("Enter the server address first");
+        config.set("openbased.url", server);
+        config.save();
+        String name = "WII-UU on " + computerName();
+        Object[] answer;
+        try {
+            answer = post("/api/v1/device-links", "{\"name\":\"" + name.replace("\\", "").replace("\"", "") + "\"}");
+        } catch (IOException e) {
+            throw new IOException("Can't reach OpenBased at " + base() + ": " + e.getMessage());
+        }
+        int code = (int) answer[0];
+        if (code == 404 || code == 405) {
+            throw new IOException("This OpenBased server can't link with a code yet (update it, or sign in with OpenBased instead)");
+        }
+        if (code / 100 != 2) throw new IOException("OpenBased said no (HTTP " + code + ")");
+        Map<String, Object> j = MiniJson.object(answer[1]);
+        String device = j == null ? null : MiniJson.string(j.get("deviceCode"));
+        String user = j == null ? null : MiniJson.string(j.get("userCode"));
+        if (device == null || user == null) throw new IOException("OpenBased gave no code");
+        Double expires = MiniJson.number(j.get("expiresIn")), interval = MiniJson.number(j.get("interval"));
+        Link l = new Link(user, String.valueOf(MiniJson.string(j.get("verificationUri"))),
+                String.valueOf(MiniJson.string(j.get("verificationUriComplete"))),
+                System.currentTimeMillis() + (long) ((expires == null ? 600 : expires) * 1000));
+        link = l;
+        linkState = "Waiting for you to approve it";
+        long every = (long) ((interval == null ? 5 : Math.max(1, interval)) * 1000);
+        Thread old = linkPoller;
+        if (old != null) old.interrupt();
+        Thread t = new Thread(() -> pollLink(l, device, every), "openbased-link");
+        t.setDaemon(true);
+        linkPoller = t;
+        t.start();
+        System.out.println("[openbased] linking: enter " + user + " at " + l.verificationUri());
+        return l;
+    }
+
+    private void pollLink(Link l, String deviceCode, long every) {
+        while (link == l && System.currentTimeMillis() < l.expiresAt()) {
+            try {
+                Thread.sleep(every);
+                Object[] r = post("/api/v1/device-links/token", "{\"deviceCode\":\"" + deviceCode.replaceAll("[^A-Za-z0-9_.~-]", "") + "\"}");
+                int code = (int) r[0];
+                if (code == 403) {                                  // DEVICE_LINK_DENIED
+                    linkState = "Linking was declined";
+                    link = null;
+                    return;
+                }
+                if (code == 404 || code == 410) break;             // DEVICE_LINK_EXPIRED
+                Map<String, Object> j = code / 100 == 2 ? MiniJson.object(r[1]) : null;
+                if (j == null || !"APPROVED".equals(MiniJson.string(j.get("status")))) continue;
+                String token = MiniJson.string(j.get("token")), who = MiniJson.string(j.get("user"));
+                if (token == null) continue;
+                synchronized (this) {
+                    config.set("openbased.token", token);
+                    config.set("openbased.tokenId", null);      // a linked token can't revoke itself (no profile scope)
+                    config.set("openbased.user", who);
+                    config.set("openbased.linked", "true");
+                    config.save();
+                    link = null;
+                }
+                linkState = "Linked" + (who == null ? "" : " as " + who);
+                System.out.println("[openbased] " + linkState);
+                refreshAsync();
+                return;
+            } catch (InterruptedException e) {
+                return;
+            } catch (IOException e) {
+                // the network hiccuped: try again
+            }
+        }
+        if (link == l) {
+            link = null;
+            linkState = "The code expired: start again";
+        }
+    }
+
+    /** A POST with a JSON body and no sign-in: {status, parsed answer or null}. */
+    private Object[] post(String path, String json) throws IOException {
+        HttpURLConnection c = open(path, "POST", null);
+        c.setDoOutput(true);
+        c.setRequestProperty("Content-Type", "application/json");
+        try (OutputStream out = c.getOutputStream()) {
+            out.write(json.getBytes(StandardCharsets.UTF_8));
+        }
+        int code = c.getResponseCode();
+        Object body = null;
+        try (InputStream in = code / 100 == 2 ? c.getInputStream() : c.getErrorStream()) {
+            if (in != null) {
+                String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                if (!text.isBlank()) body = MiniJson.parse(text);
+            }
+        } catch (RuntimeException ignored) {
+            // not JSON
+        }
+        return new Object[]{code, body};
+    }
+
+    /** Stops waiting for an approval. */
+    public void cancelLink() {
+        link = null;
+        Thread t = linkPoller;
+        if (t != null) t.interrupt();
+        linkState = "";
+    }
+
+    private static String computerName() {
+        try {
+            String n = InetAddress.getLocalHost().getHostName();
+            int dot = n.indexOf('.');
+            return dot > 0 ? n.substring(0, dot) : n;
+        } catch (IOException e) {
+            return "this computer";
+        }
+    }
+
+    /** Whether WII-UU's token came from linking with a code (OpenBased's API tokens page revokes it). */
+    public boolean linked() {
+        return config.getBool("openbased.linked", false);
+    }
+
     public synchronized void signOut() {
         String id = config.get("openbased.tokenId", "").trim(), token = token();
         if (!id.isEmpty() && !token.isEmpty()) {
@@ -350,6 +522,7 @@ public final class OpenBased implements Launcher.Listener {
         config.set("openbased.token", null);
         config.set("openbased.tokenId", null);
         config.set("openbased.user", null);
+        config.set("openbased.linked", null);
         config.save();
         refresh();
     }
@@ -449,6 +622,23 @@ public final class OpenBased implements Launcher.Listener {
                 covers.add(file);
                 if (!Files.exists(file)) downloads.add(posters.submit(() -> download(poster, file)));
             }
+            // newer servers put the story, genres, backdrop and your progress on each list item
+            if (m.containsKey("overview") || m.containsKey("backdrop")) {
+                List<String> genres = new ArrayList<>();
+                List<Object> gl = MiniJson.array(m.get("genres"));
+                if (gl != null) for (Object o : gl) if (MiniJson.string(o) != null) genres.add(MiniJson.string(o));
+                Double runtime = MiniJson.number(m.get("runtime"));
+                Detail had = details.get(id);
+                details.put(id, new Detail(MiniJson.string(m.get("overview")), List.copyOf(genres),
+                        runtime == null ? null : runtime.intValue(), had == null ? null : had.backdrop()));
+                String b = MiniJson.string(m.get("backdrop"));
+                if (b != null) listBackdrops.put(id, b);
+            }
+            Map<String, Object> prog = MiniJson.object(m.get("progress"));
+            if (prog != null && !positions.containsKey(id)) {
+                Double pos = MiniJson.number(prog.get("position"));
+                if (pos != null && !Boolean.TRUE.equals(prog.get("completed"))) positions.put(id, pos);
+            }
             Game game = new Game(Systems.OPENBASED, title(m), cache.resolve("media").resolve(id), covers);
             games.add(game);
             Double year = MiniJson.number(m.get("year")), season = MiniJson.number(m.get("seasonNumber")),
@@ -459,6 +649,17 @@ public final class OpenBased implements Launcher.Listener {
                     covers.isEmpty() ? null : covers.get(0), game, positions.getOrDefault(id, 0.0), first.contains(id)));
         }
         items = List.copyOf(list);
+        // newest first, for the cinema's Recently added row
+        try {
+            List<String> newest = new ArrayList<>();
+            for (Object o : MiniJson.array(MiniJson.object(get("/api/v1/media?sort=-addedAt&pageSize=24")).get("items"))) {
+                String rid = MiniJson.string(MiniJson.object(o).get("id"));
+                if (rid != null) newest.add(rid);
+            }
+            recent = List.copyOf(newest);
+        } catch (IOException | RuntimeException e) {
+            recent = List.of();
+        }
         for (var d : downloads) {
             try {
                 d.get(30, TimeUnit.SECONDS);
@@ -508,7 +709,7 @@ public final class OpenBased implements Launcher.Listener {
         c.setRequestMethod(method);
         c.setConnectTimeout(8000);
         c.setReadTimeout(20000);
-        c.setRequestProperty("Authorization", "Bearer " + bearer);
+        if (bearer != null) c.setRequestProperty("Authorization", "Bearer " + bearer);
         c.setRequestProperty("Accept", "application/json");
         return c;
     }

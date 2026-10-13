@@ -34,7 +34,7 @@ import wiiuu.core.OpenBased;
  * OpenBased as a cinema, apart from the games: the lights go down, the music stops, and it's a
  * dark screen of films and series like a streaming service's. The focused title fills the top
  * (its backdrop, story, year, length, genres and how far it was watched); below, rows of posters
- * to browse with the d-pad: Continue watching, Series, Movies, More. A series opens to its
+ * to browse with the d-pad: Continue watching, Recently added, Series, Movies, More. A series opens to its
  * seasons and episodes. A plays (from where it was left), B goes back.
  */
 final class Cinema {
@@ -131,6 +131,22 @@ final class Cinema {
                 showRow.add(new Entry(null, s.getKey(), eps));
             }
             if (!going.isEmpty()) out.add(new Row("Continue watching", going, true));
+            // newest first: episodes of one series show once, as the series
+            Map<String, OpenBased.Item> byId = new HashMap<>();
+            for (OpenBased.Item i : items) byId.put(i.id(), i);
+            List<Entry> newest = new ArrayList<>();
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (String id : ob.recentlyAdded()) {
+                OpenBased.Item i = byId.get(id);
+                if (i == null || "TRACK".equals(i.type())) continue;
+                if (i.isEpisode()) {
+                    if (seen.add("s:" + i.series())) newest.add(new Entry(null, i.series(), shows.get(i.series())));
+                } else if (seen.add(id)) {
+                    newest.add(new Entry(i, null, null));
+                }
+                if (newest.size() >= 15) break;
+            }
+            if (newest.size() > 1) out.add(new Row("Recently added", newest, false));
             if (!showRow.isEmpty()) out.add(new Row("Series", showRow, false));
             if (!movies.isEmpty()) out.add(new Row("Movies", movies, false));
             if (!more.isEmpty()) out.add(new Row("More", more, false));

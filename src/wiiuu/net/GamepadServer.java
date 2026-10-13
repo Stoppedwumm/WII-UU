@@ -744,6 +744,17 @@ public final class GamepadServer {
                                 }
                                 return;
                             }
+                            if (ob != null && action.equals("link")) {
+                                // linking with a code: OpenBased's device links, nothing to set up on the server
+                                try {
+                                    wiiuu.core.OpenBased.Link l = ob.startLink(f.getOrDefault("url", ""));
+                                    json(ex, 200, new Json().obj().kv("code", l.userCode()).kv("verify", l.verificationUri())
+                                            .kv("verifyComplete", l.verificationUriComplete()).endObj());
+                                } catch (IOException e) {
+                                    json(ex, 422, error(e.getMessage()));
+                                }
+                                return;
+                            }
                             if (ob != null && action.equals("signout")) {
                                 ob.signOut();
                                 json(ex, 200, new Json().obj().kv("ok", true).endObj());
@@ -1023,6 +1034,8 @@ public final class GamepadServer {
         if (ob == null) j.val((String) null);
         else j.obj().kv("configured", wiiuu.core.OpenBased.configured(config)).kv("url", config.get("openbased.url", ""))
                 .kv("count", ob.count()).kv("problem", ob.problem()).kv("user", ob.user())
+                .kv("linkCode", ob.pendingLink() == null ? null : ob.pendingLink().userCode()).kv("linkState", ob.linkState())
+                .kv("linkUrl", ob.pendingLink() == null ? null : ob.pendingLink().verificationUriComplete())
                 .kv("clientConfig", ob.clientConfig(ob.redirectUri(url()))).endObj();
         // the menu music, for phones that make it themselves (web/music.js); "local" when the sound
         // they get leaves it out

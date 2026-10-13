@@ -1365,17 +1365,50 @@ public final class SettingsScreen {
             config.save();
         }, false, "not set"));
         boolean hasToken = !config.get("openbased.token", "").isBlank();
-        r.add(new Action("Sign in", "Opens OpenBased's sign-in page in the browser (or sign in from the phone: "
-                + "GamePad page, Library, OpenBased). Needs the GamePad server.", this::signIn,
-                () -> ob != null && ob.user() != null ? "Signed in as " + ob.user()
-                        : !config.get("openbased.token", "").isBlank() ? "Connected with a token" : "Not signed in", null));
+        // linking with a code: nothing to set up on the server (OpenBased's device links)
+        r.add(new Action("Link with a code", "WII-UU shows a code; approve it in OpenBased's web app, on your phone or "
+                + "anywhere you're signed in. Nothing to set up on the server.", () -> {
+            if (ob == null) return;
+            say("Asking OpenBased for a code…");
+            Thread t = new Thread(() -> {
+                String why = null;
+                try {
+                    ob.startLink(config.get("openbased.url", ""));
+                } catch (java.io.IOException e) {
+                    why = e.getMessage();
+                }
+                String msg = why;
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    say(msg != null ? msg : "Approve the code in OpenBased");
+                    reload(false);
+                });
+            }, "openbased-link-start");
+            t.setDaemon(true);
+            t.start();
+        }, () -> ob == null ? "" : ob.user() != null && ob.pendingLink() == null ? "Signed in as " + ob.user()
+                : ob.linkState().isEmpty() ? (hasToken ? "Connected with a token" : "Not signed in") : ob.linkState(), null));
+        wiiuu.core.OpenBased.Link pending = ob == null ? null : ob.pendingLink();
+        if (pending != null) {
+            r.add(new Info("Your code:   " + pending.userCode()));
+            r.add(new Info("Enter it at " + pending.verificationUri() + " (signed in to OpenBased), or open this on your phone: "
+                    + pending.verificationUriComplete()));
+            r.add(new Action("Stop waiting", null, () -> {
+                ob.cancelLink();
+                reload(false);
+            }, null, null));
+        }
         if (hasToken && ob != null) {
-            r.add(new Action("Sign out", null, () -> {
+            r.add(new Action("Sign out", ob.linked() ? "Forgets WII-UU's token here. Revoke it on OpenBased's API tokens page too "
+                    + "(it's named \"WII-UU on …\")." : null, () -> {
+                boolean linked = ob.linked();
                 ob.signOut();
-                say("Signed out");
+                say(linked ? "Signed out: revoke \"WII-UU on …\" on OpenBased's API tokens page too" : "Signed out");
                 reload(false);
             }, null, "Press A again to sign out"));
         }
+        r.add(new Header("Older OpenBased servers"));
+        r.add(new Action("Sign in with OpenBased", "OpenBased's sign-in page, for servers that can't link with a code yet: "
+                + "they need WII-UU set up as a client (below). Needs the GamePad server.", this::signIn, null, null));
         r.add(new Text("Personal access token", "Or paste one from OpenBased's API tokens page: media.read, media.stream, "
                 + "history.read, history.write and profile, 1 year. Ctrl+V pastes.",
                 () -> config.get("openbased.token", ""), v -> {
@@ -1392,8 +1425,7 @@ public final class SettingsScreen {
         }, false, "mpv, VLC or ffplay"));
         String base = sv.gamepadBase().get();
         String snippet = ob == null || base == null ? "(turn on the GamePad server first)" : ob.clientConfig(ob.redirectUri(base));
-        r.add(new Header("Once, on the OpenBased server"));
-        r.add(new Info("Add this under openbased.clients in its application.yml (/etc/openbased/application.yml when "
+        r.add(new Info("For Sign in with OpenBased only, once, on the server: add this under openbased.clients in its application.yml (/etc/openbased/application.yml when "
                 + "installed as a service; then sudo systemctl restart openbased):"));
         for (String line : snippet.split("\n")) r.add(new Info("    " + line));
         r.add(new Info("GamePad while a video plays: A / + pause, ◀ ▶ seek, ▲ ▼ a minute, ZL / ZR volume, Y mute, "

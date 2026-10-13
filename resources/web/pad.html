@@ -383,13 +383,21 @@
                choose 1 year, then paste it here.</p>
             <input class="field" id="obToken" type="password" placeholder="Personal access token (ob_pat_…)" autocomplete="off">
           </details>
+          <div id="obLink" class="hidden" style="text-align:center;margin:10px 0">
+            <p style="margin:4px 0">Your code</p>
+            <div id="obCode" style="font-size:34px;font-weight:800;letter-spacing:4px"></div>
+            <p id="obLinkState" style="margin:6px 0;color:#8a9099"></p>
+            <a class="bigbtn" id="obApprove" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">Approve on OpenBased</a>
+          </div>
           <div class="err" id="obErr"></div>
           <div class="row">
             <button class="bigbtn grey" type="button" id="obCancel">Cancel</button>
             <button class="bigbtn grey hidden" type="button" id="obOut">Sign out</button>
-            <button class="bigbtn" type="submit" id="obSave">Sign in with OpenBased</button>
+            <button class="bigbtn" type="button" id="obLinkBtn">Link with a code</button>
           </div>
-          <details class="obmore"><summary>Server setup (once)</summary>
+          <details class="obmore"><summary>Older OpenBased server? Sign in with its page</summary>
+            <p>Servers that can't link with a code need WII-UU set up as a client first, then:</p>
+            <button class="bigbtn grey" type="submit" id="obSave">Sign in with OpenBased</button>
             <p>OpenBased needs to know WII-UU. Add this under <b>openbased.clients</b> in its application.yml
                (<b>/etc/openbased/application.yml</b> when installed as a service), then restart it
                (<b>sudo systemctl restart openbased</b>). Use the address that is OpenBased's <b>issuer</b> above.</p>
@@ -573,7 +581,7 @@ async function poll() {
     if (S.noticeId !== undefined && j.noticeId !== S.noticeId && j.notice) toast(j.notice);
     S.noticeId = j.noticeId;
     if (j.library !== S.libVersion) loadLibrary();
-    if (JSON.stringify(j.openbased) !== JSON.stringify(S.ob)) { S.ob = j.openbased; if (S.lib) renderLibrary(); }
+    if (JSON.stringify(j.openbased) !== JSON.stringify(S.ob)) { S.ob = j.openbased; if (S.lib) renderLibrary(); obLinkProgress(S.ob); }
     S.https = j.https; S.tv = j.tv; S.stream = j.stream;
     if (!j.buzz) S.buzzHidden = false;          // the next Buzz! game shows the buzzer again
     S.buzz = !!j.buzz; updateBuzz();
@@ -1219,9 +1227,36 @@ function openObSheet() {
   const tokens = obTokensUrl();
   if (tokens) $("obTokensLink").href = tokens; else $("obTokensLink").removeAttribute("href");
   $("obErr").textContent = ob.problem || "";
+  $("obLink").classList.toggle("hidden", !ob.linkCode);
+  if (ob.linkCode) { $("obCode").textContent = ob.linkCode; $("obLinkState").textContent = ob.linkState || ""; if (ob.linkUrl) $("obApprove").href = ob.linkUrl; }
   $("obSheet").classList.remove("hidden");
 }
 $("obCancel").onclick = () => $("obSheet").classList.add("hidden");
+// linking with a code (OpenBased's device links): approve it right here on the phone
+$("obLinkBtn").onclick = async () => {
+  $("obErr").textContent = "Asking OpenBased for a code…";
+  try {
+    const r = await api("/api/openbased", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                            body: form({ action: "link", url: $("obUrl").value.trim() }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.code) { $("obErr").textContent = j.error || ("Error " + r.status); return; }
+    $("obErr").textContent = "";
+    $("obCode").textContent = j.code;
+    $("obApprove").href = j.verifyComplete || j.verify;
+    $("obLinkState").textContent = "Approve it in OpenBased (signed in there), then come back.";
+    $("obLink").classList.remove("hidden");
+  } catch (e) { $("obErr").textContent = "Not connected to WII-UU"; }
+};
+// the TV tells how it goes (status poll): linked, declined, expired
+function obLinkProgress(ob) {
+  if (!ob || $("obLink").classList.contains("hidden")) return;
+  if (ob.linkState) $("obLinkState").textContent = ob.linkState;
+  if (!ob.linkCode && /^Linked/.test(ob.linkState || "")) {
+    $("obLink").classList.add("hidden");
+    $("obSheet").classList.add("hidden");
+    toast(ob.linkState); S.sys = "openbased"; store.set("sys", S.sys); loadLibrary();
+  }
+}
 // the API tokens page of the server typed above (OpenBased's web UI, #/tokens)
 function obTokensUrl() {
   let u = $("obUrl").value.trim().replace(/\/+$/, "");

@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.10.1 (2026-10-13)
+- OpenBased: **Link with a code** (Settings > OpenBased, or on the phone). WII-UU shows a code, you
+  approve it in OpenBased's web app (the phone's Approve on OpenBased button opens the page), and
+  that's it: no more adding WII-UU to OpenBased's application.yml, and a new IP address doesn't
+  break anything. WII-UU's token is called "WII-UU on (computer name)" on OpenBased's API tokens
+  page, where it can be revoked. Older servers can still sign in with OpenBased's page.
+- The cinema takes stories, backdrops, genres and your progress straight from OpenBased's lists
+  when the server sends them, so browsing no longer asks for every title separately.
+- A Recently added row in the cinema, newest first.
+
 ## 1.10.0 (2026-10-12)
 Everything new since 1.9, in one place (the 1.9.x notes below have the details).
 
