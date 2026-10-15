@@ -1282,6 +1282,11 @@ public final class SettingsScreen {
                 pr.setGames(l, on);
                 say(on ? "Copying the games " + l.name() + " has and this one doesn't…" : "Games stay as they are");
             }));
+            r.add(new Link("Which consoles", "Pick the consoles (and so the emulators) whose games are copied from "
+                    + l.name() + ".", () -> {
+                long off = wiiuu.net.Peers.gameSystems().stream().filter(sy -> !l.copies(sy.id())).count();
+                return off == 0 ? "all" : (wiiuu.net.Peers.gameSystems().size() - off) + " of " + wiiuu.net.Peers.gameSystems().size();
+            }, () -> peerConsolesPage(pr, l)));
             r.add(new Action("Copy games now", null, () -> {
                 pr.gamesSoon(l);
                 say("Looking at " + l.name() + "'s games…");
@@ -1295,6 +1300,36 @@ public final class SettingsScreen {
                 say("Unlinked " + l.name());
                 back();
             }, null, "Press A again to unlink"));
+            return r;
+        });
+    }
+
+    /** The consoles whose games are copied from a linked WII-UU: the ones it has games for first. */
+    private Page peerConsolesPage(wiiuu.net.Peers pr, wiiuu.net.Peers.Link l) {
+        return new Page("Games from " + l.name(), () -> {
+            List<Row> r = new ArrayList<>();
+            java.util.Map<String, Integer> theirs = l.theirGames();
+            r.add(new Info("Games of the consoles turned on here are copied from " + l.name() + (l.games() ? "" : " (once "
+                    + "\"Copy its games\" is on)") + ". Turning one off copies nothing more of it; what is here already stays."
+                    + (theirs.isEmpty() ? " (How many games it has shows after the first look: Copy games now.)" : "")));
+            List<wiiuu.core.GameSystem> all = new ArrayList<>(wiiuu.net.Peers.gameSystems());
+            all.sort(java.util.Comparator.comparing((wiiuu.core.GameSystem sy) -> theirs.getOrDefault(sy.id(), 0) == 0));
+            r.add(new Action("All on", null, () -> {
+                for (wiiuu.core.GameSystem sy : all) pr.setCopies(l, sy.id(), true);
+                say("All consoles' games are copied from " + l.name());
+            }, null, null));
+            r.add(new Action("All off", null, () -> {
+                for (wiiuu.core.GameSystem sy : all) pr.setCopies(l, sy.id(), false);
+                say("No games are copied from " + l.name() + " now; turn on the consoles you want");
+            }, null, null));
+            for (wiiuu.core.GameSystem sy : all) {
+                int n = theirs.getOrDefault(sy.id(), 0);
+                String has = theirs.isEmpty() ? "" : n == 0 ? " · none there" : " · " + n + (n == 1 ? " file there" : " files there");
+                r.add(new Toggle(sy.name(), sy.emulator() + has, () -> l.copies(sy.id()), on -> {
+                    pr.setCopies(l, sy.id(), on);
+                    say(sy.name() + (on ? ": copied from " : ": not copied from ") + l.name());
+                }));
+            }
             return r;
         });
     }

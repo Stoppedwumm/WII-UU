@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.10.5 (2026-10-15)
+- Other WII-UUs: **pick which consoles' games are copied** (Settings > Other WII-UUs > the linked
+  one > Which consoles). Each console shows its emulator and how many games the other WII-UU has
+  for it, with All on / All off. Handy for a Raspberry Pi that should only get the games it can
+  run. Turning a console off stops copying its games, also in the middle of a round, and deletes
+  nothing.
+
 ## 1.10.4 (2026-10-13)
 - Videos (OpenBased, Reactions): **HOME stops the video** and goes back to the menu, also on a
   controller plugged into the computer. Before, there was no way out of mpv with just a controller.

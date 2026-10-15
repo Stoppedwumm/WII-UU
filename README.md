@@ -629,6 +629,9 @@ GamePad page shows) and type the pairing code from its TV. Then, on either one:
   after an interruption; copying pauses while a game runs, and a game doesn't start copying without
   room for it (plus 512 MB). Nothing is replaced or deleted, so a game deleted here comes back while
   this is on. Turn it on on both WII-UUs to have the same games on both.
+* **Which consoles:** pick the consoles (and so the emulators) whose games are copied, e.g. only
+  NES and N64 to a Raspberry Pi that can't run Wii U games anyway. It lists how many games the
+  other one has for each; turning one off copies nothing more of it and leaves what is here.
 
 Linking gives each WII-UU a random key for the other (kept in `~/.wiiuu/peers.properties`, readable
 only by you); saves and controllers need it, and the pairing code is only used to link. Five

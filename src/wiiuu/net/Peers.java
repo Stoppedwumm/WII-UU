@@ -84,6 +84,10 @@ public final class Peers {
         volatile String state = "", gameState = "";
         volatile long lastGames;
         volatile long lastSync, contact;
+        /** the consoles whose games aren't copied from it (by system id; the others are) */
+        final Set<String> skipGames = ConcurrentHashMap.newKeySet();
+        /** how many game files it had per console, at the last look */
+        volatile Map<String, Integer> theirGames = Map.of();
 
         Link(String id, String name, String host, int port, String out, String in, boolean forward, boolean sync) {
             this.id = id;
@@ -111,6 +115,16 @@ public final class Peers {
         /** Whether games this one lacks are copied from it. */
         public boolean games() {
             return games;
+        }
+
+        /** Whether this console's games are copied from it (when copying is on). */
+        public boolean copies(String system) {
+            return !skipGames.contains(system);
+        }
+
+        /** Its game files per console (system id), as last seen; empty before the first look. */
+        public Map<String, Integer> theirGames() {
+            return theirGames;
         }
 
         /** How copying its games goes: "copying 3 of 12: Mario Kart 64.z64 (45%)"... */
@@ -386,6 +400,14 @@ public final class Peers {
         save();
         if (on) gamesSoon(l);
         else l.gameState = "";
+    }
+
+    /** Copy that console's games from it, or leave them there. */
+    public void setCopies(Link l, String system, boolean on) {
+        if (on) l.skipGames.remove(system);
+        else l.skipGames.add(system);
+        save();
+        if (on && l.games) gamesSoon(l);
     }
 
     public void gamesSoon(Link l) {
@@ -845,8 +867,8 @@ public final class Peers {
 
     // ---- games ------------------------------------------------------------------------------------
 
-    /** The consoles whose games are copied (not the video channels). */
-    private static List<wiiuu.core.GameSystem> gameSystems() {
+    /** The consoles whose games can be copied (not the video channels). */
+    public static List<wiiuu.core.GameSystem> gameSystems() {
         List<wiiuu.core.GameSystem> out = new ArrayList<>();
         for (wiiuu.core.GameSystem s : wiiuu.core.Systems.ALL) {
             if (!s.id().equals("openbased") && !s.id().equals("reactions")) out.add(s);
@@ -923,15 +945,21 @@ public final class Peers {
                 return;
             }
             List<String[]> missing = new ArrayList<>();
+            Map<String, Integer> counts = new java.util.HashMap<>();
             for (Object o : MiniJson.array(j.get("files"))) {
                 Map<String, Object> e = MiniJson.object(o);
                 String s = MiniJson.string(e.get("s")), f = MiniJson.string(e.get("f"));
+                if (s == null) continue;
+                counts.merge(s, 1, Integer::sum);
+                if (l.skipGames.contains(s)) continue;              // a console not picked for copying
                 Path to = gamePath(s, f);
                 if (to != null && !Files.exists(to)) missing.add(new String[]{s, f, str(e.get("n"), "0")});
             }
+            l.theirGames = Map.copyOf(counts);
             int done = 0;
             for (String[] m : missing) {
                 if (!l.games || !links.containsKey(l.id)) return;
+                if (l.skipGames.contains(m[0])) continue;           // turned off meanwhile
                 if (host.playing()) {
                     l.gameState = "paused while a game runs";
                     l.lastGames = 0;                        // goes on when it ends
@@ -1029,6 +1057,9 @@ public final class Peers {
                         Integer.parseInt(p.getProperty(id + ".port", "8080")), p.getProperty(id + ".out"), p.getProperty(id + ".in", ""),
                         Boolean.parseBoolean(p.getProperty(id + ".forward")), !"false".equals(p.getProperty(id + ".sync"))));
                 links.get(id).games = Boolean.parseBoolean(p.getProperty(id + ".games"));
+                for (String sys : p.getProperty(id + ".gamesSkip", "").split(",")) {
+                    if (!sys.isBlank()) links.get(id).skipGames.add(sys.trim());
+                }
             } catch (NumberFormatException ignored) {
                 // a broken entry
             }
@@ -1047,6 +1078,7 @@ public final class Peers {
             p.setProperty(l.id + ".forward", Boolean.toString(l.forward));
             p.setProperty(l.id + ".sync", Boolean.toString(l.sync));
             p.setProperty(l.id + ".games", Boolean.toString(l.games));
+            p.setProperty(l.id + ".gamesSkip", String.join(",", new java.util.TreeSet<>(l.skipGames)));
         }
         try {
             Files.createDirectories(config.home());
