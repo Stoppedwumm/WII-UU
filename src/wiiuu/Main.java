@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.10.5";
+    public static final String VERSION = "1.11.0";
 
     private final Config config;
     private final Library library;
@@ -356,6 +356,36 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         });
         view.setChoccyKeys((b, down) -> launcher.choccyButton(1, b, down));
         launcher.setChoccyLook(view::choccyLook);
+        // sharing the work: a Choccy Milk game may play on a linked WII-UU that scores clearly better
+        launcher.onChoccySpeed((system, pct) -> wiiuu.net.SplitPlay.recordSpeed(config, system, pct));
+        launcher.setLendingTo(() -> {
+            GamepadServer g = server;
+            return g == null || g.split() == null ? null : g.split().lendingTo();
+        });
+        launcher.setElsewhere(game -> {
+            GamepadServer g = server;
+            wiiuu.net.SplitPlay sp = g == null ? null : g.split();
+            if (sp == null || !config.getBool("choccy.split", false)) return null;
+            wiiuu.net.SplitPlay.Rating best = sp.better(game.system().id());
+            if (best == null) return null;
+            return new Launcher.Elsewhere() {
+                @Override
+                public String name() {
+                    return best.name();
+                }
+
+                @Override
+                public String score() {
+                    return best.label();
+                }
+
+                @Override
+                public Launcher.Started start(wiiuu.core.Game gm, java.util.Map<String, String> options) throws java.io.IOException {
+                    wiiuu.net.SplitPlay.Away a = sp.open(best.link(), gm, options);
+                    return new Launcher.Started(a.process(), a.core());
+                }
+            };
+        });
         view.setChoccyStates(launcher::choccyState);
         launcher.setAnnouncer((title, text, trophy) -> {
             view.choccyAnnounce(title, text, trophy);

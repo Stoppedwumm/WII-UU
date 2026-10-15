@@ -3,6 +3,24 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.11.0 (2026-10-15)
+- **Share the work** (Settings > Games > Share the work): a faster linked WII-UU can run a Choccy
+  Milk game while the one at the TV shows it. One console can't be emulated by two computers at once
+  (every frame needs the one before it), so the work is split where it can be: the fast one runs the
+  console (the core, the sound, save states, achievements), the one at the TV shows the picture (with
+  its own upscaling), plays the sound and reads the controllers.
+- Frames travel compressed and lossless, only what changed (about 2 Mbit/s for an NES game), over
+  TCP 26781. A game that only this WII-UU has is copied there first, and its saves go there before
+  and come back after.
+- **Efficiency score** for each computer and console, 1 to 10: 1 is horrible, 10 is *holy shit, this
+  will run GTA 6*. It comes from a quick processor test, then the real speeds of the games played
+  there, plus the ping and the network's room for the picture for another computer. With *Play on
+  the best computer* on, a game starts on a linked WII-UU that scores 6 or more and at least 2
+  points better than this one, and plays here if that fails.
+- Choccy Milk reports how fast it runs (the score learns from it). Its sound can go out with the
+  frames instead of to its own speakers.
+- The installers open TCP 26781 too (Windows firewall rule; the Linux firewall hint names it).
+
 ## 1.10.5 (2026-10-15)
 - Other WII-UUs: **pick which consoles' games are copied** (Settings > Other WII-UUs > the linked
   one > Which consoles). Each console shows its emulator and how many games the other WII-UU has

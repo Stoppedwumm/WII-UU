@@ -404,7 +404,8 @@ public final class GamepadServer {
 
         @Override
         public boolean playing() {
-            return launcher.isRunning();
+            SplitPlay sp = split;
+            return launcher.isRunning() || sp != null && sp.lending();
         }
 
         @Override
@@ -528,6 +529,13 @@ public final class GamepadServer {
         }
     }
 
+    private volatile SplitPlay split;
+
+    /** Sharing a game's work with other WII-UUs (null while the GamePad server or peers are off). */
+    public SplitPlay split() {
+        return split;
+    }
+
     public void start(int port) throws IOException {
         this.port = port;
         // cached pool: every open screen stream holds a thread for as long as it is watched
@@ -544,6 +552,37 @@ public final class GamepadServer {
         http.start();
         if (config.getBool("peers.enabled", true)) {
             peers = new Peers(config, new PeerHost(), port, wiiuu.Main.VERSION);
+            split = new SplitPlay(config, peers, new SplitPlay.Games() {
+                @Override
+                public boolean busy() {
+                    return launcher.isRunning();
+                }
+
+                @Override
+                public Path core(String system) throws IOException {
+                    GameSystem gs = wiiuu.core.Systems.byId(system).orElse(null);
+                    if (gs == null) throw new IOException("it doesn't know that console");
+                    try {
+                        Path core = launcher.retroArch().choccyCoreFor(new Game(gs, "", Path.of(""), List.of()), () -> { });
+                        if (core == null) throw new IOException("it has no core for " + gs.name());
+                        return core;
+                    } catch (wiiuu.core.Cores.Downloading d) {
+                        throw new IOException("it's getting its core for " + gs.name() + " first: try again in a minute");
+                    }
+                }
+
+                @Override
+                public Path systemDir() {
+                    return launcher.retroArch().systemDir();
+                }
+
+                @Override
+                public Map<String, String> options(String system) {
+                    return launcher.retroArch().choccyOptions(system);
+                }
+            });
+            peers.setExtra(split::handle);
+            split.keepWarm();
             peers.start();
             if (peers.forwardTarget() != null && controllers != null) controllers.rehome();
         }

@@ -362,6 +362,14 @@ public final class Choccy {
                         } catch (RuntimeException e) {
                             System.err.println("[choccy] " + e);
                         }
+                    } else if (kind == 'P') {                   // how fast it runs (100: full speed)
+                        try {
+                            int pct = Integer.parseInt(line(s).trim());
+                            speed = pct;
+                            onSpeed.accept(pct);
+                        } catch (RuntimeException e) {
+                            // not a number
+                        }
                     } else if (kind == 'A') {                   // an achievement unlocked
                         String id = line(s);
                         try {
@@ -394,6 +402,18 @@ public final class Choccy {
         }
 
         private volatile java.util.function.IntConsumer onAchievement = id -> { };
+        private volatile java.util.function.IntConsumer onSpeed = pct -> { };
+        private volatile int speed = -1;
+
+        /** Gets how fast the game runs (percent of full speed), every ten seconds, on the reading thread. */
+        public void onSpeed(java.util.function.IntConsumer listener) {
+            onSpeed = listener;
+        }
+
+        /** How fast it ran at the last report (percent of full speed), -1 before the first. */
+        public int speed() {
+            return speed;
+        }
         private volatile java.util.function.Consumer<String> onNotice = t -> { };
 
         /** Gets what the player has to say ("State 1 saved"), on the reading thread. */
@@ -507,6 +527,14 @@ public final class Choccy {
     }
 
     static Session start(Process p, Screen screen, Path log) {
+        return new Session(p, screen, log);
+    }
+
+    /**
+     * A game Choccy Milk plays somewhere else (on another WII-UU): {@code p} speaks the same as the
+     * player process does (its frames and messages on the input stream, the controls to its output).
+     */
+    public static Session attach(Process p, Screen screen, Path log) {
         return new Session(p, screen, log);
     }
 

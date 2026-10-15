@@ -867,6 +867,8 @@ public final class SettingsScreen {
             config.save();
         }));
         r.add(new Link("Choccy Milk picture", "Upscaling and widescreen, per console.", null, this::choccyPicturePage));
+        r.add(new Link("Share the work", "Let a faster linked WII-UU run the game while this one shows it: each computer's "
+                + "efficiency score per console, 1 to 10.", () -> config.getBool("choccy.split", false) ? "on" : "off", this::splitPage));
         List<String> n64Ids = List.of("auto", "opengl", "software");
         r.add(new Choice("N64 renderer", "In RetroArch mode. Software needs no OpenGL (slower); Automatic switches to it "
                 + "by itself if the N64 core can't get OpenGL on this computer.",
@@ -951,6 +953,92 @@ public final class SettingsScreen {
 
     /** The consoles Choccy Milk plays, each with its upscaling and widescreen. */
     private static final List<String> CHOCCY_CONSOLES = List.of("nes", "snes", "gb", "gba", "n64", "nds", "sms", "genesis", "ps1", "saturn");
+
+    // ---- sharing the work (SplitPlay) ----
+
+    private volatile String splitConsole = "n64";
+    private volatile List<wiiuu.net.SplitPlay.Rating> splitScores;
+    private volatile boolean splitMeasuring;
+
+    private wiiuu.net.SplitPlay split() {
+        wiiuu.net.GamepadServer g = sv.gamepad().get();
+        return g == null ? null : g.split();
+    }
+
+    /** Works the scores out in the background (it asks the other computers and measures the network), then shows them. */
+    private void measureSplit(boolean again) {
+        wiiuu.net.SplitPlay sp = split();
+        if (sp == null || splitMeasuring) return;
+        splitMeasuring = true;
+        String console = splitConsole;
+        Thread t = new Thread(() -> {
+            try {
+                if (again) {
+                    wiiuu.net.SplitPlay.measureAgain(config);
+                    sp.forget();
+                }
+                List<wiiuu.net.SplitPlay.Rating> got = sp.all(console);
+                if (console.equals(splitConsole)) splitScores = got;
+            } finally {
+                splitMeasuring = false;
+                javax.swing.SwingUtilities.invokeLater(() -> reload(false));
+            }
+        }, "split-scores");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private Page splitPage() {
+        splitScores = null;
+        measureSplit(false);
+        return new Page("Share the work", () -> {
+            List<Row> r = new ArrayList<>();
+            wiiuu.net.SplitPlay sp = split();
+            r.add(new Info("A console can't be emulated by two computers at once (every frame needs the one before it, far "
+                    + "faster than a network answers), so the work is split where it can be: the strongest linked WII-UU runs "
+                    + "the game, this one shows it (with its own upscaling), plays the sound and reads the controllers. The "
+                    + "game is copied there if it's missing, and its saves come back here after."));
+            if (sp == null) {
+                r.add(new Info("Needs the GamePad server (and linked WII-UUs: Settings > Other WII-UUs)."));
+                return r;
+            }
+            r.add(new Toggle("Play on the best computer", "When a linked WII-UU scores at least 2 points better than this one "
+                    + "(and 6 or more), Choccy Milk games start there. If that fails, they play here.",
+                    () -> config.getBool("choccy.split", false), on -> {
+                config.set("choccy.split", Boolean.toString(on));
+                config.save();
+            }));
+            List<String> names = new ArrayList<>();
+            for (String id : CHOCCY_CONSOLES) names.add(Systems.byId(id).map(GameSystem::name).orElse(id));
+            r.add(new Choice("Console", "The scores are per console: an N64 needs far more than a NES.", () -> names,
+                    () -> Math.max(0, CHOCCY_CONSOLES.indexOf(splitConsole)), i -> {
+                splitConsole = CHOCCY_CONSOLES.get(i);
+                splitScores = null;
+                measureSplit(false);
+            }));
+            r.add(new Header("Efficiency score (1: horrible, 10: it would run GTA 6)"));
+            List<wiiuu.net.SplitPlay.Rating> scores = splitScores;
+            if (scores == null) {
+                r.add(new Info(splitMeasuring ? "Measuring\u2026 (asking the linked WII-UUs, testing the network)" : "No scores yet."));
+            } else {
+                for (wiiuu.net.SplitPlay.Rating x : scores) {
+                    r.add(new Action(x.name(), x.details(), () -> say(x.name() + ": " + x.label() + " \u00B7 " + x.details()),
+                            x::label, null));
+                }
+                if (scores.size() == 1) r.add(new Info("No linked WII-UU online: link one in Settings > Other WII-UUs."));
+            }
+            r.add(new Action("Measure again", "Runs the processor test again (about a second) and asks the others anew.",
+                    () -> {
+                        splitScores = null;
+                        measureSplit(true);
+                        say("Measuring\u2026");
+                    }, null, null));
+            r.add(new Info("The score: how fast the computer runs that console (a processor test at first, then the real "
+                    + "speed of games played there), and for another computer the ping (input lag) and whether the network has "
+                    + "room for the picture. Wired networks score better than Wi-Fi."));
+            return r;
+        });
+    }
 
     private Page choccyPicturePage() {
         return new Page("Choccy Milk picture", () -> {

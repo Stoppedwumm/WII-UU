@@ -157,6 +157,11 @@ if ($isAdmin) {
     if (-not (Get-NetFirewallRule -DisplayName $peers -ErrorAction SilentlyContinue)) {
         New-NetFirewallRule -DisplayName $peers -Direction Inbound -Protocol UDP -LocalPort 26780 -Action Allow -Profile Private | Out-Null
     }
+    # 26781: playing a game for another WII-UU (Settings > Choccy Milk > Share the work)
+    $split = "WII-UU sharing the work of a game (TCP 26781)"
+    if (-not (Get-NetFirewallRule -DisplayName $split -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName $split -Direction Inbound -Protocol TCP -LocalPort 26781 -Action Allow -Profile Private | Out-Null
+    }
     Ok "Firewall rule '$rule' (private networks)"
 } else {
     Warn "Not running as administrator: when Windows asks on first start, allow Java on Private networks."

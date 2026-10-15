@@ -499,8 +499,110 @@ public final class Peers {
                     }
                 }
             }
-            default -> reply(ex, 404, new Json().obj().kv("error", "unknown").endObj());
+            default -> {
+                Extra x = extra;
+                if (x == null || !x.handle(ex, path, l, q)) reply(ex, 404, new Json().obj().kv("error", "unknown").endObj());
+            }
         }
+        return true;
+    }
+
+    /** More /api/peer/ requests, from linked WII-UUs only (sharing the work of a game: SplitPlay). */
+    interface Extra {
+        boolean handle(HttpExchange ex, String path, Link from, Map<String, String> q) throws IOException;
+    }
+
+    private volatile Extra extra;
+
+    void setExtra(Extra x) {
+        extra = x;
+    }
+
+    /** A request to a linked WII-UU (GET without a body), with this side's key. */
+    <T> HttpResponse<T> call(Link l, String pathAndQuery, String formBody, Duration timeout, HttpResponse.BodyHandler<T> as)
+            throws IOException, InterruptedException {
+        HttpRequest.Builder b = request(l.base() + pathAndQuery, l).timeout(timeout);
+        if (formBody == null) b.GET();
+        else b.header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(formBody));
+        return http.send(b.build(), as);
+    }
+
+    static void replyJson(HttpExchange ex, int status, Json j) throws IOException {
+        reply(ex, status, j);
+    }
+
+    static String requestBody(HttpExchange ex, int max) throws IOException {
+        return body(ex, max);
+    }
+
+    static String encode(String s) {
+        return enc(s);
+    }
+
+    /**
+     * Syncs one game's saves and save states with it now (newer copy wins, both ways), also when
+     * save sync is off for it: before and after that WII-UU plays the game for this one.
+     */
+    synchronized void syncGame(Link l, String system, String romFile) {
+        String base = romFile.replaceFirst("\\.[^.]+$", "");
+        String prefix = system + "/" + base + ".";
+        try {
+            HttpResponse<String> r = get(l.base() + "/api/peer/saves", l);
+            Map<String, Object> j = MiniJson.object(MiniJson.parse(r.body()));
+            if (r.statusCode() != 200 || j == null) return;
+            Map<String, String[]> theirs = new HashMap<>();
+            for (Object o : MiniJson.array(j.get("files"))) {
+                Map<String, Object> e = MiniJson.object(o);
+                String f = MiniJson.string(e.get("f"));
+                if (f != null && f.startsWith(prefix)) theirs.put(f, new String[]{str(e.get("s"), "0"), str(e.get("t"), "0"), MiniJson.string(e.get("h"))});
+            }
+            Map<String, String[]> mine = new HashMap<>();
+            for (Map.Entry<String, String[]> e : localSaves().entrySet()) if (e.getKey().startsWith(prefix)) mine.put(e.getKey(), e.getValue());
+            Set<String> all = new java.util.TreeSet<>(mine.keySet());
+            all.addAll(theirs.keySet());
+            for (String f : all) {
+                String[] a = mine.get(f), b = theirs.get(f);
+                if (a != null && b != null && a[2].equalsIgnoreCase(b[2])) continue;
+                long ta = a == null ? -1 : Long.parseLong(a[1]), tb = b == null ? -1 : Long.parseLong(num(b[1]));
+                if (b != null && (a == null || tb > ta)) download(l, f, tb, b[2]);
+                else if (a != null) upload(l, f, ta, a[2]);
+            }
+        } catch (IOException | RuntimeException e) {
+            System.err.println("[peers] saves of " + romFile + " with " + l.name + ": " + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** A game file of a linked WII-UU into {@code to} (resuming a part file), for playing it here for that one. */
+    boolean fetchGame(Link l, String system, String rel, long size, Path to) throws IOException, InterruptedException {
+        if (Files.isRegularFile(to) && Files.size(to) == size) return true;
+        Files.createDirectories(to.getParent());
+        Path part = to.resolveSibling(to.getFileName() + PART);
+        long have = Files.exists(part) ? Files.size(part) : 0;
+        if (have > size) {
+            Files.delete(part);
+            have = 0;
+        }
+        if (Files.getFileStore(to.getParent()).getUsableSpace() < size - have + (256L << 20)) {
+            throw new IOException("not enough room for " + to.getFileName() + " (" + (size >> 20) + " MB)");
+        }
+        HttpRequest.Builder b = request(l.base() + "/api/peer/rom?s=" + enc(system) + "&f=" + enc(rel), l);
+        if (have > 0) b.header("Range", "bytes=" + have + "-");
+        HttpResponse<InputStream> r = http.send(b.timeout(Duration.ofHours(1)).GET().build(), HttpResponse.BodyHandlers.ofInputStream());
+        if (r.statusCode() != 200 && r.statusCode() != 206) {
+            r.body().close();
+            throw new IOException("it didn't send " + rel + " (" + r.statusCode() + ")");
+        }
+        if (r.statusCode() == 200) have = 0;
+        try (InputStream in = r.body(); OutputStream out = Files.newOutputStream(part,
+                have > 0 ? new java.nio.file.OpenOption[]{java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND}
+                        : new java.nio.file.OpenOption[]{java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+                        java.nio.file.StandardOpenOption.WRITE})) {
+            in.transferTo(out);
+        }
+        if (Files.size(part) != size) throw new IOException("the copy of " + rel + " was cut short");
+        Files.move(part, to, StandardCopyOption.REPLACE_EXISTING);
         return true;
     }
 

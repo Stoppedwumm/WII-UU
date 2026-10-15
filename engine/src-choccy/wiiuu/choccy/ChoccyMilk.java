@@ -58,6 +58,10 @@ import static java.lang.foreign.ValueLayout.JAVA_SHORT;
  *         'X' message\n     stopped: why (empty: all well)
  *         'N' message\n     something to show the player ("State 1 saved")
  *         'A' id\n          an achievement unlocked
+ *         'P' percent\n     how fast it runs (100: full speed), every few seconds
+ *         'S' frames(int) then frames x 2 x 16-bit little-endian samples at 48 kHz (only with
+ *                           wiiuu.sound=pipe: the sound goes to WII-UU instead of this computer's
+ *                           speakers, for playing on another computer; the clock keeps the pace then)
  * </pre>
  */
 public final class ChoccyMilk {
@@ -90,6 +94,8 @@ public final class ChoccyMilk {
     private final short[][] sticks = new short[8][4];
 
     private SourceDataLine audio;
+    /** the sound goes out with the frames (wiiuu.sound=pipe), not to this computer's speakers */
+    private boolean pipeSound;
     private byte[] audioBytes = new byte[16384];
     // frames go to WII-UU on their own thread, so a busy WII-UU never holds up the game: the core's
     // thread fills a free buffer (none free: the frame is dropped), the writer sends the newest
@@ -235,7 +241,8 @@ public final class ChoccyMilk {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {                  // stopped hard (WII-UU, the system)
             if (!unloaded) writeSave();
         }, "choccy-save"));
-        openAudio();
+        pipeSound = "pipe".equals(overrides.get("wiiuu.sound"));
+        if (!pipeSound) openAudio();
         send('R', name);
 
         Thread input = new Thread(this::readInput, "choccy-input");
@@ -265,7 +272,7 @@ public final class ChoccyMilk {
             doStates();
             checkAchievements();
             framesRun++;
-            if (audio == null && !BENCH) {                  // no sound: keep time by the clock (with sound, the sound card does)
+            if (audio == null && !BENCH) {                  // no sound (or sent on): keep time by the clock (with sound, the sound card does)
                 next += frameNanos;
                 long wait = next - System.nanoTime();
                 if (wait > 0) Thread.sleep(wait / 1_000_000, (int) (wait % 1_000_000));
@@ -276,6 +283,9 @@ public final class ChoccyMilk {
                 double secs = (now - statAt) / 1e9, rate = (framesRun - statFrames) / secs;
                 System.err.printf(Locale.ROOT, "[choccy] speed: %.1f of %.1f frames a second (%.0f %%), %d not drawn, %d not shown%n",
                         rate, fps, 100 * rate / fps, framesSkipped - statSkipped, framesDropped);
+                // how fast, for WII-UU's efficiency score; a frame not drawn counts against it (it was too slow)
+                double drawn = framesRun - statFrames == 0 ? 1 : 1 - (double) (framesSkipped - statSkipped) / (framesRun - statFrames);
+                send('P', String.format(Locale.ROOT, "%.0f", 100 * rate / fps * drawn));
                 statAt = now;
                 statFrames = framesRun;
                 statSkipped = framesSkipped;
@@ -616,7 +626,7 @@ public final class ChoccyMilk {
 
     private void sample(short l, short r) {
         try {
-            if (audio == null) return;
+            if (audio == null && !pipeSound) return;
             if (singleFrames * 2 + 2 > single.length) single = java.util.Arrays.copyOf(single, single.length * 2);
             single[singleFrames * 2] = l;
             single[singleFrames * 2 + 1] = r;
@@ -638,7 +648,7 @@ public final class ChoccyMilk {
 
     private long samples(MemorySegment data, long frames) {
         try {
-            if (audio == null || frames <= 0) return frames;
+            if (audio == null && !pipeSound || frames <= 0) return frames;
             int n = (int) frames;
             if (batch.length < n * 2) batch = new short[n * 2];
             MemorySegment.copy(data.reinterpret(n * 4L), JAVA_SHORT, 0, batch, 0, n * 2);
@@ -654,7 +664,7 @@ public final class ChoccyMilk {
     /** Resamples n stereo frames from the core's rate to 48 kHz and plays them. */
     void resample(short[] in, int n) {
         SourceDataLine line = audio;
-        if (line == null || n <= 0) return;
+        if (line == null && !pipeSound || n <= 0) return;
         if (Math.abs(sampleRate - OUT_RATE) < 0.5) {        // already 48 kHz
             play(line, in, n);
             return;
@@ -666,12 +676,29 @@ public final class ChoccyMilk {
 
     private void play(SourceDataLine line, short[] pcm, int frames) {
         int bytes = frames * 4;
-        if (audioBytes.length < bytes) audioBytes = new byte[bytes];
-        for (int i = 0, j = 0; i < frames * 2; i++, j += 2) {
+        if (audioBytes.length < bytes + 5) audioBytes = new byte[bytes + 5];
+        int at = pipeSound ? 5 : 0;
+        for (int i = 0, j = at; i < frames * 2; i++, j += 2) {
             audioBytes[j] = (byte) pcm[i];
             audioBytes[j + 1] = (byte) (pcm[i] >> 8);
         }
-        line.write(audioBytes, 0, bytes);
+        if (!pipeSound) {
+            line.write(audioBytes, 0, bytes);
+            return;
+        }
+        audioBytes[0] = 'S';
+        audioBytes[1] = (byte) (frames >>> 24);
+        audioBytes[2] = (byte) (frames >>> 16);
+        audioBytes[3] = (byte) (frames >>> 8);
+        audioBytes[4] = (byte) frames;
+        try {
+            synchronized (out) {
+                out.write(audioBytes, 0, bytes + 5);
+                out.flush();
+            }
+        } catch (IOException e) {
+            running = false;                                // WII-UU stopped listening
+        }
     }
 
     // ---- input -------------------------------------------------------------------------------------

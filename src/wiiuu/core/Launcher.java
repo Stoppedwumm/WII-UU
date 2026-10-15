@@ -140,6 +140,47 @@ public final class Launcher {
         this.choccyLook = look;
     }
 
+    /** Another computer a Choccy Milk game plays on (SplitPlay): its name, the score, and how to start it there. */
+    public interface Elsewhere {
+        String name();
+
+        /** "9/10 · Superb" */
+        String score();
+
+        /** Starts it there (blocks while that computer gets ready): the process, and the core it plays with there. */
+        Started start(Game game, Map<String, String> options) throws IOException;
+    }
+
+    /** A game started on another computer. */
+    public record Started(Process process, String core) {}
+
+    private volatile java.util.function.Function<Game, Elsewhere> elsewhere = g -> null;
+    private volatile java.util.function.BiConsumer<String, Integer> speeds = (s, pct) -> { };
+    /** games that play here next time (playing elsewhere just failed) */
+    private final java.util.Set<Path> hereOnce = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private volatile java.util.function.Supplier<String> lendingTo = () -> null;
+
+    /** Who this WII-UU plays a game for now (SplitPlay), or null: no game starts here meanwhile. */
+    public void setLendingTo(java.util.function.Supplier<String> f) {
+        lendingTo = f;
+    }
+
+    /** Where a Choccy Milk game plays when not here (null: here). */
+    public void setElsewhere(java.util.function.Function<Game, Elsewhere> f) {
+        elsewhere = f;
+    }
+
+    /** Gets how fast Choccy Milk games run here (console id, percent), every ten seconds while one plays. */
+    public void onChoccySpeed(java.util.function.BiConsumer<String, Integer> f) {
+        speeds = f;
+    }
+
+    /** WII-UU's RetroArch side (its cores, BIOS folder and core options), also for Choccy Milk. */
+    public RetroArch retroArch() {
+        return retroArch;
+    }
+
     public void setChoccyScreen(Choccy.Screen screen) {
         this.choccyScreen = screen;
     }
@@ -193,6 +234,11 @@ public final class Launcher {
             });
             throw new LaunchException("Getting Java for Choccy Milk (about 50 MB, once)\u2026 the game starts by itself");
         }
+        Elsewhere away = hereOnce.remove(game.path()) ? null : elsewhere.apply(game);
+        if (away != null) {
+            startElsewhere(game, away);
+            throw new LaunchException("Starting on " + away.name() + " (" + away.score() + ")\u2026");
+        }
         Path core;
         try {
             core = retroArch.choccyCoreFor(game, () -> {
@@ -207,8 +253,6 @@ public final class Launcher {
         }
         if (core == null) throw new LaunchException("No core for " + game.system().name() + " found: install one in RetroArch's Online Updater");
         Path log = config.logDir().resolve(game.system().id() + ".log");
-        String[] look = retroArch.choccyLook(game, core);
-        choccyLook.accept(look[0], !look[1].isEmpty());
         Choccy.Session session;
         try {
             session = Choccy.play(core, game.path(), config.home().resolve("saves").resolve(game.system().id()),
@@ -217,6 +261,44 @@ public final class Launcher {
         } catch (IOException e) {
             throw new LaunchException("Choccy Milk didn't start: " + e.getMessage());
         }
+        session.onSpeed(pct -> speeds.accept(game.system().id(), pct));
+        begin(game, core, session, log, null);
+    }
+
+    /** Starts a Choccy Milk game on another computer (in the background); back to playing here when that fails. */
+    private void startElsewhere(Game game, Elsewhere away) {
+        Thread t = new Thread(() -> {
+            try {
+                Started st = away.start(game, retroArch.choccyOptions(game.system().id()));
+                Path log = config.logDir().resolve(game.system().id() + ".log");
+                Choccy.Session session = Choccy.attach(st.process(), (px, w, h, a) -> choccyScreen.frame(px, w, h, a), log);
+                synchronized (this) {
+                    if (isRunning()) {                          // something else started meanwhile
+                        st.process().destroy();
+                        return;
+                    }
+                }
+                begin(game, Path.of(st.core().isEmpty() ? "core" : st.core()), session, log, away.name());
+                for (Listener l : listeners) l.message(game.name() + " plays on " + away.name() + " (" + away.score() + ")");
+            } catch (Exception e) {
+                System.out.println("[split] " + away.name() + ": " + e.getMessage());
+                for (Listener l : listeners) l.message("Couldn't play on " + away.name() + " (" + e.getMessage() + "): playing here");
+                hereOnce.add(game.path());
+                try {
+                    launch(game);
+                } catch (LaunchException e2) {
+                    for (Listener l : listeners) l.message(e2.getMessage());
+                }
+            }
+        }, "split-start");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** A Choccy Milk game that started (here, or on the computer named {@code on}): watching it to the end. */
+    private void begin(Game game, Path core, Choccy.Session session, Path log, String on) {
+        String[] look = retroArch.choccyLook(game, core);
+        choccyLook.accept(look[0], !look[1].isEmpty());
         final Process p = session.process();
         session.onNotice(text -> announcer.announce(text, null, false));
         ChoccyCheevos.start(ra, session, game, new ChoccyCheevos.Events() {
@@ -241,7 +323,7 @@ public final class Launcher {
         current = game;
         inRetroArch = false;
         choccy = session;
-        System.out.println("[choccy] " + game.name() + " with " + core.getFileName());
+        System.out.println("[choccy] " + game.name() + " with " + core.getFileName() + (on == null ? "" : " on " + on));
         long startedAt = System.currentTimeMillis();
         for (Listener l : listeners) l.started(game);
         p.onExit().thenAccept(done -> {
@@ -254,6 +336,10 @@ public final class Launcher {
             }
             int code = done.exitValue();
             String why = session.ending() == null ? "" : session.ending();
+            if (on != null) {                                  // played on another computer: its own problems stay there
+                for (Listener l : listeners) l.exited(game, code, false, log);
+                return;
+            }
             if (why.contains("needs OpenGL")) {
                 // a core that draws with the graphics chip: this console plays in RetroArch from now on
                 config.set("choccy.hardware." + game.system().id(), "true");
@@ -343,6 +429,8 @@ public final class Launcher {
 
     public synchronized void launch(Game game) throws LaunchException {
         if (isRunning()) throw new LaunchException(current.name() + " is already running");
+        String lending = lendingTo.get();
+        if (lending != null) throw new LaunchException("This WII-UU is playing a game for " + lending + " right now");
         if (!OpenBased.handles(game) && !Reactions.handles(game) && choccyFor(game)) {
             launchChoccy(game);
             return;
@@ -469,7 +557,8 @@ public final class Launcher {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
-                signalTree(p, p.pid(), null, null, true);
+                if (p.pid() > 0) signalTree(p, p.pid(), null, null, true);
+                else p.destroy();                               // a game on another computer: just hang up
             };
             if (wait) gently.run();
             else {

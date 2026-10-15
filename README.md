@@ -639,6 +639,36 @@ wrong codes in a row stop linking for a minute. *Unlink* forgets the other one (
 this one). WII-UUs find each other on UDP port 26780; where a firewall blocks it, link by address.
 `peers.enabled=false` turns all of this off.
 
+### Sharing the work of a game
+
+A slow computer at the TV (a Raspberry Pi) can let a faster linked WII-UU (a desktop) run its Choccy
+Milk games: *Settings → Games → Share the work → Play on the best computer*.
+
+One console can't be emulated by two computers at once: every frame needs the one before it, many
+times faster than a network answers. So the work is split where it can be:
+
+* **The faster computer** runs the console: the core, the game's sound, save states and achievements.
+  If it doesn't have the game, it copies it from this one first (into `~/.wiiuu/choccy/lent`, not its
+  games folder; unused for 30 days, it goes again).
+* **The one at the TV** shows the picture (with its own upscaling and widescreen), plays the sound and
+  reads the controllers and phones, as always.
+* Between the two: the controls one way; the other way the sound and the frames, only what changed
+  since the last one and compressed (lossless). An NES game takes about 2 Mbit/s, N64 and
+  PlayStation games more. They connect on TCP port 26781 (the installers open it).
+* The game's saves and save states are synced to the faster computer before, and come back after
+  (newer copy wins), also when *Sync saves* is off.
+
+**The efficiency score**, 1 to 10 for each computer and console (1: horrible, 10: it would run
+GTA 6), is in the same place. It's made of:
+* how fast that computer runs the console: a processor test (a second, once) to begin with, then the
+  real speed of the games played there;
+* for another computer, the ping (each millisecond is input lag; Wi-Fi costs points) and whether the
+  network has room for the picture.
+
+A game plays on another computer only when that one scores 6 or more and at least 2 points better
+than this one. If it can't start there, it plays here. Only one game at a time is played for
+another WII-UU, and a WII-UU playing one for another doesn't start a game of its own meanwhile.
+
 ## Phone as GamePad
 
 **Player numbers:** tap the player badge (P1, P2...) at the top of the GamePad to pick another
