@@ -3,6 +3,17 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.12.0 (2026-10-15)
+- Choccy Milk picture: **Rounded 2x / 4x (xBR)** for pixel art. It follows each edge at its angle,
+  so curves and slopes come out round instead of stair-stepped (4x wants a fast computer).
+- **CRT TV** for every console: scanlines, a little softness along each line and the colour
+  stripes of an old TV.
+- **Blend frames** per console: each frame half and half with the one before. Sprites that NES,
+  Game Boy and Game Boy Advance games flicker for see-through effects look as they did on the
+  screens of the time.
+- These run on all cores of the computer showing the game, so with Share the work the computer at
+  the TV puts its otherwise idle power into the picture while the other one runs the game.
+
 ## 1.11.1 (2026-10-15)
 - Share the work: **see where a game plays.** The banner at the start of a Choccy Milk game names the
   computer and its score ("on Desktop (9/10)"). The phone's HOME menu shows it while playing, with

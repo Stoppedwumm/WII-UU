@@ -256,6 +256,7 @@ public final class Cores {
             if (ChoccyPicture.coreUpscale(config, id)) filter = "smooth";
             if (ChoccyPicture.widescreen(config, id) && !id.equals("ps1")) stretch = true;     // PlayStation: SwanStation widens too
         }
+        if (ChoccyPicture.blend(config, id)) filter += "+blend";
         return new String[]{filter, stretch ? "stretch" : ""};
     }
 

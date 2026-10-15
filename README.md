@@ -499,14 +499,24 @@ Milk app: U and W in the list). Choccy Milk draws without a graphics chip, so:
 | Off | all | whole pixels, as the console drew them (the default) |
 | Smooth | all | softened to the screen's size |
 | Pixel art 2x / 3x | NES, SNES, Game Boy (Color / Advance), DS, Master System, Mega Drive | Scale2x / Scale3x: rounds off the stair steps of pixel art, stays crisp |
+| Rounded 2x / 4x | the same | xBR: follows each edge at its angle, so curves and slopes come out round (4x wants a fast computer: about 10 ms a frame on four 2.8 GHz cores) |
+| CRT TV | all | scanlines, a little softness along each line and the colour stripes of an old TV's screen |
 | Internal resolution 2x / 4x | PlayStation | Beetle PSX draws the 3D at 2x / 4x itself (downloaded once; 4x needs a fast computer, not a Raspberry Pi) |
 
 **Widescreen** shows more of the game where the emulator can: PlayStation 3D games (SwanStation's
 or Beetle PSX's widescreen hack; 2D parts and pre-drawn backgrounds can look off) and the Mega Drive
 (Genesis Plus GX Wide, downloaded once; some games show glitches at the edges). Elsewhere it
 stretches the picture to 16:9, which is right for games with a widescreen mode of their own (some
-N64 ones). Changes apply from the next game. In config: `choccy.<console>.upscale=off|smooth|scale2x|scale3x|hd2|hd4`,
-`choccy.<console>.widescreen=true`.
+N64 ones). Changes apply from the next game. In config: `choccy.<console>.upscale=off|smooth|scale2x|scale3x|xbr2|xbr4|crt|hd2|hd4`,
+`choccy.<console>.widescreen=true`, `choccy.<console>.blend=true`.
+
+**Blend frames** mixes each frame half and half with the one before. Many NES, Game Boy and Game Boy
+Advance games flicker sprites on and off for see-through effects (or to show more of them than the
+console can at once); the screens of the time blurred that into what was meant, and so does this.
+
+The upscalers, the CRT look and blending run on the computer showing the game, on all its cores.
+When a linked WII-UU runs the game for this one (*Share the work*), that's the work left to the
+computer at the TV, which would be idle otherwise.
 
 N64 and DS games can't be drawn at a higher resolution without a graphics chip; the Super
 Nintendo's bsnes-hd (HD Mode 7) can't run in Choccy Milk (its 32 KB coroutine stacks are too small

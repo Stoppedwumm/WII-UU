@@ -44,7 +44,10 @@ public final class ChoccyPicture {
         if (PIXEL_ART.contains(system)) {
             out.add(new String[]{"scale2x", "Pixel art 2x (Scale2x)"});
             out.add(new String[]{"scale3x", "Pixel art 3x (Scale3x)"});
+            out.add(new String[]{"xbr2", "Rounded 2x (xBR)"});
+            out.add(new String[]{"xbr4", "Rounded 4x (xBR)"});
         }
+        out.add(new String[]{"crt", "CRT TV (scanlines)"});
         if (HD.contains(system)) {
             out.add(new String[]{"hd2", "Internal resolution 2x"});
             out.add(new String[]{"hd4", "Internal resolution 4x"});
@@ -56,6 +59,11 @@ public final class ChoccyPicture {
         String u = config.get("choccy." + system + ".upscale", "off").trim();
         for (String[] c : upscalers(system)) if (c[0].equals(u)) return u;
         return "off";
+    }
+
+    /** Whether each frame is blended into the one before (sprites games flicker for see-through effects look right). */
+    public static boolean blend(Config config, String system) {
+        return config.getBool("choccy." + system + ".blend", false);
     }
 
     public static boolean widescreen(Config config, String system) {
@@ -72,7 +80,7 @@ public final class ChoccyPicture {
         return upscale(config, system).startsWith("hd");
     }
 
-    /** The upscaler the picture gets on its way to the screen: off, smooth, scale2x, scale3x. */
+    /** The upscaler the picture gets on its way to the screen: off, smooth, scale2x, scale3x, xbr2, xbr4, crt. */
     public static String filter(Config config, String system) {
         String u = upscale(config, system);
         return u.startsWith("hd") ? "smooth" : u;           // drawn bigger already: only smoothed to the screen
@@ -122,6 +130,7 @@ public final class ChoccyPicture {
     public static String describe(Config config, String system) {
         String u = upscale(config, system), name = "Off";
         for (String[] c : upscalers(system)) if (c[0].equals(u)) name = c[1];
+        if (blend(config, system)) name += " · blended";
         if (!widescreen(config, system)) return name;
         return name + " · widescreen" + (realWidescreen(system) ? "" : " (stretched)");
     }

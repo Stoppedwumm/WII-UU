@@ -866,7 +866,8 @@ public final class SettingsScreen {
             config.set("choccy.enabled", Boolean.toString(on));
             config.save();
         }));
-        r.add(new Link("Choccy Milk picture", "Upscaling and widescreen, per console.", null, this::choccyPicturePage));
+        r.add(new Link("Choccy Milk picture", "Upscaling (also rounded xBR and a CRT TV look), blending frames and "
+                + "widescreen, per console.", null, this::choccyPicturePage));
         r.add(new Link("Share the work", "Let a faster linked WII-UU run the game while this one shows it: each computer's "
                 + "efficiency score per console, 1 to 10.", () -> config.getBool("choccy.split", false) ? "on" : "off", this::splitPage));
         List<String> n64Ids = List.of("auto", "opengl", "software");
@@ -1046,7 +1047,7 @@ public final class SettingsScreen {
         return new Page("Choccy Milk picture", () -> {
             List<Row> r = new ArrayList<>();
             r.add(new Info("How Choccy Milk draws each console's games. Upscaling: pixel art 2x / 3x rounds off the stair steps of "
-                    + "2D graphics and stays crisp; Smooth softens; Internal resolution (PlayStation) has the emulator draw its 3D "
+                    + "2D graphics and stays crisp; Rounded (xBR) follows edges at any angle; CRT TV looks like an old TV; Smooth softens; Internal resolution (PlayStation) has the emulator draw its 3D "
                     + "at a higher resolution itself. Widescreen shows more of the game where the emulator can (PlayStation 3D "
                     + "games, Mega Drive) and stretches the picture elsewhere. From the next game."));
             for (String id : CHOCCY_CONSOLES) {
@@ -1067,7 +1068,8 @@ public final class SettingsScreen {
             for (String[] u : ups) names.add(u[1]);
             String hdHelp = id.equals("ps1") ? " Internal resolution: Beetle PSX draws the 3D at 2x / 4x (downloaded once; 4x needs a "
                     + "fast computer, too much for a Raspberry Pi)." : "";
-            r.add(new Choice("Upscaling", "Pixel art 2x / 3x: Scale2x / Scale3x, for 2D pixel art. Smooth: softened." + hdHelp,
+            r.add(new Choice("Upscaling", "Pixel art: crisp. Rounded (xBR): round curves, 4x wants a fast computer. CRT TV: "
+                    + "scanlines. All done by the computer showing the game." + hdHelp,
                     () -> names, () -> {
                         String u = wiiuu.core.ChoccyPicture.upscale(config, id);
                         for (int i = 0; i < ups.size(); i++) if (ups.get(i)[0].equals(u)) return i;
@@ -1084,6 +1086,13 @@ public final class SettingsScreen {
                 default -> "Stretched to 16:9: right for games with a widescreen mode of their own (some N64 ones), wide "
                         + "everywhere else.";
             };
+            r.add(new Toggle("Blend frames", "Each frame half and half with the one before: games that flicker sprites "
+                    + "on and off for see-through effects or to show more of them (common on the NES, Game Boy and Game Boy "
+                    + "Advance) look as on the TVs and screens of the time. Fast motion gets a slight trail.",
+                    () -> wiiuu.core.ChoccyPicture.blend(config, id), on -> {
+                config.set("choccy." + id + ".blend", on ? "true" : null);
+                config.save();
+            }));
             r.add(new Toggle("Widescreen", wideHelp, () -> wiiuu.core.ChoccyPicture.widescreen(config, id), on -> {
                 config.set("choccy." + id + ".widescreen", on ? "true" : null);
                 config.save();
