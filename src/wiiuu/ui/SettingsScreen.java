@@ -1016,6 +1016,8 @@ public final class SettingsScreen {
                 splitScores = null;
                 measureSplit(false);
             }));
+            String last = config.get("choccy.split.last", "");
+            if (!last.isEmpty()) r.add(new Info("Last game: " + last + "."));
             r.add(new Header("Efficiency score (1: horrible, 10: it would run GTA 6)"));
             List<wiiuu.net.SplitPlay.Rating> scores = splitScores;
             if (scores == null) {

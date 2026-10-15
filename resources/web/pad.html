@@ -367,6 +367,7 @@
         </div>
         <div class="sheet hidden" id="homeSheet">
           <h3>HOME Menu</h3>
+          <p id="sheetWhere" class="hidden" style="margin:0 0 10px;font-size:13px;color:#8a9099"></p>
           <div class="row">
             <button class="bigbtn grey" id="sheetResume">Resume</button>
             <button class="bigbtn" id="sheetClose">Close game</button>
@@ -571,6 +572,8 @@ async function poll() {
     S.stateSlot = typeof j.stateSlot === "number" ? j.stateSlot : -1;
     $("stateRow").classList.toggle("hidden", S.stateSlot < 0);
     if (S.stateSlot >= 0) $("slotNum").textContent = "Slot " + S.stateSlot;
+    $("sheetWhere").classList.toggle("hidden", !j.where);
+    if (j.where) $("sheetWhere").textContent = j.where;
     $("player").textContent = j.player > 0 ? "P" + j.player : "Viewer";
     if (!$("playerMenu").classList.contains("hidden")) renderPlayerMenu();
     $("keysWarn").classList.toggle("hidden", j.keys !== false);

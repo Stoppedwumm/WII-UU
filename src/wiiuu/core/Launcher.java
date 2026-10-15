@@ -160,6 +160,26 @@ public final class Launcher {
     private final java.util.Set<Path> hereOnce = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private volatile java.util.function.Supplier<String> lendingTo = () -> null;
+    /** the computer the Choccy Milk game plays on (null: this one) */
+    private volatile String choccyOn;
+    /** the last Choccy Milk game: {name, computer or null, last speed} */
+    private volatile Object[] lastChoccy;
+
+    /** The other computer the Choccy Milk game plays on now, or null (this one, or none playing). */
+    public String choccyOn() {
+        return inChoccy() ? choccyOn : null;
+    }
+
+    /** How fast the Choccy Milk game runs (percent of full speed, at the last report), -1 when unknown. */
+    public int choccySpeed() {
+        Choccy.Session s = choccy;
+        return s == null ? -1 : s.speed();
+    }
+
+    /** The last Choccy Milk game that ended: {name (String), computer (String, null: this one), speed (Integer, -1: unknown)}. */
+    public Object[] lastChoccy() {
+        return lastChoccy;
+    }
 
     /** Who this WII-UU plays a game for now (SplitPlay), or null: no game starts here meanwhile. */
     public void setLendingTo(java.util.function.Supplier<String> f) {
@@ -323,6 +343,7 @@ public final class Launcher {
         current = game;
         inRetroArch = false;
         choccy = session;
+        choccyOn = on;
         System.out.println("[choccy] " + game.name() + " with " + core.getFileName() + (on == null ? "" : " on " + on));
         long startedAt = System.currentTimeMillis();
         for (Listener l : listeners) l.started(game);
@@ -335,6 +356,7 @@ public final class Launcher {
                 }
             }
             int code = done.exitValue();
+            lastChoccy = new Object[]{game.name(), on, session.speed()};
             String why = session.ending() == null ? "" : session.ending();
             if (on != null) {                                  // played on another computer: its own problems stay there
                 for (Listener l : listeners) l.exited(game, code, false, log);

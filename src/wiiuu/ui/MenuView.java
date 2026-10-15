@@ -859,7 +859,16 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** The game, as big as fits at its aspect ratio, on black; "Choccy Milk" for a moment at the start. */
     private void paintChoccy(Graphics2D g, int w, int h) {
-        choccyScreen.paint(g, w, h, "Choccy Milk  \u00B7  HOME (or Esc): back to WII-UU  \u00B7  F2 / F4: save / load state", font(Font.BOLD, h * 0.028f));
+        String where = choccyWhere.get();
+        choccyScreen.paint(g, w, h, "Choccy Milk  \u00B7  " + (where == null ? "" : where + "  \u00B7  ")
+                + "HOME (or Esc): back to WII-UU  \u00B7  F2 / F4: save / load state", font(Font.BOLD, h * 0.028f));
+    }
+
+    private volatile java.util.function.Supplier<String> choccyWhere = () -> null;
+
+    /** Where the Choccy Milk game plays ("on Desktop (9/10 · Superb)"), for the banner at its start; null: say nothing. */
+    public void setChoccyWhere(java.util.function.Supplier<String> where) {
+        choccyWhere = where;
     }
 
     // ---- the boss fight (Settings > Developer) -------------------------------------------------------

@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.11.1 (2026-10-15)
+- Share the work: **see where a game plays.** The banner at the start of a Choccy Milk game names the
+  computer and its score ("on Desktop (9/10)"). The phone's HOME menu shows it while playing, with
+  how fast the game runs there ("Playing on Desktop · 9/10 · Superb · running at 100%"). Settings >
+  Share the work shows where the last game played and how fast.
+
 ## 1.11.0 (2026-10-15)
 - **Share the work** (Settings > Games > Share the work): a faster linked WII-UU can run a Choccy
   Milk game while the one at the TV shows it. One console can't be emulated by two computers at once

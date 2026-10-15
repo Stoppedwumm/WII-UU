@@ -665,6 +665,10 @@ GTA 6), is in the same place. It's made of:
 * for another computer, the ping (each millisecond is input lag; Wi-Fi costs points) and whether the
   network has room for the picture.
 
+**Where it plays:** the banner at the start of a game says so ("on Desktop (9/10)"); the phone's
+HOME menu shows it while playing, with the score and how fast it runs ("Playing on Desktop · 9/10 ·
+Superb · running at 100%"); and *Share the work* shows where the last game played and how fast.
+
 A game plays on another computer only when that one scores 6 or more and at least 2 points better
 than this one. If it can't start there, it plays here. Only one game at a time is played for
 another WII-UU, and a WII-UU playing one for another doesn't start a game of its own meanwhile.

@@ -105,6 +105,11 @@ public final class GamepadServer {
             return -1;
         }
 
+        /** Where the Choccy Milk game plays ("Playing on Desktop · 9/10 · Superb · running at 100%"), or null. */
+        default String choccyWhere() {
+            return null;
+        }
+
         /** What the TV asks the phones to fill in (a sign-in, say), or null. */
         default Form form() {
             return null;
@@ -1057,7 +1062,8 @@ public final class GamepadServer {
                 .kv("buzz", g != null && wiiuu.core.Buzz.active(config, g))
                 .kv("maxPlayers", wiiuu.core.Buzz.players(config))
                 .kv("choosePlayer", choosePlayer())
-                .kv("stateSlot", host.choccySlot());
+                .kv("stateSlot", host.choccySlot())
+                .kv("where", host.choccyWhere());
         j.key("taken").arr();                           // numbers other connected phones have
         for (Client o : clients.values()) if (o != c && o.active && o.player > 0) j.val(o.player);
         j.endArr();

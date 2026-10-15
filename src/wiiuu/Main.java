@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.11.0";
+    public static final String VERSION = "1.11.1";
 
     private final Config config;
     private final Library library;
@@ -356,6 +356,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         });
         view.setChoccyKeys((b, down) -> launcher.choccyButton(1, b, down));
         launcher.setChoccyLook(view::choccyLook);
+        view.setChoccyWhere(() -> {
+            String on = launcher.choccyOn(), label = whereLabel;
+            if (on == null && label == null) return null;
+            String score = label == null ? null : label.split(" \u00B7 ")[0];        // "9/10": the banner is short
+            return "on " + (on == null ? "this computer" : on) + (score == null ? "" : " (" + score + ")");
+        });
         // sharing the work: a Choccy Milk game may play on a linked WII-UU that scores clearly better
         launcher.onChoccySpeed((system, pct) -> wiiuu.net.SplitPlay.recordSpeed(config, system, pct));
         launcher.setLendingTo(() -> {
@@ -365,9 +371,15 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         launcher.setElsewhere(game -> {
             GamepadServer g = server;
             wiiuu.net.SplitPlay sp = g == null ? null : g.split();
+            whereLabel = null;
             if (sp == null || !config.getBool("choccy.split", false)) return null;
             wiiuu.net.SplitPlay.Rating best = sp.better(game.system().id());
-            if (best == null) return null;
+            if (best == null) {
+                wiiuu.net.SplitPlay.Rating here = sp.here(game.system().id());
+                whereLabel = here.usable() ? here.label() : null;
+                return null;
+            }
+            whereLabel = best.label();
             return new Launcher.Elsewhere() {
                 @Override
                 public String name() {
@@ -739,6 +751,18 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     }
 
     @Override
+    public String choccyWhere() {
+        if (!launcher.inChoccy()) return null;
+        String on = launcher.choccyOn(), label = whereLabel;
+        int speed = launcher.choccySpeed();
+        return "Playing on " + (on == null ? "this computer" : on) + (label == null ? "" : " \u00B7 " + label)
+                + (speed >= 0 ? " \u00B7 running at " + speed + "%" : "");
+    }
+
+    /** the score of where the Choccy Milk game plays (with "Play on the best computer" on), for showing it */
+    private volatile String whereLabel;
+
+    @Override
     public int choccySlot() {
         return launcher.choccySlot();
     }
@@ -876,6 +900,13 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     @Override
     public void exited(Game game, int exitCode, boolean quickFailure, Path log) {
         dual.ended(exitCode, log);
+        Object[] last = launcher.lastChoccy();
+        if (last != null && game.name().equals(last[0])) {          // where it played, for Settings > Share the work
+            int speed = (Integer) last[2];
+            config.set("choccy.split.last", last[0] + " played on " + (last[1] == null ? "this computer" : last[1])
+                    + (whereLabel == null ? "" : " (" + whereLabel + ")") + (speed >= 0 ? ", running at " + speed + "%" : ""));
+            config.save();
+        }
         afterPlaying();
         // N64 in RetroArch: the core crashed getting OpenGL (old or missing graphics driver): use the
         // software renderer from now on (Settings > Games > N64 renderer) and start the game again
