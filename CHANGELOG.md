@@ -3,6 +3,19 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.13.0 (2026-10-15)
+- **WII-UU for Android** (`WII-UU-Android.apk` on the website): the Wii U menu and Choccy Milk on
+  Android handhelds and phones, Android 8 or newer. The same folders as on a computer
+  (`WiiUU/roms/<console>`, saves and save states in `WiiUU/saves`), so games and saves copy over as
+  they are.
+- On Android: NES, SNES, Game Boy, GBA, Master System, Mega Drive and PlayStation; DS, N64 and
+  Saturn experimental. Cores download from the libretro buildbot when a console is first played.
+- Android controls: the handheld's buttons by position, several controllers, touch controls on a
+  phone. Back, Home or Select + Start opens the menu: save states (10 slots), quit.
+- Choccy Milk's libretro host is written in C for Android (each game in a process of its own,
+  sound with AAudio). It's built without Gradle by `android/build-android.sh`, and tested on Linux
+  with real cores: picture, sound, buttons, save states and game saves.
+
 ## 1.12.0 (2026-10-15)
 - Choccy Milk picture: **Rounded 2x / 4x (xBR)** for pixel art. It follows each edge at its angle,
   so curves and slopes come out round instead of stair-stepped (4x wants a fast computer).

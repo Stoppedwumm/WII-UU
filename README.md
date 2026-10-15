@@ -550,6 +550,34 @@ same in both.
 - `choccymilk GAME` plays a file right away (`.nes`, `.sfc`, `.gba`, `.z64`, ...).
 - It has no phone GamePad: that's WII-UU's.
 
+### Choccy Milk on Android
+
+**WII-UU for Android** (`WII-UU-Android.apk` on the website, source in `android/`) is the Wii U
+menu and Choccy Milk on Android handhelds (Retroid, AYN Odin, Anbernic) and phones, Android 8 or
+newer.
+
+* **Folders as on a computer:** `WiiUU/roms/<console>` for the games (also `.zip`), `WiiUU/saves/<console>`
+  for saves and save states (`ROM.srm`, `ROM.state1`...), `WiiUU/system` for BIOS files. That needs
+  *Settings → Access to all files*; without it everything lives in the app's own folder
+  (`Android/data/wiiuu.android/files`). Covers: `roms/<console>/covers/<game>.png`.
+* **Consoles:** NES, SNES, Game Boy / Color, GBA, Master System / Game Gear, Mega Drive and
+  PlayStation (no BIOS needed); DS, N64 and Saturn are experimental (software drawing only, as in
+  Choccy Milk on a computer: heavy for most handhelds, and some cores may need a graphics chip
+  Choccy Milk doesn't offer yet). Each console's core is downloaded from the libretro buildbot the
+  first time (or all at once: *Settings → Download every core now*).
+* **Controls:** the handheld's buttons by position (bottom = B, right = A, as on a Nintendo pad),
+  sticks, triggers, several controllers as players 1 to 4. **Back**, **Home** or **Select + Start**
+  opens the menu: save and load states (slots 0 to 9), quit (the game saves). On a phone without
+  buttons, touch controls show (*Settings → Touch controls*: automatic, always, never).
+* **Picture:** as big as fits at the game's shape, sharp whole pixels or smoothed, or filling the
+  screen.
+* Each game plays in a process of its own, so a crashing core only ends that game.
+
+Building it needs only the Android SDK's own tools, no Gradle: `android/build-android.sh` (it says
+which SDK parts it wants). The native part (`android/jni/choccy_core.c`, a libretro host in C) also
+builds and runs on Linux: `android/test/host_test.c` plays a game for a few seconds with a desktop
+core and checks the picture, sound, a button, save states and the game's save.
+
 ## RetroArch mode
 
 Turn on *Settings → Games → RetroArch mode* (`retroarch.enabled=true`) to run every system that has
