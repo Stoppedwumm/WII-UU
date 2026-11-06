@@ -352,7 +352,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         view.setAchievements(achievements);
         launcher.setChoccyScreen((px, w, h, aspect) -> {
             Game game = launcher.current();
-            boolean split = config.getBool("screen.split", true) && game != null && "nds".equals(game.system().id()) && h >= 2;
+            boolean split = config.getBool("choccy.splitScreens", true) && game != null && "nds".equals(game.system().id()) && h >= 2;
             if (split) view.choccyFrame(java.util.Arrays.copyOf(px, w * (h / 2)), w, h / 2, 4f / 3);
             else view.choccyFrame(px, w, h, aspect);
             ScreenStreamer s = screen;                  // the phones get the game's own picture, not a screen capture

@@ -355,6 +355,7 @@
             <p id="ctlInfo"></p>
             <p id="keysWarn" class="hidden" style="color:#d0342c">Key injection unavailable on the PC (headless or Wayland-only session).</p>
             <div class="row">
+              <button class="bigbtn hidden" id="playSecond">Show touch screen</button>
               <button class="bigbtn" id="playTv">Show TV here</button>
               <button class="bigbtn grey" id="closeGame">Close game</button>
             </div>
@@ -595,8 +596,7 @@ async function poll() {
     }
     const secondChanged = j.second !== S.second;
     S.second = j.second;
-    $("segSecond").classList.toggle("hidden", !S.second);
-    if (S.second) $("segSecond").textContent = S.second;
+    updateScreenChoices(S.second);
     $("tvBtn").classList.toggle("hidden", !S.tv);
     $("soundBtn").classList.toggle("hidden", j.audio === false);
     $("segSound").classList.toggle("hidden", j.audio === false);
@@ -608,9 +608,8 @@ async function poll() {
         $("playName").textContent = j.game.name;
         $("playSys").textContent = j.game.system;
         $("playBand").style.background = j.game.color;
-        // like the Wii U: games with a second screen put it on the GamePad
-        if (S.second && (started || S.view !== "screen")) openScreen("second");
-        else if (started || (S.view === "screen" && S.streamMode === "second" && !S.second)) show("play");
+        // The player chooses the lower screen from Now playing, including after returning from it.
+        if (started || (S.view === "screen" && S.streamMode === "second" && !S.second)) show("play");
       } else {
         $("homeSheet").classList.add("hidden");
         if (!(S.view === "screen" && S.streamMode === "tv")) show("lib");
@@ -620,6 +619,14 @@ async function poll() {
     setOnline(false);
     // a missed answer or two happens on Wi-Fi; three in a row: WII-UU is gone
     if (e.message !== "re-paired" && ++S.fails >= 3) showDown(null);
+  }
+}
+function updateScreenChoices(second) {
+  $("segSecond").classList.toggle("hidden", !second);
+  $("playSecond").classList.toggle("hidden", !second);
+  if (second) {
+    $("segSecond").textContent = second;
+    $("playSecond").textContent = "Show " + second.toLowerCase();
   }
 }
 setInterval(poll, 1000);
@@ -1379,6 +1386,7 @@ $("sheetClose").onclick = closeGame;
 $("sheetResume").onclick = () => $("homeSheet").classList.add("hidden");
 $("tvBtn").onclick = () => openScreen("tv");
 $("playTv").onclick = () => openScreen("tv");
+$("playSecond").onclick = () => openScreen("second");
 $("segSecond").onclick = () => openScreen("second");
 $("segTv").onclick = () => openScreen("tv");
 $("segMenu").onclick = () => show(S.mode === "game" ? "play" : "lib");

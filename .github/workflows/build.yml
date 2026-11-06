@@ -70,6 +70,9 @@ jobs:
           javac --release 22 -cp build/classes -d build/tests test/wiiuu/screen/ChoccyDualScreenTest.java
           java --enable-native-access=ALL-UNNAMED -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.screen.ChoccyDualScreenTest
 
+      - name: Test GamePad screen selector
+        run: node test/web/screen-choices.cjs
+
       - name: Check shell scripts
         run: bash -n install.sh emulators.sh build.sh package.sh
 

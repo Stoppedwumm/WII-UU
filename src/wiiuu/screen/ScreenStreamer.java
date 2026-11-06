@@ -197,7 +197,7 @@ public final class ScreenStreamer {
 
     private boolean splitChoccy() {
         Game g = currentGame.get();
-        return config.getBool("screen.split", true) && g != null && "nds".equals(g.system().id());
+        return config.getBool("choccy.splitScreens", true) && g != null && "nds".equals(g.system().id());
     }
 
     private boolean directMode(String mode) {

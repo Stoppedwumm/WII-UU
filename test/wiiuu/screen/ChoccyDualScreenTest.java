@@ -29,6 +29,8 @@ public final class ChoccyDualScreenTest {
         }
         ScreenStreamer.Frame waiting = stream.nextFrame("second", -1, 2000);
         check(waiting != null, "waiting picture before first game frame");
+        config.set("screen.split", "false");
+        check(stream.secondScreen() != null, "RetroArch virtual-display setting must not disable Choccy screens");
         int[] pixels = new int[256 * 384];
         Arrays.fill(pixels, 0, 256 * 192, 0xff0000);
         Arrays.fill(pixels, 256 * 192, pixels.length, 0x0000ff);
@@ -62,7 +64,7 @@ public final class ChoccyDualScreenTest {
         check(touch[0] == .25 && touch[1] == .75 && touch[2] == 1, "bottom pointer mapping");
         stream.releaseTouch();
         check(touch[2] == 0, "disconnect releases stylus");
-        config.set("screen.split", "false");
+        config.set("choccy.splitScreens", "false");
         check(stream.secondScreen() == null, "split disabled");
         stream.touch("tv", .25, .5, 1);
         check(touch[1] == .5, "combined pointer mapping");

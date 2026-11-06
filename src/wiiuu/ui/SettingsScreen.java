@@ -895,6 +895,8 @@ public final class SettingsScreen {
             }
             config.save();
         }));
+        r.add(toggle("Split DS screens in Choccy Milk", "Upper screen in WII-UU; select Show touch screen on the GamePad for the lower screen. No virtual display needed.",
+                "choccy.splitScreens", true, null));
         r.add(new Toggle("Split DS / 3DS screens", "In RetroArch mode: the top screen on the TV, the touch screen on the phone.",
                 () -> config.getBool("screen.split", true), on -> {
             config.set("screen.split", on ? null : "false");
