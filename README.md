@@ -1320,3 +1320,18 @@ melonDS DS as a requirement; turn it off before choosing another DS core. Missin
 cores can download on launch when **Download missing cores automatically** is enabled.
 If a selection cannot be installed, the app reports that instead of silently using another
 core. Downloads choose the native player's CPU architecture, including translated Macs.
+
+### Choccy Milk starts but the game view has no picture
+
+WII-UU switches into its Choccy Milk game view when the helper starts and shows the
+current startup phase until the first frame arrives. A long delay also reports the core
+log path. For a DS game, this is normally `~/.wiiuu/logs/nds.log` (or `<custom-home>/logs/nds.log`).
+The main application's `Mario Kart DS with melondsds_libretro` message only confirms
+helper launch; `playing with ...` and `first picture ...` show further progress.
+
+If it remains on Loading native core, Initializing core, Loading game, or Opening audio,
+include that phase and the final lines of the core log in a bug report. RetroAchievements
+not recognizing the game does not prevent Choccy Milk from displaying it. macOS with
+melonDS DS uses a normal JVM thread; the special coroutine-stack workaround is skipped
+for this core. CI checks the native frame path on macOS and Linux with Java 27 using a
+redistributable fixture core; a real game can still fail for core/BIOS/JIT/audio reasons.

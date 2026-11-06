@@ -144,7 +144,11 @@ public final class ChoccyMilk {
                 System.err.println("[choccy] " + why[0]);
             }
         };
-        if (!LowStack.run(game)) {
+        // melonDS DS does not switch to libco coroutine stacks. Give it an ordinary JVM thread,
+        // rather than the fabricated native stack range used to support N64 coroutine callbacks.
+        boolean melonDs = coreUsesNormalStack(m.corePath);
+        m.progress("Starting core thread…");
+        if (melonDs || !LowStack.run(game)) {
             Thread core = new Thread(null, game, "choccy-core", 256L << 20);
             core.start();
             core.join();
@@ -176,9 +180,19 @@ public final class ChoccyMilk {
         }
     }
 
+    static boolean coreUsesNormalStack(Path core) {
+        return core.getFileName().toString().toLowerCase(Locale.ROOT).startsWith("melondsds_libretro");
+    }
+
+    private void progress(String message) {
+        System.err.println("[choccy] " + message);
+        try { send('N', "[startup] " + message); } catch (IOException e) { running = false; }
+    }
+
     // ---- running a game ----------------------------------------------------------------------------
 
     private void play() throws Throwable {
+        progress("Loading native core…");
         Linker linker = Linker.nativeLinker();
         SymbolLookup lib = SymbolLookup.libraryLookup(corePath, arena);
         MethodHandle apiVersion = fn(linker, lib, "retro_api_version", FunctionDescriptor.of(JAVA_INT));
@@ -204,6 +218,7 @@ public final class ChoccyMilk {
         set(linker, lib, "retro_set_input_state", me.bind(this, "inputState",
                 MethodType.methodType(short.class, int.class, int.class, int.class, int.class)),
                 FunctionDescriptor.of(JAVA_SHORT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT));
+        progress("Initializing core…");
         fn(linker, lib, "retro_init", FunctionDescriptor.ofVoid()).invokeExact();
         checkOnlineCapabilities();
 
@@ -225,6 +240,7 @@ public final class ChoccyMilk {
             game.set(ADDRESS, 8, bytes);
             game.set(JAVA_LONG, 16, data.length);
         }
+        progress("Loading game…");
         boolean loaded = (boolean) fn(linker, lib, "retro_load_game", FunctionDescriptor.of(JAVA_BOOLEAN, ADDRESS)).invokeExact(game);
         if (!loaded) {
             throw new IllegalStateException(wantsHardware
@@ -244,7 +260,8 @@ public final class ChoccyMilk {
             if (!unloaded) writeSave();
         }, "choccy-save"));
         pipeSound = "pipe".equals(overrides.get("wiiuu.sound"));
-        if (!pipeSound) openAudio();
+        if (!pipeSound) { progress("Opening audio…"); openAudio(); }
+        progress("Starting video…");
         send('R', name);
 
         Thread input = new Thread(this::readInput, "choccy-input");

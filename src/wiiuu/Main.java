@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.14.1";
+    public static final String VERSION = "1.14.2";
 
     private final Config config;
     private final Library library;
@@ -362,6 +362,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             ScreenStreamer s = screen;                  // the phones get the game's own picture, not a screen capture
             if (s != null) s.directFrame(px, w, h, aspect);
         });
+        launcher.setChoccyStartup(view::choccyStarting);
         view.setChoccyKeys((b, down) -> launcher.choccyButton(1, b, down));
         launcher.setChoccyLook(view::choccyLook);
         view.setChoccyWhere(() -> {
@@ -857,6 +858,13 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         playStarted = System.currentTimeMillis();
         SwingUtilities.invokeLater(() -> {
             view.setPlaying(game);
+            if (launcher.inChoccy()) {
+                view.choccyStarting(launcher.choccyStartup());
+                if ((frame.getExtendedState() & Frame.ICONIFIED) != 0)
+                    frame.setExtendedState(frame.getExtendedState() & ~Frame.ICONIFIED);
+                frame.toFront();
+                view.requestFocusInWindow();
+            }
             // (a Choccy Milk game plays in WII-UU's own window)
             if (config.getBool("ui.minimizeOnLaunch", true) && !launcher.inChoccy()) frame.setState(Frame.ICONIFIED);
         });

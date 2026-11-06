@@ -855,6 +855,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         choccyScreen.look(filter, stretch);
     }
 
+    public void choccyStarting(String message) {
+        choccyScreen.starting(message);
+        repaint();
+    }
+
     public void choccyFrame(int[] rgb, int w, int h, float aspect) {
         if (playing == null) return;
         choccyScreen.frame(rgb, w, h, aspect);

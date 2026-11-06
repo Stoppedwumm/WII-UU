@@ -215,6 +215,7 @@ public final class App extends JPanel implements PadSink {
             return;
         }
         session = s;
+        s.onStartup(text -> { screen.starting(text); repaint(); });
         s.onNotice(text -> {
             screen.announce(text, null, false, 2500);
             repaint();

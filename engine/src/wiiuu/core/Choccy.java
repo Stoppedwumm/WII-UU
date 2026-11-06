@@ -337,6 +337,19 @@ public final class Choccy {
         private final OutputStream in;
         private volatile String core = "";
         private volatile String ending;            // its last word: "" when all went well
+        private volatile boolean receivedFrame, readingFinished;
+        private volatile String startup = "Starting Choccy Milk…";
+        private volatile java.util.function.Consumer<String> onStartup = text -> {};
+        public String startup() { return startup; }
+        public boolean receivedFrame() { return receivedFrame; }
+        public void onStartup(java.util.function.Consumer<String> listener) {
+            onStartup = listener;
+            if (!receivedFrame) listener.accept(startup);
+        }
+        private void progress(String message) {
+            startup = message;
+            if (!receivedFrame) onStartup.accept(message);
+        }
 
         Session(Process process, Screen screen, Path log) {
             this.process = process;
@@ -344,6 +357,13 @@ public final class Choccy {
             Thread t = new Thread(() -> read(screen, log), "choccy-frames");
             t.setDaemon(true);
             t.start();
+            java.util.concurrent.CompletableFuture.delayedExecutor(10, java.util.concurrent.TimeUnit.SECONDS).execute(() -> {
+                if (!receivedFrame && !readingFinished && process.isAlive()) {
+                    String message = "Choccy Milk has not sent a picture yet (" + startup + "). Core log: " + log;
+                    System.err.println("[choccy] " + message);
+                    try { onNotice.accept(message); } catch (RuntimeException ignored) { }
+                }
+            });
         }
 
         private void read(Screen screen, Path log) {
@@ -355,7 +375,7 @@ public final class Choccy {
                     if (kind == 'F') {
                         int w = s.readInt(), h = s.readInt();
                         float aspect = s.readFloat();
-                        if (w <= 0 || h <= 0 || w > 4096 || h > 4096) break;
+                        if (w <= 0 || h <= 0 || w > 4096 || h > 4096) throw new IOException("Invalid frame size " + w + "x" + h);
                         int n = w * h;
                         if (raw.length < n * 4) raw = new byte[n * 4];
                         s.readFully(raw, 0, n * 4);
@@ -364,13 +384,17 @@ public final class Choccy {
                             frame[i] = (raw[j + 1] & 0xff) << 16 | (raw[j + 2] & 0xff) << 8 | (raw[j + 3] & 0xff);
                         }
                         screen.frame(frame, w, h, aspect);
+                        if (!receivedFrame) System.out.println("[choccy] first picture " + w + "x" + h);
+                        receivedFrame = true;
                     } else if (kind == 'R') {
                         core = line(s);
+                        progress("Core loaded; waiting for video…");
                         System.out.println("[choccy] playing with " + core);
                     } else if (kind == 'X') {
                         ending = line(s);
                     } else if (kind == 'N') {                   // something to show ("State 1 saved")
                         String text = line(s);
+                        if (text.startsWith("[startup] ")) { progress(text.substring(10)); continue; }
                         try {
                             onNotice.accept(text);
                         } catch (RuntimeException e) {
@@ -392,12 +416,15 @@ public final class Choccy {
                             System.err.println("[achievements] " + e);
                         }
                     } else {
-                        break;                               // out of step: stop reading
+                        throw new IOException("Unexpected frame protocol byte 0x" + Integer.toHexString(kind));
                     }
                 }
-            } catch (IOException ignored) {
-                // it's gone
-            }
+            } catch (IOException | RuntimeException failure) {
+                ending = "Choccy Milk frame stream failed: " + failure + ". Core log: " + log;
+                System.err.println("[choccy] " + ending);
+                try { onNotice.accept(ending); } catch (RuntimeException ignored) { }
+                process.destroy();
+            } finally { readingFinished = true; }
         }
 
         private static String line(DataInputStream s) throws IOException {

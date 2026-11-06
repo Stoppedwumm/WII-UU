@@ -29,6 +29,7 @@ public final class GameScreen {
     public static final Color HINT = new Color(0xD7A27A);
 
     private volatile BufferedImage picture;
+    private volatile String startup;
     private volatile float aspect = 4f / 3;
     private long shownAt;
     /** off (whole pixels), smooth, scale2x, scale3x, xbr2, xbr4, crt; and whether to stretch to 16:9 */
@@ -292,8 +293,11 @@ public final class GameScreen {
 
     /** Whether a game picture is there (a game is playing). */
     public boolean showing() {
-        return picture != null;
+        return picture != null || startup != null;
     }
+
+    /** Enter the game view before its first frame, so a slow native core cannot leave the menu visible. */
+    public void starting(String message) { startup = message == null ? "Starting Choccy Milk…" : message; }
 
     /** The newest picture, or null. */
     public BufferedImage picture() {
@@ -303,6 +307,7 @@ public final class GameScreen {
     /** Forgets the picture (the game ended); the hint shows again for the next one. */
     public void clear() {
         picture = null;
+        startup = null;
         shownAt = 0;
     }
 
@@ -322,7 +327,15 @@ public final class GameScreen {
         BufferedImage img = picture;
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, w, h);
-        if (img == null) return;
+        if (img == null) {
+            g.setFont(font);
+            g.setColor(HINT);
+            String text = startup == null ? "Starting Choccy Milk…" : startup;
+            FontMetrics fm = g.getFontMetrics();
+            g.drawString(text, Math.max(12, (w - fm.stringWidth(text)) / 2), h / 2);
+            paintNote(g, w, h, font);
+            return;
+        }
         java.awt.Rectangle viewport = pictureBounds(w, h);
         int dw = viewport.width, dh = viewport.height;
         // whole pixels, or (smooth and the upscalers) softened to the screen's size
