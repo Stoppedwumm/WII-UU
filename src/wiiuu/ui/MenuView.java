@@ -595,12 +595,15 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }
 
+    private volatile String localPairing;
+    private Rectangle2D pairingQrHit, pairingLinkHit;
     private volatile String relayPairing;
     private QrCode relayQr;
     public void showPadOverlay() { showPad = true; repaint(); }
 
     public void setRelay(String url) {
         relayPairing = url;
+        pairingQrHit = pairingLinkHit = null;
         relayQr = url == null ? null : QrCode.encode(url);
         repaint();
     }
@@ -608,6 +611,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void setServer(String url, String pairingUrl, String code, boolean needsCode) {
         serverOn = url != null;
         padUrl = url == null ? "" : url;
+        localPairing = pairingUrl;
+        pairingQrHit = pairingLinkHit = null;
         padCode = code == null ? "" : code;
         padNeedsCode = needsCode;
         qr = pairingUrl == null ? null : QrCode.encode(pairingUrl);
@@ -1131,7 +1136,33 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     String pairingUrl() {
-        return serverOn ? relayPairing != null ? relayPairing : padUrl : "";
+        return serverOn ? relayPairing != null ? relayPairing : localPairing != null ? localPairing : padUrl : "";
+    }
+
+    /** Both pairing surfaces use the exact QR URL, including its code or relay capability. */
+    void openPairingInBrowser() {
+        String url = pairingUrl();
+        if (url.isBlank()) { showToast("The GamePad server is off"); return; }
+        Thread browser = new Thread(() -> {
+            try {
+                java.net.URI target = java.net.URI.create(url);
+                if (!"http".equalsIgnoreCase(target.getScheme()) && !"https".equalsIgnoreCase(target.getScheme()))
+                    throw new IllegalArgumentException("Unsupported pairing address");
+                if (!java.awt.Desktop.isDesktopSupported()
+                        || !java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE))
+                    throw new UnsupportedOperationException("No desktop browser");
+                java.awt.Desktop.getDesktop().browse(target);
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> showToast("Could not open the browser. Open the pairing link manually."));
+            }
+        }, "pairing-browser");
+        browser.setDaemon(true);
+        browser.start();
+    }
+
+    private boolean pairingHit(double x, double y) {
+        return showPad && serverOn && (pairingQrHit != null && pairingQrHit.contains(x, y)
+                || pairingLinkHit != null && pairingLinkHit.contains(x, y));
     }
 
     String pairingCode() {
@@ -1681,6 +1712,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     repaint();
                     return;
                 }
+                if (showPad) {
+                    if (e.getButton() == MouseEvent.BUTTON1 && pairingHit(e.getX(), e.getY())) {
+                        Sfx.select(); openPairingInBrowser();
+                    } else { showPad = false; repaint(); }
+                    return;
+                }
                 if (playing != null) return;
                 if (cinema != null) {
                     if (e.getButton() == MouseEvent.BUTTON3) cinema.back();
@@ -1736,6 +1773,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             }
 
             @Override
+            public void mouseMoved(MouseEvent e) {
+                boolean link = settings == null && (guide != null ? guide.pairingHit(e.getX(), e.getY()) : pairingHit(e.getX(), e.getY()));
+                setCursor(java.awt.Cursor.getPredefinedCursor(link ? java.awt.Cursor.HAND_CURSOR : java.awt.Cursor.DEFAULT_CURSOR));
+            }
+
+            @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
                 if (wakeIdle()) return;
                 if (settings != null) {
@@ -1753,6 +1796,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             }
         };
         addMouseListener(mouse);
+        addMouseMotionListener(mouse);
         addMouseWheelListener(mouse);
     }
 
@@ -3024,10 +3068,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.setColor(CARD);
         g.fill(card);
         QrCode qr = relayQr != null ? relayQr : this.qr;
-        String padUrl = relayPairing != null ? relayPairing : this.padUrl;
+        String padUrl = pairingUrl();
+        pairingQrHit = pairingLinkHit = null;
         float qrSize = ch * 0.64f;
         float qx = cx + ch * 0.12f, qy = cy + (ch - qrSize) / 2;
         if (qr != null) {
+            pairingQrHit = new Rectangle2D.Float(qx - 4, qy - 4, qrSize + 8, qrSize + 8);
             float cell = qrSize / (qr.size + 4);
             g.setColor(Color.WHITE);
             g.fill(new Rectangle2D.Float(qx, qy, qrSize, qrSize));
@@ -3057,6 +3103,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.setColor(ACCENT);
         fitFont(g, padUrl, Font.BOLD, ch * 0.055f, tw);
         g.drawString(padUrl, tx, ly);
+        FontMetrics linkMetrics = g.getFontMetrics();
+        pairingLinkHit = new Rectangle2D.Float(tx - 4, ly - Math.max(18, linkMetrics.getAscent()),
+                linkMetrics.stringWidth(padUrl) + 8, Math.max(28, linkMetrics.getHeight()));
         ly += ch * 0.12f;
         if (padNeedsCode) {
             g.setColor(TEXT_DIM);
