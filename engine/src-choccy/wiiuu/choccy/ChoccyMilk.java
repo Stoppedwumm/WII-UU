@@ -50,6 +50,7 @@ import static java.lang.foreign.ValueLayout.JAVA_SHORT;
  * java --enable-native-access=ALL-UNNAMED -cp wiiuu.jar wiiuu.choccy.ChoccyMilk CORE ROM SAVES SYSTEM [key=value ...]
  * stdin:  b PORT ID 0|1     a RetroPad button (ids as libretro's RETRO_DEVICE_ID_JOYPAD_*)
  *         s PORT STICK X Y  an analog stick, X / Y in -1..1
+ *         p X Y 0|1         absolute pointer, X / Y in -32767..32767 over the full frame
  *         q                 quit (saves first)
  *         save N / load N   a save state in slot N (0-9): ROM.state, ROM.state1 ... next to the saves
  *         c / a / x         achievements (see checkAchievements)
@@ -714,9 +715,21 @@ public final class ChoccyMilk {
         }
     }
 
+    private record Pointer(short x, short y, boolean down) {}
+    private volatile Pointer pointer = new Pointer((short) 0, (short) 0, false);
+
     private short inputState(int port, int device, int index, int id) {
         try {
             if (port < 0 || port >= buttons.length) return 0;
+            if ((device & 255) == 6 && port == 0 && index == 0) {
+                Pointer p = pointer;
+                return switch (id) {
+                    case 0 -> p.x();
+                    case 1 -> p.y();
+                    case 2, 3 -> (short) (p.down() ? 1 : 0);
+                    default -> 0;
+                };
+            }
             if (device == DEVICE_JOYPAD) {
                 int held = seen[port];
                 if (id == JOYPAD_MASK) return (short) held;
@@ -738,6 +751,10 @@ public final class ChoccyMilk {
                 String[] p = line.trim().split(" ");
                 try {
                     if (p[0].equals("q")) break;
+                    if (p[0].equals("p") && p.length == 4) {
+                        pointer = new Pointer(Short.parseShort(p[1]), Short.parseShort(p[2]), p[3].equals("1"));
+                        continue;
+                    }
                     if ((p[0].equals("save") || p[0].equals("load")) && p.length == 2) {     // save states: on the core's thread
                         stateQueue.add(p);
                         continue;

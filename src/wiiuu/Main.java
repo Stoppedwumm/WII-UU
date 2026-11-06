@@ -297,6 +297,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.screen = screen;
         if (screen != null) {
             screen.setRetroArch(launcher::inRetroArch);
+            screen.setChoccy(launcher::inChoccy, launcher::choccyTouch);
             screen.setDualScreen(dual);
         }
         router.setKeysPermitted(() -> !Boolean.FALSE.equals(macKeysAllowed));
@@ -350,7 +351,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         view = new MenuView(config, this);
         view.setAchievements(achievements);
         launcher.setChoccyScreen((px, w, h, aspect) -> {
-            view.choccyFrame(px, w, h, aspect);
+            Game game = launcher.current();
+            boolean split = config.getBool("choccy.splitScreens", true) && game != null && "nds".equals(game.system().id()) && h >= 2;
+            if (split) view.choccyFrame(java.util.Arrays.copyOf(px, w * (h / 2)), w, h / 2, 4f / 3);
+            else view.choccyFrame(px, w, h, aspect);
             ScreenStreamer s = screen;                  // the phones get the game's own picture, not a screen capture
             if (s != null) s.directFrame(px, w, h, aspect);
         });

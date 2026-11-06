@@ -19,6 +19,24 @@ permissions:
   id-token: write
 
 jobs:
+  actions-installer-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Test build ZIP import
+        shell: bash
+        run: |
+          mkdir -p build/installer-tests
+          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java test/wiiuu/core/ActionsBuildTest.java
+          java -cp build/installer-tests wiiuu.core.ActionsBuildTest
+
   build:
     runs-on: ubuntu-latest
     outputs:
@@ -29,7 +47,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "25"
 
       - name: Build jar and release zip (also copies it into docs/download and writes docs/version.json)
         id: version
@@ -47,13 +65,26 @@ jobs:
           test -s "$RUNNER_TEMP/menu.png"
           java -jar build/ChoccyMilk.jar --help
 
+      - name: Test Choccy Milk dual screens and pointer input
+        run: |
+          javac --release 22 -cp build/classes -d build/tests test/wiiuu/screen/ChoccyDualScreenTest.java
+          java --enable-native-access=ALL-UNNAMED -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.screen.ChoccyDualScreenTest
+
+      - name: Test GamePad screen selector
+        run: node test/web/screen-choices.cjs
+
       - name: Check shell scripts
         run: bash -n install.sh emulators.sh build.sh package.sh
+
+      - name: Prepare easy-install artifact
+        run: |
+          mkdir -p build/actions-artifact
+          unzip -q "dist/WII-UU-${{ env.VERSION }}.zip" -d build/actions-artifact
 
       - uses: actions/upload-artifact@v4
         with:
           name: WII-UU-${{ env.VERSION }}
-          path: dist/WII-UU-${{ env.VERSION }}.zip
+          path: build/actions-artifact/WII-UU-${{ env.VERSION }}/
           if-no-files-found: error
 
       - name: Keep only the current zip on the site

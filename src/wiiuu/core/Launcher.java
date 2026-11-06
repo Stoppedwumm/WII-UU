@@ -423,6 +423,12 @@ public final class Launcher {
         return s == null ? -1 : s.slot();
     }
 
+    /** A GamePad touch in normalized coordinates of the full core picture. */
+    public void choccyTouch(double x, double y, boolean down) {
+        Choccy.Session s = choccy;
+        if (s != null) s.pointer(x, y, down);
+    }
+
     /** A button for Choccy Milk; false when it isn't running (then the router does as usual). */
     public boolean choccyButton(int player, PadButton b, boolean down) {
         Choccy.Session s = choccy;

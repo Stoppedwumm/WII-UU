@@ -1214,3 +1214,31 @@ The code is in three parts:
 * `choccy-app/`: Choccy Milk on its own (`build/ChoccyMilk.jar`, `choccymilk.App`)
 
 The phone page is `resources/web/pad.html`.
+
+### Choccy Milk dual screens
+
+Nintendo DS games in Choccy Milk show the top screen on the TV. On the phone GamePad,
+select **Touch screen** for the bottom screen, including stylus taps and dragging.
+The TV stream also shows just the top screen. Frames and touch input go directly to
+Choccy Milk, including when it plays on a linked computer; no virtual monitor or
+screen-capture permission is needed. melonDS DS, melonDS and DeSmuME use a fixed
+vertical layout with no gap. Set `choccy.splitScreens=false` to keep both screens together (Settings → Consoles and emulators → Split DS screens in Choccy Milk). RetroArch’s `screen.split` setting does not affect Choccy Milk.
+This applies to DS software cores; 3DS cores requiring OpenGL still use RetroArch.
+
+### Install a GitHub Actions beta build
+
+Open **Settings → System → GitHub Actions builds**, choose a successful Build run,
+and download its WII-UU artifact (GitHub may require sign-in). Back in WII-UU, use
+**Choose a build ZIP**, select that download, then **Install selected beta build**
+and confirm. WII-UU installs it and restarts, keeping your settings and games.
+This works on Windows, macOS and Linux, and accepts older nested artifact ZIPs too.
+Only install artifacts from builds you trust: they contain executable application code.
+
+For a first Windows install, extract the downloaded artifact ZIP and double-click
+`install.bat` in the extracted folder. New artifacts contain the installation files
+directly, so there is no second ZIP to extract. The app displays a **BETA** badge
+at the top of the screen, including during Choccy Milk gameplay.
+
+On the GamePad **Now playing** page, tap **Show touch screen** to choose the lower
+DS screen. **Show TV here** shows the upper screen instead. Both options remain
+available when you return from the screen view.
