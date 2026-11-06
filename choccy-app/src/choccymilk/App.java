@@ -66,6 +66,9 @@ public final class App extends JPanel implements PadSink {
     private final GameScreen screen = new GameScreen();
     private final wiiuu.core.RaConnect ra;
     private JFrame frame;
+    private volatile boolean settingsOpen;
+    private boolean stylusDown;
+    private final java.util.Map<Integer, PadButton> heldKeys = new java.util.HashMap<>();
 
     /** consoles with games and cores, and the games of the chosen one */
     private List<GameSystem> systems = List.of();
@@ -90,6 +93,9 @@ public final class App extends JPanel implements PadSink {
         setPreferredSize(new Dimension(1100, 680));
         setFocusable(true);
         setFocusTraversalKeysEnabled(false);
+        addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override public void focusLost(java.awt.event.FocusEvent e) { releaseKeyboard(); }
+        });
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -107,7 +113,11 @@ public final class App extends JPanel implements PadSink {
                 requestFocusInWindow();
                 if (skipIntro()) return;
                 if (playing == null) click(e.getX(), e.getY(), e.getClickCount());
+                else if (e.getButton() == MouseEvent.BUTTON1) stylus(e.getX(), e.getY(), true);
             }
+
+            @Override public void mouseDragged(MouseEvent e) { if (stylusDown) stylus(e.getX(), e.getY(), true); }
+            @Override public void mouseReleased(MouseEvent e) { if (stylusDown) releaseStylus(); }
 
             @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
@@ -115,6 +125,7 @@ public final class App extends JPanel implements PadSink {
             }
         };
         addMouseListener(mouse);
+        addMouseMotionListener(mouse);
         addMouseWheelListener(mouse);
         library.addListener(s -> SwingUtilities.invokeLater(this::refresh));
         new Timer(250, e -> {
@@ -231,6 +242,7 @@ public final class App extends JPanel implements PadSink {
         long started = System.currentTimeMillis();
         System.out.println("[choccy] " + game.name() + " with " + core.getFileName());
         s.process().onExit().thenAccept(p -> SwingUtilities.invokeLater(() -> {
+            heldKeys.clear(); stylusDown = false;
             session = null;
             playing = null;
             screen.clear();
@@ -321,36 +333,91 @@ public final class App extends JPanel implements PadSink {
 
     // ---- input -----------------------------------------------------------------------------------
 
+    private void releaseStylus() {
+        if (session != null) session.pointer(0, 0, false);
+        stylusDown = false;
+    }
+    private void stylus(int x, int y, boolean down) {
+        if (session == null || playing == null || !playing.system().id().equals("nds")) return;
+        java.awt.Rectangle viewport = screen.pictureBounds(getWidth(), getHeight());
+        if (viewport.isEmpty() || !viewport.contains(x, y)) { releaseStylus(); return; }
+        double px = (x - viewport.x) / (double) viewport.width, py = (y - viewport.y) / (double) viewport.height;
+        if (py < .5) { releaseStylus(); return; }
+        session.pointer(px, py, down); stylusDown = down;
+    }
+
+    private void releaseKeyboard() {
+        releaseStylus();
+        Choccy.Session s = session;
+        if (s != null) for (PadButton b : heldKeys.values()) s.button(0, b, false);
+        heldKeys.clear();
+    }
+
+    private void settings() {
+        if (settingsOpen) return;
+        settingsOpen = true; releaseKeyboard();
+        Choccy.Session active = session;
+        if (active != null) for (int port = 0; port < 8; port++) {
+            for (PadButton button : PadButton.values()) active.button(port, button, false);
+            active.stick(port, 0, 0, 0); active.stick(port, 1, 0, 0);
+        }
+        try {
+            if (SettingsDialog.show(frame, config)) {
+                look = Look.pick(config.get("choccy.theme", "auto"), systemDark);
+                setBackground(look.bgBottom); library.rescanAsync();
+                say("Settings saved. DS online/core changes apply after restarting the game.");
+            }
+        } finally { settingsOpen = false; requestFocusInWindow(); repaint(); }
+    }
+
+    private void state(String action) {
+        Choccy.Session s = session;
+        if (s == null) return;
+        String text = s.state(action);
+        if (text != null) screen.announce(text, null, false, 2500);
+        repaint();
+    }
+
+    private javax.swing.JMenuBar menuBar() {
+        javax.swing.JMenuBar bar = new javax.swing.JMenuBar();
+        javax.swing.JMenu app = new javax.swing.JMenu("Choccy Milk");
+        javax.swing.JMenuItem settings = new javax.swing.JMenuItem("Settings… (F1)");
+        settings.addActionListener(e -> settings()); app.add(settings);
+        javax.swing.JMenu game = new javax.swing.JMenu("Game");
+        for (String action : new String[]{"save", "load", "slotdown", "slotup"}) {
+            javax.swing.JMenuItem item = new javax.swing.JMenuItem(switch (action) {
+                case "save" -> "Save state"; case "load" -> "Load state"; case "slotdown" -> "Previous state slot"; default -> "Next state slot";
+            });
+            item.addActionListener(e -> state(action)); game.add(item);
+        }
+        javax.swing.JMenuItem quit = new javax.swing.JMenuItem("Quit game"); quit.addActionListener(e -> stop()); game.add(quit);
+        javax.swing.JMenuItem full = new javax.swing.JMenuItem("Toggle full screen"); full.addActionListener(e -> fullScreen()); app.add(full);
+        bar.add(app); bar.add(game); return bar;
+    }
+
     private void key(KeyEvent e, boolean down) {
         int k = e.getKeyCode();
         if (down && skipIntro()) return;
-        if (k == KeyEvent.VK_F11 && down) {
+        if (k == KeyEvent.VK_F1) { if (down) settings(); return; }
+        if (settingsOpen) return;
+        String mapped = wiiuu.input.ChoccyKeys.action(config, k);
+        if ("fullscreen".equals(mapped) && down) {
             fullScreen();
             return;
         }
         Choccy.Session s = session;
         if (s != null) {
-            if (k == KeyEvent.VK_ESCAPE && down) {
-                stop();
+            if (!down) {
+                PadButton held = heldKeys.remove(k);
+                if (held != null && !heldKeys.containsValue(held)) s.button(0, held, false);
                 return;
             }
-            String state = !down ? null : switch (k) {           // save states, with RetroArch's keys
-                case KeyEvent.VK_F2 -> "save";
-                case KeyEvent.VK_F4 -> "load";
-                case KeyEvent.VK_F6 -> "slotdown";
-                case KeyEvent.VK_F7 -> "slotup";
-                default -> null;
-            };
-            if (state != null) {
-                String text = s.state(state);
-                if (text != null) {
-                    screen.announce(text, null, false, 2500);
-                    repaint();
-                }
-                return;
+            if ("quit".equals(mapped)) { releaseKeyboard(); stop(); return; }
+            if (java.util.Set.of("save", "load", "slotdown", "slotup").contains(mapped == null ? "" : mapped)) {
+                state(mapped); return;
             }
-            PadButton b = GameScreen.key(k);
-            if (b != null) s.button(0, b, down);
+            PadButton b = PadButton.parse(mapped == null ? "" : mapped);
+            if (b != null) { heldKeys.put(k, b); s.button(0, b, true); }
             return;
         }
         if (!down) return;
@@ -383,6 +450,7 @@ public final class App extends JPanel implements PadSink {
     /** Controllers: in a game they play it (HOME goes back); in the list they choose. */
     @Override
     public void button(int player, PadButton b, boolean down) {
+        if (settingsOpen) return;
         if (down && intro != null) {
             SwingUtilities.invokeLater(this::skipIntro);
             return;
@@ -420,6 +488,7 @@ public final class App extends JPanel implements PadSink {
 
     @Override
     public void stick(int player, int stick, float x, float y) {
+        if (settingsOpen) return;
         Choccy.Session s = session;
         Game g = playing;
         int port = player > 0 ? player - 1 : Math.max(0, -player - 1);
@@ -532,7 +601,7 @@ public final class App extends JPanel implements PadSink {
         Graphics2D g = (Graphics2D) g0;
         if (playing != null && screen.showing()) {
             int h = getHeight();
-            screen.paint(g, getWidth(), h, NAME + "  ·  Esc (or HOME): back to the list  ·  F2 / F4: save / load state",
+            screen.paint(g, getWidth(), h, NAME + "  ·  F1: Settings  ·  HOME: back to the list",
                     new Font(Font.SANS_SERIF, Font.BOLD, Math.max(11, Math.round(h * 0.028f))));
             return;
         }
@@ -679,7 +748,7 @@ public final class App extends JPanel implements PadSink {
         FontMetrics fm = g.getFontMetrics();
         boolean news = !status.isEmpty() && System.currentTimeMillis() - statusAt < 12000;
         String text = news ? status
-                : "↑↓ choose   Enter play   ←→ consoles / games   O open a file   U / W upscaling / widescreen   T look   F11 full screen   F2 "
+                : "F1 Settings   ↑↓ choose   Enter play   ←→ consoles / games   O open a file   U / W upscaling / widescreen   T look   F11 full screen   F2 "
                 + (ra.signedIn() ? "RetroAchievements: " + ra.user() : "RetroAchievements sign-in");
         if (news) {                                     // news in a little caramel pill
             float tw = Math.min(fm.stringWidth(text), l.w - 80 * u) + 28 * u, th = 28 * u;
@@ -752,6 +821,7 @@ public final class App extends JPanel implements PadSink {
                 }
             });
             f.setContentPane(app);
+            f.setJMenuBar(app.menuBar());
             f.pack();
             f.setLocationRelativeTo(null);
             f.setVisible(true);

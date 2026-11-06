@@ -254,7 +254,7 @@ public final class Launcher {
             });
             throw new LaunchException("Getting Java for Choccy Milk (about 50 MB, once)\u2026 the game starts by itself");
         }
-        Elsewhere away = hereOnce.remove(game.path()) ? null : elsewhere.apply(game);
+        Elsewhere away = hereOnce.remove(game.path()) || (game.system().id().equals("nds") && DsOnline.enabled(config)) ? null : elsewhere.apply(game);
         if (away != null) {
             startElsewhere(game, away);
             throw new LaunchException("Starting on " + away.name() + " (" + away.score() + ")\u2026");

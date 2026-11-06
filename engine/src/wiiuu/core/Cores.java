@@ -169,7 +169,8 @@ public final class Cores {
      * downloaded once, else the usual one (also when that core doesn't exist for this computer).
      */
     public Path choccyCoreFor(GameSystem system, Runnable afterDownload) throws Downloading {
-        List<String> want = ChoccyPicture.cores(config, system.id());
+        boolean dsOnline = system.id().equals("nds") && DsOnline.enabled(config);
+        List<String> want = dsOnline ? List.of("melondsds") : ChoccyPicture.cores(config, system.id());
         if (want != null) {
             boolean translated = Choccy.translated();
             Path own = translated ? choccyCoreDir().resolve(Choccy.arch()) : choccyCoreDir();
@@ -196,8 +197,9 @@ public final class Cores {
                 }, "core-download");
                 t.setDaemon(true);
                 t.start();
-                throw new Downloading("Getting " + want.get(0) + " for " + system.name() + "'s picture settings\u2026 the game starts by itself in a moment");
+                throw new Downloading("Getting " + want.get(0) + " for " + system.name() + "'s core settings\u2026 the game starts by itself in a moment");
             }
+            if (dsOnline) throw new Downloading("DS online needs melonDS DS. Install its libretro core, or enable core downloads and restart the app to retry.");
             System.out.println("[choccy] " + want.get(0) + " isn't available for this computer: " + system.name()
                     + " plays with its usual core (widescreen stretched, upscaling smoothed)");
         }
@@ -262,6 +264,8 @@ public final class Cores {
 
     /** RetroArch's system folder (BIOS files), when there is one. */
     public Path systemDir() {
+        String override = config.get("choccy.systemDir", "").trim();
+        if (!override.isEmpty()) return Path.of(override);
         List<String> exe = executable();
         for (List<String> e : java.util.Arrays.asList(exe, List.of("/snap/bin/retroarch"))) {
             if (e == null) continue;
@@ -274,6 +278,7 @@ public final class Cores {
     /** Core options Choccy Milk gives this console's cores: N64 without OpenGL (and without the recompiler if it crashed). */
     public java.util.Map<String, String> choccyOptions(String systemId) {
         java.util.Map<String, String> o = new java.util.LinkedHashMap<>(ChoccyPicture.options(config, systemId));
+        if (systemId.equals("nds")) o.putAll(DsOnline.options(config));
         if (systemId.equals("n64")) {
             // the software renderer (Angrylion: no OpenGL needed) on every processor core
             o.put("mupen64plus-rdp-plugin", "angrylion");

@@ -3,6 +3,21 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.0 (2026-11-06)
+- **Standalone Choccy Milk Settings:** open Choccy Milk → Settings or press F1, including during
+  a game. Configure keyboard bindings and emulator shortcuts, theme/startup animation,
+  game and BIOS folders, and per-console upscaling, frame blending and widescreen.
+- Capture keys, unbind actions, restore defaults, and reject conflicting assignments.
+  Keyboard and stylus inputs release when Settings opens or the app loses focus.
+- **DS online (WFC) settings in both apps:** enable melonDS DS indirect networking and use its
+  default replacement service or a custom IPv4 DNS. Configure a stable profile name;
+  deriving the MAC from it is optional and existing firmware identities remain unchanged.
+- Online DS games require the melonDS DS core. They run on this computer so its profile and
+  network settings apply. Restart the game after changing online settings. Compatibility,
+  friend-code setup and any SSL patches depend on the game and replacement service.
+- Standalone Choccy Milk now supports DS stylus clicks and dragging in the lower screen.
+  WFC is distinct from DS local wireless / Download Play and general rollback netplay.
+
 ## 1.13.3 (2026-11-06)
 - Click the GamePad QR code or pairing link to open it in the default web browser, in both
   the pairing overlay and the setup guide. Works with LAN and relay addresses, preserving

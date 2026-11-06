@@ -85,7 +85,7 @@ public final class ChoccyMilk {
     private float aspect = 4f / 3;
     private int baseW = 256, baseH = 240;
     private boolean wantsHardware;
-    private MemorySegment systemDirC, saveDirC;
+    private MemorySegment systemDirC, saveDirC, usernameC;
 
     // input: written by the stdin thread, read by the core's thread
     private final int[] buttons = new int[8];
@@ -471,6 +471,13 @@ public final class ChoccyMilk {
             }
             case 37 -> {                                    // SET_GEOMETRY
                 readGeometry(data.reinterpret(20));
+                return true;
+            }
+            case 38 -> {                                    // GET_USERNAME: stable DS firmware/MAC identity
+                String name = overrides.get("wiiuu.username");
+                if (name == null || name.isBlank()) return false;
+                if (usernameC == null) usernameC = arena.allocateFrom(name);
+                data.reinterpret(8).set(ADDRESS, 0, usernameC);
                 return true;
             }
             case 39 -> {                                    // GET_LANGUAGE: English

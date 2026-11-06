@@ -866,6 +866,7 @@ public final class SettingsScreen {
             config.set("choccy.enabled", Boolean.toString(on));
             config.save();
         }));
+        r.add(new Link("DS online (WFC)", "Online settings shared with standalone Choccy Milk; uses the melonDS DS core.", null, this::dsOnlinePage));
         r.add(new Link("Choccy Milk picture", "Upscaling (also rounded xBR and a CRT TV look), blending frames and "
                 + "widescreen, per console.", null, this::choccyPicturePage));
         r.add(new Link("Share the work", "Let a faster linked WII-UU run the game while this one shows it: each computer's "
@@ -1041,6 +1042,30 @@ public final class SettingsScreen {
             r.add(new Info("The score: how fast the computer runs that console (a processor test at first, then the real "
                     + "speed of games played there), and for another computer the ping (input lag) and whether the network has "
                     + "room for the picture. Wired networks score better than Wi-Fi."));
+            return r;
+        });
+    }
+
+    private Page dsOnlinePage() {
+        return new Page("DS online (WFC)", () -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info("Shared with standalone Choccy Milk. Changes apply after restarting the game."));
+            r.add(toggle("Enable DS online", "Uses melonDS DS indirect networking and WFC replacement services. The required core is downloaded when available.", "choccy.nds.online", false, null));
+            r.add(new Text("WFC DNS override", "IPv4 address from your replacement service. Blank uses the core's default service.",
+                    () -> wiiuu.core.DsOnline.dns(config), value -> {
+                        String dns = value.trim();
+                        if (!wiiuu.core.DsOnline.validDns(dns)) { say("Enter an IPv4 DNS address, or leave it blank"); return; }
+                        config.set("choccy.nds.dns", dns); config.save();
+                    }, false, "core default"));
+            r.add(new Text("DS profile name", "1–10 letters, digits, _ or -. Keep stable for existing online profiles.",
+                    () -> wiiuu.core.DsOnline.username(config), value -> {
+                        String name = value.trim();
+                        if (!wiiuu.core.DsOnline.validName(name)) { say("Use 1–10 letters, digits, _ or -"); return; }
+                        config.set("choccy.nds.username", name); config.save();
+                    }, false, "profile name"));
+            r.add(toggle("Derive MAC from profile", "Off preserves existing firmware/MAC. Changing MAC/profile may affect online identities and Pokémon save access.", "choccy.nds.online.uniqueMac", false, null));
+            r.add(new Info("In the game's WFC setup connect to melonAP, then use its online or friend-code menu. Game support and SSL patches depend on the service."));
+            r.add(new Info("WFC online play is separate from DS local wireless / Download Play and rollback netplay. The GamePad relay does not relay DS network packets."));
             return r;
         });
     }
