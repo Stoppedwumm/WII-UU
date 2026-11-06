@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.13.2 (2026-11-06)
+- **Restricted Wi-Fi relay:** Settings → GamePad & players → Start internet relay creates a
+  temporary HTTPS GamePad address and pairing QR, even when Wi-Fi isolates devices or the
+  phone uses mobile data. Stop the relay to close the internet link and restore the LAN QR.
+- Bundle cloudflared 2026.10.7 for Windows, macOS and Linux. The wrapper verifies and extracts
+  the matching executable, uses an isolated loopback origin, and stops it when WII-UU closes.
+  No separate download, Cloudflare login or inbound port forwarding is needed.
+- Relay access uses a fresh secret per session plus normal GamePad pairing. Peer transfers,
+  setup forms and OpenBased account changes remain local. Frames and sound use HTTP polling.
+
 ## 1.13.1 (2026-11-06)
 - **Choccy Milk DS dual screens:** the upper screen stays in WII-UU's main window;
   choose **Show touch screen** on the phone GamePad for the lower screen, with stylus taps

@@ -1241,3 +1241,32 @@ directly, so there is no second ZIP to extract. Development builds display a **B
 On the GamePad **Now playing** page, tap **Show touch screen** to choose the lower
 DS screen. **Show TV here** shows the upper screen instead. Both options remain
 available when you return from the screen view.
+
+### GamePads on restricted Wi-Fi
+
+If the phone and computer cannot reach each other, open **Settings → GamePad & players →
+Start internet relay**. Wait for **Relay ready**, then choose **Show relay pairing QR**
+(or press + on the main menu). The phone can scan this QR using restricted Wi-Fi or mobile
+internet. Both devices need internet access. The existing LAN address still works.
+**Stop internet relay** immediately closes the public link and restores the local pairing QR.
+The relay is temporary and never starts automatically; restarting it creates a new link.
+
+Packaged builds include cloudflared **2026.10.7** for Windows x64/x86 (Windows ARM uses
+x64 emulation), macOS Intel/Apple Silicon, and Linux x64/ARM64. WII-UU extracts the matching
+binary and checks its SHA-256. No Cloudflare account or manual helper installation is needed.
+Source builds can bundle helpers with `python3 tools/package-cloudflared.py` before `build.sh`;
+`package.sh` does this automatically. Downloads and their hashes are pinned in
+`tools/cloudflared.json`; Cloudflare's Apache 2.0 license is included in the JAR.
+
+Only share the relay QR/link with players: it grants GamePad control and access to the
+streamed picture and sound through Cloudflare. A new random session secret protects the
+public endpoint even if LAN pairing codes are disabled. Device-linking/file transfer and
+setup/account-changing routes are excluded. The browser keeps the secret in a secure,
+HTTP-only cookie, and a stopped or restarted relay invalidates it.
+
+Internet relaying adds latency and bandwidth use, so local Wi-Fi is better when available.
+Quick Tunnels have no uptime guarantee; networks blocking Cloudflare Tunnel's outbound
+TCP port 7844 or the trycloudflare.com service may still prevent connection. The wrapper
+uses HTTP/2, so blocked UDP alone does not prevent it working. GamePad video and audio
+use single-response polling rather than relying on buffered continuous/SSE streams.
+Logs are in `~/.wiiuu/relay/cloudflared.log` (or the selected WII-UU home).

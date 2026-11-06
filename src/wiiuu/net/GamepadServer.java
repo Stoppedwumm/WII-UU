@@ -149,6 +149,7 @@ public final class GamepadServer {
         final boolean controller;
         /** a controller another WII-UU sends (Peers): forgotten when it stops */
         volatile boolean remote;
+        volatile boolean relayed;
 
         Client(String id, int player) {
             this(id, player, false);
@@ -179,6 +180,32 @@ public final class GamepadServer {
     private byte[] musicCache;
     private byte[] iconCache;
     private int port;
+    private volatile CloudflaredRelay relay;
+    private volatile Runnable relayChanged = () -> {};
+    public void onRelayChanged(Runnable changed) { relayChanged = changed; }
+    public boolean relayActive() { return relay != null && relay.active(); }
+    public String relayStatus() { return relay == null ? "Relay is off" : relay.status(); }
+    public String relayPairingUrl() { return relay == null ? null : relay.pairingUrl(); }
+    public synchronized void startRelay() {
+        if (http == null || stopped) return;
+        if (relay == null) relay = new CloudflaredRelay(config.home(), ex -> handle(ex, true), code, this::relayStateChanged);
+        relay.start();
+    }
+    public void stopRelay() { if (relay != null) relay.close(); }
+    private void relayStateChanged() {
+        if (!relayActive()) {
+            boolean changed = false;
+            for (Client c : clients.values()) if (c.relayed && c.active) {
+                c.active = false; c.relayed = false; release(c); changed = true;
+            }
+            if (changed) {
+                if (screen != null) screen.releaseTouch();
+                host.padsChanged(connectedPads());
+            }
+        }
+        relayChanged.run();
+    }
+
 
     public GamepadServer(Config config, Library library, Launcher launcher, InputRouter router, Host host,
                          ScreenStreamer screen, DsuServer dsu) {
@@ -543,6 +570,7 @@ public final class GamepadServer {
 
     public void start(int port) throws IOException {
         this.port = port;
+        Runtime.getRuntime().addShutdownHook(new Thread(this::stopRelay, "relay-shutdown"));
         // cached pool: every open screen stream holds a thread for as long as it is watched
         var pool = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "gamepad-http");
@@ -637,6 +665,7 @@ public final class GamepadServer {
 
     public void stop() {
         stopped = true;
+        stopRelay();
         if (peers != null) peers.stop();
         saveClients();
         if (http != null) http.stop(0);
@@ -694,7 +723,9 @@ public final class GamepadServer {
 
     // ---- request handling ---------------------------------------------------------------
 
-    private void handle(HttpExchange ex) throws IOException {
+    private void handle(HttpExchange ex) throws IOException { handle(ex, false); }
+
+    private void handle(HttpExchange ex, boolean relayed) throws IOException {
         try (ex) {
             String path = ex.getRequestURI().getPath();
             String method = ex.getRequestMethod();
@@ -717,8 +748,9 @@ public final class GamepadServer {
                         json(ex, 401, new Json().obj().kv("error", "not paired").endObj());
                         return;
                     }
+                    c.relayed = relayed;
                     switch (path) {
-                        case "/api/status" -> json(ex, 200, status(c));
+                        case "/api/status" -> json(ex, 200, status(c, relayed));
                         case "/api/stream" -> stream(ex, query(ex).getOrDefault("m", "tv"), "1".equals(query(ex).get("raw")));
                         case "/api/frame" -> frame(ex, query(ex));
                         case "/api/audio" -> audio(ex, query(ex));
@@ -1040,7 +1072,7 @@ public final class GamepadServer {
 
     // ---- JSON payloads ------------------------------------------------------------------
 
-    private Json status(Client c) {
+    private Json status(Client c, boolean relayed) {
         Game g = launcher.current();
         Json j = new Json().obj()
                 .kv("closing", closing)
@@ -1056,7 +1088,8 @@ public final class GamepadServer {
                 .kv("tv", screen != null && screen.available())
                 .kv("dsu", dsu != null)
                 .kv("pad", pads != null && pads.usable())
-                .kv("stream", screen == null ? "off" : screen.backend())
+                .kv("stream", screen == null ? "off" : relayed ? "relay" : screen.backend())
+                .kv("relay", relayed)
                 .kv("audio", audio != null)
                 .kv("captureBlocked", screen != null && screen.captureBlocked())
                 .kv("buzz", g != null && wiiuu.core.Buzz.active(config, g))
@@ -1067,7 +1100,7 @@ public final class GamepadServer {
         j.key("taken").arr();                           // numbers other connected phones have
         for (Client o : clients.values()) if (o != c && o.active && o.player > 0) j.val(o.player);
         j.endArr();
-        String secure = httpsUrl();
+        String secure = relayed ? null : httpsUrl();
         j.key("https");
         if (secure == null) j.val((String) null);
         else j.val(secure + (requiresCode() ? "?code=" + code : ""));
