@@ -129,6 +129,10 @@ public final class Launcher {
 
     // ---- Choccy Milk: WII-UU's own frontend for RetroArch's cores --------------------------------
 
+    private volatile java.util.function.Consumer<String> choccyStartup = text -> {};
+    public void setChoccyStartup(java.util.function.Consumer<String> listener) { choccyStartup = listener; }
+    public String choccyStartup() { Choccy.Session s = choccy; return s == null ? "Starting Choccy Milk…" : s.startup(); }
+
     private volatile Choccy.Screen choccyScreen = (px, w, h, a) -> { };
     private volatile Choccy.Session choccy;
 
@@ -320,6 +324,7 @@ public final class Launcher {
         String[] look = retroArch.choccyLook(game, core);
         choccyLook.accept(look[0], !look[1].isEmpty());
         final Process p = session.process();
+        session.onStartup(text -> { if (choccy == session) choccyStartup.accept(text); });
         session.onNotice(text -> announcer.announce(text, null, false));
         ChoccyCheevos.start(ra, session, game, new ChoccyCheevos.Events() {
             @Override

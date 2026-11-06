@@ -19,6 +19,38 @@ permissions:
   id-token: write
 
 jobs:
+  native-ds-startup:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "27"
+      - name: Test actual native DS frame path on Java 27
+        shell: bash
+        run: |
+          mkdir -p build/native-startup
+          find engine/src -name '*.java' > build/native-engine.txt
+          javac --release 17 -d build/native-startup @build/native-engine.txt
+          find engine/src-choccy -name '*.java' > build/native-helper.txt
+          javac --release 22 -cp build/native-startup -d build/native-startup @build/native-helper.txt
+          javac --release 17 -cp build/native-startup -d build/native-startup test/wiiuu/core/NativeStartupTest.java
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            core=build/native-startup/melondsds_libretro.dylib
+            clang -dynamiclib -o "$core" test/native/ds_startup_fixture.c
+          else
+            core=build/native-startup/melondsds_libretro.so
+            gcc -shared -fPIC -o "$core" test/native/ds_startup_fixture.c
+          fi
+          java --enable-native-access=ALL-UNNAMED -Djava.awt.headless=true -cp build/native-startup wiiuu.core.NativeStartupTest "$core"
+
   actions-installer-test:
     strategy:
       matrix:

@@ -3,6 +3,16 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.2 (2026-11-06)
+- Switch WII-UU into Choccy Milk's game view as soon as the helper starts, restore the window
+  if minimized, and show startup progress while waiting for the first picture.
+- Run melonDS DS on an ordinary JVM thread instead of the special coroutine-stack workaround
+  used by other cores. Add native macOS/Linux frame-path regression coverage on Java 27.
+- Surface core loading, game loading, audio initialization and video startup phases in the game
+  view and core log. A delayed first picture reports the current phase and the core-log path.
+- Report malformed or failed frame streams and stop their helper instead of silently leaving
+  a live process with no picture. Startup messages remain compatible with linked WII-UUs.
+
 ## 1.14.1 (2026-11-06)
 - **Core manager in both apps:** standalone Choccy Milk Settings → Cores, or WII-UU Settings →
   Games → Choccy Milk cores. Choose a core per console, see installed cores and their paths,
