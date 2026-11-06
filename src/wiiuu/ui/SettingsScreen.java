@@ -1222,6 +1222,23 @@ public final class SettingsScreen {
             config.set("server.port", Integer.toString(v));
             config.save();
         }));
+        r.add(new Header("Restricted Wi-Fi relay"));
+        r.add(new Action("Start internet relay", "For Wi-Fi that isolates devices. Routes GamePad controls and screen over Cloudflare. Requires internet; adds latency. Share the relay QR only with players.", () -> {
+            var g = sv.gamepad().get();
+            if (g == null) { say("Turn on the GamePad server and restart WII-UU first"); return; }
+            g.startRelay();
+            say("Starting relay. Open the pairing QR (+) once it is ready.");
+        }, () -> { var g = sv.gamepad().get(); return g == null ? "GamePad server is off" : g.relayStatus(); }, null));
+        r.add(new Action("Show relay pairing QR", "Shows the temporary internet link once the relay is ready.", () -> {
+            var g = sv.gamepad().get();
+            if (g == null || g.relayPairingUrl() == null) { say(g == null ? "GamePad server is off" : g.relayStatus()); return; }
+            view.setRelay(g.relayPairingUrl());
+            close(); view.showPadOverlay();
+        }, null, null));
+        r.add(new Action("Stop internet relay", "Closes the public link. Local GamePads continue to work.", () -> {
+            var g = sv.gamepad().get(); if (g != null) g.stopRelay();
+            view.setRelay(null); say("Relay stopped. The pairing QR uses local Wi-Fi again.");
+        }, null, null));
         r.add(new Link("Player order", "Which phone or controller is player 1, 2, 3... Games read player 1's controller first.",
                 () -> {
                     wiiuu.net.GamepadServer g = sv.gamepad().get();

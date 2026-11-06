@@ -846,6 +846,7 @@ function frameUrl(after) {
 }
 // a status line on the picture until the first frame shows, so a blank screen says why
 function streamInfo(text) { $("streamInfo").textContent = text || ""; }
+let relayImageTimer;
 function startStream() {
   if (!S.id || document.hidden) return;
   stopStream();
@@ -853,7 +854,14 @@ function startStream() {
     $("streamImg").classList.remove("hidden"); canvas.classList.add("hidden");
     streamInfo("Connecting (image player)\u2026");
     $("streamImg").onload = () => streamInfo("");
-    $("streamImg").src = streamUrl(false);
+    if (S.stream === "relay") {
+      const pollImage = () => {
+        if (S.view === "screen" && !document.hidden) $("streamImg").src = frameUrl(-1);
+      };
+      $("streamImg").onload = () => { streamInfo(""); relayImageTimer = setTimeout(pollImage, 100); };
+      $("streamImg").onerror = () => { relayImageTimer = setTimeout(pollImage, 1000); };
+      pollImage();
+    } else $("streamImg").src = streamUrl(false);
     return;
   }
   streamInfo("Connecting\u2026");
@@ -874,6 +882,9 @@ function startStream() {
   });
 }
 function stopStream() {
+  clearTimeout(relayImageTimer);
+  $("streamImg").onload = null;
+  $("streamImg").onerror = null;
   streamInfo("");
   if (streamCtl) { streamCtl.abort(); streamCtl = null; }
   $("streamImg").src = BLANK;

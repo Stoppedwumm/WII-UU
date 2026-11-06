@@ -22,7 +22,7 @@ jobs:
   actions-installer-test:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +37,19 @@ jobs:
           javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java src/wiiuu/core/BuildInfo.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java
           java -cp build/installer-tests wiiuu.core.ActionsBuildTest
           java -cp build/installer-tests wiiuu.core.BuildInfoTest
+      - name: Test native cloudflared bundle and relay boundary
+        shell: bash
+        run: |
+          case "$RUNNER_OS/$RUNNER_ARCH" in
+            Windows/*) platform=windows-amd64; binary=cloudflared.exe ;;
+            macOS/ARM64) platform=darwin-arm64; binary=cloudflared ;;
+            macOS/*) platform=darwin-amd64; binary=cloudflared ;;
+            Linux/*) platform=linux-amd64; binary=cloudflared ;;
+          esac
+          python3 tools/package-cloudflared.py "$platform"
+          "build/cloudflared/$platform/$binary" --version
+          javac --release 17 -d build/installer-tests src/wiiuu/net/CloudflaredRelay.java src/wiiuu/net/RelayGateway.java src/wiiuu/net/QrCode.java test/wiiuu/net/RelayTest.java
+          java -Djava.awt.headless=true -cp build/installer-tests wiiuu.net.RelayTest
 
   build:
     runs-on: ubuntu-latest
@@ -76,6 +89,12 @@ jobs:
         run: |
           javac --release 22 -cp build/classes -d build/tests test/wiiuu/screen/ChoccyDualScreenTest.java
           java --enable-native-access=ALL-UNNAMED -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.screen.ChoccyDualScreenTest
+
+      - name: Test relay boundary and bundled Linux helper
+        run: |
+          javac --release 17 -cp build/classes -d build/tests test/wiiuu/net/RelayTest.java
+          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.net.RelayTest
+          build/cloudflared/linux-amd64/cloudflared --version
 
       - name: Test GamePad screen selector
         run: node test/web/screen-choices.cjs

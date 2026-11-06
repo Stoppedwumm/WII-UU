@@ -42,7 +42,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.13.1";
+    public static final String VERSION = "1.13.2";
 
     private final Config config;
     private final Library library;
@@ -308,6 +308,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                             : "GamePad screen is black: screen capture seems blocked")));
         }
         server = new GamepadServer(config, library, launcher, router, this, screen, dsu);
+        server.onRelayChanged(() -> SwingUtilities.invokeLater(() -> {
+            GamepadServer current = server;
+            if (current != null) view.setRelay(current.relayPairingUrl());
+        }));
         // killed from outside (Console Mode's session, the system shutting down): the phones still hear it
         GamepadServer phones = server;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> phones.announceClosing("quit"), "tell-phones"));

@@ -595,6 +595,16 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }
 
+    private volatile String relayPairing;
+    private QrCode relayQr;
+    public void showPadOverlay() { showPad = true; repaint(); }
+
+    public void setRelay(String url) {
+        relayPairing = url;
+        relayQr = url == null ? null : QrCode.encode(url);
+        repaint();
+    }
+
     public void setServer(String url, String pairingUrl, String code, boolean needsCode) {
         serverOn = url != null;
         padUrl = url == null ? "" : url;
@@ -1117,11 +1127,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     QrCode pairingQr() {
-        return serverOn ? qr : null;
+        return serverOn ? relayQr != null ? relayQr : qr : null;
     }
 
     String pairingUrl() {
-        return serverOn ? padUrl : "";
+        return serverOn ? relayPairing != null ? relayPairing : padUrl : "";
     }
 
     String pairingCode() {
@@ -2304,6 +2314,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
         if (choccyScreen.showing() && playing != null) {
             paintChoccy(g, getWidth(), getHeight());
+            if (showPad) paintPadOverlay(g, L);
             g.dispose();
             Toolkit.getDefaultToolkit().sync();
             return;
@@ -3012,6 +3023,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         shadow(g, card, 10);
         g.setColor(CARD);
         g.fill(card);
+        QrCode qr = relayQr != null ? relayQr : this.qr;
+        String padUrl = relayPairing != null ? relayPairing : this.padUrl;
         float qrSize = ch * 0.64f;
         float qx = cx + ch * 0.12f, qy = cy + (ch - qrSize) / 2;
         if (qr != null) {
@@ -3037,7 +3050,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             g.drawString("The GamePad server is turned off in Settings.", tx, ly);
             return;
         }
-        for (String s : new String[]{"1. Join the same Wi-Fi as this computer.", "2. Scan the code, or open:"}) {
+        for (String s : new String[]{relayPairing != null ? "1. Relay: connect your phone to the internet." : "1. Join the same Wi-Fi as this computer.", "2. Scan the code, or open:"}) {
             g.drawString(ellipsize(g, s, tw), tx, ly);
             ly += ch * 0.075f;
         }

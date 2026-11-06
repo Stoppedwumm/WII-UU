@@ -43,6 +43,7 @@ find src -name '*.java' > build/sources.txt
 javac --release 17 -encoding UTF-8 -cp build/engine -d build/classes @build/sources.txt
 cp -r build/engine/. build/classes/
 cp -r resources/. build/classes/
+if [ -d build/cloudflared ]; then cp -r build/cloudflared/. build/classes/cloudflared/; fi
 # Development builds carry the badge; release packaging explicitly chooses release.
 BUILD_CHANNEL="${WIIUU_BUILD_CHANNEL:-beta}"
 case "$BUILD_CHANNEL" in beta|release) ;; *) echo "Unknown build channel: $BUILD_CHANNEL" >&2; exit 1 ;; esac
@@ -56,7 +57,7 @@ echo "Built build/wiiuu.jar"
 printf 'Main-Class: wiiuu.react.Editor\n' > build/manifest-reactions.txt
 # (without WII-UU's example reaction packs: the editor doesn't need them)
 jar --create --file build/WII-UU-Reactions.jar --manifest build/manifest-reactions.txt -C build/classes .
-zip -q -d build/WII-UU-Reactions.jar 'reactions/*' >/dev/null || true
+zip -q -d build/WII-UU-Reactions.jar 'reactions/*' 'cloudflared/*' >/dev/null || true
 echo "Built build/WII-UU-Reactions.jar"
 # Choccy Milk on its own, on the engine
 find choccy-app/src -name '*.java' > build/sources-app.txt
