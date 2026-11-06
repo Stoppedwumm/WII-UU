@@ -62,6 +62,7 @@ final class SetupGuide {
     private final long opened = System.currentTimeMillis();
     private long closing;
 
+    private Rectangle2D pairingQrHit, pairingLinkHit;
     private Step step = Step.WELCOME;
     private Step leaving;                    // the step sliding out, during a change
     private int direction = 1;
@@ -407,7 +408,14 @@ final class SetupGuide {
     }
 
     /** A click: the item under it, if any. */
+    boolean pairingHit(double x, double y) {
+        return step == Step.GAMEPAD && closing == 0 && System.currentTimeMillis() - changed >= SLIDE_MS
+                && view.pairingQr() != null && (pairingQrHit != null && pairingQrHit.contains(x, y)
+                || pairingLinkHit != null && pairingLinkHit.contains(x, y));
+    }
+
     void click(double x, double y) {
+        if (pairingHit(x, y)) { view.openPairingInBrowser(); return; }
         for (int i = 0; i < current.size(); i++) {
             Rectangle2D r = current.get(i).rect;
             if (r != null && r.contains(x, y)) {
@@ -901,6 +909,8 @@ final class SetupGuide {
 
     private void paintPairing(Graphics2D g, float x, float y, float size, float textX, float textY, long now) {
         QrCode qr = view.pairingQr();
+        pairingQrHit = qr == null ? null : new Rectangle2D.Float(x, y, size, size);
+        pairingLinkHit = null;
         g.setColor(Color.WHITE);
         g.fill(new RoundRectangle2D.Float(x - 10, y - 10, size + 20, size + 20, 24, 24));
         if (qr != null) {
@@ -925,6 +935,9 @@ final class SetupGuide {
         g.setColor(MenuView.ACCENT);
         fit(g, view.pairingUrl(), Font.BOLD, h * 0.04f, x - textX - h * 0.04f);
         g.drawString(view.pairingUrl(), textX, textY + h * 0.02f);
+        var linkMetrics = g.getFontMetrics();
+        pairingLinkHit = new Rectangle2D.Float(textX - 4, textY + h * 0.02f - Math.max(18, linkMetrics.getAscent()),
+                linkMetrics.stringWidth(view.pairingUrl()) + 8, Math.max(28, linkMetrics.getHeight()));
         if (view.pairingNeedsCode() && !view.pairingCode().isEmpty()) {
             g.setColor(MenuView.TEXT_DIM);
             g.setFont(MenuView.font(Font.PLAIN, h * 0.03f));

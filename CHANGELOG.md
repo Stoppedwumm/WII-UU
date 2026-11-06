@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.13.3 (2026-11-06)
+- Click the GamePad QR code or pairing link to open it in the default web browser, in both
+  the pairing overlay and the setup guide. Works with LAN and relay addresses, preserving
+  the pairing code and relay session link. A hand cursor marks clickable areas.
+
 ## 1.13.2 (2026-11-06)
 - **Restricted Wi-Fi relay:** Settings → GamePad & players → Start internet relay creates a
   temporary HTTPS GamePad address and pairing QR, even when Wi-Fi isolates devices or the
