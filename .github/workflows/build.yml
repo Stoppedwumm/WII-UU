@@ -34,7 +34,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/installer-tests
-          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java test/wiiuu/core/ActionsBuildTest.java
+          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java test/wiiuu/core/ActionsBuildTest.java
           java -cp build/installer-tests wiiuu.core.ActionsBuildTest
 
   build:
