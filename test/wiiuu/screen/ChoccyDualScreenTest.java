@@ -85,6 +85,29 @@ public final class ChoccyDualScreenTest {
         check((short) input.invoke(milk, 0, 6, 0, 1) == 16384, "pointer Y callback");
         check((short) input.invoke(milk, 0, 6, 0, 2) == 1, "pointer pressed callback");
         check((short) input.invoke(milk, 1, 6, 0, 2) == 0, "pointer belongs to player one");
+        var overrides = helper.getDeclaredField("overrides"); overrides.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        var coreOptions = (java.util.Map<String, String>) overrides.get(milk);
+        coreOptions.put("wiiuu.username", "PlayerTwo");
+        var env = helper.getDeclaredMethod("env", int.class, java.lang.foreign.MemorySegment.class); env.setAccessible(true);
+        try (var arena = java.lang.foreign.Arena.ofConfined()) {
+            var username = arena.allocate(java.lang.foreign.ValueLayout.ADDRESS);
+            check((boolean) env.invoke(milk, 38, username), "GET_USERNAME supported");
+            var namePointer = username.get(java.lang.foreign.ValueLayout.ADDRESS, 0);
+            check(namePointer.reinterpret(32).getString(0).equals("PlayerTwo"), "DS identity reaches native core");
+        }
+        var capabilities = helper.getDeclaredMethod("checkOnlineCapabilities"); capabilities.setAccessible(true);
+        capabilities.invoke(milk); // offline cores remain supported
+        coreOptions.put("wiiuu.dsOnline", "true");
+        try {
+            capabilities.invoke(milk);
+            throw new AssertionError("Missing networking must be reported before gameplay");
+        } catch (java.lang.reflect.InvocationTargetException expected) {
+            check(expected.getCause() instanceof IllegalStateException, "missing networking error");
+        }
+        var defaultsField = helper.getDeclaredField("defaults"); defaultsField.setAccessible(true);
+        @SuppressWarnings("unchecked") var coreDefaults = (java.util.Map<String, String>) defaultsField.get(milk);
+        coreDefaults.put("melonds_network_mode", "indirect"); capabilities.invoke(milk);
         System.out.println("Choccy dual screen tests passed");
         System.exit(0);
     }

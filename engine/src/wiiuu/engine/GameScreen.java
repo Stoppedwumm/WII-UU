@@ -310,17 +310,21 @@ public final class GameScreen {
      * Paints the picture over w x h. hint (or null) shows for 4 s from the first paint, in font
      * (sized by the caller, about 2.8 % of the height looks right).
      */
+    /** Exact viewport used for drawing, also used to map standalone DS stylus clicks. */
+    public java.awt.Rectangle pictureBounds(int w, int h) {
+        if (picture == null || w <= 0 || h <= 0) return new java.awt.Rectangle();
+        int dh = h, dw = Math.round(h * aspect);
+        if (dw > w) { dw = w; dh = Math.round(w / aspect); }
+        return new java.awt.Rectangle((w - dw) / 2, (h - dh) / 2, dw, dh);
+    }
+
     public void paint(Graphics2D g, int w, int h, String hint, Font font) {
         BufferedImage img = picture;
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, w, h);
         if (img == null) return;
-        float a = aspect;
-        int dh = h, dw = Math.round(h * a);
-        if (dw > w) {
-            dw = w;
-            dh = Math.round(w / a);
-        }
+        java.awt.Rectangle viewport = pictureBounds(w, h);
+        int dw = viewport.width, dh = viewport.height;
         // whole pixels, or (smooth and the upscalers) softened to the screen's size
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, filter.equals("off")
                 ? RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR : RenderingHints.VALUE_INTERPOLATION_BILINEAR);

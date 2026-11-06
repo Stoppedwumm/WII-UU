@@ -1270,3 +1270,32 @@ TCP port 7844 or the trycloudflare.com service may still prevent connection. The
 uses HTTP/2, so blocked UDP alone does not prevent it working. GamePad video and audio
 use single-response polling rather than relying on buffered continuous/SSE streams.
 Logs are in `~/.wiiuu/relay/cloudflared.log` (or the selected WII-UU home).
+
+### Standalone Choccy Milk settings and DS online
+
+In **ChoccyMilk.jar**, use **Choccy Milk → Settings** or **F1**. The settings window has
+General, Keyboard, Picture and DS online tabs. Click a keyboard assignment and press its
+new key, or Unbind it; Restore default keys resets the editor. Save validates conflicts;
+Cancel discards edits. F1 stays reserved for Settings. The Game menu provides save/load
+states, slot selection and quitting the game. A game continues running while settings
+are open. Keyboard/stylus inputs release when the app loses focus.
+
+For Nintendo WFC replacement services, enable **DS online** in this window, or in
+WII-UU under **Settings → Games → DS online (WFC)** with **Play with Choccy Milk** enabled. These preferences use the shared
+engine/configuration, so both apps launch the game with the same options. Online mode
+requires **melonDS DS** (`melondsds_libretro`), downloaded if available; an older DS core
+is not silently substituted. Games run locally while DS online is enabled.
+
+Leave DNS blank for the core's default replacement service, or enter the IPv4 DNS from
+one you choose. Restart the game, open its Nintendo WFC setup, and connect to the emulated
+**melonAP** access point. Use the game's online/friend-code menus. Game support, SSL
+patches, firmware/BIOS requirements and service availability vary. No game ROM or BIOS
+is supplied, and no replacement WFC server is hosted by WII-UU.
+
+Keep existing firmware/MAC identity unless creating a separate profile: changing MACs can
+affect existing online profiles and Pokémon save access. The optional **Derive MAC from
+profile** setting uses a stable configurable 1–10-character name; use different names on
+different computers. Standalone DS games accept mouse clicks/drags on the lower screen,
+with letterboxing accounted for. These are WFC online settings, not local wireless,
+Download Play, remote co-op streaming, or general rollback netplay. The GamePad relay
+carries controller/screen traffic and does not relay DS WFC packets.
