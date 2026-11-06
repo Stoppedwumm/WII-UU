@@ -1127,6 +1127,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         return guide != null || guidePending;
     }
 
+    boolean gameRunning() { return playing != null; }
+
     public int padCount() {
         return pads;
     }

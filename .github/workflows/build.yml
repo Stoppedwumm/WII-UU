@@ -37,6 +37,13 @@ jobs:
           javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java src/wiiuu/core/BuildInfo.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java
           java -cp build/installer-tests wiiuu.core.ActionsBuildTest
           java -cp build/installer-tests wiiuu.core.BuildInfoTest
+      - name: Test shared core manager
+        shell: bash
+        run: |
+          find engine/src -name '*.java' > build/core-manager-sources.txt
+          javac --release 17 -d build/installer-tests @build/core-manager-sources.txt test/wiiuu/core/CoreManagerTest.java
+          java -Djava.awt.headless=true -cp build/installer-tests wiiuu.core.CoreManagerTest
+
       - name: Test native cloudflared bundle and relay boundary
         shell: bash
         run: |

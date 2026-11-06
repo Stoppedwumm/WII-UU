@@ -1299,3 +1299,24 @@ different computers. Standalone DS games accept mouse clicks/drags on the lower 
 with letterboxing accounted for. These are WFC online settings, not local wireless,
 Download Play, remote co-op streaming, or general rollback netplay. The GamePad relay
 carries controller/screen traffic and does not relay DS WFC packets.
+
+### Choosing and downloading Choccy Milk cores
+
+Open **Settings → Cores** in standalone Choccy Milk (**F1**), or **Settings → Games →
+Choccy Milk cores** in WII-UU. Select a console to see catalogue cores, installed status
+and file paths. **Download / reinstall** fetches a core from the libretro buildbot into
+WII-UU's Choccy Milk core folder; stop the running game first. Availability varies by
+platform, and Choccy Milk requires software rendering. Incompatible bsnes/higan cores
+are omitted from the catalogue.
+
+Choose **Use selected core** to save a preference for the next game, or **Use Automatic**
+to restore normal selection. These controls apply immediately and are shared between
+both apps; closing the standalone Settings window without Save does not undo core
+operations. Game saves and BIOS files are kept. Save states may not transfer between
+cores, and explicit core choices may change hardware upscaling/widescreen behavior.
+
+Explicit core choices override automatic picture-driven choices. **DS online** keeps
+melonDS DS as a requirement; turn it off before choosing another DS core. Missing chosen
+cores can download on launch when **Download missing cores automatically** is enabled.
+If a selection cannot be installed, the app reports that instead of silently using another
+core. Downloads choose the native player's CPU architecture, including translated Macs.
