@@ -9,7 +9,7 @@ if ! grep -qE "^## v?${VERSION//./\\.}( |$)" CHANGELOG.md; then
   echo "CHANGELOG.md has no '## $VERSION' entry: add what changed first." >&2
   exit 1
 fi
-./build.sh
+WIIUU_BUILD_CHANNEL="${WIIUU_BUILD_CHANNEL:-release}" ./build.sh
 rm -rf "dist/$NAME" "dist/$NAME.zip"
 mkdir -p "dist/$NAME/source"
 cp build/wiiuu.jar build/ChoccyMilk.jar build/WII-UU-Reactions.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"

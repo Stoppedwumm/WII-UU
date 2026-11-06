@@ -43,6 +43,10 @@ find src -name '*.java' > build/sources.txt
 javac --release 17 -encoding UTF-8 -cp build/engine -d build/classes @build/sources.txt
 cp -r build/engine/. build/classes/
 cp -r resources/. build/classes/
+# Development builds carry the badge; release packaging explicitly chooses release.
+BUILD_CHANNEL="${WIIUU_BUILD_CHANNEL:-beta}"
+case "$BUILD_CHANNEL" in beta|release) ;; *) echo "Unknown build channel: $BUILD_CHANNEL" >&2; exit 1 ;; esac
+printf 'channel=%s\n' "$BUILD_CHANNEL" > build/classes/wiiuu-build.properties
 # the release notes WII-UU shows after an update (Settings > General > What's new)
 [ -f CHANGELOG.md ] && cp CHANGELOG.md build/classes/CHANGELOG.md
 printf 'Main-Class: wiiuu.Main\n' > build/manifest.txt
