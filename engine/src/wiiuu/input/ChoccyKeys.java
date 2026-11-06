@@ -37,7 +37,7 @@ public final class ChoccyKeys {
     public static String action(Config c, int key) {
         if (key == 0) return null;
         for (var e : load(c).entrySet()) if (e.getValue() == key) return e.getKey();
-        if (key == KeyEvent.VK_SHIFT && c.get("choccy.keys.MINUS", null) == null) return "MINUS";
+        if (key == KeyEvent.VK_SHIFT && load(c).get("MINUS") == KeyEvent.VK_SPACE) return "MINUS";
         return null;
     }
 }

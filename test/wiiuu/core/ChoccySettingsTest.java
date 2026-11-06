@@ -16,6 +16,7 @@ public final class ChoccySettingsTest {
         map.put("A", KeyEvent.VK_K); map.put("save", KeyEvent.VK_F8);
         ChoccyKeys.save(c, map);
         Config reload = new Config(home);
+        check(ChoccyKeys.action(reload, KeyEvent.VK_SHIFT).equals("MINUS"), "default alias survives saving");
         check(ChoccyKeys.action(reload, KeyEvent.VK_K).equals("A"), "binding survives restart");
         check(ChoccyKeys.action(reload, KeyEvent.VK_X) == null, "old key unbound");
         check(ChoccyKeys.action(reload, KeyEvent.VK_F8).equals("save"), "state shortcut");
@@ -25,7 +26,7 @@ public final class ChoccySettingsTest {
         check(ChoccyKeys.action(c, 0) == null, "unbound");
         check(DsOnline.options(c).get("melonds_network_mode").equals("disabled"), "online opt in");
         for (String dns : List.of("127.0.0.1", "178.62.43.212", "")) check(DsOnline.validDns(dns), "valid DNS");
-        for (String dns : List.of("999.1.1.1", "1.2.3", "a.2.3.4", "1.2.3.4.5", "1..2.3")) check(!DsOnline.validDns(dns), "invalid DNS");
+        for (String dns : List.of("999.1.1.1", "1.2.3", "a.2.3.4", "1.2.3.4.5", "1..2.3", "01.2.3.4")) check(!DsOnline.validDns(dns), "invalid DNS");
         c.set("choccy.nds.online", "true");
         var defaults = DsOnline.options(c);
         check(defaults.get("melonds_network_mode").equals("indirect"), "shared online mode");

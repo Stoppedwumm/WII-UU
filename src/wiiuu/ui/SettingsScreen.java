@@ -1049,7 +1049,7 @@ public final class SettingsScreen {
     private Page dsOnlinePage() {
         return new Page("DS online (WFC)", () -> {
             List<Row> r = new ArrayList<>();
-            r.add(new Info("Shared with standalone Choccy Milk. Changes apply after restarting the game."));
+            r.add(new Info("For Choccy Milk games in WII-UU: enable Play with Choccy Milk under Games. Shared with the standalone app; restart the game after changes."));
             r.add(toggle("Enable DS online", "Uses melonDS DS indirect networking and WFC replacement services. The required core is downloaded when available.", "choccy.nds.online", false, null));
             r.add(new Text("WFC DNS override", "IPv4 address from your replacement service. Blank uses the core's default service.",
                     () -> wiiuu.core.DsOnline.dns(config), value -> {

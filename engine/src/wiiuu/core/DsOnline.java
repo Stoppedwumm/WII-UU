@@ -14,7 +14,7 @@ public final class DsOnline {
         String[] parts = value.split("\\.", -1);
         if (parts.length != 4) return false;
         for (String part : parts) {
-            if (!part.matches("[0-9]{1,3}") || Integer.parseInt(part) > 255) return false;
+            if (!part.matches("[0-9]{1,3}") || part.length() > 1 && part.startsWith("0") || Integer.parseInt(part) > 255) return false;
         }
         return true;
     }

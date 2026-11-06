@@ -1281,7 +1281,7 @@ states, slot selection and quitting the game. A game continues running while set
 are open. Keyboard/stylus inputs release when the app loses focus.
 
 For Nintendo WFC replacement services, enable **DS online** in this window, or in
-WII-UU under **Settings → Games → DS online (WFC)**. These preferences use the shared
+WII-UU under **Settings → Games → DS online (WFC)** with **Play with Choccy Milk** enabled. These preferences use the shared
 engine/configuration, so both apps launch the game with the same options. Online mode
 requires **melonDS DS** (`melondsds_libretro`), downloaded if available; an older DS core
 is not silently substituted. Games run locally while DS online is enabled.
