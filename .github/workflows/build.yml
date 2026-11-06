@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "25"
 
       - name: Build jar and release zip (also copies it into docs/download and writes docs/version.json)
         id: version
@@ -46,6 +46,11 @@ jobs:
             --snapshot "$RUNNER_TEMP/menu.png" --snapshot-view home
           test -s "$RUNNER_TEMP/menu.png"
           java -jar build/ChoccyMilk.jar --help
+
+      - name: Test Choccy Milk dual screens and pointer input
+        run: |
+          javac --release 22 -cp build/classes -d build/tests test/wiiuu/screen/ChoccyDualScreenTest.java
+          java --enable-native-access=ALL-UNNAMED -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.screen.ChoccyDualScreenTest
 
       - name: Check shell scripts
         run: bash -n install.sh emulators.sh build.sh package.sh

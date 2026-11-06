@@ -312,6 +312,20 @@ public final class Choccy {
                 "-XX:+DisplayVMOutputToStderr", "-cp", classPath(), "wiiuu.choccy.ChoccyMilk",
                 core.toString(), rom.toAbsolutePath().toString(), saves.toString(), system.toString()));
         for (var e : options.entrySet()) cmd.add(e.getKey() + "=" + e.getValue());
+        String coreName = core.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+        if (coreName.contains("melonds")) {
+            boolean ds = coreName.contains("melondsds");
+            cmd.add("melonds_touch_mode=" + (ds ? "touch" : "Touch"));
+            cmd.add("melonds_screen_layout=Top/Bottom");
+            cmd.add("melonds_screen_layout1=top-bottom");
+            cmd.add("melonds_number_of_screen_layouts=1");
+            cmd.add("melonds_screen_gap=0");
+        } else if (coreName.contains("desmume")) {
+            cmd.add("desmume_screens_layout=top/bottom");
+            cmd.add("desmume_pointer_mouse=enabled");
+            cmd.add("desmume_pointer_type=touch");
+            cmd.add("desmume_screens_gap=0");
+        }
         return cmd;
     }
 
@@ -478,6 +492,13 @@ public final class Choccy {
         public void achievements(int console, java.util.List<RaConnect.Achievement> list) {
             send("c " + console);
             for (RaConnect.Achievement a : list) send("a " + a.id() + " " + a.memAddr().replace('\n', ' '));
+        }
+
+        /** Absolute libretro pointer coordinates, normalized to the full video frame. */
+        public void pointer(double x, double y, boolean down) {
+            if (!Double.isFinite(x) || !Double.isFinite(y)) return;
+            send("p " + Math.round(Math.max(0, Math.min(1, x)) * 65534 - 32767)
+                    + " " + Math.round(Math.max(0, Math.min(1, y)) * 65534 - 32767) + " " + (down ? 1 : 0));
         }
 
         private synchronized void send(String line) {

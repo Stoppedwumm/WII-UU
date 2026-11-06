@@ -1214,3 +1214,13 @@ The code is in three parts:
 * `choccy-app/`: Choccy Milk on its own (`build/ChoccyMilk.jar`, `choccymilk.App`)
 
 The phone page is `resources/web/pad.html`.
+
+### Choccy Milk dual screens
+
+Nintendo DS games in Choccy Milk show the top screen on the TV. On the phone GamePad,
+select **Touch screen** for the bottom screen, including stylus taps and dragging.
+The TV stream also shows just the top screen. Frames and touch input go directly to
+Choccy Milk, including when it plays on a linked computer; no virtual monitor or
+screen-capture permission is needed. melonDS DS, melonDS and DeSmuME use a fixed
+vertical layout with no gap. Set `screen.split=false` to keep both screens together.
+This applies to DS software cores; 3DS cores requiring OpenGL still use RetroArch.
