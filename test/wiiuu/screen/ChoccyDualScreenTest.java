@@ -20,12 +20,21 @@ public final class ChoccyDualScreenTest {
         double[] touch = new double[3];
         stream.setChoccy(active::get, (x, y, down) -> { touch[0] = x; touch[1] = y; touch[2] = down ? 1 : 0; });
         check(stream.available() && stream.secondScreen() != null, "direct screen available headless");
+        var region = ScreenStreamer.class.getDeclaredMethod("region", String.class, String[].class);
+        region.setAccessible(true);
+        for (String mode : List.of("tv", "second")) {
+            String[] why = new String[1];
+            check(region.invoke(stream, mode, why) == null && why[0].contains("Choccy Milk"),
+                    mode + " must never resolve a desktop region before first frame");
+        }
+        ScreenStreamer.Frame waiting = stream.nextFrame("second", -1, 2000);
+        check(waiting != null, "waiting picture before first game frame");
         int[] pixels = new int[256 * 384];
         Arrays.fill(pixels, 0, 256 * 192, 0xff0000);
         Arrays.fill(pixels, 256 * 192, pixels.length, 0x0000ff);
         stream.directFrame(pixels, 256, 384, 2f / 3);
         for (String mode : List.of("tv", "second")) {
-            ScreenStreamer.Frame frame = stream.nextFrame(mode, -1, 4000);
+            ScreenStreamer.Frame frame = stream.nextFrame(mode, mode.equals("second") ? waiting.seq() : -1, 4000);
             check(frame != null, mode + " frame");
             var image = ImageIO.read(new ByteArrayInputStream(frame.jpeg()));
             check(Math.abs(image.getWidth() / (double) image.getHeight() - 4.0 / 3) < .02, "screen aspect");
@@ -33,6 +42,22 @@ public final class ChoccyDualScreenTest {
             check(mode.equals("tv") ? (rgb >> 16 & 255) > 240 && (rgb & 255) < 10
                     : (rgb & 255) > 240 && (rgb >> 16 & 255) < 10, mode + " crop");
         }
+        // Cross the old one-second expiry: keep the cached core image, never start desktop capture.
+        Thread.sleep(1200);
+        for (String mode : List.of("tv", "second")) {
+            String[] why = new String[1];
+            check(region.invoke(stream, mode, why) == null && why[0].contains("Choccy Milk"),
+                    mode + " stays direct during a long frame gap");
+        }
+        ScreenStreamer.Frame retained = stream.nextFrame("second", -1, 1000);
+        var retainedImage = ImageIO.read(new ByteArrayInputStream(retained.jpeg()));
+        check((retainedImage.getRGB(10, 10) & 255) > 240, "retain bottom frame during gap");
+        Arrays.fill(pixels, 256 * 192, pixels.length, 0x00ff00);
+        stream.directFrame(pixels, 256, 384, 2f / 3);
+        ScreenStreamer.Frame resumed = stream.nextFrame("second", retained.seq(), 2000);
+        check(resumed != null, "direct frames resume after gap");
+        var resumedImage = ImageIO.read(new ByteArrayInputStream(resumed.jpeg()));
+        check((resumedImage.getRGB(10, 10) >> 8 & 255) > 240, "resumed bottom picture");
         stream.touch("second", .25, .5, 1);
         check(touch[0] == .25 && touch[1] == .75 && touch[2] == 1, "bottom pointer mapping");
         stream.releaseTouch();

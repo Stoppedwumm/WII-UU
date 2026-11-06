@@ -168,12 +168,11 @@ public final class ScreenStreamer {
     private int directW, directH;
     private float directAspect;
     private long directSeq;
-    private volatile long directAt;
 
     /**
      * A frame of the game WII-UU itself plays (Choccy Milk): while these come, the TV picture on the
      * phones is made from them instead of a screen capture: the exact picture, without capture
-     * permissions, with less delay and less work. Capture takes over again a moment after they stop.
+     * permissions, with less delay and less work. The last picture stays visible during frame gaps; desktop capture resumes only after the game ends.
      */
     public void directFrame(int[] pixels, int w, int h, float aspect) {
         synchronized (directLock) {
@@ -182,7 +181,6 @@ public final class ScreenStreamer {
             directH = h;
             directAspect = aspect;
             directSeq++;
-            directAt = System.currentTimeMillis();
             directLock.notifyAll();
         }
     }
@@ -203,11 +201,7 @@ public final class ScreenStreamer {
     }
 
     private boolean directMode(String mode) {
-        return direct() && ("tv".equals(mode) || "second".equals(mode) && splitChoccy());
-    }
-
-    private boolean direct() {
-        return System.currentTimeMillis() - directAt < 1000;
+        return inChoccy.getAsBoolean() && ("tv".equals(mode) || "second".equals(mode) && splitChoccy());
     }
 
     // ---- phones watching ----------------------------------------------------------------
@@ -333,6 +327,11 @@ public final class ScreenStreamer {
 
     /** @return the screen rectangle for a mode right now, or null (with {@code why} filled in) */
     private Rectangle region(String mode, String[] why) {
+        // Direct profiles describe core pixels, never a desktop window (their title regex is empty).
+        if (inChoccy.getAsBoolean()) {
+            why[0] = "Waiting for Choccy Milk's picture";
+            return null;
+        }
         if (robot == null) {
             why[0] = "Screen capture is not available on this PC";
             return null;
@@ -496,7 +495,9 @@ public final class ScreenStreamer {
             watcher.setDaemon(true);
             String[] why = new String[1];
             region = region(mode, why);
-            if (region == null && !directMode(mode)) publish(message(why[0]));
+            synchronized (directLock) {
+                if (region == null && (!directMode(mode) || directPixels == null)) publish(message(why[0]));
+            }
             producer.start();
             watcher.start();
         }
@@ -522,6 +523,10 @@ public final class ScreenStreamer {
             frame = jpeg;
             seq++;
             notifyAll();
+        }
+
+        private synchronized void publishCapture(byte[] jpeg) {
+            if (!inChoccy.getAsBoolean()) publish(jpeg);
         }
 
         /** Looks up the window once a second, off the frame path; restarts capture when it moves. */
@@ -629,10 +634,11 @@ public final class ScreenStreamer {
                     float aspect;
                     synchronized (directLock) {
                         long deadline = System.currentTimeMillis() + 500;
-                        while (directSeq == seen && System.currentTimeMillis() < deadline) {
+                        while ((directPixels == null || directSeq == seen) && directMode(mode) && System.currentTimeMillis() < deadline) {
                             directLock.wait(Math.max(1, deadline - System.currentTimeMillis()));
                         }
-                        if (directSeq == seen) continue;
+                        if (!directMode(mode)) return;
+                        if (directPixels == null || directSeq == seen) continue;
                         seen = directSeq;
                         px = directPixels;
                         w = directW;
@@ -732,7 +738,7 @@ public final class ScreenStreamer {
                         cur.write(buf, start, i + 1 - start);
                         byte[] jpeg = cur.toByteArray();
                         if (jpeg.length > 4 && (jpeg[0] & 0xFF) == 0xFF && (jpeg[1] & 0xFF) == 0xD8) {
-                            publish(jpeg);
+                            publishCapture(jpeg);
                             any = true;
                         }
                         cur.reset();
@@ -768,7 +774,7 @@ public final class ScreenStreamer {
                     if (len <= 0 || len > 16 << 20) break;
                     byte[] jpeg = new byte[len];
                     in.readFully(jpeg);
-                    publish(jpeg);
+                    publishCapture(jpeg);
                     any = true;
                     sawPicture = true;
                     captureBlocked = false;
@@ -805,7 +811,7 @@ public final class ScreenStreamer {
                     Math.max(160, config.getInt("stream.maxWidth", 640)));
             if (cap == null) {
                 // RetroArch's window isn't there yet: keep trying (screen capture can't see it there)
-                publish(message("Waiting for RetroArch's window"));
+                publishCapture(message("Waiting for RetroArch's window"));
                 sleep(500);
                 return true;
             }
@@ -847,7 +853,7 @@ public final class ScreenStreamer {
             long captured = 0;
             int blackInARow = 0;
             try {
-                while (!stopped && r.equals(region) && !(macHelper != null && !helperFailed)) {
+                while (!stopped && !directMode(mode) && r.equals(region) && !(macHelper != null && !helperFailed)) {
                     long start = System.nanoTime();
                     free.acquire();
                     BufferedImage img;
@@ -867,7 +873,7 @@ public final class ScreenStreamer {
                                 System.err.println("[screen] capture returns only black - " + blockedMessage());
                                 onBlocked.accept(blockedMessage());
                             }
-                            publish(message(blockedMessage()));
+                            publishCapture(message(blockedMessage()));
                             sleep(2000);
                             continue;
                         }
@@ -888,7 +894,7 @@ public final class ScreenStreamer {
                                 writer.write(null, new IIOImage(img, null, null), param);
                             }
                             // only publish if no newer frame went out first
-                            if (newestSent.getAndAccumulate(seq, Math::max) < seq) publish(buf.toByteArray());
+                            if (newestSent.getAndAccumulate(seq, Math::max) < seq) publishCapture(buf.toByteArray());
                         } catch (IOException | RuntimeException ignored) {
                             // drop this frame
                         } finally {
