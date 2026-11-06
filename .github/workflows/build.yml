@@ -22,7 +22,7 @@ jobs:
   actions-installer-test:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-14]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -92,9 +92,9 @@ jobs:
 
       - name: Test relay boundary and bundled Linux helper
         run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/net/RelayTest.java
+          javac --release 17 -cp build/classes -d build/tests test/wiiuu/net/RelayTest.java test/wiiuu/net/RelayBundleTest.java
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.net.RelayTest
-          build/cloudflared/linux-amd64/cloudflared --version
+          java -Djava.awt.headless=true -cp build/wiiuu.jar:build/tests wiiuu.net.RelayBundleTest
 
       - name: Test GamePad screen selector
         run: node test/web/screen-choices.cjs
