@@ -114,6 +114,40 @@ public final class Updater {
         }
     }
 
+    /** Accepts a release ZIP or GitHub Actions' older ZIP-containing-a-ZIP download. */
+    public Path prepareBuild(Path archive) throws IOException {
+        Path staging = Files.createTempDirectory("wiiuu-actions-");
+        return unpackBuild(archive, staging, 0);
+    }
+
+    private static Path unpackBuild(Path archive, Path into, int depth) throws IOException {
+        unzip(archive, into);
+        try (var paths = Files.walk(into, 3)) {
+            List<Path> jars = paths.filter(p -> p.getFileName().toString().equals("wiiuu.jar")
+                    && Files.isRegularFile(p)).toList();
+            if (jars.size() == 1) {
+                Path folder = jars.get(0).getParent();
+                if (!Files.isRegularFile(folder.resolve("install.sh"))
+                        || !Files.isRegularFile(folder.resolve("install.ps1"))) {
+                    throw new IOException("Build is missing its installers; download the WII-UU artifact, not source code");
+                }
+                try (var jar = new java.util.jar.JarFile(jars.get(0).toFile())) {
+                    if (jar.getEntry("wiiuu/Main.class") == null) throw new IOException("Not a WII-UU application build");
+                }
+                return folder;
+            }
+            if (jars.size() > 1) throw new IOException("Archive contains multiple WII-UU builds");
+        }
+        if (depth == 0) {
+            try (var paths = Files.walk(into, 2)) {
+                List<Path> zips = paths.filter(p -> Files.isRegularFile(p)
+                        && p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".zip")).toList();
+                if (zips.size() == 1) return unpackBuild(zips.get(0), into.resolve("unpacked"), depth + 1);
+            }
+        }
+        throw new IOException("No WII-UU build found; download the build artifact ZIP from GitHub Actions");
+    }
+
     /**
      * Runs the installer from {@code release} once this process has exited, then starts WII-UU
      * again. Returns immediately; the caller should exit right after.
@@ -126,10 +160,13 @@ public final class Updater {
         String jar = runningJar();
         List<String> cmd;
         if (OS.contains("win")) {
+            Path installedJar = Path.of(System.getenv("LOCALAPPDATA"), "WII-UU", "wiiuu.jar");
             String ps = "Wait-Process -Id " + pid + " -ErrorAction SilentlyContinue; "
-                    + "& '" + release.resolve("install.ps1") + "' -Yes *> '" + log + "'; "
-                    + "Start-Process '" + java + "' -ArgumentList '-Xmx384m','-jar','\"" + (jar != null ? jar
-                    : System.getenv("LOCALAPPDATA") + "\\WII-UU\\wiiuu.jar") + "\"'";
+                    + "$ErrorActionPreference = 'Stop'; try { & " + powershellQuote(release.resolve("install.ps1").toString())
+                    + " -Yes *> " + powershellQuote(log.toString()) + "; "
+                    + "if (-not $?) { exit 1 }; Start-Process " + powershellQuote(java)
+                    + " -ArgumentList '-Xmx384m','-jar'," + powershellQuote("\"" + installedJar + "\"")
+                    + " } catch { $_ | Out-File -Append " + powershellQuote(log.toString()) + "; exit 1 }";
             cmd = List.of("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", ps);
         } else {
             String relaunch = relaunchCommand(java, jar);
@@ -149,6 +186,10 @@ public final class Updater {
         }
         new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectInput(ProcessBuilder.Redirect.PIPE).start().getOutputStream().close();
+    }
+
+    private static String powershellQuote(String value) {
+        return "'" + value.replace("'", "''") + "'";
     }
 
     /** The shell command that starts WII-UU again (macOS: through its app, so its permissions apply). */

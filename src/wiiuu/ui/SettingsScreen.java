@@ -1584,6 +1584,9 @@ public final class SettingsScreen {
         }
     }
 
+    private Path actionsBuild;
+    private String actionsBuildStatus = "Download a successful build artifact, then select its ZIP here";
+
     private String updateStatus = "Version " + wiiuu.Main.VERSION;
     private Updater.Release release;
     private List<Changelog.Entry> releaseNotes = List.of();
@@ -1602,6 +1605,15 @@ public final class SettingsScreen {
                 for (String s : e.points()) r.add(new Info("•  " + s));
             }
         }
+        r.add(new Action("GitHub Actions builds", "Open successful builds in your browser (GitHub sign-in may be required).", () -> {
+            try {
+                java.awt.Desktop.getDesktop().browse(java.net.URI.create("https://github.com/Stoppedwumm/WII-UU/actions/workflows/build.yml"));
+            } catch (Exception e) { say("Open github.com/Stoppedwumm/WII-UU/actions in your browser"); }
+        }, null, null));
+        r.add(new Action("Choose a build ZIP", "Select the WII-UU artifact ZIP downloaded from GitHub Actions.",
+                this::chooseActionsBuild, () -> actionsBuildStatus, null));
+        if (actionsBuild != null) r.add(new Action("Install selected beta build", "Installs the selected code and restarts WII-UU. Settings and games are kept.",
+                this::installActionsBuild, null, "Press A again to install this beta build"));
         r.add(new Link("What's new", "Everything that changed, newest first.", null, this::whatsNewPage));
         r.add(new Header("Setup guide"));
         r.add(new Action("Show the setup guide", "The welcome and setup screens from the first start.", () -> {
@@ -1764,6 +1776,46 @@ public final class SettingsScreen {
             say("The Developer tab is hidden again.");
         }, null, null));
         return r;
+    }
+
+    private void chooseActionsBuild() {
+        if (updating || sv.updater() == null) return;
+        javax.swing.JFileChooser chooser = new javax.swing.JFileChooser();
+        chooser.setDialogTitle("Choose a GitHub Actions build ZIP");
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("WII-UU build ZIP", "zip"));
+        if (chooser.showOpenDialog(view) != javax.swing.JFileChooser.APPROVE_OPTION) return;
+        Path zip = chooser.getSelectedFile().toPath();
+        updating = true;
+        actionsBuild = null;
+        actionsBuildStatus = "Preparing " + zip.getFileName() + "…";
+        Thread worker = new Thread(() -> {
+            Path prepared = null;
+            String status;
+            try {
+                prepared = sv.updater().prepareBuild(zip);
+                status = zip.getFileName() + " is ready to install";
+            } catch (Exception e) { status = "Could not open build: " + e.getMessage(); }
+            Path selected = prepared;
+            String message = status;
+            SwingUtilities.invokeLater(() -> {
+                updating = false;
+                actionsBuild = selected;
+                actionsBuildStatus = message;
+                if (category == 4 && stack.isEmpty()) reload(false);
+                view.repaint();
+            });
+        }, "actions-build-prepare");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void installActionsBuild() {
+        if (actionsBuild == null || updating) return;
+        try {
+            sv.updater().installAfterExit(actionsBuild);
+            updating = true;
+            sv.exitForUpgrade().run();
+        } catch (IOException e) { say("Could not install build: " + e.getMessage()); }
     }
 
     private void checkForUpdates() {

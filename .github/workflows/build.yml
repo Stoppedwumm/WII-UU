@@ -19,6 +19,24 @@ permissions:
   id-token: write
 
 jobs:
+  actions-installer-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Test build ZIP import
+        shell: bash
+        run: |
+          mkdir -p build/installer-tests
+          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java test/wiiuu/core/ActionsBuildTest.java
+          java -cp build/installer-tests wiiuu.core.ActionsBuildTest
+
   build:
     runs-on: ubuntu-latest
     outputs:
@@ -55,10 +73,15 @@ jobs:
       - name: Check shell scripts
         run: bash -n install.sh emulators.sh build.sh package.sh
 
+      - name: Prepare easy-install artifact
+        run: |
+          mkdir -p build/actions-artifact
+          unzip -q "dist/WII-UU-${{ env.VERSION }}.zip" -d build/actions-artifact
+
       - uses: actions/upload-artifact@v4
         with:
           name: WII-UU-${{ env.VERSION }}
-          path: dist/WII-UU-${{ env.VERSION }}.zip
+          path: build/actions-artifact/WII-UU-${{ env.VERSION }}/
           if-no-files-found: error
 
       - name: Keep only the current zip on the site
