@@ -3,6 +3,17 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.1 (2026-11-06)
+- **Core manager in both apps:** standalone Choccy Milk Settings → Cores, or WII-UU Settings →
+  Games → Choccy Milk cores. Choose a core per console, see installed cores and their paths,
+  download/reinstall catalogue cores, or return to Automatic.
+- Core preferences are shared, persist across restarts, and apply to the next game.
+  Explicit selections take priority over automatic picture-driven choices. Missing selected
+  cores can download automatically; a failed download does not silently choose another core.
+- DS online mode still requires melonDS DS. Download operations run in the background and
+  ask you to stop the current game first. Downloads use the native player's architecture,
+  keep game saves and BIOS files, and reject unexpected archive contents.
+
 ## 1.14.0 (2026-11-06)
 - **Standalone Choccy Milk Settings:** open Choccy Milk → Settings or press F1, including during
   a game. Configure keyboard bindings and emulator shortcuts, theme/startup animation,

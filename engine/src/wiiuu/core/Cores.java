@@ -163,6 +163,39 @@ public final class Cores {
                 + ")\u2026 the game starts by itself in a moment");
     }
 
+    /** Native cores visible to Choccy Milk. Its own folder takes precedence over RetroArch's. */
+    public Path installedChoccyCore(String name) {
+        if (!name.matches("[a-z0-9_]+")) return null;
+        boolean translated = Choccy.translated();
+        Path own = translated ? choccyCoreDir().resolve(Choccy.arch()) : choccyCoreDir();
+        List<Path> dirs = new ArrayList<>(); dirs.add(own);
+        if (!translated) {
+            dirs.addAll(coreDirs(executable()));
+            dirs.addAll(coreDirs(List.of("/snap/bin/retroarch")));
+            dirs.addAll(coreDirs(List.of("flatpak", "run", "org.libretro.RetroArch")));
+        }
+        for (Path dir : dirs) {
+            Path candidate = dir.resolve(name + "_libretro." + EXT);
+            if (Files.isRegularFile(candidate)) return candidate;
+        }
+        return null;
+    }
+    public Path downloadChoccyCore(String name) {
+        if (!name.matches("[a-z0-9_]+")) throw new IllegalArgumentException("Invalid core name");
+        Path own = Choccy.translated() ? choccyCoreDir().resolve(Choccy.arch()) : choccyCoreDir();
+        return download(name, own, buildbot(Choccy.arch()));
+    }
+    private Path selectedCore(String name, Runnable afterDownload) throws Downloading {
+        Path installed = installedChoccyCore(name);
+        if (installed != null) return installed;
+        if (config.getBool("retroarch.download", true) && buildbot(Choccy.arch()) != null && triedDownload.add("selected:" + name)) {
+            Thread fetch = new Thread(() -> { downloadChoccyCore(name); afterDownload.run(); }, "selected-core-download");
+            fetch.setDaemon(true); fetch.start();
+            throw new Downloading("Getting selected core " + name + "… the game starts when it is installed");
+        }
+        throw new Downloading("Selected core " + name + " is not installed. Download it in the core manager or select Automatic.");
+    }
+
     /**
      * The core Choccy Milk plays a console with: the one its picture settings need when there are
      * some (Beetle PSX, bsnes-hd, Genesis Plus GX Wide; see {@link ChoccyPicture}), found or
@@ -170,6 +203,11 @@ public final class Cores {
      */
     public Path choccyCoreFor(GameSystem system, Runnable afterDownload) throws Downloading {
         boolean dsOnline = system.id().equals("nds") && DsOnline.enabled(config);
+        String selected = config.get("choccy.core." + system.id(), "").trim();
+        if (!dsOnline && !selected.isEmpty()) {
+            if (!CoreManager.catalogue(system.id()).contains(selected)) throw new Downloading("Invalid selected core. Choose a core in the core manager or use Automatic.");
+            return selectedCore(selected, afterDownload);
+        }
         List<String> want = dsOnline ? List.of("melondsds") : ChoccyPicture.cores(config, system.id());
         if (want != null) {
             boolean translated = Choccy.translated();
@@ -459,8 +497,10 @@ public final class Cores {
     }
 
     private Path download(String name, Path dir, String from) {
+        if (from == null || !name.matches("[a-z0-9_]+")) return null;
         String url = from + name + "_libretro." + EXT + ".zip";
         Path target = dir.resolve(name + "_libretro." + EXT);
+        Path tmp = null;
         try {
             Files.createDirectories(dir);
             HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
@@ -472,12 +512,12 @@ public final class Cores {
                 return null;
             }
             System.out.println("[cores] downloading " + name + " core from " + url);
-            Path tmp = Files.createTempFile(dir, name, ".part");
+            tmp = Files.createTempFile(dir, name, ".part");
             boolean found = false;
             try (ZipInputStream z = new ZipInputStream(r.body())) {
                 ZipEntry e;
                 while ((e = z.getNextEntry()) != null) {
-                    if (e.getName().endsWith("_libretro." + EXT)) {
+                    if (!e.isDirectory() && e.getName().equals(name + "_libretro." + EXT)) {
                         Files.copy(z, tmp, StandardCopyOption.REPLACE_EXISTING);
                         found = true;
                         break;
@@ -498,6 +538,8 @@ public final class Cores {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;
+        } finally {
+            if (tmp != null) try { Files.deleteIfExists(tmp); } catch (IOException ignored) { }
         }
     }
 

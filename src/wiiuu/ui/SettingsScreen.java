@@ -866,6 +866,8 @@ public final class SettingsScreen {
             config.set("choccy.enabled", Boolean.toString(on));
             config.save();
         }));
+        r.add(new Action("Choccy Milk cores", "Choose the core for each console, see installed cores, or download/reinstall one. Changes apply to the next game.",
+                () -> wiiuu.engine.CoreManagerPanel.open(view, config, view::gameRunning), null, null));
         r.add(new Link("DS online (WFC)", "Online settings shared with standalone Choccy Milk; uses the melonDS DS core.", null, this::dsOnlinePage));
         r.add(new Link("Choccy Milk picture", "Upscaling (also rounded xBR and a CRT TV look), blending frames and "
                 + "widescreen, per console.", null, this::choccyPicturePage));

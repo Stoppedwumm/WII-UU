@@ -11,7 +11,7 @@ import wiiuu.input.ChoccyKeys;
 /** Standalone settings: edits are staged until Save, including captured keyboard assignments. */
 final class SettingsDialog {
     private SettingsDialog() {}
-    static boolean show(JFrame owner, Config config) {
+    static boolean show(JFrame owner, Config config, java.util.function.BooleanSupplier gameRunning) {
         JDialog dialog = new JDialog(owner, "Choccy Milk settings", true);
         JTabbedPane tabs = new JTabbedPane();
         JPanel general = new JPanel(new GridLayout(0, 1, 8, 8));
@@ -26,6 +26,7 @@ final class SettingsDialog {
         general.add(new JLabel("BIOS / system folder (blank: automatic)")); general.add(folder(bios));
         general.add(new JLabel("Game folders and BIOS changes apply to the next game."));
         tabs.addTab("General", general);
+        tabs.addTab("Cores", new wiiuu.engine.CoreManagerPanel(config, gameRunning));
 
         Map<String, Integer> keys = new LinkedHashMap<>(ChoccyKeys.load(config));
         JPanel keyboard = new JPanel(new GridLayout(0, 3, 8, 5));

@@ -362,7 +362,7 @@ public final class App extends JPanel implements PadSink {
             active.stick(port, 0, 0, 0); active.stick(port, 1, 0, 0);
         }
         try {
-            if (SettingsDialog.show(frame, config)) {
+            if (SettingsDialog.show(frame, config, () -> session != null)) {
                 look = Look.pick(config.get("choccy.theme", "auto"), systemDark);
                 setBackground(look.bgBottom); library.rescanAsync();
                 say("Settings saved. DS online/core changes apply after restarting the game.");
