@@ -96,6 +96,18 @@ public final class ChoccyDualScreenTest {
             var namePointer = username.get(java.lang.foreign.ValueLayout.ADDRESS, 0);
             check(namePointer.reinterpret(32).getString(0).equals("PlayerTwo"), "DS identity reaches native core");
         }
+        var capabilities = helper.getDeclaredMethod("checkOnlineCapabilities"); capabilities.setAccessible(true);
+        capabilities.invoke(milk); // offline cores remain supported
+        coreOptions.put("wiiuu.dsOnline", "true");
+        try {
+            capabilities.invoke(milk);
+            throw new AssertionError("Missing networking must be reported before gameplay");
+        } catch (java.lang.reflect.InvocationTargetException expected) {
+            check(expected.getCause() instanceof IllegalStateException, "missing networking error");
+        }
+        var defaultsField = helper.getDeclaredField("defaults"); defaultsField.setAccessible(true);
+        @SuppressWarnings("unchecked") var coreDefaults = (java.util.Map<String, String>) defaultsField.get(milk);
+        coreDefaults.put("melonds_network_mode", "indirect"); capabilities.invoke(milk);
         System.out.println("Choccy dual screen tests passed");
         System.exit(0);
     }

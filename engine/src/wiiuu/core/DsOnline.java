@@ -29,6 +29,7 @@ public final class DsOnline {
         Map<String, String> result = new LinkedHashMap<>();
         result.put("melonds_network_mode", enabled(c) ? "indirect" : "disabled");
         if (!enabled(c)) return result;
+        result.put("wiiuu.dsOnline", "true");
         result.put("wiiuu.username", username(c));
         if (!dns(c).isBlank()) {
             if (!validDns(dns(c))) throw new IllegalArgumentException("DS online DNS must be an IPv4 address");

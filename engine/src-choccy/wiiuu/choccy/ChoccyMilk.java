@@ -205,6 +205,7 @@ public final class ChoccyMilk {
                 MethodType.methodType(short.class, int.class, int.class, int.class, int.class)),
                 FunctionDescriptor.of(JAVA_SHORT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT));
         fn(linker, lib, "retro_init", FunctionDescriptor.ofVoid()).invokeExact();
+        checkOnlineCapabilities();
 
         // what the core wants: the file's path, or its bytes
         MemorySegment info = arena.allocate(40, 8);
@@ -384,6 +385,11 @@ public final class ChoccyMilk {
             System.err.println("[choccy] environment " + cmd + ": " + t);
             return false;
         }
+    }
+
+    private void checkOnlineCapabilities() {
+        if ("true".equals(overrides.get("wiiuu.dsOnline")) && !defaults.containsKey("melonds_network_mode"))
+            throw new IllegalStateException("This DS core was built without WFC networking. Install a networking-enabled melonDS DS core, or turn off DS online.");
     }
 
     private boolean env(int cmd, MemorySegment data) {
