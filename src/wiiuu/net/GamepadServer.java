@@ -149,6 +149,7 @@ public final class GamepadServer {
         final boolean controller;
         /** a controller another WII-UU sends (Peers): forgotten when it stops */
         volatile boolean remote;
+        volatile boolean relayed;
 
         Client(String id, int player) {
             this(id, player, false);
@@ -187,10 +188,23 @@ public final class GamepadServer {
     public String relayPairingUrl() { return relay == null ? null : relay.pairingUrl(); }
     public synchronized void startRelay() {
         if (http == null || stopped) return;
-        if (relay == null) relay = new CloudflaredRelay(config.home(), ex -> handle(ex, true), code, () -> relayChanged.run());
+        if (relay == null) relay = new CloudflaredRelay(config.home(), ex -> handle(ex, true), code, this::relayStateChanged);
         relay.start();
     }
     public void stopRelay() { if (relay != null) relay.close(); }
+    private void relayStateChanged() {
+        if (!relayActive()) {
+            boolean changed = false;
+            for (Client c : clients.values()) if (c.relayed && c.active) {
+                c.active = false; c.relayed = false; release(c); changed = true;
+            }
+            if (changed) {
+                if (screen != null) screen.releaseTouch();
+                host.padsChanged(connectedPads());
+            }
+        }
+        relayChanged.run();
+    }
 
 
     public GamepadServer(Config config, Library library, Launcher launcher, InputRouter router, Host host,
@@ -734,6 +748,7 @@ public final class GamepadServer {
                         json(ex, 401, new Json().obj().kv("error", "not paired").endObj());
                         return;
                     }
+                    c.relayed = relayed;
                     switch (path) {
                         case "/api/status" -> json(ex, 200, status(c, relayed));
                         case "/api/stream" -> stream(ex, query(ex).getOrDefault("m", "tv"), "1".equals(query(ex).get("raw")));
