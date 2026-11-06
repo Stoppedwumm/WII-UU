@@ -3,6 +3,20 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.13.1 (2026-11-06)
+- **Choccy Milk DS dual screens:** the upper screen stays in WII-UU's main window;
+  choose **Show touch screen** on the phone GamePad for the lower screen, with stylus taps
+  and dragging. Choccy's split-screen setting is independent of RetroArch's virtual display.
+- Stream game frames directly, including when playing on a linked computer. During startup
+  or a frame gap, show a waiting image or retain the last game frame instead of capturing
+  another desktop window. Release the stylus when the GamePad disconnects.
+- **Install GitHub Actions builds** from Settings → System: open the builds page, choose a
+  downloaded build ZIP, then confirm installation. Supports current artifacts and older
+  nested ZIPs. On Windows, new artifacts extract once; double-click `install.bat`.
+- Windows updates restart the installed application and handle quoted paths correctly.
+- **BETA** appears at the top only in development builds. Published release builds, including
+  1.13.1, have no beta badge. The build channel travels with the installed JAR.
+
 ## 1.13.0 (2026-10-15)
 - **WII-UU for Android** (`WII-UU-Android.apk` on the website): the Wii U menu and Choccy Milk on
   Android handhelds and phones, Android 8 or newer. The same folders as on a computer

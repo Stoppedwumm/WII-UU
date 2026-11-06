@@ -34,8 +34,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/installer-tests
-          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java test/wiiuu/core/ActionsBuildTest.java
+          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java src/wiiuu/core/BuildInfo.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java
           java -cp build/installer-tests wiiuu.core.ActionsBuildTest
+          java -cp build/installer-tests wiiuu.core.BuildInfoTest
 
   build:
     runs-on: ubuntu-latest
@@ -53,7 +54,13 @@ jobs:
         id: version
         run: |
           chmod +x build.sh package.sh
+          if [[ "$GITHUB_REF" == refs/tags/v* || ( "$GITHUB_EVENT_NAME" != pull_request && "$GITHUB_REF_NAME" == "${{ github.event.repository.default_branch }}" ) ]]; then
+            export WIIUU_BUILD_CHANNEL=release
+          else
+            export WIIUU_BUILD_CHANNEL=beta
+          fi
           ./package.sh
+          unzip -p build/wiiuu.jar wiiuu-build.properties | grep -Fx "channel=$WIIUU_BUILD_CHANNEL"
           v="$(grep -o 'VERSION = "[^"]*"' src/wiiuu/Main.java | cut -d'"' -f2)"
           echo "VERSION=$v" >> "$GITHUB_ENV"
           echo "version=$v" >> "$GITHUB_OUTPUT"

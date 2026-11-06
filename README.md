@@ -1236,8 +1236,7 @@ Only install artifacts from builds you trust: they contain executable applicatio
 
 For a first Windows install, extract the downloaded artifact ZIP and double-click
 `install.bat` in the extracted folder. New artifacts contain the installation files
-directly, so there is no second ZIP to extract. The app displays a **BETA** badge
-at the top of the screen, including during Choccy Milk gameplay.
+directly, so there is no second ZIP to extract. Development builds display a **BETA** badge at the top of the screen, including during Choccy Milk gameplay. Release builds have no badge. `build.sh` defaults to beta; `package.sh` defaults to release. Set `WIIUU_BUILD_CHANNEL=beta` or `release` to override. Actions builds on the default branch and version tags are releases; pull-request and other branch builds are beta.
 
 On the GamePad **Now playing** page, tap **Show touch screen** to choose the lower
 DS screen. **Show TV here** shows the upper screen instead. Both options remain
