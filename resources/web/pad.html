@@ -164,6 +164,22 @@
   .obmore pre { text-align: left; background: #fff; border: 1px solid #c9ced4; border-radius: 8px; padding: 8px 10px;
     font-size: 11px; user-select: all; -webkit-user-select: all; overflow-x: auto; margin: 6px auto; }
 
+  .race-only { display: none; }
+  #pad.racing .col > .standard-only { display: none; }
+  #pad.racing .race-only { display: grid; }
+  #pad.racing .col { justify-content: center; gap: 2vh; }
+  #pad.racing .dpad { width: min(100%, 38vh); height: auto; aspect-ratio: 1; }
+  .race-tools { width: 100%; grid-template-columns: 1fr 1fr; gap: .7vw; }
+  .race-tools .sh, .race-brake { font-size: clamp(10px, 3vh, 16px); }
+  .race-brake { flex: none; width: 100%; }
+  .race-drive { width: 100%; height: 48vh; grid-template-rows: 1fr 1.4fr 1fr; gap: 3px;
+    border: 2px solid #525f6d; border-radius: 16px; overflow: hidden; background: #20242a;
+    text-align: center; font-size: clamp(10px, 3.4vh, 18px); font-weight: 800; }
+  .race-drive span { display: grid; place-items: center; padding: 0 2px; background: #3a3f47; }
+  .race-drive [data-zone="forward"] { background: #295569; }
+  .race-drive .on { background: var(--accent); color: #fff; }
+  .race-layout select { font: inherit; color: inherit; max-width: 100%; }
+
   /* GamePad screen: live picture from the PC (second screen or TV mirror), touchable */
   body.big #pad { grid-template-columns: .78fr 2.4fr .78fr; }
   body.big { --stick: min(27vh, 13.5vw); --face: min(11vh, 6.2vw); }
@@ -299,14 +315,18 @@
 
   <!-- left: ZL L, left stick, d-pad -->
   <div class="col left">
-    <div class="shoulders"><div class="sh z" data-b="ZL">ZL</div><div class="sh" data-b="L">L</div></div>
-    <div class="stick" data-stick="0"><div class="knob"></div></div>
+    <div class="shoulders standard-only"><div class="sh z" data-b="ZL">ZL</div><div class="sh" data-b="L">L</div></div>
+    <div class="stick standard-only" data-stick="0"><div class="knob"></div></div>
     <div class="dpad" data-dpad>
       <div class="arm h"></div><div class="arm v"></div>
       <div class="dir d-up" data-dir="UP">&#9650;</div>
       <div class="dir d-down" data-dir="DOWN">&#9660;</div>
       <div class="dir d-left" data-dir="LEFT">&#9664;</div>
       <div class="dir d-right" data-dir="RIGHT">&#9654;</div>
+    </div>
+    <div class="race-only race-tools">
+      <div class="sh" data-b="Y">Map</div>
+      <div class="sh" data-b="PLUS">Pause</div>
     </div>
   </div>
 
@@ -359,6 +379,13 @@
               <button class="bigbtn" id="playTv">Show TV here</button>
               <button class="bigbtn grey" id="closeGame">Close game</button>
             </div>
+            <label class="race-layout">Controls
+              <select id="controlLayout">
+                <option value="auto">Automatic</option>
+                <option value="standard">Standard</option>
+                <option value="mario-kart-ds">Mario Kart DS</option>
+              </select>
+            </label>
             <div class="row states hidden" id="stateRow">
               <button class="bigbtn" id="stateSave">Save state</button>
               <button class="bigbtn grey" id="stateLoad">Load state</button>
@@ -427,14 +454,20 @@
 
   <!-- right: R ZR, face buttons, right stick -->
   <div class="col right">
-    <div class="shoulders"><div class="sh z" data-b="ZR">ZR</div><div class="sh" data-b="R">R</div></div>
-    <div class="face">
+    <div class="shoulders standard-only"><div class="sh z" data-b="ZR">ZR</div><div class="sh" data-b="R">R</div></div>
+    <div class="face standard-only">
       <div class="bx" data-b="X">X</div>
       <div class="by" data-b="Y">Y</div>
       <div class="ba" data-b="A">A</div>
       <div class="bb" data-b="B">B</div>
     </div>
-    <div class="stick" data-stick="1"><div class="knob"></div></div>
+    <div class="stick standard-only" data-stick="1"><div class="knob"></div></div>
+    <div class="race-only race-drive" id="raceDrive">
+      <span data-zone="drift">Drift</span>
+      <span data-zone="forward">Forward</span>
+      <span data-zone="item">Item</span>
+    </div>
+    <div class="race-only sh race-brake" data-b="B">Brake / Back</div>
   </div>
 </div>
 
@@ -601,9 +634,12 @@ async function poll() {
     $("soundBtn").classList.toggle("hidden", j.audio === false);
     $("segSound").classList.toggle("hidden", j.audio === false);
     $("playTv").classList.toggle("hidden", !S.tv);
-    if (j.mode !== S.mode || JSON.stringify(j.game) !== JSON.stringify(S.game) || secondChanged) {
+    const gameChanged = j.mode !== S.mode || JSON.stringify(j.game) !== JSON.stringify(S.game);
+    if (gameChanged || secondChanged) {
       const started = j.mode === "game" && S.mode !== "game";
+      if (gameChanged) releasePadTouches();
       S.mode = j.mode; S.game = j.game;
+      updateControlLayout();
       if (j.mode === "game") {
         $("playName").textContent = j.game.name;
         $("playSys").textContent = j.game.system;
@@ -810,6 +846,7 @@ async function loadLibrary() {
 
 // ---------------------------------------------------------------- screen views
 function show(which) {
+  if (S.view !== which) releasePadTouches();
   S.view = which;
   if (which === "pair") { S.fails = 0; hideDown(); }      // back, but it wants the (new) pairing code
   for (const v of ["pair", "lib", "play", "screen"]) $("v-" + v).classList.toggle("hidden", v !== which);
@@ -1428,6 +1465,49 @@ function mark(b, on) {
   if (b === "HOME" && on) onHome();
 }
 
+// Layouts change the browser controls. The game still receives ordinary RetroPad buttons.
+const controlLayout = $("controlLayout");
+controlLayout.value = store.get("controlLayout") || "auto";
+if (!controlLayout.value) controlLayout.value = "auto";
+function racingLayout(game, choice) {
+  return !!game && (choice === "mario-kart-ds" ||
+    (choice === "auto" && game.system === "Nintendo DS" && /^mario kart ds\b/i.test(game.name)));
+}
+function updateControlLayout() {
+  const racing = racingLayout(S.game, controlLayout.value);
+  if (pad.classList.contains("racing") === racing) return;
+  releasePadTouches();
+  pad.classList.toggle("racing", racing);
+}
+controlLayout.onchange = () => {
+  store.set("controlLayout", controlLayout.value);
+  updateControlLayout();
+};
+
+const raceDrive = $("raceDrive");
+let drivePointer = null, itemPulse = null;
+function stopItemPulse() {
+  if (itemPulse === null) return;
+  clearTimeout(itemPulse);
+  itemPulse = null;
+  release("L");
+}
+function driveMove(t, y) {
+  const r = raceDrive.getBoundingClientRect();
+  const pos = (y - r.top) / r.height;
+  const zone = pos < .29 ? "drift" : pos > .71 ? "item" : "forward";
+  if (zone === t.zone) return;
+  if (t.zone === "drift") release("R");
+  t.zone = zone;
+  if (zone === "drift") press("R");
+  if (zone === "item") {
+    stopItemPulse();
+    press("L");
+    itemPulse = setTimeout(stopItemPulse, 90);
+  }
+  raceDrive.querySelectorAll("[data-zone]").forEach(el => el.classList.toggle("on", el.dataset.zone === zone));
+}
+
 // Buzz! mode: shown while a Buzz! game runs; HOME or "GamePad" switch back to the normal layout
 function updateBuzz() {
   const on = S.buzz && !S.buzzHidden && S.player > 0;
@@ -1471,7 +1551,15 @@ pad.addEventListener("pointerdown", (e) => {
   wakeLock();
   const stick = e.target.closest("[data-stick]");
   const dpad = e.target.closest("[data-dpad]");
-  if (stick) {
+  if (e.target.closest("#raceDrive")) {
+    if (drivePointer !== null) return;
+    drivePointer = e.pointerId;
+    const t = { type: "drive", zone: null };
+    touches.set(e.pointerId, t);
+    try { raceDrive.setPointerCapture(e.pointerId); } catch (err) {}
+    press("A");
+    driveMove(t, e.clientY);
+  } else if (stick) {
     const t = { type: "stick", el: stick, knob: stick.querySelector(".knob"), idx: +stick.dataset.stick, start: Date.now(), moved: false };
     stick.classList.add("on");
     touches.set(e.pointerId, t);
@@ -1491,7 +1579,8 @@ pad.addEventListener("pointermove", (e) => {
   const t = touches.get(e.pointerId);
   if (!t) return;
   e.preventDefault();
-  if (t.type === "stick") stickMove(t, e.clientX, e.clientY);
+  if (t.type === "drive") driveMove(t, e.clientY);
+  else if (t.type === "stick") stickMove(t, e.clientX, e.clientY);
   else if (t.type === "dpad") {
     const now = dpadDirs(t.el, e.clientX, e.clientY);
     t.dirs.filter((d) => !now.includes(d)).forEach(release);
@@ -1512,11 +1601,16 @@ function end(e) {
   const t = touches.get(e.pointerId);
   if (!t) return;
   touches.delete(e.pointerId);
-  if (t.type === "stick") {
+  if (t.type === "drive") {
+    drivePointer = null;
+    if (t.zone === "drift") release("R");
+    release("A");
+    raceDrive.querySelectorAll(".on").forEach(el => el.classList.remove("on"));
+  } else if (t.type === "stick") {
     t.el.classList.remove("on");
     t.knob.style.transform = "";
     sendStick(t.idx, 0, 0);
-    if (!t.moved && Date.now() - t.start < 220) {   // quick tap on a stick = L3 / R3
+    if (e.type === "pointerup" && !t.moved && Date.now() - t.start < 220) {   // quick tap on a stick = L3 / R3
       const b = t.idx === 0 ? "L3" : "R3";
       press(b); setTimeout(() => release(b), 80);
     }
@@ -1525,14 +1619,20 @@ function end(e) {
 }
 pad.addEventListener("pointerup", end);
 pad.addEventListener("pointercancel", end);
-window.addEventListener("blur", () => { for (const id of [...touches.keys()]) end({ pointerId: id }); });
+pad.addEventListener("lostpointercapture", end);
+function releasePadTouches() {
+  for (const id of [...touches.keys()]) end({ pointerId: id });
+  stopItemPulse();
+}
+window.addEventListener("blur", releasePadTouches);
+document.addEventListener("visibilitychange", () => { if (document.hidden) releasePadTouches(); });
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
 // physical keyboard (handy for testing on a laptop)
 const KEYS = { ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT", KeyX: "A", KeyZ: "B",
                KeyS: "X", KeyA: "Y", KeyQ: "L", KeyW: "R", Enter: "PLUS", ShiftRight: "MINUS", KeyH: "HOME" };
-addEventListener("keydown", (e) => { const b = KEYS[e.code]; if (b && !e.repeat && e.target.tagName !== "INPUT") { press(b); e.preventDefault(); } });
-addEventListener("keyup", (e) => { const b = KEYS[e.code]; if (b && e.target.tagName !== "INPUT") release(b); });
+addEventListener("keydown", (e) => { const b = KEYS[e.code]; if (b && !e.repeat && !["INPUT", "SELECT"].includes(e.target.tagName)) { press(b); e.preventDefault(); } });
+addEventListener("keyup", (e) => { const b = KEYS[e.code]; if (b && !["INPUT", "SELECT"].includes(e.target.tagName)) release(b); });
 
 let lock = null;
 async function wakeLock() {

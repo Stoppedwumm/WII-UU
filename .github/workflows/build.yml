@@ -140,8 +140,10 @@ jobs:
           javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/ChoccySettingsTest.java
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.ChoccySettingsTest
 
-      - name: Test GamePad screen selector
-        run: node test/web/screen-choices.cjs
+      - name: Test GamePad screen and controller layouts
+        run: |
+          node test/web/screen-choices.cjs
+          node test/web/controller-layouts.cjs
 
       - name: Check shell scripts
         run: bash -n install.sh emulators.sh build.sh package.sh

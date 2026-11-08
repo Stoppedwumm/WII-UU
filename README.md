@@ -79,6 +79,11 @@ sudo wiiuu-console install                                                    # 
   GameController framework with a small helper it builds the first time (it needs the Xcode Command
   Line Tools, like the screen capture helper: `xcode-select --install`). Other emulators (Dolphin,
   PPSSPP...) read the controller themselves, so WII-UU leaves it to them while one runs.
+* **Touch controller layouts.** Choose a layout under **Controls** on the phone’s **Now playing** screen.
+  **Automatic** selects **Mario Kart DS** when that game runs. Steer with the left thumb and hold
+  **Forward** with the right. Slide up to **Drift** or down to use an **Item** while accelerating.
+  Return to **Forward** to finish a drift or rearm the item gesture. **Brake / Back**, **Map**, and
+  **Pause** are also within thumb reach. The DS touch screen in the middle still accepts taps.
 * **Remapping a controller:** *Settings → GamePad & players → Controller buttons* lists the
   controllers plugged in. Pick one, then a GamePad button (A, B, X, Y, L, R, ZL, ZR, +, −, HOME,
   L3, R3, the d-pad) and press the controller's button that should be it. The button that was it
