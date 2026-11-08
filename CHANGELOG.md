@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.7 (2026-11-08)
+- Skip custom ROM folders during storage relocation and network migration. Local moves keep
+  the original paths. Receiving computers can configure their own folders.
+- Give receiving computers their own peer identity and skip cached native cores and peer
+  credentials during network migration. Local storage moves preserve them.
+
 ## 1.14.6 (2026-11-08)
 - Add drive relocation and local-network data migration under System settings, with an animated transfer dialog.
 - Stage installations and upgrades on the selected data drive and clean up stale staging there.
