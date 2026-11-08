@@ -46,6 +46,23 @@ The installer:
 
 To uninstall, run `./install.sh --uninstall` or `install.ps1 -Uninstall`. Your ROMs and settings are kept.
 
+## Clean up old upgrade files
+
+The standalone `WII-UU-Cleanup.jar` works even when WII-UU cannot start. It finds old website
+upgrade and GitHub Actions import staging folders in the system temp directory, as well as
+incomplete Linux emulator release staging folders. It keeps installed apps and emulators,
+ROMs, saves, settings and upgrade logs. Staging folders modified in the last 24 hours are skipped.
+
+With Java 17 or newer, preview the cleanup first. Close WII-UU and its installers before applying it.
+
+```sh
+java -jar WII-UU-Cleanup.jar
+java -jar WII-UU-Cleanup.jar --apply
+```
+
+For custom paths, pass `--temp-dir DIR` or `--emu-root DIR` (the same root as
+`emulators.sh --prefix`). Build the JAR from source with `./build.sh` and find it in `build/`.
+
 ## Console Mode (Linux, Raspberry Pi)
 
 Console Mode turns a PC or Raspberry Pi into a WII-UU console, the way SteamOS does on a Steam
