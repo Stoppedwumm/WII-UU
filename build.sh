@@ -2,10 +2,16 @@
 # Builds with only the JDK (javac + jar), Java 17 or newer:
 #   build/wiiuu-engine.jar  the WII-UU engine, the library WII-UU and Choccy Milk share (engine/)
 #   build/wiiuu.jar         WII-UU (src/, with the engine inside)
+#   build/WII-UU-Cleanup.jar  standalone tool for stale upgrade staging folders
 #   build/ChoccyMilk.jar    Choccy Milk on its own (choccy-app/, with the engine inside)
 set -euo pipefail
 cd "$(dirname "$0")"
-rm -rf build/classes build/engine build/choccy-classes && mkdir -p build/classes build/engine build/choccy-classes
+rm -rf build/classes build/engine build/choccy-classes build/cleanup-classes
+mkdir -p build/classes build/engine build/choccy-classes build/cleanup-classes
+# The cleanup tool is independent of the engine and the main app.
+javac --release 17 -encoding UTF-8 -d build/cleanup-classes tools/cleanup/Cleanup.java
+jar --create --file build/WII-UU-Cleanup.jar --main-class wiiuu.cleanup.Cleanup -C build/cleanup-classes .
+echo "Built build/WII-UU-Cleanup.jar"
 # the engine first, on its own: so it can't come to depend on either program
 find engine/src -name '*.java' > build/sources-engine.txt
 javac --release 17 -encoding UTF-8 -d build/engine @build/sources-engine.txt
