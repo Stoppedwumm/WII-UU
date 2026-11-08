@@ -90,12 +90,14 @@ final class MigrationPanel {
         TransferAnimation animation = new TransferAnimation(network);
         JButton cancel = new JButton("Cancel");
         cancel.setEnabled(network);
-        JPanel panel = new JPanel(new GridLayout(0, 1, 0, 8));
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
-        panel.add(status);
-        panel.add(code);
-        panel.add(animation);
-        panel.add(cancel);
+        for (JComponent item : new JComponent[]{status, code, animation, cancel}) {
+            if (panel.getComponentCount() != 0) panel.add(Box.createVerticalStrut(8));
+            item.setAlignmentX(Component.CENTER_ALIGNMENT);
+            panel.add(item);
+        }
         JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(owner), title, Dialog.ModalityType.APPLICATION_MODAL);
         dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         dialog.add(panel);
