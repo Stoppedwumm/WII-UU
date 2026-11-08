@@ -3,6 +3,10 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.5 (2026-11-08)
+- Add an installer maintenance menu for uninstall, repair, update, and stale staging cleanup.
+- Remove temporary ZIP copies after extraction and clean up failed upgrade staging directories.
+
 ## 1.14.4 (2026-11-08)
 - Add a GamePad layout editor for named two-thumb layouts. Customize gesture labels,
   button bindings and hold or tap behavior, and save layouts on the GamePad device.

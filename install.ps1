@@ -22,6 +22,47 @@ function Ok($m) { Write-Host "  + $m" -ForegroundColor Green }
 function Warn($m) { Write-Host "  ! $m" -ForegroundColor Yellow }
 function Ask($q) { if ($Yes) { return $true }; return (Read-Host "$q [y/N]") -match '^[Yy]' }
 
+function Get-CleanupJar {
+    @((Join-Path $Here "WII-UU-Cleanup.jar"), (Join-Path $Here "build\WII-UU-Cleanup.jar"),
+        (Join-Path $Prefix "WII-UU-Cleanup.jar")) |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+}
+
+if (-not $Uninstall -and -not $Yes -and -not [Console]::IsInputRedirected -and
+    (Test-Path -LiteralPath (Join-Path $Prefix "wiiuu.jar") -PathType Leaf)) {
+    Say "WII-UU is already installed"
+    Write-Host "1) Uninstall WII-UU"
+    Write-Host "2) Repair WII-UU using this installer"
+    Write-Host "3) Update WII-UU"
+    Write-Host "4) Optimize device space"
+    Write-Host "0) Cancel"
+    switch (Read-Host "Choose an action [0-4]") {
+        "1" {
+            if (-not (Ask "Uninstall WII-UU? Your ROMs and settings are kept.")) { exit 0 }
+            $Uninstall = $true
+        }
+        "2" { Say "Reinstalling WII-UU from this installer" }
+        "3" {
+            Say "Close WII-UU before updating."
+            if (-not (Ask "Check for and install a newer release?")) { exit 0 }
+            & java -jar (Join-Path $Prefix "wiiuu.jar") --upgrade
+            exit $LASTEXITCODE
+        }
+        "4" {
+            $cleaner = Get-CleanupJar
+            if (-not $cleaner) { throw "WII-UU-Cleanup.jar is missing. Use the complete WII-UU installer package." }
+            & java -jar $cleaner
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if (-not (Ask "Close WII-UU and any other installers first. Remove eligible staging files?")) { exit 0 }
+            & java -jar $cleaner --apply
+            exit $LASTEXITCODE
+        }
+        "0" { exit 0 }
+        "" { exit 0 }
+        default { throw "Choose an option from 0 to 4." }
+    }
+}
+
 if ($Uninstall) {
     Say "Removing WII-UU"
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $Prefix, $StartMenu, $DesktopLnk
@@ -65,6 +106,11 @@ $jar = @((Join-Path $Here "wiiuu.jar"), (Join-Path $Here "build\wiiuu.jar")) | W
 if (-not $jar) { throw "wiiuu.jar not found next to install.ps1 (use the release zip, or build with build.sh first)." }
 New-Item -ItemType Directory -Force -Path $Prefix | Out-Null
 Copy-Item -Force $jar (Join-Path $Prefix "wiiuu.jar")
+$cleaner = Get-CleanupJar
+$installedCleaner = Join-Path $Prefix "WII-UU-Cleanup.jar"
+if ($cleaner -and $cleaner -ne $installedCleaner) {
+    Copy-Item -LiteralPath $cleaner -Destination $installedCleaner -Force
+}
 $ErrorActionPreference = "Continue"
 & java -jar (Join-Path $Prefix "wiiuu.jar") --write-icon (Join-Path $Prefix "wiiuu.png") 2>&1 | Out-Null
 & java -jar (Join-Path $Prefix "wiiuu.jar") --write-icon (Join-Path $Prefix "wiiuu.ico") 2>&1 | Out-Null
