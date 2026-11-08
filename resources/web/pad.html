@@ -6,6 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="wiiuu-pad-build" content="__WIIUU_PAD_BUILD__">
 <meta name="theme-color" content="#1c1f24">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon.png">
@@ -534,6 +535,24 @@ const S = { fails: 0, id: store.get("id"), code: store.get("code") || "", player
             libVersion: -1, lib: null, sys: store.get("sys"), online: false, haptics: store.get("haptics") !== "0",
             view: "pair", streamMode: "tv", second: null, https: null, tv: false };
 
+// Compare the running document, since another tab can update localStorage while this app stays open.
+const loadedPadBuild = document.querySelector('meta[name="wiiuu-pad-build"]').content;
+store.set("loadedPadBuild", loadedPadBuild);
+let padReloading = false;
+function refreshPadIfOutdated(serverBuild) {
+  if (padReloading) return true;
+  if (!serverBuild || serverBuild === loadedPadBuild) return false;
+  const url = new URL(location.href);
+  // A fresh URL bypasses a cached app shell. Try only once per target if the cache still wins.
+  if (url.searchParams.get("pad-build") === serverBuild) return false;
+  url.searchParams.set("pad-build", serverBuild);
+  padReloading = true;
+  releasePadTouches();
+  if (touchPointer !== null) touchEnd({ pointerId: touchPointer });
+  location.replace(url.href);
+  return true;
+}
+
 // ---------------------------------------------------------------- networking
 function form(obj) { return Object.entries(obj).map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(v ?? "")).join("&"); }
 
@@ -541,9 +560,13 @@ async function hello(code) {
   const r = await fetch("/api/hello", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
                                         body: form({ code, id: S.id || "" }) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+  if (!r.ok) {
+    refreshPadIfOutdated(r.headers.get("X-Wiiuu-Pad-Build"));
+    throw new Error(j.error || ("HTTP " + r.status));
+  }
   S.id = j.id; S.player = j.player; S.code = code;
   store.set("id", S.id); store.set("code", code);
+  refreshPadIfOutdated(r.headers.get("X-Wiiuu-Pad-Build"));
   return j;
 }
 
@@ -594,6 +617,7 @@ async function poll() {
     const r = await api("/api/status", typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(2500) } : {});
     const j = await r.json();
     if (j.closing) { setOnline(false); showDown(j.closing); return; }
+    if (refreshPadIfOutdated(j.padBuild)) return;
     S.fails = 0;
     hideDown();
     setOnline(true);

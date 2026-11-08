@@ -8,6 +8,7 @@ in Settings > General > What's new, and before installing an update.
   gestures, plus Start and Select. Switch between racing and standard controls during play.
 - Reduce split DS streaming overhead by encoding each screen at the core resolution and
   choosing the newest available frame. Preserve optional frame blending on the main screen.
+- Refresh the installed GamePad web app automatically when the host serves a different build.
 
 ## 1.14.2 (2026-11-06)
 - Switch WII-UU into Choccy Milk's game view as soon as the helper starts, restore the window

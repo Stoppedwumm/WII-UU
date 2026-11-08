@@ -176,7 +176,8 @@ public final class GamepadServer {
     private HttpsServer https;
     private int httpsPort;
     private ScheduledExecutorService reaper;
-    private byte[] pageCache;
+    private record PadPage(String build, byte[] html) {}
+    private PadPage pageCache;
     private byte[] musicCache;
     private byte[] iconCache;
     private int port;
@@ -730,7 +731,7 @@ public final class GamepadServer {
             String path = ex.getRequestURI().getPath();
             String method = ex.getRequestMethod();
             switch (path) {
-                case "/", "/index.html" -> send(ex, 200, "text/html; charset=utf-8", page());
+                case "/", "/index.html" -> send(ex, 200, "text/html; charset=utf-8", page().html());
                 case "/manifest.json" -> send(ex, 200, "application/manifest+json", manifest());
                 case "/music.js" -> send(ex, 200, "text/javascript; charset=utf-8", musicScript());
                 case "/openbased/callback" -> openBasedCallback(ex);
@@ -848,6 +849,7 @@ public final class GamepadServer {
     }
 
     private void hello(HttpExchange ex) throws IOException {
+        ex.getResponseHeaders().set("X-Wiiuu-Pad-Build", page().build());
         Map<String, String> f = form(body(ex));
         if (requiresCode() && !code.equals(f.getOrDefault("code", "").trim())) {
             json(ex, 403, error("Wrong code - check the TV screen"));
@@ -1072,9 +1074,10 @@ public final class GamepadServer {
 
     // ---- JSON payloads ------------------------------------------------------------------
 
-    private Json status(Client c, boolean relayed) {
+    private Json status(Client c, boolean relayed) throws IOException {
         Game g = launcher.current();
         Json j = new Json().obj()
+                .kv("padBuild", page().build())
                 .kv("closing", closing)
                 .kv("mode", g == null ? "menu" : "game")
                 .kv("player", c.player)
@@ -1166,11 +1169,14 @@ public final class GamepadServer {
 
     // ---- static assets ------------------------------------------------------------------
 
-    private byte[] page() throws IOException {
+    private synchronized PadPage page() throws IOException {
         if (pageCache == null) {
             try (InputStream in = GamepadServer.class.getResourceAsStream("/web/pad.html")) {
                 if (in == null) throw new IOException("pad.html missing from jar");
-                pageCache = in.readAllBytes();
+                byte[] template = in.readAllBytes();
+                String build = wiiuu.Main.VERSION + "-" + UUID.nameUUIDFromBytes(template);
+                String html = new String(template, StandardCharsets.UTF_8).replace("__WIIUU_PAD_BUILD__", build);
+                pageCache = new PadPage(build, html.getBytes(StandardCharsets.UTF_8));
             }
         }
         return pageCache;
