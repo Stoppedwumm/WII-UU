@@ -39,7 +39,7 @@ public final class ChoccyDualScreenTest {
             ScreenStreamer.Frame frame = stream.nextFrame(mode, mode.equals("second") ? waiting.seq() : -1, 4000);
             check(frame != null, mode + " frame");
             var image = ImageIO.read(new ByteArrayInputStream(frame.jpeg()));
-            check(Math.abs(image.getWidth() / (double) image.getHeight() - 4.0 / 3) < .02, "screen aspect");
+            check(image.getWidth() == 256 && image.getHeight() == 192, "split stream at native resolution");
             int rgb = image.getRGB(image.getWidth() / 2, image.getHeight() / 2);
             check(mode.equals("tv") ? (rgb >> 16 & 255) > 240 && (rgb & 255) < 10
                     : (rgb & 255) > 240 && (rgb >> 16 & 255) < 10, mode + " crop");
