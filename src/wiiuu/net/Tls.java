@@ -20,14 +20,8 @@ final class Tls {
 
     private Tls() {}
 
-    record Identity(SSLContext context, byte[] fingerprint) {}
-
     /** Loads (or creates with the JDK's keytool) a certificate valid for {@code ip}. */
     static SSLContext context(Path home, String ip) throws Exception {
-        return identity(home, ip).context();
-    }
-
-    static Identity identity(Path home, String ip) throws Exception {
         Path ks = home.resolve("gamepad-" + ip.replace(':', '_') + ".p12");
         if (!Files.exists(ks)) create(ks, ip);
         KeyStore store = KeyStore.getInstance("PKCS12");
@@ -38,9 +32,7 @@ final class Tls {
         kmf.init(store, PASS);
         SSLContext ctx = SSLContext.getInstance("TLS");
         ctx.init(kmf.getKeyManagers(), null, null);
-        byte[] fingerprint = java.security.MessageDigest.getInstance("SHA-256")
-                .digest(store.getCertificate("wiiuu").getEncoded());
-        return new Identity(ctx, fingerprint);
+        return ctx;
     }
 
     private static void create(Path ks, String ip) throws IOException, InterruptedException {
@@ -48,7 +40,6 @@ final class Tls {
         String keytool = Path.of(System.getProperty("java.home"), "bin",
                 System.getProperty("os.name", "").toLowerCase().contains("win") ? "keytool.exe" : "keytool").toString();
         String san = "dns:localhost,ip:127.0.0.1" + (ip.matches("[0-9.]+") ? ",ip:" + ip : "");
-        if (!Files.isExecutable(Path.of(keytool))) keytool = "keytool";
         Process p = new ProcessBuilder(keytool, "-genkeypair", "-alias", "wiiuu", "-keyalg", "RSA", "-keysize", "2048",
                 "-validity", "3650", "-dname", "CN=WII-UU GamePad", "-ext", "SAN=" + san,
                 "-keystore", ks.toString(), "-storetype", "PKCS12", "-storepass", new String(PASS), "-noprompt")

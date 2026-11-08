@@ -219,11 +219,7 @@ to_desktop() { sudo -n /usr/local/bin/wiiuu-console switch desktop || exit 0; sl
 fails=0
 while true; do
   # an update in progress: wait until its installer has finished before starting WII-UU again
-  data="${WIIUU_HOME:-$HOME/.wiiuu}"
-  if [ -z "${WIIUU_HOME:-}" ] && [ -f "$HOME/.wiiuu-location" ]; then
-    IFS= read -r data < "$HOME/.wiiuu-location" || true
-  fi
-  for _ in $(seq 1 600); do [ -e "$data/updating" ] || break; sleep 1; done
+  for _ in $(seq 1 600); do [ -e "$HOME/.wiiuu/updating" ] || break; sleep 1; done
   started=$(date +%s)
   "$WIIUU" --fullscreen
   code=$?

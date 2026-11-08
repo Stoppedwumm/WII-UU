@@ -6,7 +6,6 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 
 /** Properties-backed settings stored in ~/.wiiuu/config.properties (or $WIIUU_HOME). */
@@ -24,39 +23,7 @@ public final class Config {
     public static Path defaultHome() {
         String env = System.getenv("WIIUU_HOME");
         if (env != null && !env.isBlank()) return Paths.get(env);
-        Path link = storageLink();
-        if (Files.exists(link)) {
-            try {
-                Path target = Path.of(Files.readString(link).replaceFirst("\\r?\\n$", ""));
-                if (!target.isAbsolute() || !Files.isDirectory(target))
-                    throw new IOException("Storage drive is unavailable: " + target);
-                return target;
-            } catch (IOException e) {
-                throw new IllegalStateException("Cannot open WII-UU storage listed in " + link, e);
-            }
-        }
         return Paths.get(System.getProperty("user.home"), ".wiiuu");
-    }
-
-    public static Path storageLink() {
-        return Path.of(System.getProperty("user.home"), ".wiiuu-location");
-    }
-
-    public static void selectHome(Path target) throws IOException {
-        String path = target.toAbsolutePath().toString();
-        if (path.indexOf('\n') >= 0 || path.indexOf('\r') >= 0) throw new IOException("Invalid storage path");
-        Path link = storageLink();
-        Path pending = Files.createTempFile(link.getParent(), ".wiiuu-location-", ".tmp");
-        try {
-            Files.writeString(pending, path + "\n");
-            Files.move(pending, link, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } finally {
-            Files.deleteIfExists(pending);
-        }
-    }
-
-    public Path tempDir() throws IOException {
-        return Files.createDirectories(home.resolve("tmp"));
     }
 
     public Path home() {
@@ -78,16 +45,12 @@ public final class Config {
 
     public synchronized void save() {
         try {
-            saveChecked();
+            Files.createDirectories(home);
+            try (OutputStream out = Files.newOutputStream(file)) {
+                props.store(out, "WII-UU settings. {rom} in a command is replaced by the game path.");
+            }
         } catch (IOException e) {
             System.err.println("[config] could not save " + file + ": " + e.getMessage());
-        }
-    }
-
-    public synchronized void saveChecked() throws IOException {
-        Files.createDirectories(home);
-        try (OutputStream out = Files.newOutputStream(file)) {
-            props.store(out, "WII-UU settings. {rom} in a command is replaced by the game path.");
         }
     }
 

@@ -22,14 +22,6 @@ ROOT="${WIIUU_EMU_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/wiiuu-emulators}"
 SRC="$ROOT/emu-src"
 EMU="$ROOT/emulators"
 CONF_DIR="${WIIUU_HOME:-$HOME/.wiiuu}"
-if [ -z "${WIIUU_HOME:-}" ] && [ -f "$HOME/.wiiuu-location" ]; then
-  IFS= read -r CONF_DIR < "$HOME/.wiiuu-location" || true
-  [[ "$CONF_DIR" = /* && -d "$CONF_DIR" ]] || { echo "WII-UU storage is unavailable: $CONF_DIR" >&2; exit 1; }
-fi
-if [ -n "${WIIUU_HOME:-}" ] || [ -f "$HOME/.wiiuu-location" ]; then
-  mkdir -p "$CONF_DIR/tmp" || exit 1
-  export TMPDIR="$CONF_DIR/tmp"
-fi
 CONF="$CONF_DIR/config.properties"
 LOGS="$CONF_DIR/logs/build"
 ARCH="${WIIUU_ARCH:-$(uname -m)}"

@@ -99,7 +99,7 @@ public final class Updater {
 
     /** Downloads, verifies and unpacks the release; returns the folder that contains install.sh / install.ps1. */
     public Path download(Release rel) throws IOException, InterruptedException {
-        Path dir = Files.createTempDirectory(config.tempDir(), "wiiuu-upgrade-");
+        Path dir = Files.createTempDirectory("wiiuu-upgrade-");
         try {
             Path zip = dir.resolve("wiiuu.zip");
             HttpResponse<Path> r = http.send(HttpRequest.newBuilder(URI.create(rel.zipUrl())).timeout(Duration.ofMinutes(5))
@@ -125,7 +125,7 @@ public final class Updater {
 
     /** Accepts a release ZIP or GitHub Actions' older ZIP-containing-a-ZIP download. */
     public Path prepareBuild(Path archive) throws IOException {
-        Path staging = Files.createTempDirectory(config.tempDir(), "wiiuu-actions-");
+        Path staging = Files.createTempDirectory("wiiuu-actions-");
         try {
             return unpackBuild(archive, staging, 0);
         } catch (IOException | RuntimeException failure) {
@@ -215,7 +215,7 @@ public final class Updater {
             String done = "";
             if ("1".equals(System.getenv("WIIUU_CONSOLE"))) {
                 // console mode: the session starts WII-UU again itself, once this flag is gone
-                Path flag = config.home().resolve("updating");
+                Path flag = Path.of(System.getProperty("user.home"), ".wiiuu", "updating");
                 Files.createDirectories(flag.getParent());
                 Files.writeString(flag, Long.toString(pid));
                 relaunch = "true";

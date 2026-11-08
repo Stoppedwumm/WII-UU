@@ -34,12 +34,12 @@ public final class ActionsBuildTest {
         check(Files.isRegularFile(nested), "keep user-selected archive");
         Path bad = temp.resolve("bad.zip");
         Files.write(bad, zip(Map.of("../escaped.txt", new byte[]{1})));
-        rejects(updater, temp.resolve("tmp"), bad, "zip traversal");
+        rejects(updater, bad, "zip traversal");
         files.remove("install.ps1");
         Files.write(bad, zip(files));
-        rejects(updater, temp.resolve("tmp"), bad, "missing Windows installer");
+        rejects(updater, bad, "missing Windows installer");
         Files.write(bad, zip(Map.of("README.md", new byte[]{1})));
-        rejects(updater, temp.resolve("tmp"), bad, "source archive");
+        rejects(updater, bad, "source archive");
         System.out.println("Actions build import tests passed");
     }
     private static byte[] zip(Map<String, byte[]> files) throws IOException {
@@ -52,18 +52,18 @@ public final class ActionsBuildTest {
         }
         return bytes.toByteArray();
     }
-    private static void rejects(Updater updater, Path temp, Path zip, String label) throws Exception {
-        Set<Path> before = actionStages(temp);
+    private static void rejects(Updater updater, Path zip, String label) throws Exception {
+        Set<Path> before = actionStages();
         try {
             updater.prepareBuild(zip);
         } catch (IOException expected) {
-            check(before.containsAll(actionStages(temp)), label + " left a staging folder");
+            check(before.containsAll(actionStages()), label + " left a staging folder");
             return;
         }
         throw new AssertionError(label);
     }
-    private static Set<Path> actionStages(Path temp) throws IOException {
-        try (var paths = Files.list(temp)) {
+    private static Set<Path> actionStages() throws IOException {
+        try (var paths = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
             return new HashSet<>(paths.filter(p -> p.getFileName().toString().startsWith("wiiuu-actions-")).toList());
         }
     }

@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 
 /** Standalone cleaner for staging directories created by Updater.java and emulators.sh. */
 public final class Cleanup {
-    private static final Pattern UPDATE_STAGE = Pattern.compile("wiiuu-(?:(?:upgrade|actions)-[0-9]+|(?:web|app)\\.[A-Za-z0-9]+)");
+    private static final Pattern UPDATE_STAGE = Pattern.compile("wiiuu-(upgrade|actions)-[0-9]+");
     private static final Set<String> EMULATORS = Set.of("fceux", "snes9x", "mgba", "mupen64plus",
             "mednafen", "melonds", "ppsspp", "flycast", "dolphin", "azahar", "cemu", "ryujinx",
             "duckstation", "rpcs3", "shadps4", "pcsx2");
@@ -66,15 +66,6 @@ public final class Cleanup {
         }
 
         if (tempRoots.isEmpty()) {
-            Path user = Path.of(System.getProperty("user.home"));
-            String data = System.getenv("WIIUU_HOME");
-            Path link = user.resolve(".wiiuu-location");
-            if ((data == null || data.isBlank()) && Files.isRegularFile(link)) {
-                try { data = Files.readString(link).replaceFirst("\\r?\\n$", ""); }
-                catch (IOException e) { err.println("Could not read " + link + ": " + e.getMessage()); }
-            }
-            if (data != null && !data.isBlank()) tempRoots.add(Path.of(data).resolve("tmp"));
-            tempRoots.add(user.resolve(".wiiuu/tmp"));
             tempRoots.add(Path.of(System.getProperty("java.io.tmpdir")));
             for (String name : List.of("TMPDIR", "TEMP", "TMP")) {
                 String value = System.getenv(name);

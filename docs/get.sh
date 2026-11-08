@@ -14,13 +14,7 @@ else
   [ "$result" = 42 ] || exit "$result"
 fi
 command -v unzip >/dev/null 2>&1 || { echo "Please install unzip first." >&2; exit 1; }
-data="${WIIUU_HOME:-$HOME/.wiiuu}"
-if [ -z "${WIIUU_HOME:-}" ] && [ -f "$HOME/.wiiuu-location" ]; then
-  IFS= read -r data < "$HOME/.wiiuu-location" || true
-  [[ "$data" = /* && -d "$data" ]] || { echo "WII-UU storage is unavailable: $data" >&2; exit 1; }
-fi
-mkdir -p "$data/tmp"
-tmp="$(mktemp -d "$data/tmp/wiiuu-web.XXXXXXXX")"
+tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 echo "==> Downloading WII-UU"
 curl -fL --retry 3 -o "$tmp/wiiuu.zip" "$URL"

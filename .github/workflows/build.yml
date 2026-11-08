@@ -138,12 +138,7 @@ jobs:
           javac --release 22 -cp build/classes -d build/tests test/wiiuu/screen/ChoccyDualScreenTest.java
           java --enable-native-access=ALL-UNNAMED -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.screen.ChoccyDualScreenTest
 
-      - name: Test storage relocation and LAN migration
-        run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/net/MigrationTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.net.MigrationTest
-
-      - name: Test relay boundary and downloaded Linux helper
+      - name: Test relay boundary and bundled Linux helper
         run: |
           javac --release 17 -cp build/classes -d build/tests test/wiiuu/net/RelayTest.java test/wiiuu/net/RelayBundleTest.java
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.net.RelayTest

@@ -10,22 +10,19 @@ if ! grep -qE "^## v?${VERSION//./\\.}( |$)" CHANGELOG.md; then
   exit 1
 fi
 python3 tools/package-cloudflared.py
-WIIUU_BUILD_CHANNEL="${WIIUU_BUILD_CHANNEL:-release}" WIIUU_SLIM_RELAY=1 ./build.sh
+WIIUU_BUILD_CHANNEL="${WIIUU_BUILD_CHANNEL:-release}" ./build.sh
 rm -rf "dist/$NAME" "dist/$NAME.zip"
-mkdir -p "dist/$NAME"
-cp build/wiiuu.jar build/ChoccyMilk.jar build/WII-UU-Cleanup.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"
+mkdir -p "dist/$NAME/source"
+cp build/wiiuu.jar build/ChoccyMilk.jar build/WII-UU-Reactions.jar build/WII-UU-Cleanup.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"
 cp -r console "dist/$NAME/"
-chmod +x "dist/$NAME/install.sh" "dist/$NAME/emulators.sh" "dist/$NAME/console/wiiuu-console"
+cp -r engine src choccy-app resources tools build.sh package.sh CHANGELOG.md "dist/$NAME/source/"
+# the example reaction video is in wiiuu.jar already (the source builds without it)
+rm -f "dist/$NAME/source/resources/reactions/"*.zip
+chmod +x "dist/$NAME/install.sh" "dist/$NAME/emulators.sh" "dist/$NAME/console/wiiuu-console" "dist/$NAME/source/build.sh" "dist/$NAME/source/package.sh"
 (cd dist && zip -qr -X "$NAME.zip" "$NAME")
 rm -rf "dist/$NAME"
 # the website (docs/, served at wiiuu.stoppedwumm.net) hosts the downloads too
 mkdir -p docs/download
-relay_version="$(python3 -c 'import json; print(json.load(open("tools/cloudflared.json"))["version"])')"
-for helper in build/cloudflared/*; do
-  target="docs/download/cloudflared/$relay_version/$(basename "$helper")"
-  mkdir -p "$target"
-  cp "$helper"/cloudflared* "$target/"
-done
 cp install.sh build/WII-UU-Cleanup.jar docs/download/
 cp "dist/$NAME.zip" "docs/download/$NAME.zip"
 cp "dist/$NAME.zip" docs/download/WII-UU-latest.zip

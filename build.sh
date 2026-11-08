@@ -49,17 +49,7 @@ find src -name '*.java' > build/sources.txt
 javac --release 17 -encoding UTF-8 -cp build/engine -d build/classes @build/sources.txt
 cp -r build/engine/. build/classes/
 cp -r resources/. build/classes/
-if [ -d build/cloudflared ]; then
-  if [ "${WIIUU_SLIM_RELAY:-0}" = 1 ]; then
-    for helper in build/cloudflared/*/sha256; do
-      target="build/classes/${helper#build/}"
-      mkdir -p "$(dirname "$target")"
-      cp "$helper" "$target"
-    done
-  else
-    cp -r build/cloudflared/. build/classes/cloudflared/
-  fi
-fi
+if [ -d build/cloudflared ]; then cp -r build/cloudflared/. build/classes/cloudflared/; fi
 # Development builds carry the badge; release packaging explicitly chooses release.
 BUILD_CHANNEL="${WIIUU_BUILD_CHANNEL:-beta}"
 case "$BUILD_CHANNEL" in beta|release) ;; *) echo "Unknown build channel: $BUILD_CHANNEL" >&2; exit 1 ;; esac

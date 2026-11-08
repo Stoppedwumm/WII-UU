@@ -3,11 +3,6 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
-## 1.14.6 (2026-11-08)
-- Add drive relocation and local-network data migration under System settings, with an animated transfer dialog.
-- Stage installations and upgrades on the selected data drive and clean up stale staging there.
-- Slim the installer ZIP and fetch the platform-specific relay helper when needed.
-
 ## 1.14.5 (2026-11-08)
 - Add an installer maintenance menu for uninstall, repair, update, and stale staging cleanup.
 - Remove temporary ZIP copies after extraction and clean up failed upgrade staging directories.
