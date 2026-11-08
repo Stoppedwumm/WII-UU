@@ -6,9 +6,12 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
@@ -97,27 +100,60 @@ public final class Updater {
     /** Downloads, verifies and unpacks the release; returns the folder that contains install.sh / install.ps1. */
     public Path download(Release rel) throws IOException, InterruptedException {
         Path dir = Files.createTempDirectory("wiiuu-upgrade-");
-        Path zip = dir.resolve("wiiuu.zip");
-        HttpResponse<Path> r = http.send(HttpRequest.newBuilder(URI.create(rel.zipUrl())).timeout(Duration.ofMinutes(5))
-                .header("User-Agent", "WII-UU/" + current).build(), HttpResponse.BodyHandlers.ofFile(zip));
-        if (r.statusCode() != 200) throw new IOException("download failed: HTTP " + r.statusCode());
-        if (rel.sha256() != null && !rel.sha256().isBlank()) {
-            String got = sha256(zip);
-            if (!got.equalsIgnoreCase(rel.sha256().trim())) {
-                throw new IOException("download is corrupt (checksum mismatch) - try again");
+        try {
+            Path zip = dir.resolve("wiiuu.zip");
+            HttpResponse<Path> r = http.send(HttpRequest.newBuilder(URI.create(rel.zipUrl())).timeout(Duration.ofMinutes(5))
+                    .header("User-Agent", "WII-UU/" + current).build(), HttpResponse.BodyHandlers.ofFile(zip));
+            if (r.statusCode() != 200) throw new IOException("download failed: HTTP " + r.statusCode());
+            if (rel.sha256() != null && !rel.sha256().isBlank()) {
+                String got = sha256(zip);
+                if (!got.equalsIgnoreCase(rel.sha256().trim())) {
+                    throw new IOException("download is corrupt (checksum mismatch) - try again");
+                }
             }
-        }
-        unzip(zip, dir);
-        try (var s = Files.list(dir)) {
-            return s.filter(p -> Files.isDirectory(p) && Files.exists(p.resolve("wiiuu.jar"))).findFirst()
-                    .orElseThrow(() -> new IOException("release zip has no wiiuu.jar"));
+            unzip(zip, dir);
+            Files.delete(zip);
+            try (var s = Files.list(dir)) {
+                return s.filter(p -> Files.isDirectory(p) && Files.exists(p.resolve("wiiuu.jar"))).findFirst()
+                        .orElseThrow(() -> new IOException("release zip has no wiiuu.jar"));
+            }
+        } catch (IOException | InterruptedException | RuntimeException failure) {
+            discardFailedStage(dir, failure);
+            throw failure;
         }
     }
 
     /** Accepts a release ZIP or GitHub Actions' older ZIP-containing-a-ZIP download. */
     public Path prepareBuild(Path archive) throws IOException {
         Path staging = Files.createTempDirectory("wiiuu-actions-");
-        return unpackBuild(archive, staging, 0);
+        try {
+            return unpackBuild(archive, staging, 0);
+        } catch (IOException | RuntimeException failure) {
+            discardFailedStage(staging, failure);
+            throw failure;
+        }
+    }
+
+    private static void discardFailedStage(Path staging, Exception failure) {
+        try {
+            Files.walkFileTree(staging, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                        throws IOException {
+                    Files.delete(file);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path dir, IOException error) throws IOException {
+                    if (error != null) throw error;
+                    Files.delete(dir);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException cleanup) {
+            failure.addSuppressed(cleanup);
+        }
     }
 
     private static Path unpackBuild(Path archive, Path into, int depth) throws IOException {
@@ -139,10 +175,16 @@ public final class Updater {
             if (jars.size() > 1) throw new IOException("Archive contains multiple WII-UU builds");
         }
         if (depth == 0) {
+            List<Path> zips;
             try (var paths = Files.walk(into, 2)) {
-                List<Path> zips = paths.filter(p -> Files.isRegularFile(p)
+                zips = paths.filter(p -> Files.isRegularFile(p)
                         && p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".zip")).toList();
-                if (zips.size() == 1) return unpackBuild(zips.get(0), into.resolve("unpacked"), depth + 1);
+            }
+            if (zips.size() == 1) {
+                Path nested = zips.get(0);
+                Path build = unpackBuild(nested, into.resolve("unpacked"), depth + 1);
+                Files.delete(nested);
+                return build;
             }
         }
         throw new IOException("No WII-UU build found; download the build artifact ZIP from GitHub Actions");

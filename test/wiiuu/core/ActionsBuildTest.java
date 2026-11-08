@@ -27,7 +27,11 @@ public final class ActionsBuildTest {
         files.forEach((name, bytes) -> release.put("WII-UU-1.0/" + name, bytes));
         Path nested = temp.resolve("legacy artifact.zip");
         Files.write(nested, zip(Map.of("WII-UU-1.0.zip", zip(release))));
-        check(Files.isRegularFile(updater.prepareBuild(nested).resolve("wiiuu.jar")), "nested legacy artifact");
+        Path nestedBuild = updater.prepareBuild(nested);
+        check(Files.isRegularFile(nestedBuild.resolve("wiiuu.jar")), "nested legacy artifact");
+        Path nestedStage = nestedBuild.getParent().getParent();
+        check(!Files.exists(nestedStage.resolve("WII-UU-1.0.zip")), "discard extracted ZIP copy");
+        check(Files.isRegularFile(nested), "keep user-selected archive");
         Path bad = temp.resolve("bad.zip");
         Files.write(bad, zip(Map.of("../escaped.txt", new byte[]{1})));
         rejects(updater, bad, "zip traversal");
@@ -49,8 +53,19 @@ public final class ActionsBuildTest {
         return bytes.toByteArray();
     }
     private static void rejects(Updater updater, Path zip, String label) throws Exception {
-        try { updater.prepareBuild(zip); } catch (IOException expected) { return; }
+        Set<Path> before = actionStages();
+        try {
+            updater.prepareBuild(zip);
+        } catch (IOException expected) {
+            check(before.containsAll(actionStages()), label + " left a staging folder");
+            return;
+        }
         throw new AssertionError(label);
+    }
+    private static Set<Path> actionStages() throws IOException {
+        try (var paths = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
+            return new HashSet<>(paths.filter(p -> p.getFileName().toString().startsWith("wiiuu-actions-")).toList());
+        }
     }
     private static void check(boolean ok, String label) { if (!ok) throw new AssertionError(label); }
 }
