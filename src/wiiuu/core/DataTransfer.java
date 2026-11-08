@@ -3,9 +3,11 @@ package wiiuu.core;
 import java.io.*;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.zip.*;
 
-/** Copies app data and configured ROM folders into a new storage directory. */
+/** Copies app data and the standard ROM library into a new storage directory. */
 public final class DataTransfer {
     private static final String LIBRARY = "migrated-roms";
     private static final String CUSTOM = "migrated-custom-roms";
@@ -102,13 +104,11 @@ public final class DataTransfer {
         try {
             writer.write(stage);
             Config relocated = new Config(stage);
-            if (network) relocated.set("peer.id", null);
-            relocated.set("roms.base", target.resolve(LIBRARY).toString());
-            for (GameSystem system : Systems.ALL) {
-                String key = "system." + system.id() + ".romdir";
-                Path custom = stage.resolve(CUSTOM).resolve(system.id());
-                relocated.set(key, Files.isDirectory(custom) ? target.resolve(CUSTOM).resolve(system.id()).toString() : null);
+            if (network) {
+                relocated.set("peer.id", null);
+                for (GameSystem system : Systems.ALL) relocated.set("system." + system.id() + ".romdir", null);
             }
+            relocated.set("roms.base", target.resolve(LIBRARY).toString());
             relocated.saveChecked();
             Files.move(stage, target);
             Config.selectHome(target);
@@ -122,23 +122,25 @@ public final class DataTransfer {
     }
 
     private static void visit(Config config, boolean network, EntrySink sink) throws IOException {
-        tree(config.home(), "", network, sink);
-        tree(config.romBase(), LIBRARY, false, sink);
+        Set<Path> customFolders = new HashSet<>();
         for (GameSystem system : Systems.ALL) {
             String custom = config.get("system." + system.id() + ".romdir", "");
-            if (!custom.isBlank()) tree(Path.of(custom), CUSTOM + "/" + system.id(), false, sink);
+            if (!custom.isBlank() && Files.isDirectory(Path.of(custom))) customFolders.add(Path.of(custom).toRealPath());
         }
+        tree(config.home(), "", network, customFolders, sink);
+        tree(config.romBase(), LIBRARY, false, customFolders, sink);
     }
 
     private static boolean networkExcluded(String name) {
         String path = name.toLowerCase(java.util.Locale.ROOT);
-        return path.equals("peers.properties") || path.equals("peers.properties.tmp")
+        return path.equals(CUSTOM) || path.startsWith(CUSTOM + "/")
+                || path.equals("peers.properties") || path.equals("peers.properties.tmp")
                 || path.equals("choccy/cores") || path.startsWith("choccy/cores/")
                 || path.equals("choccy/jre") || path.startsWith("choccy/jre/")
                 || path.equals("bin/cloudflared") || path.startsWith("bin/cloudflared/");
     }
 
-    private static void tree(Path root, String prefix, boolean network, EntrySink sink) throws IOException {
+    private static void tree(Path root, String prefix, boolean network, Set<Path> customFolders, EntrySink sink) throws IOException {
         if (!Files.exists(root)) return;
         Path real = root.toRealPath();
         Files.walkFileTree(real, new SimpleFileVisitor<>() {
@@ -148,6 +150,8 @@ public final class DataTransfer {
             }
 
             @Override public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                if ((!prefix.isEmpty() || !dir.equals(real)) && customFolders.contains(dir))
+                    return FileVisitResult.SKIP_SUBTREE;
                 String name = name(dir);
                 if (prefix.isEmpty() && (name.equals("tmp") || name.equals(LIBRARY) || name.equals(CUSTOM)
                         || network && networkExcluded(name)))

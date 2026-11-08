@@ -72,7 +72,7 @@ For custom paths, pass `--temp-dir DIR` or `--emu-root DIR` (the same root as
 ## Storage and migration
 
 Open **Settings → System → Storage and migration**. Choose a drive and a new folder to switch
-WII-UU data and configured ROM folders to that location. Quit and reopen WII-UU after the copy.
+WII-UU data and the standard ROM library to that location. Custom ROM folders stay in place. Quit and reopen WII-UU after the copy.
 The small `~/.wiiuu-location` file points the app and installers to the drive, including upgrade
 and install staging. Keep the drive connected. The original files are retained so you can check
 the copy before removing them.
@@ -83,7 +83,7 @@ one-time code on the destination. The transfer copies data into a new folder, sw
 destination's storage link, and leaves its previous data available. Temporary files, symbolic
 links and device-specific GamePad HTTPS certificates are skipped. Network transfers also skip cached
 Java runtimes, Choccy Milk cores and Cloudflared binaries so the destination can obtain its own
-copies. The destination gets its own peer identity and must pair with other WII-UUs again. External emulator installs
+copies. The destination gets its own peer identity and must pair with other WII-UUs again. Configure any custom ROM folders on the destination separately. External emulator installs
 and data held in their own app folders are managed separately.
 
 The installer ZIP contains the apps and installers. The reactions editor is a separate
