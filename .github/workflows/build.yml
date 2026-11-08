@@ -155,7 +155,7 @@ jobs:
           node test/web/controller-layouts.cjs
 
       - name: Check shell scripts
-        run: bash -n install.sh emulators.sh build.sh package.sh
+        run: bash -n install.sh emulators.sh build.sh package.sh docs/get.sh
 
       - name: Prepare easy-install artifact
         run: |

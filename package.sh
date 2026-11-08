@@ -23,6 +23,7 @@ chmod +x "dist/$NAME/install.sh" "dist/$NAME/emulators.sh" "dist/$NAME/console/w
 rm -rf "dist/$NAME"
 # the website (docs/, served at wiiuu.stoppedwumm.net) hosts the downloads too
 mkdir -p docs/download
+cp install.sh build/WII-UU-Cleanup.jar docs/download/
 cp "dist/$NAME.zip" "docs/download/$NAME.zip"
 cp "dist/$NAME.zip" docs/download/WII-UU-latest.zip
 # the reactions editor on its own (it runs anywhere with Java 17+ and ffmpeg)

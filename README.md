@@ -34,7 +34,8 @@ it, then:
 
 If WII-UU is already installed, rerun the installer to **Uninstall**, **Repair** from the
 installer's files, **Update** from the release server, or **Optimize device space**. Optimization
-previews stale WII-UU staging files and asks before removing them. Automated installs using
+previews stale WII-UU staging files and asks before removing them. The one-line web installer
+offers maintenance before downloading the release archive. Automated installs using
 `--yes` or `-Yes` skip the menu.
 
 The installer:
