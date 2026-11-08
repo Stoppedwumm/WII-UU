@@ -15,8 +15,8 @@ set -euo pipefail
 APP="WII-UU"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OS="$(uname -s)"
-PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/wiiuu"
-BIN="$HOME/.local/bin"
+DEFAULT_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/wiiuu"
+BIN="${WIIUU_INSTALL_BIN:-$HOME/.local/bin}"
 ROMS="$HOME/WiiUU/roms"
 CONF_DIR="${WIIUU_HOME:-$HOME/.wiiuu}"
 PORT=8080
@@ -25,7 +25,8 @@ EMULATORS=0
 SHORTCUT=1
 UNINSTALL=0
 CONSOLE=0
-[ "$OS" = "Darwin" ] && PREFIX="$HOME/Library/Application Support/WII-UU"
+[ "$OS" = "Darwin" ] && DEFAULT_PREFIX="$HOME/Library/Application Support/WII-UU"
+PREFIX="${WIIUU_INSTALL_PREFIX:-$DEFAULT_PREFIX}"
 
 SYSTEMS="nes snes gb n64 gba gc nds wii 3ds wiiu switch sms genesis saturn dc ps1 ps2 psp ps3 ps4"
 
@@ -54,6 +55,39 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+cleanup_jar() {
+  local candidate
+  for candidate in "$HERE/WII-UU-Cleanup.jar" "$HERE/build/WII-UU-Cleanup.jar" "$PREFIX/WII-UU-Cleanup.jar"; do
+    if [ -f "$candidate" ]; then printf '%s\n' "$candidate"; return 0; fi
+  done
+  return 1
+}
+
+if [ "$UNINSTALL" = 0 ] && [ "$YES" = 0 ] && [ -t 0 ] && [ -f "$PREFIX/wiiuu.jar" ]; then
+  say "WII-UU is already installed"
+  printf '%s\n' '1) Uninstall WII-UU' '2) Repair WII-UU using this installer' \
+    '3) Update WII-UU' '4) Optimize device space' '0) Cancel'
+  read -r -p "Choose an action [0-4]: " action || exit 0
+  case "$action" in
+    1) ask "Uninstall WII-UU? Your ROMs and settings are kept." || exit 0; UNINSTALL=1 ;;
+    2) say "Reinstalling WII-UU from this installer" ;;
+    3)
+      say "Close WII-UU before updating."
+      ask "Check for and install a newer release?" || exit 0
+      WIIUU_HOME="$CONF_DIR" WIIUU_INSTALL_PREFIX="$PREFIX" WIIUU_INSTALL_BIN="$BIN" \
+        exec java -jar "$PREFIX/wiiuu.jar" --upgrade
+      ;;
+    4)
+      cleaner="$(cleanup_jar)" || die "WII-UU-Cleanup.jar is missing. Use the complete WII-UU installer package."
+      java -jar "$cleaner"
+      ask "Close WII-UU and any other installers first. Remove eligible staging files?" || exit 0
+      exec java -jar "$cleaner" --apply
+      ;;
+    0|"") exit 0 ;;
+    *) die "Choose an option from 0 to 4." ;;
+  esac
+fi
 
 # ---------------------------------------------------------------------------- uninstall
 if [ "$UNINSTALL" = 1 ]; then
@@ -135,6 +169,9 @@ ok "$JAR"
 say "Installing to $PREFIX"
 mkdir -p "$PREFIX" "$BIN"
 cp "$JAR" "$PREFIX/wiiuu.jar"
+if cleaner="$(cleanup_jar)" && [ "$cleaner" != "$PREFIX/WII-UU-Cleanup.jar" ]; then
+  cp "$cleaner" "$PREFIX/WII-UU-Cleanup.jar"
+fi
 java -jar "$PREFIX/wiiuu.jar" --write-icon "$PREFIX/wiiuu.png" 2>/dev/null || true
 cat > "$BIN/wiiuu" <<EOF
 #!/usr/bin/env bash

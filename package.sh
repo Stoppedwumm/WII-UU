@@ -13,7 +13,7 @@ python3 tools/package-cloudflared.py
 WIIUU_BUILD_CHANNEL="${WIIUU_BUILD_CHANNEL:-release}" ./build.sh
 rm -rf "dist/$NAME" "dist/$NAME.zip"
 mkdir -p "dist/$NAME/source"
-cp build/wiiuu.jar build/ChoccyMilk.jar build/WII-UU-Reactions.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"
+cp build/wiiuu.jar build/ChoccyMilk.jar build/WII-UU-Reactions.jar build/WII-UU-Cleanup.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"
 cp -r console "dist/$NAME/"
 cp -r engine src choccy-app resources tools build.sh package.sh CHANGELOG.md "dist/$NAME/source/"
 # the example reaction video is in wiiuu.jar already (the source builds without it)

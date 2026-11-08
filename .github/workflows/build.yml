@@ -69,6 +69,15 @@ jobs:
           javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java src/wiiuu/core/BuildInfo.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java
           java -cp build/installer-tests wiiuu.core.ActionsBuildTest
           java -cp build/installer-tests wiiuu.core.BuildInfoTest
+      - name: Check Windows installer syntax
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path install.ps1).Path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors) { $errors | Out-String | Write-Error }
+
       - name: Test shared core manager
         shell: bash
         run: |

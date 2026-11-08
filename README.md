@@ -32,6 +32,11 @@ it, then:
   configures them for you; see below.)
 * **Windows:** double-click `install.bat`
 
+If WII-UU is already installed, rerun the installer to **Uninstall**, **Repair** from the
+installer's files, **Update** from the release server, or **Optimize device space**. Optimization
+previews stale WII-UU staging files and asks before removing them. Automated installs using
+`--yes` or `-Yes` skip the menu.
+
 The installer:
 
 * checks for Java 17+ and offers to install it (apt, dnf, pacman, zypper, Homebrew or winget)
