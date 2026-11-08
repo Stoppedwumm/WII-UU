@@ -85,6 +85,9 @@ sudo wiiuu-console install                                                    # 
   Return to **Forward** to finish a drift or rearm the item gesture. **Brake / Back**, **Map**,
   **Start**, and **Select** are also within thumb reach. Tap **Standard layout** or **Racing layout**
   below the screen to switch during play. The DS touch screen in the middle still accepts taps.
+  **Edit layouts** on **Now playing** lets you name and save your own layouts. Set the right-thumb
+  hold and slide bindings, choose whether each slide holds or taps its button, and remap the four
+  extra buttons. Custom layouts are saved in the GamePad browser or installed web app.
 * **Remapping a controller:** *Settings → GamePad & players → Controller buttons* lists the
   controllers plugged in. Pick one, then a GamePad button (A, B, X, Y, L, R, ZL, ZR, +, −, HOME,
   L3, R3, the d-pad) and press the controller's button that should be it. The button that was it
