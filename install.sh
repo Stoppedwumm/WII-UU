@@ -13,7 +13,7 @@
 set -euo pipefail
 
 APP="WII-UU"
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 OS="$(uname -s)"
 DEFAULT_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/wiiuu"
 BIN="${WIIUU_INSTALL_BIN:-$HOME/.local/bin}"
@@ -25,6 +25,8 @@ EMULATORS=0
 SHORTCUT=1
 UNINSTALL=0
 CONSOLE=0
+BOOTSTRAP=0
+SKIP_MAINTENANCE="${WIIUU_SKIP_MAINTENANCE:-0}"
 [ "$OS" = "Darwin" ] && DEFAULT_PREFIX="$HOME/Library/Application Support/WII-UU"
 PREFIX="${WIIUU_INSTALL_PREFIX:-$DEFAULT_PREFIX}"
 
@@ -49,8 +51,13 @@ while [ $# -gt 0 ]; do
     --with-all-emulators) EMULATORS=all ;;
     --no-shortcut) SHORTCUT=0 ;;
     --uninstall) UNINSTALL=1 ;;
+    --bootstrap) BOOTSTRAP=1 ;;
     --console-mode) CONSOLE=1 ;;
-    -h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)
+      echo "Usage: install.sh [--yes] [--uninstall] [--console-mode] [--with-emulators | --with-all-emulators]"
+      echo "Options: --prefix DIR  --bin DIR  --roms DIR  --port N  --no-shortcut"
+      exit 0
+      ;;
     *) die "unknown option $1 (see --help)" ;;
   esac
   shift
@@ -64,11 +71,12 @@ cleanup_jar() {
   return 1
 }
 
-if [ "$UNINSTALL" = 0 ] && [ "$YES" = 0 ] && [ -t 0 ] && [ -f "$PREFIX/wiiuu.jar" ]; then
+if [ "$UNINSTALL" = 0 ] && [ "$YES" = 0 ] && [ "$SKIP_MAINTENANCE" = 0 ] &&
+   [ -f "$PREFIX/wiiuu.jar" ] && { true </dev/tty; } 2>/dev/null; then
   say "WII-UU is already installed"
   printf '%s\n' '1) Uninstall WII-UU' '2) Repair WII-UU using this installer' \
     '3) Update WII-UU' '4) Optimize device space' '0) Cancel'
-  read -r -p "Choose an action [0-4]: " action || exit 0
+  read -r -p "Choose an action [0-4]: " action </dev/tty || exit 0
   case "$action" in
     1) ask "Uninstall WII-UU? Your ROMs and settings are kept." || exit 0; UNINSTALL=1 ;;
     2) say "Reinstalling WII-UU from this installer" ;;
@@ -76,13 +84,24 @@ if [ "$UNINSTALL" = 0 ] && [ "$YES" = 0 ] && [ -t 0 ] && [ -f "$PREFIX/wiiuu.jar
       say "Close WII-UU before updating."
       ask "Check for and install a newer release?" || exit 0
       WIIUU_HOME="$CONF_DIR" WIIUU_INSTALL_PREFIX="$PREFIX" WIIUU_INSTALL_BIN="$BIN" \
-        exec java -jar "$PREFIX/wiiuu.jar" --upgrade
+        java -jar "$PREFIX/wiiuu.jar" --upgrade || exit 1
+      exit 0
       ;;
     4)
-      cleaner="$(cleanup_jar)" || die "WII-UU-Cleanup.jar is missing. Use the complete WII-UU installer package."
-      java -jar "$cleaner"
+      if [ "$BOOTSTRAP" = 1 ]; then
+        cleaner="$PREFIX/WII-UU-Cleanup.jar"
+        if [ ! -f "$cleaner" ]; then
+          cleaner="$(mktemp)"
+          trap 'rm -f "$cleaner"' EXIT
+          curl -fsSL -o "$cleaner" "${WIIUU_CLEANUP_URL:-https://wiiuu.stoppedwumm.net/download/WII-UU-Cleanup.jar}"
+        fi
+      else
+        cleaner="$(cleanup_jar)" || die "WII-UU-Cleanup.jar is missing. Use the complete WII-UU installer package."
+      fi
+      java -jar "$cleaner" || exit 1
       ask "Close WII-UU and any other installers first. Remove eligible staging files?" || exit 0
-      exec java -jar "$cleaner" --apply
+      java -jar "$cleaner" --apply || exit 1
+      exit 0
       ;;
     0|"") exit 0 ;;
     *) die "Choose an option from 0 to 4." ;;
@@ -102,6 +121,9 @@ if [ "$UNINSTALL" = 1 ]; then
   [ -d "$EMU_ROOT" ] && ok "Emulators built from source were kept in $EMU_ROOT (delete it to free the space)."
   exit 0
 fi
+
+# The web launcher only downloads the release when the installer requests its payload.
+[ "$BOOTSTRAP" = 0 ] || exit 42
 
 printf '\n%s  WII-UU installer%s\n\n' "$c_blue" "$c_off"
 
