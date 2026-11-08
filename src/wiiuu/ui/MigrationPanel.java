@@ -64,6 +64,18 @@ final class MigrationPanel {
         }
     }
 
+    static void preview(Component owner) {
+        var animation = new TransferAnimation(true);
+        var timer = new Timer(1000 / 60, e -> animation.repaint());
+        animation.start();
+        timer.start();
+        try {
+            JOptionPane.showMessageDialog(owner, animation, "Migration animation preview", JOptionPane.PLAIN_MESSAGE);
+        } finally {
+            timer.stop();
+        }
+    }
+
     @FunctionalInterface
     private interface Transfer {
         void run(java.util.function.Consumer<String> code, Runnable moving,
@@ -78,12 +90,14 @@ final class MigrationPanel {
         TransferAnimation animation = new TransferAnimation(network);
         JButton cancel = new JButton("Cancel");
         cancel.setEnabled(network);
-        JPanel panel = new JPanel(new GridLayout(0, 1, 0, 8));
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
-        panel.add(status);
-        panel.add(code);
-        panel.add(animation);
-        panel.add(cancel);
+        for (JComponent item : new JComponent[]{status, code, animation, cancel}) {
+            if (panel.getComponentCount() != 0) panel.add(Box.createVerticalStrut(8));
+            item.setAlignmentX(Component.CENTER_ALIGNMENT);
+            panel.add(item);
+        }
         JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(owner), title, Dialog.ModalityType.APPLICATION_MODAL);
         dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         dialog.add(panel);
@@ -97,7 +111,7 @@ final class MigrationPanel {
             close(socket.get());
             cancel.setEnabled(false);
         });
-        Timer timer = new Timer(60, e -> animation.advance());
+        Timer timer = new Timer(1000 / 60, e -> animation.repaint());
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() throws Exception {
                 transfer.run(value -> SwingUtilities.invokeLater(() -> {
@@ -107,6 +121,7 @@ final class MigrationPanel {
                     dialog.pack();
                 }), () -> SwingUtilities.invokeLater(() -> {
                     status.setText("Transferring WII-UU data…");
+                    animation.start();
                     timer.start();
                 }), value -> {
                     socket.set(value);
@@ -135,48 +150,77 @@ final class MigrationPanel {
     }
 
     private static final class TransferAnimation extends JComponent {
+        private static final double WALK_START = 0.35, TAKEOFF = 0.95, LAND = 2.1, ARRIVE = 2.75, LOOP = 3.7;
         private final boolean network;
-        private int frame;
+        private final Mascot mascot = new Mascot();
+        private long started;
 
         TransferAnimation(boolean network) {
             this.network = network;
-            setPreferredSize(new Dimension(410, 90));
+            setPreferredSize(new Dimension(460, 175));
         }
 
-        void advance() {
-            frame = (frame + 1) % 54;
-            repaint();
+        void start() {
+            started = System.nanoTime();
         }
 
         @Override protected void paintComponent(Graphics graphics) {
+            double time = started == 0 ? 0 : ((System.nanoTime() - started) / 1e9) % LOOP;
             Graphics2D g = (Graphics2D) graphics.create();
             try {
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                int right = getWidth() - 86;
-                endpoint(g, 12, network ? "Computer A" : "Old drive");
-                endpoint(g, right, network ? "Computer B" : "New drive");
-                int start = 89, end = right - 62;
-                g.setColor(new Color(0xa1b1bb));
-                g.drawLine(start, 31, end + 53, 31);
-                int x = start + (end - start) * Math.min(frame, 45) / 45;
-                g.setColor(new Color(0x007ea9));
-                g.fillRoundRect(x, 19, 56, 24, 14, 14);
-                g.setColor(Color.WHITE);
-                g.drawString("WII-UU", x + 7, 35);
+                float scale = Math.min(getWidth() / 460f, getHeight() / 175f);
+                g.translate((getWidth() - 460 * scale) / 2, (getHeight() - 175 * scale) / 2);
+                g.scale(scale, scale);
+                g.setColor(MenuView.dark ? new Color(0x192a39) : new Color(0xeaf4f8));
+                g.fillRoundRect(0, 0, 460, 175, 24, 24);
+
+                float x, lift = 0, stride = 0;
+                if (time < TAKEOFF) {
+                    x = lerp(72, 111, phase(time, WALK_START, TAKEOFF));
+                    if (time >= WALK_START) stride = (float) Math.sin((time - WALK_START) * 28);
+                } else if (time < LAND) {
+                    float air = phase(time, TAKEOFF, LAND);
+                    x = lerp(111, 349, air);
+                    lift = (float) Math.sin(Math.PI * air) * 39;
+                    stride = 0.75f;
+                } else {
+                    x = lerp(349, 388, phase(time, LAND, ARRIVE));
+                    if (time < ARRIVE) stride = (float) Math.sin((time - LAND) * 28);
+                    else if (time < ARRIVE + 0.35) lift = (float) Math.sin(Math.PI * phase(time, ARRIVE, ARRIVE + 0.35)) * 9;
+                }
+                endpoint(g, 72, network ? "Computer A" : "Old drive", time < LAND);
+                endpoint(g, 388, network ? "Computer B" : "New drive", time >= LAND);
+                if (time >= TAKEOFF && time < LAND) {
+                    g.setColor(new Color(0x6690a0));
+                    for (int i = 1; i <= 4; i++) g.fillOval((int) x - 30 - i * 10, (int) (92 - lift) + i * 2, 5, 3);
+                }
+                mascot.look(405, 85);
+                mascot.paintWalking(g, x, 99 - lift - Math.abs(stride) * 2, 23, stride);
             } finally {
                 g.dispose();
             }
         }
 
-        private void endpoint(Graphics2D g, int x, String label) {
+        private static float phase(double time, double from, double to) {
+            return (float) Math.max(0, Math.min(1, (time - from) / (to - from)));
+        }
+
+        private static float lerp(float from, float to, float phase) {
+            return from + (to - from) * phase;
+        }
+
+        private void endpoint(Graphics2D g, int x, String label, boolean active) {
             g.setColor(new Color(0x263848));
-            g.fillRoundRect(x + 6, 8, 59, 42, 8, 8);
-            g.setColor(new Color(0xc8eaf5));
-            g.fillRect(x + 11, 13, 49, 32);
+            g.fillRoundRect(x - 43, 99, 86, 48, 9, 9);
+            g.setColor(new Color(active ? 0x74d7f4 : 0xb8cbd2));
+            g.fillRoundRect(x - 36, 105, 72, 35, 5, 5);
             g.setColor(new Color(0x263848));
-            g.fillRect(x + 31, 50, 9, 8);
-            g.fillRect(x + 21, 58, 29, 3);
-            g.drawString(label, x, 79);
+            g.fillRect(x - 5, 147, 10, 7);
+            g.fillRoundRect(x - 18, 153, 36, 4, 4, 4);
+            g.setColor(MenuView.dark ? Color.WHITE : new Color(0x263848));
+            g.setFont(MenuView.font(Font.BOLD, 11));
+            g.drawString(label, x - g.getFontMetrics().stringWidth(label) / 2, 169);
         }
     }
 

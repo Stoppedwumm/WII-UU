@@ -3,6 +3,9 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.8 (2026-11-08)
+- Animate the WII-UU mascot during migration and preview the animation from Developer settings.
+
 ## 1.14.7 (2026-11-08)
 - Skip custom ROM folders during storage relocation and network migration. Local moves keep
   the original paths. Receiving computers can configure their own folders.

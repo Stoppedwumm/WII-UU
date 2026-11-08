@@ -86,9 +86,18 @@ final class Mascot {
      * right (bubbleAbove false) or above it, at most bubbleW wide.
      */
     void paint(Graphics2D g, float footX, float footY, float s, boolean bubbleAbove, float bubbleW) {
+        paint(g, footX, footY, s, bubbleAbove, bubbleW, false, 0);
+    }
+
+    void paintWalking(Graphics2D g, float footX, float footY, float s, float stride) {
+        paint(g, footX, footY, s, false, 0, true, stride);
+    }
+
+    private void paint(Graphics2D g, float footX, float footY, float s, boolean bubbleAbove,
+                       float bubbleW, boolean walkingScene, float stride) {
         long now = System.currentTimeMillis();
         float bodyW = s * 2.6f, bodyH = s;
-        double in = ease((now - created) / 900.0);
+        double in = walkingScene ? 1 : ease((now - created) / 900.0);
         float x = footX - (float) ((1 - in) * (footX + bodyW));
         double hop = Math.min(1, (now - hopAt) / (double) HOP_MS);
         float lift = (float) (Math.sin(Math.PI * hop) * s * 0.45f);
@@ -96,7 +105,7 @@ final class Mascot {
         // legs
         g.setColor(MenuView.dark ? new Color(0xB0BEC5) : new Color(0x37474F));
         g.setStroke(new BasicStroke(Math.max(2f, s * 0.12f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        float walk = in < 1 ? (float) Math.sin(now / 60.0) * s * 0.25f : 0;
+        float walk = walkingScene ? stride * s * 0.25f : in < 1 ? (float) Math.sin(now / 60.0) * s * 0.25f : 0;
         g.drawLine((int) (x - s * 0.4f), (int) (y + bodyH / 2), (int) (x - s * 0.45f + walk), (int) (footY - lift * 0.3f));
         g.drawLine((int) (x + s * 0.4f), (int) (y + bodyH / 2), (int) (x + s * 0.45f - walk), (int) (footY - lift * 0.3f));
         g.setStroke(new BasicStroke(1));
@@ -135,7 +144,7 @@ final class Mascot {
             }
         }
         g.setStroke(new BasicStroke(1));
-        if (in >= 1) bubble(g, x, y, bodyW, bodyH, s, bubbleAbove, bubbleW, now);
+        if (!walkingScene && in >= 1) bubble(g, x, y, bodyW, bodyH, s, bubbleAbove, bubbleW, now);
     }
 
     private void bubble(Graphics2D g, float x, float y, float bodyW, float bodyH, float s, boolean above, float maxW, long now) {
