@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Download the WII-UU UI library and use its game screen renderer in Java desktop apps.">
+<title>UI Library · WII-UU Support</title>
+<link rel="icon" href="../../icon.png">
+<link rel="stylesheet" href="../support.css">
+</head>
+<body>
+<header>
+  <nav aria-label="Main">
+    <a class="brand" href="../../">WII-<b>UU</b></a>
+    <a href="../">Support</a>
+    <a href="../../#install">Downloads</a>
+  </nav>
+</header>
+<main>
+<article>
+<h1>WII-UU UI Library</h1>
+<p>Use the same game screen renderer, display filters, and button types that WII-UU and Choccy Milk share. The standalone JAR works with Java 17 or newer and uses Java desktop APIs. Emulation, the GamePad server, and the WII-UU launcher are separate applications.</p>
+<ul>
+  <li><a href="https://github.com/Stoppedwumm/WII-UU/releases/tag/wiiuu-ui-v1.0.0">Download the official 1.0.0 release</a></li>
+  <li><a href="api/">Browse the Java API reference</a></li>
+  <li><a href="UiDemo.java">Download the Swing example</a></li>
+</ul>
+<h2>Run the example</h2>
+<p>Put <code>UiDemo.java</code> and <code>WII-UU-UI-1.0.0.jar</code> in the same folder. Compile the example with a JDK, then run it.</p>
+<pre><code>javac -cp WII-UU-UI-1.0.0.jar UiDemo.java
+java -cp "WII-UU-UI-1.0.0.jar:." UiDemo</code></pre>
+<p>On Windows, use the following launch command.</p>
+<pre><code>java -cp "WII-UU-UI-1.0.0.jar;." UiDemo</code></pre>
+<h2>Render your own frames</h2>
+<ol>
+  <li>Create a <code>wiiuu.engine.GameScreen</code> and call <code>look</code> to choose a filter and optional widescreen stretch.</li>
+  <li>Pass packed <code>0xRRGGBB</code> pixels to <code>frame</code> in row order, with the width, height, and display aspect ratio. Use aspect <code>0</code> to derive it from the dimensions. Keep submitted arrays unchanged if frame blending is enabled.</li>
+  <li>Call <code>paint</code> from your Swing component’s <code>paintComponent</code> method. Request a repaint after delivering each frame.</li>
+</ol>
+<p>Use <code>pictureBounds</code> to map input through letterboxing, <code>announce</code> to draw a temporary notification, and <code>GameScreen.key</code> to translate common keys to <code>wiiuu.input.PadButton</code>. <code>SystemTheme.isDark()</code> queries the desktop theme. Call it off the Swing event thread if you need to keep the UI responsive.</p>
+</article>
+</main>
+<footer><a href="https://github.com/Stoppedwumm/WII-UU">Source on GitHub</a></footer>
+</body>
+</html>

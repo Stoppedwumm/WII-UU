@@ -3,6 +3,10 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.9 (2026-11-08)
+- Publish the standalone WII-UU UI Library 1.0.0 with API documentation and a Swing example.
+- Add website support articles for installation, storage migration, GamePad setup and Choccy Milk.
+
 ## 1.14.8 (2026-11-08)
 - Animate the WII-UU mascot during migration and preview the animation from Developer settings.
 
