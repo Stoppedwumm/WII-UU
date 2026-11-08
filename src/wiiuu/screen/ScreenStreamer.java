@@ -619,7 +619,7 @@ public final class ScreenStreamer {
 
         /**
          * The game's own frames, as they come (up to stream.directFps, 60), scaled to its shape: whole
-         * pixels as big as fit stream.maxWidth (854) without smoothing, so pixel art stays sharp.
+         * pixels as big as fit stream.maxWidth (854). Split DS streams let the browser scale the picture.
          */
         private void produceDirect() {
             int maxW = Math.max(160, config.getInt("stream.maxWidth", 854));
@@ -629,6 +629,8 @@ public final class ScreenStreamer {
             long seen = -1, last = 0;
             try {
                 while (!stopped && directMode(mode)) {
+                    long wait = minNanos - (System.nanoTime() - last);
+                    if (wait > 0) java.util.concurrent.TimeUnit.NANOSECONDS.sleep(wait);
                     int[] px;
                     int w, h;
                     float aspect;
@@ -637,7 +639,7 @@ public final class ScreenStreamer {
                         while ((directPixels == null || directSeq == seen) && directMode(mode) && System.currentTimeMillis() < deadline) {
                             directLock.wait(Math.max(1, deadline - System.currentTimeMillis()));
                         }
-                        if (!directMode(mode)) return;
+                        if (stopped || !directMode(mode)) return;
                         if (directPixels == null || directSeq == seen) continue;
                         seen = directSeq;
                         px = directPixels;
@@ -645,21 +647,17 @@ public final class ScreenStreamer {
                         h = directH;
                         aspect = directAspect;
                     }
+                    if (idle()) continue;
+                    int start = 0, widthLimit = maxW;
                     if (splitChoccy() && h >= 2) {
                         int half = h / 2;
-                        int start = "second".equals(mode) ? w * (h - half) : 0;
-                        px = java.util.Arrays.copyOfRange(px, start, start + w * half);
+                        start = "second".equals(mode) ? w * (h - half) : 0;
                         h = half;
                         aspect = 4f / 3;
+                        widthLimit = Math.min(maxW, Math.round(h * aspect));
                     }
-                    if (idle()) {                         // nobody watching: don't encode
-                        sleep(100);
-                        continue;
-                    }
-                    long wait = minNanos - (System.nanoTime() - last);
-                    if (wait > 0) sleep(wait / 1_000_000);
                     last = System.nanoTime();
-                    publish(encodeDirect(writer, px, w, h, aspect, maxW, quality));
+                    publish(encodeDirect(writer, px, start, w, h, aspect, widthLimit, quality));
                     sawPicture = true;
                 }
             } catch (InterruptedException e) {
@@ -917,7 +915,7 @@ public final class ScreenStreamer {
     // ---- helpers ------------------------------------------------------------------------
 
     /** A game frame (0xRRGGBB) as a JPEG in its display shape, scaled up with whole source pixels. */
-    static byte[] encodeDirect(ImageWriter writer, int[] px, int w, int h, float aspect, int maxW, float quality) throws IOException {
+    static byte[] encodeDirect(ImageWriter writer, int[] px, int start, int w, int h, float aspect, int maxW, float quality) throws IOException {
         if (aspect <= 0) aspect = (float) w / h;
         // height: the largest whole multiple that keeps the width within maxW; width: the shape's
         int k = Math.max(1, (int) Math.floor(maxW / (h * aspect)));
@@ -928,11 +926,15 @@ public final class ScreenStreamer {
         }
         BufferedImage img = new BufferedImage(ow, oh, BufferedImage.TYPE_INT_RGB);
         int[] dst = ((java.awt.image.DataBufferInt) img.getRaster().getDataBuffer()).getData();
-        int[] col = new int[ow];
-        for (int x = 0; x < ow; x++) col[x] = Math.min(w - 1, (int) ((long) x * w / ow));
-        for (int y = 0; y < oh; y++) {
-            int src = Math.min(h - 1, y * h / oh) * w, d = y * ow;
-            for (int x = 0; x < ow; x++) dst[d + x] = px[src + col[x]];
+        if (ow == w && oh == h) {
+            System.arraycopy(px, start, dst, 0, w * h);
+        } else {
+            int[] col = new int[ow];
+            for (int x = 0; x < ow; x++) col[x] = Math.min(w - 1, (int) ((long) x * w / ow));
+            for (int y = 0; y < oh; y++) {
+                int src = start + Math.min(h - 1, y * h / oh) * w, d = y * ow;
+                for (int x = 0; x < ow; x++) dst[d + x] = px[src + col[x]];
+            }
         }
         ImageWriteParam param = writer.getDefaultWriteParam();
         param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);

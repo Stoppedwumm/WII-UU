@@ -48,7 +48,7 @@ public final class GameScreen {
         this.before = null;
     }
 
-    /** A frame (0xRRGGBB pixels); aspect is its display shape (0 = as the pixels are). */
+    /** A frame in the first w * h pixels (0xRRGGBB); aspect 0 uses the pixel dimensions. */
     public void frame(int[] rgb, int w, int h, float aspect) {
         String f = filter;
         if (blend) rgb = blend(rgb, w * h);
@@ -78,8 +78,8 @@ public final class GameScreen {
     /** This frame half and half with the one before (the one before as it came, so nothing smears for long). */
     private int[] blend(int[] rgb, int n) {
         int[] was = before;
-        before = rgb;
-        if (was == null || was.length != rgb.length) return rgb;
+        before = rgb.length == n ? rgb : java.util.Arrays.copyOf(rgb, n);
+        if (was == null || was.length != n) return rgb;
         int[] mixed = new int[n];
         for (int i = 0; i < n; i++) {
             int a = rgb[i], b = was[i];
