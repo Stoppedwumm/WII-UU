@@ -31,7 +31,7 @@ public final class DataTransfer {
             if (inside(target, config.romDir(system)))
                 throw new IOException("Choose a destination outside the current ROM folders.");
         }
-        install(target, stage -> visit(config, false, (source, name, directory) -> {
+        install(target, false, stage -> visit(config, false, (source, name, directory) -> {
             Path file = stage.resolve(name);
             if (directory) Files.createDirectories(file);
             else Files.copy(source, file, StandardCopyOption.COPY_ATTRIBUTES);
@@ -60,7 +60,7 @@ public final class DataTransfer {
     }
 
     public static void receive(InputStream in, Path destination) throws IOException {
-        install(target(destination), stage -> {
+        install(target(destination), true, stage -> {
             try (var zip = new ZipInputStream(new FilterInputStream(in) {
                 @Override public void close() { }
             })) {
@@ -75,6 +75,7 @@ public final class DataTransfer {
                         throw new IOException("Invalid migration entry");
                     Path file = stage.resolve(name).normalize();
                     if (!file.startsWith(stage) || file.equals(stage)) throw new IOException("Invalid migration entry");
+                    if (networkExcluded(stage.relativize(file).toString().replace(File.separatorChar, '/'))) continue;
                     if (entry.isDirectory()) Files.createDirectories(file);
                     else {
                         Files.createDirectories(file.getParent());
@@ -96,11 +97,12 @@ public final class DataTransfer {
         return target;
     }
 
-    private static void install(Path target, StageWriter writer) throws IOException {
+    private static void install(Path target, boolean network, StageWriter writer) throws IOException {
         Path stage = Files.createTempDirectory(target.getParent(), ".wiiuu-transfer-");
         try {
             writer.write(stage);
             Config relocated = new Config(stage);
+            if (network) relocated.set("peer.id", null);
             relocated.set("roms.base", target.resolve(LIBRARY).toString());
             for (GameSystem system : Systems.ALL) {
                 String key = "system." + system.id() + ".romdir";
@@ -128,6 +130,14 @@ public final class DataTransfer {
         }
     }
 
+    private static boolean networkExcluded(String name) {
+        String path = name.toLowerCase(java.util.Locale.ROOT);
+        return path.equals("peers.properties") || path.equals("peers.properties.tmp")
+                || path.equals("choccy/cores") || path.startsWith("choccy/cores/")
+                || path.equals("choccy/jre") || path.startsWith("choccy/jre/")
+                || path.equals("bin/cloudflared") || path.startsWith("bin/cloudflared/");
+    }
+
     private static void tree(Path root, String prefix, boolean network, EntrySink sink) throws IOException {
         if (!Files.exists(root)) return;
         Path real = root.toRealPath();
@@ -140,7 +150,7 @@ public final class DataTransfer {
             @Override public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
                 String name = name(dir);
                 if (prefix.isEmpty() && (name.equals("tmp") || name.equals(LIBRARY) || name.equals(CUSTOM)
-                        || network && (name.equals("choccy/jre") || name.equals("bin/cloudflared"))))
+                        || network && networkExcluded(name)))
                     return FileVisitResult.SKIP_SUBTREE;
                 if (!name.isEmpty()) sink.accept(dir, name, true);
                 return FileVisitResult.CONTINUE;
@@ -149,7 +159,7 @@ public final class DataTransfer {
             @Override public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 String name = name(file);
                 if (attrs.isRegularFile() && !name.equals(COMPLETE)
-                        && !(prefix.isEmpty() && name.matches("gamepad-[^/]+\\.p12")))
+                        && !(prefix.isEmpty() && (name.matches("gamepad-[^/]+\\.p12") || network && networkExcluded(name))))
                     sink.accept(file, name, false);
                 return FileVisitResult.CONTINUE;
             }

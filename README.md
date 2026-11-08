@@ -82,7 +82,8 @@ from another computer** on the destination. Use the same local network and paste
 one-time code on the destination. The transfer copies data into a new folder, switches the
 destination's storage link, and leaves its previous data available. Temporary files, symbolic
 links and device-specific GamePad HTTPS certificates are skipped. Network transfers also skip cached
-Java runtimes and Cloudflared binaries so the destination can obtain its own copies. External emulator installs
+Java runtimes, Choccy Milk cores and Cloudflared binaries so the destination can obtain its own
+copies. The destination gets its own peer identity and must pair with other WII-UUs again. External emulator installs
 and data held in their own app folders are managed separately.
 
 The installer ZIP contains the apps and installers. The reactions editor is a separate
