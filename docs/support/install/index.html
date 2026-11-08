@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Use the maintenance menu, recover from a disk-full upgrade, or install a GitHub Actions build.">
+<title>Install, update, or free disk space · WII-UU Support</title>
+<link rel="icon" href="../../icon.png">
+<link rel="stylesheet" href="../../support/support.css">
+</head>
+<body>
+<header>
+  <nav aria-label="Main">
+    <a class="brand" href="../../">WII-<b>UU</b></a>
+    <a href="../../support/" >Support</a>
+    <a href="../../#install">Downloads</a>
+  </nav>
+</header>
+<main>
+<article>
+<h1>Install, update, or free disk space</h1>
+<h2>Open the installer</h2>
+<p>On macOS and Linux, run the web installer from a terminal.</p>
+<pre><code>curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash</code></pre>
+<p>On Windows, download and extract the release ZIP, then run <code>install.bat</code>.</p>
+<p>When WII-UU is already installed, the installer offers Uninstall, Repair, Update, and Optimize device space. The macOS and Linux web installer opens the menu before downloading the full package. Repair uses the files in the installer you opened, and Update checks the release server.</p>
+<h2>If the drive ran out of space</h2>
+<ol>
+  <li>If extraction is still asking whether to continue, press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop it.</li>
+  <li>Run the installer again and choose <strong>Optimize device space</strong>. Review the preview before confirming deletion. Close WII-UU and any other installers first.</li>
+  <li>Try the update again after freeing space. The updater still needs room to download and extract the package.</li>
+</ol>
+<p>Optimize skips staging folders modified in the last 24 hours. If WII-UU cannot start, use the standalone cleanup JAR with Java 17 or newer. The first command previews eligible files. The second removes them.</p>
+<pre><code>java -jar WII-UU-Cleanup.jar
+java -jar WII-UU-Cleanup.jar --apply</code></pre>
+<p><a href="../../download/WII-UU-Cleanup.jar">Download WII-UU-Cleanup.jar</a></p>
+<h2>Test a GitHub Actions build</h2>
+<ol>
+  <li>Open a successful build and download the WII-UU artifact. Choose the artifact ZIP listed under the workflow run.</li>
+  <li>In WII-UU, open <strong>Settings → System → Choose a build ZIP</strong>, then select <strong>Install selected beta build</strong>.</li>
+  <li>After WII-UU restarts, reopen the GamePad page so the phone loads the updated controls.</li>
+</ol>
+<p><a href="https://github.com/Stoppedwumm/WII-UU/actions/workflows/build.yml">Browse GitHub Actions builds</a></p>
+</article>
+</main>
+<footer>
+  <a href="https://github.com/Stoppedwumm/WII-UU/issues">Report a problem on GitHub</a>
+</footer>
+</body>
+</html>
