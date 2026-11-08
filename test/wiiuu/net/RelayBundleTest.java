@@ -7,12 +7,36 @@ import java.util.concurrent.TimeUnit;
 /** Checks the shipped JAR, actual native extraction, pinned version and CLI flags without a tunnel. */
 public final class RelayBundleTest {
     public static void main(String[] args) throws Exception {
+        var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            String request = exchange.getRequestURI().getPath();
+            Path root = Path.of("docs/download/cloudflared").toAbsolutePath();
+            Path file = root.resolve(request.substring(1)).normalize();
+            try (exchange) {
+                if (!file.startsWith(root) || !Files.isRegularFile(file)) {
+                    exchange.sendResponseHeaders(404, -1);
+                    return;
+                }
+                exchange.sendResponseHeaders(200, Files.size(file));
+                Files.copy(file, exchange.getResponseBody());
+            }
+        });
+        server.start();
+        System.setProperty("wiiuu.cloudflared.base", "http://127.0.0.1:" + server.getAddress().getPort() + "/");
+        try {
+            verifyPackage();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private static void verifyPackage() throws Exception {
         for (String platform : List.of("linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64", "windows-amd64", "windows-386")) {
             String root = "/cloudflared/" + platform + "/";
             String filename = platform.startsWith("windows") ? "cloudflared.exe" : "cloudflared";
             try (var binary = CloudflaredRelay.class.getResourceAsStream(root + filename);
                  var sum = CloudflaredRelay.class.getResourceAsStream(root + "sha256")) {
-                if (binary == null || sum == null) throw new AssertionError("Missing packaged helper: " + platform);
+                if (binary != null || sum == null) throw new AssertionError("Expected a checksum-only relay bundle: " + platform);
             }
         }
         Path home = Files.createTempDirectory("relay-bundle-test");

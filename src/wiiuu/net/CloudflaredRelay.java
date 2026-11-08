@@ -148,14 +148,25 @@ public final class CloudflaredRelay implements AutoCloseable {
         Files.createDirectories(dest.getParent());
         Path temp = Files.createTempFile(dest.getParent(), "cloudflared-", ".tmp");
         try (InputStream in = CloudflaredRelay.class.getResourceAsStream(resource + name)) {
-            if (in == null) throw new IOException("Missing bundled cloudflared executable");
-            Files.copy(in, temp, StandardCopyOption.REPLACE_EXISTING);
-            if (!digest(temp).equals(expected)) throw new IOException("Bundled cloudflared checksum mismatch");
+            if (in != null) Files.copy(in, temp, StandardCopyOption.REPLACE_EXISTING);
+            else downloadBinary(target, name, temp);
+            if (!digest(temp).equals(expected)) throw new IOException("Cloudflared checksum mismatch");
             temp.toFile().setExecutable(true, true);
             Files.move(temp, dest, StandardCopyOption.REPLACE_EXISTING);
         } finally { Files.deleteIfExists(temp); }
         return dest;
     }
+    private static void downloadBinary(String target, String name, Path temp) throws Exception {
+        String site = System.getProperty("wiiuu.cloudflared.base",
+                "https://wiiuu.stoppedwumm.net/download/cloudflared/");
+        var request = java.net.http.HttpRequest.newBuilder(java.net.URI.create(site).resolve(VERSION + "/" + target + "/" + name))
+                .timeout(java.time.Duration.ofMinutes(3)).build();
+        var client = java.net.http.HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(15)).build();
+        var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofFile(temp,
+                StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING));
+        if (response.statusCode() != 200) throw new IOException("Relay helper download failed (HTTP " + response.statusCode() + ")");
+    }
+
     private static String digest(Path file) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream in = Files.newInputStream(file)) {

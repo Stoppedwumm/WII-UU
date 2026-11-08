@@ -1640,6 +1640,11 @@ public final class SettingsScreen {
 
     private List<Row> systemRows() {
         List<Row> r = new ArrayList<>();
+        r.add(new Header("Storage"));
+        r.add(new Action("Storage and migration", "Choose a new drive or transfer WII-UU data over the local network.", () -> {
+            if (view.gameRunning()) { say("Close the current game before transferring data."); return; }
+            MigrationPanel.open(view, config);
+        }, () -> config.home().toString(), null));
         r.add(new Header("Updates"));
         r.add(new Action("Check for updates", null, this::updatesPressed, () -> updateStatus, null));
         if (release != null) {

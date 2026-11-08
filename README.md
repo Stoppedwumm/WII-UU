@@ -69,6 +69,25 @@ java -jar WII-UU-Cleanup.jar --apply
 For custom paths, pass `--temp-dir DIR` or `--emu-root DIR` (the same root as
 `emulators.sh --prefix`). Build the JAR from source with `./build.sh` and find it in `build/`.
 
+## Storage and migration
+
+Open **Settings → System → Storage and migration**. Choose a drive and a new folder to switch
+WII-UU data and configured ROM folders to that location. Quit and reopen WII-UU after the copy.
+The small `~/.wiiuu-location` file points the app and installers to the drive, including upgrade
+and install staging. Keep the drive connected. The original files are retained so you can check
+the copy before removing them.
+
+To transfer between computers, choose **Send to another computer** on the source and **Receive
+from another computer** on the destination. Use the same local network and paste the sender's
+one-time code on the destination. The transfer copies data into a new folder, switches the
+destination's storage link, and leaves its previous data available. Temporary files, symbolic
+links and device-specific GamePad HTTPS certificates are skipped. Network transfers also skip cached
+Java runtimes and Cloudflared binaries so the destination can obtain its own copies. External emulator installs
+and data held in their own app folders are managed separately.
+
+The installer ZIP contains the apps and installers. The reactions editor is a separate
+download, and relay setup downloads and verifies the Cloudflared helper for the current platform.
+
 ## Console Mode (Linux, Raspberry Pi)
 
 Console Mode turns a PC or Raspberry Pi into a WII-UU console, the way SteamOS does on a Steam
