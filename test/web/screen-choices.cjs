@@ -30,3 +30,32 @@ context.updateScreenChoices(null);
 assert.equal($('playSecond').hidden, true);
 assert.equal($('segSecond').hidden, true);
 console.log('GamePad screen-choice tests passed');
+
+const refreshCode = html.slice(html.indexOf('const loadedPadBuild'), html.indexOf('// ---------------------------------------------------------------- networking'));
+const saved = new Map();
+const loads = [];
+let releases = 0;
+const refreshContext = {
+  URL,
+  document: { querySelector: () => ({ content: '1.14.3-old' }) },
+  store: { set: (key, value) => saved.set(key, value) },
+  location: { href: 'https://gamepad.example/?example=keep', replace: url => loads.push(url) },
+  releasePadTouches: () => releases++,
+  touchPointer: 1,
+  touchEnd: () => releases++
+};
+vm.createContext(refreshContext);
+vm.runInContext(refreshCode, refreshContext);
+assert.equal(saved.get('loadedPadBuild'), '1.14.3-old');
+assert.equal(refreshContext.refreshPadIfOutdated(undefined), false);
+assert.equal(refreshContext.refreshPadIfOutdated('1.14.3-old'), false);
+assert.equal(refreshContext.refreshPadIfOutdated('1.14.3-new'), true);
+assert.equal(refreshContext.refreshPadIfOutdated('1.14.3-new'), true);
+assert.deepEqual(loads, ['https://gamepad.example/?example=keep&pad-build=1.14.3-new']);
+assert.equal(releases, 2);
+const retryContext = { ...refreshContext, location: { ...refreshContext.location, href: loads[0] } };
+vm.createContext(retryContext);
+vm.runInContext(refreshCode, retryContext);
+assert.equal(retryContext.refreshPadIfOutdated('1.14.3-new'), false);
+assert.equal(loads.length, 1);
+console.log('GamePad automatic refresh tests passed');
