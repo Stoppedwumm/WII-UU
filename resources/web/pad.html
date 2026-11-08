@@ -66,90 +66,7 @@
 
   .face { position: relative; width: calc(var(--face) * 3.1); height: calc(var(--face) * 3.1); }
   .face [data-b] { position: absolute; width: var(--face); height: var(--face); border-radius: 50%;
-    display: grid; place-items: center; font-weight: 800; font-size: calc(var(--face) * .42);
-    background: radial-gradient(circle at 40% 30%, #555b64, #3a3f47 70%); color: #d8dde2;
-    box-shadow: 0 4px 0 #111, inset 0 1px 0 rgba(255,255,255,.15); }
-  .face .bx { left: 50%; top: 0; transform: translateX(-50%); }
-  .face .by { left: 0; top: 50%; transform: translateY(-50%); }
-  .face .ba { right: 0; top: 50%; transform: translateY(-50%); }
-  .face .bb { left: 50%; bottom: 0; transform: translateX(-50%); }
-  .face .bx.on { transform: translateX(-50%) translateY(2px); }
-  .face .bb.on { transform: translateX(-50%) translateY(2px); }
-  .face .by.on, .face .ba.on { transform: translateY(-50%) translateY(2px); }
-
-  .center { display: flex; flex-direction: column; gap: 2vh; min-width: 0; }
-  .screen { flex: 1; min-height: 0; border-radius: 16px; background: #0b0c0e; padding: 1.6vh; position: relative;
-    box-shadow: inset 0 0 0 2px #000, 0 1px 0 rgba(255,255,255,.08); touch-action: pan-y; }
-  .lcd { position: absolute; inset: 1.6vh; border-radius: 8px; overflow: hidden; background: var(--screen); color: var(--screen-ink);
-    display: flex; flex-direction: column;
-    background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.028) 0 2px, transparent 2px 6px); }
-  .bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff;
-    box-shadow: 0 1px 4px rgba(0,0,0,.1); font-size: 13px; font-weight: 700; flex: none; }
-  .logo b { color: var(--accent); }
-  .pill { padding: 2px 9px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 12px; }
-  .pill.off { background: #c3c8ce; }
-  button.pill { border: 0; font: inherit; font-size: 12px; cursor: pointer; }
-  /* save states (games in Choccy Milk) */
-  .row.states { align-items: center; flex-wrap: wrap; }
-  .row.states .slot { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
-  .slotbtn { border: 0; border-radius: 999px; width: 32px; height: 32px; background: #eceff1; color: #202124; font-size: 13px; cursor: pointer; }
-  /* "which player are you?" */
-  #playerMenu { position: fixed; inset: 0; z-index: 55; background: rgba(8,12,18,.78); display: flex; align-items: center;
-    justify-content: center; padding: 16px; }
-  #playerMenu .card { background: #fff; color: #202124; border-radius: 18px; padding: 20px; width: min(520px, 100%); }
-  #playerMenu h2 { margin: 0 0 4px; font-size: 21px; }
-  #playerMenu .note { margin: 0 0 14px; color: #5f6368; font-size: 14px; }
-  #playerMenu .nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  #playerMenu .nums button { font-size: 20px; font-weight: 800; padding: 14px 0 10px; border-radius: 14px; border: 2px solid #dfe3e7;
-    background: #f4f6f8; color: #202124; }
-  #playerMenu .nums button small { display: block; font-size: 11px; font-weight: 600; color: #5f6368; margin-top: 2px; }
-  #playerMenu .nums button.me { background: var(--accent); border-color: var(--accent); color: #fff; }
-  #playerMenu .nums button.me small { color: #e8f6fd; }
-  #playerMenu .row { display: flex; gap: 10px; margin-top: 14px; }
-  #playerMenu .row button { flex: 1; font-size: 16px; font-weight: 700; padding: 11px; border-radius: 999px; border: 0;
-    background: #eceff1; color: #202124; }
-  .grow { flex: 1; }
-  .iconbtn { border: 0; background: #eef0f2; color: var(--screen-ink); border-radius: 99px; padding: 4px 10px;
-    font: inherit; font-size: 12px; font-weight: 700; }
-  .view { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 10px; touch-action: pan-y; }
-  .hidden { display: none !important; }
-
-  .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; touch-action: pan-x; flex: none; }
-  .chip { flex: none; padding: 5px 12px; border-radius: 99px; background: #fff; font-weight: 800; font-size: 13px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.12); border: 2px solid transparent; }
-  .chip.sel { border-color: var(--accent); color: var(--accent); }
-  .games { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
-  .game { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 10px; padding: 7px 9px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.12); font-size: 13px; font-weight: 700; min-width: 0; }
-  .game:active { outline: 3px solid var(--accent); }
-  .game i { flex: none; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
-    color: #fff; font-style: normal; font-size: 10px; font-weight: 900; }
-  .game span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .empty { color: #8a9099; font-size: 13px; text-align: center; padding: 16px 8px; line-height: 1.5; }
-
-  .playing { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;
-    text-align: center; gap: 8px; }
-  .playing .band { width: 100%; padding: 10px; border-radius: 12px; color: #fff; font-weight: 800; font-size: 12px; letter-spacing: .08em; }
-  .playing h2 { margin: 4px 0 0; font-size: 20px; }
-  .playing p { margin: 0; color: #8a9099; font-size: 12px; }
-  .bigbtn { border: 0; border-radius: 99px; padding: 9px 18px; font: inherit; font-weight: 800; font-size: 14px;
-    background: var(--accent); color: #fff; box-shadow: 0 2px 0 #07779f; }
-  .bigbtn.grey { background: #e3e6ea; color: var(--screen-ink); box-shadow: 0 2px 0 #b9bec4; }
-  .row { display: flex; gap: 10px; justify-content: center; }
-
-  .pair { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; text-align: center; }
-  .pair h2 { margin: 0; font-size: 18px; }
-  .pair input { width: 150px; font: inherit; font-size: 26px; letter-spacing: .4em; text-align: center; padding: 6px;
-    border-radius: 12px; border: 2px solid #d5d9de; background: #fff; color: var(--screen-ink); }
-  .err { color: #d0342c; font-size: 12px; min-height: 1em; }
-
-  .sys { display: flex; justify-content: center; align-items: center; gap: 5vw; flex: none; }
-  .sys [data-b] { width: min(9vh, 40px); height: min(9vh, 40px); border-radius: 50%; display: grid; place-items: center;
-    background: linear-gradient(#474d56, #33373e); box-shadow: 0 3px 0 #111; font-weight: 900; color: var(--dim); font-size: min(5vh, 22px); }
-  .sys .home { width: min(11vh, 50px); height: min(11vh, 50px); font-size: min(3.3vh, 14px); letter-spacing: .03em; }
-
-  .toast { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); background: rgba(40,44,50,.92);
-    color: #fff; padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap;
+    display: grid; place-items: center; font-weight: 800; font-size: calc(var(--fac…1654 tokens truncated…ht: 700; white-space: nowrap;
     opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 95%; overflow: hidden; text-overflow: ellipsis; }
   .toast.show { opacity: 1; }
   .sheet { position: absolute; inset: 0; background: rgba(244,246,248,.94); display: flex; flex-direction: column;
@@ -171,7 +88,7 @@
   #pad.racing .col { justify-content: center; gap: 2vh; }
   #pad.racing .dpad { width: min(100%, 38vh); height: auto; aspect-ratio: 1; }
   .race-tools { width: 100%; grid-template-columns: 1fr 1fr; gap: .7vw; }
-  .race-tools [data-b="Y"] { grid-column: 1 / -1; }
+  .race-tools [data-layout-slot="map"] { grid-column: 1 / -1; }
   .race-tools .sh, .race-brake { font-size: clamp(10px, 3vh, 16px); }
   .race-brake { flex: none; width: 100%; }
   .race-drive { width: 100%; height: 48vh; grid-template-rows: 1fr 1.4fr 1fr; gap: 3px;
@@ -183,6 +100,17 @@
   #layoutToggle { flex: none; border: 0; border-radius: 999px; padding: 7px 10px;
     background: var(--btn); color: var(--ink); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
   .race-layout select { font: inherit; color: inherit; max-width: 100%; }
+
+  #layoutEditor { width: min(630px, 94vw); max-height: 92vh; padding: 16px; border: 0; border-radius: 16px;
+    background: var(--screen); color: var(--screen-ink); touch-action: pan-y; }
+  #layoutEditor::backdrop { background: #101318d9; }
+  #layoutEditor h2 { margin: 0 0 8px; }
+  #layoutEditor p { margin: 6px 0 12px; }
+  #layoutEditor input, #layoutEditor select, #layoutEditor button { font: inherit; max-width: 100%; }
+  #layoutEditor input, #layoutEditor select { min-width: 0; }
+  .layout-field { display: grid; grid-template-columns: minmax(66px, .8fr) minmax(78px, 1fr) minmax(65px, .7fr) minmax(56px, .6fr);
+    gap: 6px; align-items: center; margin: 6px 0; font-size: 13px; }
+  .layout-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
   /* GamePad screen: live picture from the PC (second screen or TV mirror), touchable */
   body.big #pad { grid-template-columns: .78fr 2.4fr .78fr; }
@@ -329,9 +257,9 @@
       <div class="dir d-right" data-dir="RIGHT">&#9654;</div>
     </div>
     <div class="race-only race-tools">
-      <div class="sh" data-b="Y">Map</div>
-      <div class="sh" data-b="MINUS">Select</div>
-      <div class="sh" data-b="PLUS">Start</div>
+      <div class="sh" data-layout-slot="map" data-b="Y">Map</div>
+      <div class="sh" data-layout-slot="select" data-b="MINUS">Select</div>
+      <div class="sh" data-layout-slot="start" data-b="PLUS">Start</div>
     </div>
   </div>
 
@@ -391,6 +319,7 @@
                 <option value="mario-kart-ds">Mario Kart DS</option>
               </select>
             </label>
+            <button type="button" class="pill" id="editLayouts">Edit layouts</button>
             <div class="row states hidden" id="stateRow">
               <button class="bigbtn" id="stateSave">Save state</button>
               <button class="bigbtn grey" id="stateLoad">Load state</button>
@@ -473,9 +402,25 @@
       <span data-zone="forward">Forward</span>
       <span data-zone="item">Item</span>
     </div>
-    <div class="race-only sh race-brake" data-b="B">Brake / Back</div>
+    <div class="race-only sh race-brake" data-layout-slot="brake" data-b="B">Brake / Back</div>
   </div>
 </div>
+
+<dialog id="layoutEditor" aria-labelledby="layoutEditorTitle">
+  <form id="layoutForm">
+    <h2 id="layoutEditorTitle">Controller layouts</h2>
+    <label>Edit <select id="layoutDraft"><option value="">New from Mario Kart DS</option></select></label>
+    <label>Name <input id="layoutName" required maxlength="32" autocomplete="off"></label>
+    <p>The D-pad stays on the left. The right-thumb gesture holds the middle button while you slide up or down.</p>
+    <div id="layoutFields"></div>
+    <div class="layout-editor-actions">
+      <button type="submit">Save and use</button>
+      <button type="button" id="deleteLayout" class="hidden">Delete</button>
+      <button type="button" id="cancelLayout">Cancel</button>
+    </div>
+    <p id="layoutError" role="status"></p>
+  </form>
+</dialog>
 
 <div id="idle" class="hidden">
   <div class="me">
@@ -1497,49 +1442,96 @@ function mark(b, on) {
 // Layouts change the browser controls. The game still receives ordinary RetroPad buttons.
 const controlLayout = $("controlLayout");
 const layoutToggle = $("layoutToggle");
-controlLayout.value = store.get("controlLayout") || "auto";
-if (!controlLayout.value) controlLayout.value = "auto";
+const raceDrive = $("raceDrive");
+const KART_LAYOUT = {
+  id: "mario-kart-ds", name: "Mario Kart DS", controls: {
+    forward: { label: "Forward", button: "A" },
+    drift: { label: "Drift", button: "R", mode: "hold" },
+    item: { label: "Item", button: "L", mode: "tap" },
+    map: { label: "Map", button: "Y" },
+    select: { label: "Select", button: "MINUS" },
+    start: { label: "Start", button: "PLUS" },
+    brake: { label: "Brake / Back", button: "B" }
+  }
+};
+const layoutButtons = ["A", "B", "X", "Y", "L", "R", "ZL", "ZR", "PLUS", "MINUS", "UP", "DOWN", "LEFT", "RIGHT", "L3", "R3"];
+const layoutSlots = { forward: "Right hold", drift: "Slide up", item: "Slide down", map: "Left wide",
+                      select: "Left inner", start: "Left outer", brake: "Right button" };
+function validLayout(layout) {
+  return !!layout && typeof layout.id === "string" && /^custom-[a-z0-9-]+$/.test(layout.id) &&
+    typeof layout.name === "string" && !!layout.name.trim() && layout.name.length <= 32 &&
+    Object.keys(layoutSlots).every(key => {
+      const control = layout.controls?.[key];
+      return control && typeof control.label === "string" && control.label.length <= 24 &&
+        (control.button === "" || layoutButtons.includes(control.button)) &&
+        (!KART_LAYOUT.controls[key].mode || ["tap", "hold"].includes(control.mode));
+    });
+}
+let customLayouts = [];
+try {
+  const saved = JSON.parse(store.get("customLayouts"));
+  if (Array.isArray(saved)) customLayouts = saved.filter(validLayout);
+} catch (e) {}
+let lastGestureLayout = store.get("lastGestureLayout") || KART_LAYOUT.id;
+let activeLayout = null;
+let drivePointer = null, gesturePulse = null;
 function racingLayout(game, choice) {
-  return !!game && (choice === "mario-kart-ds" ||
+  return !!game && (choice === KART_LAYOUT.id ||
     (choice === "auto" && game.system === "Nintendo DS" && /^mario kart ds\b/i.test(game.name)));
 }
 function updateControlLayout() {
-  const racing = racingLayout(S.game, controlLayout.value);
+  const custom = customLayouts.find(layout => layout.id === controlLayout.value);
+  const next = S.game ? custom || (racingLayout(S.game, controlLayout.value) ? KART_LAYOUT : null) : null;
   layoutToggle.classList.toggle("hidden", !S.game);
-  layoutToggle.textContent = racing ? "Standard layout" : "Racing layout";
-  if (pad.classList.contains("racing") === racing) return;
+  layoutToggle.textContent = next ? "Standard layout" :
+    customLayouts.some(layout => layout.id === lastGestureLayout) ? "Custom layout" : "Racing layout";
+  if (activeLayout === next) return;
   releasePadTouches();
-  pad.classList.toggle("racing", racing);
+  activeLayout = next;
+  pad.classList.toggle("racing", !!next);
+  if (!next) return;
+  lastGestureLayout = next.id;
+  store.set("lastGestureLayout", next.id);
+  pad.querySelectorAll("[data-layout-slot], [data-zone]").forEach(el => {
+    const control = next.controls[el.dataset.layoutSlot || el.dataset.zone];
+    el.textContent = control.label || control.button;
+    if (el.dataset.layoutSlot) {
+      el.dataset.b = control.button;
+      el.classList.toggle("hidden", !control.button);
+      el.classList.toggle("on", held.has(control.button));
+    }
+  });
 }
-controlLayout.onchange = () => {
+function selectControlLayout(choice) {
+  controlLayout.value = choice;
+  if (!controlLayout.value) controlLayout.value = "auto";
   store.set("controlLayout", controlLayout.value);
   updateControlLayout();
-};
-layoutToggle.onclick = () => {
-  controlLayout.value = pad.classList.contains("racing") ? "standard" : "mario-kart-ds";
-  controlLayout.onchange();
-};
+}
+controlLayout.onchange = () => selectControlLayout(controlLayout.value);
+layoutToggle.onclick = () => selectControlLayout(activeLayout ? "standard" :
+  customLayouts.some(layout => layout.id === lastGestureLayout) ? lastGestureLayout : KART_LAYOUT.id);
 
-const raceDrive = $("raceDrive");
-let drivePointer = null, itemPulse = null;
-function stopItemPulse() {
-  if (itemPulse === null) return;
-  clearTimeout(itemPulse);
-  itemPulse = null;
-  release("L");
+function stopGesturePulse() {
+  if (!gesturePulse) return;
+  clearTimeout(gesturePulse.timer);
+  release(gesturePulse.button);
+  gesturePulse = null;
 }
 function driveMove(t, y) {
   const r = raceDrive.getBoundingClientRect();
   const pos = (y - r.top) / r.height;
   const zone = pos < .29 ? "drift" : pos > .71 ? "item" : "forward";
   if (zone === t.zone) return;
-  if (t.zone === "drift") release("R");
+  if (t.zoneButton) release(t.zoneButton);
   t.zone = zone;
-  if (zone === "drift") press("R");
-  if (zone === "item") {
-    stopItemPulse();
-    press("L");
-    itemPulse = setTimeout(stopItemPulse, 90);
+  const control = t.controls[zone];
+  t.zoneButton = control.mode === "hold" ? control.button : "";
+  if (t.zoneButton) press(t.zoneButton);
+  if (control.mode === "tap" && control.button && control.button !== t.baseButton) {
+    stopGesturePulse();
+    press(control.button);
+    gesturePulse = { button: control.button, timer: setTimeout(stopGesturePulse, 90) };
   }
   raceDrive.querySelectorAll("[data-zone]").forEach(el => el.classList.toggle("on", el.dataset.zone === zone));
 }
@@ -1587,13 +1579,14 @@ pad.addEventListener("pointerdown", (e) => {
   wakeLock();
   const stick = e.target.closest("[data-stick]");
   const dpad = e.target.closest("[data-dpad]");
-  if (e.target.closest("#raceDrive")) {
+  if (activeLayout && e.target.closest("#raceDrive")) {
     if (drivePointer !== null) return;
     drivePointer = e.pointerId;
-    const t = { type: "drive", zone: null };
+    const controls = activeLayout.controls;
+    const t = { type: "drive", zone: null, controls, baseButton: controls.forward.button };
     touches.set(e.pointerId, t);
     try { raceDrive.setPointerCapture(e.pointerId); } catch (err) {}
-    press("A");
+    if (t.baseButton) press(t.baseButton);
     driveMove(t, e.clientY);
   } else if (stick) {
     const t = { type: "stick", el: stick, knob: stick.querySelector(".knob"), idx: +stick.dataset.stick, start: Date.now(), moved: false };
@@ -1639,8 +1632,8 @@ function end(e) {
   touches.delete(e.pointerId);
   if (t.type === "drive") {
     drivePointer = null;
-    if (t.zone === "drift") release("R");
-    release("A");
+    if (t.zoneButton) release(t.zoneButton);
+    if (t.baseButton) release(t.baseButton);
     raceDrive.querySelectorAll(".on").forEach(el => el.classList.remove("on"));
   } else if (t.type === "stick") {
     t.el.classList.remove("on");
@@ -1658,7 +1651,7 @@ pad.addEventListener("pointercancel", end);
 pad.addEventListener("lostpointercapture", end);
 function releasePadTouches() {
   for (const id of [...touches.keys()]) end({ pointerId: id });
-  stopItemPulse();
+  stopGesturePulse();
 }
 window.addEventListener("blur", releasePadTouches);
 document.addEventListener("visibilitychange", () => { if (document.hidden) releasePadTouches(); });
@@ -1667,8 +1660,8 @@ document.addEventListener("contextmenu", (e) => e.preventDefault());
 // physical keyboard (handy for testing on a laptop)
 const KEYS = { ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT", KeyX: "A", KeyZ: "B",
                KeyS: "X", KeyA: "Y", KeyQ: "L", KeyW: "R", Enter: "PLUS", ShiftRight: "MINUS", KeyH: "HOME" };
-addEventListener("keydown", (e) => { const b = KEYS[e.code]; if (b && !e.repeat && !["INPUT", "SELECT"].includes(e.target.tagName)) { press(b); e.preventDefault(); } });
-addEventListener("keyup", (e) => { const b = KEYS[e.code]; if (b && !["INPUT", "SELECT"].includes(e.target.tagName)) release(b); });
+addEventListener("keydown", (e) => { const b = KEYS[e.code]; if (b && !e.repeat && !e.target.closest("#layoutEditor") && !["INPUT", "SELECT"].includes(e.target.tagName)) { press(b); e.preventDefault(); } });
+addEventListener("keyup", (e) => { const b = KEYS[e.code]; if (b && !e.target.closest("#layoutEditor") && !["INPUT", "SELECT"].includes(e.target.tagName)) release(b); });
 
 let lock = null;
 async function wakeLock() {
@@ -1676,6 +1669,100 @@ async function wakeLock() {
   try { lock = await navigator.wakeLock.request("screen"); lock.addEventListener("release", () => { lock = null; }); } catch (e) {}
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { lock = null; poll(); } });
+
+// ---------------------------------------------------------------- custom layout editor
+const layoutEditor = $("layoutEditor"), layoutDraft = $("layoutDraft");
+const layoutFields = new Map();
+for (const [key, title] of Object.entries(layoutSlots)) {
+  const row = document.createElement("div");
+  row.className = "layout-field";
+  const caption = document.createElement("span");
+  caption.textContent = title;
+  const label = document.createElement("input");
+  label.maxLength = 24;
+  label.setAttribute("aria-label", title + " label");
+  const button = document.createElement("select");
+  button.setAttribute("aria-label", title + " button");
+  button.add(new Option("None", ""));
+  for (const binding of layoutButtons) button.add(new Option(binding, binding));
+  row.append(caption, label, button);
+  let mode;
+  if (KART_LAYOUT.controls[key].mode) {
+    mode = document.createElement("select");
+    mode.setAttribute("aria-label", title + " behavior");
+    mode.add(new Option("Hold", "hold"));
+    mode.add(new Option("Tap", "tap"));
+    row.append(mode);
+  }
+  $("layoutFields").append(row);
+  layoutFields.set(key, { label, button, mode });
+}
+function populateLayoutChoices() {
+  controlLayout.length = 3;
+  layoutDraft.length = 1;
+  for (const layout of customLayouts) {
+    controlLayout.add(new Option(layout.name, layout.id));
+    layoutDraft.add(new Option(layout.name, layout.id));
+  }
+}
+function editLayout(id) {
+  const layout = customLayouts.find(profile => profile.id === id);
+  layoutDraft.value = layout?.id || "";
+  $("layoutName").value = layout?.name || "";
+  $("layoutError").textContent = "";
+  $("deleteLayout").classList.toggle("hidden", !layout);
+  for (const [key, fields] of layoutFields) {
+    const control = (layout || KART_LAYOUT).controls[key];
+    fields.label.value = control.label;
+    fields.button.value = control.button;
+    if (fields.mode) fields.mode.value = control.mode;
+  }
+}
+function saveLayouts(layouts) {
+  const serialized = JSON.stringify(layouts);
+  store.set("customLayouts", serialized);
+  if (store.get("customLayouts") !== serialized) {
+    $("layoutError").textContent = "This browser could not save the layouts.";
+    return false;
+  }
+  customLayouts = layouts;
+  populateLayoutChoices();
+  return true;
+}
+populateLayoutChoices();
+controlLayout.value = store.get("controlLayout") || "auto";
+if (!controlLayout.value) controlLayout.value = "auto";
+$("editLayouts").onclick = () => {
+  releasePadTouches();
+  editLayout(controlLayout.value);
+  layoutEditor.showModal();
+};
+layoutDraft.onchange = () => editLayout(layoutDraft.value);
+$("cancelLayout").onclick = () => layoutEditor.close();
+$("deleteLayout").onclick = () => {
+  const id = layoutDraft.value, selected = controlLayout.value;
+  if (!id || !saveLayouts(customLayouts.filter(layout => layout.id !== id))) return;
+  selectControlLayout(selected === id ? "auto" : selected);
+  layoutEditor.close();
+};
+$("layoutForm").onsubmit = e => {
+  e.preventDefault();
+  const id = layoutDraft.value || "custom-" + Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join("-");
+  const controls = Object.fromEntries([...layoutFields].map(([key, fields]) => [key, {
+    label: fields.label.value.trim(), button: fields.button.value, mode: fields.mode?.value
+  }]));
+  const layout = { id, name: $("layoutName").value.trim(), controls };
+  if (!validLayout(layout)) {
+    $("layoutError").textContent = "Enter a layout name and choose valid controls.";
+    return;
+  }
+  const layouts = layoutDraft.value
+    ? customLayouts.map(existing => existing.id === id ? layout : existing)
+    : [...customLayouts, layout];
+  if (!saveLayouts(layouts)) return;
+  selectControlLayout(id);
+  layoutEditor.close();
+};
 
 // ---------------------------------------------------------------- start
 (async () => {

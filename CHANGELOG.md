@@ -3,6 +3,10 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.4 (2026-11-08)
+- Add a GamePad layout editor for named two-thumb layouts. Customize gesture labels,
+  button bindings and hold or tap behavior, and save layouts on the GamePad device.
+
 ## 1.14.3 (2026-11-08)
 - Add a two-thumb Mario Kart DS GamePad layout with steering, acceleration, drift and item
   gestures, plus Start and Select. Switch between racing and standard controls during play.
