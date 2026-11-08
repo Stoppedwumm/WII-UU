@@ -13,6 +13,17 @@ $ErrorActionPreference = "Stop"
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Prefix = Join-Path $env:LOCALAPPDATA "WII-UU"
 $ConfDir = if ($env:WIIUU_HOME) { $env:WIIUU_HOME } else { Join-Path $env:USERPROFILE ".wiiuu" }
+$StorageLink = Join-Path $env:USERPROFILE ".wiiuu-location"
+if (-not $env:WIIUU_HOME -and (Test-Path -LiteralPath $StorageLink -PathType Leaf)) {
+    $ConfDir = [IO.File]::ReadAllText($StorageLink).TrimEnd("`r", "`n")
+    if (-not [IO.Path]::IsPathRooted($ConfDir) -or -not (Test-Path -LiteralPath $ConfDir -PathType Container)) {
+        throw "WII-UU storage is unavailable: $ConfDir"
+    }
+}
+if (-not $PSBoundParameters.ContainsKey("Roms") -and
+    (Test-Path -LiteralPath (Join-Path $ConfDir "migrated-roms") -PathType Container)) {
+    $Roms = Join-Path $ConfDir "migrated-roms"
+}
 $StartMenu = Join-Path ([Environment]::GetFolderPath("Programs")) "WII-UU.lnk"
 $DesktopLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "WII-UU.lnk"
 $Systems = "nes snes gb n64 gba gc nds wii 3ds wiiu switch sms genesis saturn dc ps1 ps2 psp ps3 ps4".Split(" ")
@@ -69,6 +80,11 @@ if ($Uninstall) {
     Ok "Removed. Your ROMs ($Roms) and settings ($ConfDir) were kept."
     exit 0
 }
+
+$WorkDir = Join-Path $ConfDir "tmp"
+New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
+$env:TEMP = $WorkDir
+$env:TMP = $WorkDir
 
 Write-Host "`n  WII-UU installer`n" -ForegroundColor Cyan
 

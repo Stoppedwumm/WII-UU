@@ -19,6 +19,12 @@ DEFAULT_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/wiiuu"
 BIN="${WIIUU_INSTALL_BIN:-$HOME/.local/bin}"
 ROMS="$HOME/WiiUU/roms"
 CONF_DIR="${WIIUU_HOME:-$HOME/.wiiuu}"
+if [ -z "${WIIUU_HOME:-}" ] && [ -f "$HOME/.wiiuu-location" ]; then
+  IFS= read -r CONF_DIR < "$HOME/.wiiuu-location" || true
+  [[ "$CONF_DIR" = /* && -d "$CONF_DIR" ]] || { echo "WII-UU storage is unavailable: $CONF_DIR" >&2; exit 1; }
+  ROMS="$CONF_DIR/migrated-roms"
+fi
+[ ! -d "$CONF_DIR/migrated-roms" ] || ROMS="$CONF_DIR/migrated-roms"
 PORT=8080
 YES=0
 EMULATORS=0
@@ -91,7 +97,8 @@ if [ "$UNINSTALL" = 0 ] && [ "$YES" = 0 ] && [ "$SKIP_MAINTENANCE" = 0 ] &&
       if [ "$BOOTSTRAP" = 1 ]; then
         cleaner="$PREFIX/WII-UU-Cleanup.jar"
         if [ ! -f "$cleaner" ]; then
-          cleaner="$(mktemp)"
+          mkdir -p "$CONF_DIR/tmp"
+          cleaner="$(mktemp "$CONF_DIR/tmp/wiiuu-cleaner.XXXXXXXX")"
           trap 'rm -f "$cleaner"' EXIT
           curl -fsSL -o "$cleaner" "${WIIUU_CLEANUP_URL:-https://wiiuu.stoppedwumm.net/download/WII-UU-Cleanup.jar}"
         fi
@@ -124,6 +131,9 @@ fi
 
 # The web launcher only downloads the release when the installer requests its payload.
 [ "$BOOTSTRAP" = 0 ] || exit 42
+
+mkdir -p "$CONF_DIR/tmp"
+export TMPDIR="$CONF_DIR/tmp"
 
 printf '\n%s  WII-UU installer%s\n\n' "$c_blue" "$c_off"
 
@@ -262,7 +272,8 @@ if [ "$SHORTCUT" = 1 ]; then
       ok "App: ~/Applications/WII-UU.app (kept, so its macOS permissions stay on)"
     elif [ -n "$JPACKAGE" ]; then
       say "Building WII-UU.app (native macOS app, about a minute)"
-      stage="$(mktemp -d)"; mkdir -p "$stage/in" "$stage/cls"
+      mkdir -p "$CONF_DIR/tmp"
+      stage="$(mktemp -d "$CONF_DIR/tmp/wiiuu-app.XXXXXXXX")"; mkdir -p "$stage/in" "$stage/cls"
       icon=()
       if [ -f "$PREFIX/wiiuu.png" ] && command -v iconutil >/dev/null 2>&1; then
         set_dir="$stage/WII-UU.iconset"; mkdir -p "$set_dir"
