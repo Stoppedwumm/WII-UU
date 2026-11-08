@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Find out what transfers, how to check copy progress, and when to restart.">
+<title>Move data to a drive or another computer · WII-UU Support</title>
+<link rel="icon" href="../../icon.png">
+<link rel="stylesheet" href="../../support/support.css">
+</head>
+<body>
+<header>
+  <nav aria-label="Main">
+    <a class="brand" href="../../">WII-<b>UU</b></a>
+    <a href="../../support/" >Support</a>
+    <a href="../../#install">Downloads</a>
+  </nav>
+</header>
+<main>
+<article>
+<h1>Move data to a drive or another computer</h1>
+<h2>Move data to another drive</h2>
+<ol>
+  <li>Close games and other WII-UU apps. Open <strong>Settings → System → Storage and migration → Move to another drive</strong>.</li>
+  <li>Choose a parent folder on the new drive, then enter a name for a folder that does not exist yet.</li>
+  <li>Wait for <strong>Data is ready</strong>, then quit and reopen WII-UU. Verify your games and saves before removing the original files.</li>
+</ol>
+<p>The app copies WII-UU data and the standard ROM library. Custom ROM folders stay in their original locations. The <code>~/.wiiuu-location</code> file tells WII-UU and its installers where to find data and stage updates. Keep the selected drive connected when you start WII-UU.</p>
+<h2>If the destination looks empty</h2>
+<p>During a copy, WII-UU writes to a hidden <code>.wiiuu-transfer-*</code> folder in the selected parent folder. The final folder gets its name when the copy completes. In Finder, press <kbd>Command</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> to show hidden files. Check the staging folder’s size twice, about a minute apart, to see whether it is growing.</p>
+<h2>Transfer to another computer</h2>
+<ol>
+  <li>Connect both computers to the same local network and close any running games.</li>
+  <li>On computer A, select <strong>Send to another computer</strong> and choose its address on that network.</li>
+  <li>On computer B, select <strong>Receive from another computer</strong>, paste the migration code, and choose a new destination folder.</li>
+  <li>When computer B reports <strong>Data is ready</strong>, restart WII-UU there. Set up any custom ROM folders and pair with other WII-UUs again.</li>
+</ol>
+<p>External emulator installations and saves stored in those emulators’ own folders need to be moved separately. The receiving computer can download its own Choccy Milk cores and relay helper as needed.</p>
+</article>
+</main>
+<footer>
+  <a href="https://github.com/Stoppedwumm/WII-UU/issues">Report a problem on GitHub</a>
+</footer>
+</body>
+</html>

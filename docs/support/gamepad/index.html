@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Pair your phone, handle restricted Wi-Fi, and refresh the installed web app.">
+<title>Connect and troubleshoot the GamePad · WII-UU Support</title>
+<link rel="icon" href="../../icon.png">
+<link rel="stylesheet" href="../../support/support.css">
+</head>
+<body>
+<header>
+  <nav aria-label="Main">
+    <a class="brand" href="../../">WII-<b>UU</b></a>
+    <a href="../../support/" >Support</a>
+    <a href="../../#install">Downloads</a>
+  </nav>
+</header>
+<main>
+<article>
+<h1>Connect and troubleshoot the GamePad</h1>
+<h2>Pair your phone</h2>
+<ol>
+  <li>Start WII-UU and press <strong>+</strong> to show the pairing card.</li>
+  <li>Connect your phone and computer to the same network. Scan the QR code or open the address shown on the TV.</li>
+  <li>Enter the pairing code if prompted.</li>
+</ol>
+<p>If the local address does not open, check whether the computer’s firewall allows WII-UU’s GamePad port, which defaults to <code>8080</code>.</p>
+<h2>Use the relay on restricted Wi-Fi</h2>
+<p>If the network isolates devices, open <strong>Settings → GamePad &amp; players → Start internet relay</strong> and scan the relay QR code. The relay needs internet access on both devices. Share the QR code and pairing code only with the people joining your session.</p>
+<h2>Refresh an installed GamePad web app</h2>
+<p>Restart WII-UU on the computer after an update, then reopen the GamePad. Recent builds check the page version and reload automatically after they connect. If the installed web app keeps opening a page from before automatic refresh was added, open the current pairing URL in your browser and re-add the app from there.</p>
+<h2>Check capture and input on macOS</h2>
+<p>Launch <code>WII-UU.app</code> and check its permissions in <strong>System Settings → Privacy &amp; Security</strong>. Screen recording permission is used for desktop capture, and Accessibility is used for keyboard input. If WII-UU reports that a helper failed to build, check <code>capture-build.log</code> or <code>pads-build.log</code> in the WII-UU data folder’s <code>logs</code> directory.</p>
+<p>To set up a Nintendo DS lower screen, follow the <a href="../choccy-milk/">Choccy Milk guide</a>.</p>
+</article>
+</main>
+<footer>
+  <a href="https://github.com/Stoppedwumm/WII-UU/issues">Report a problem on GitHub</a>
+</footer>
+</body>
+</html>
