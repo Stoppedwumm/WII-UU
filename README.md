@@ -22,6 +22,13 @@ the right emulator for each one. Each emulator (Mesen, Snes9x, Mupen64Plus, Dolp
 Ryujinx, DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4 …) is installed separately. You also need
 your own legally dumped games and, where an emulator requires it, your own firmware or keys.
 
+## WII-UU UI Library
+
+The standalone Java 17+ UI library packages the game screen renderer and display filters shared by
+WII-UU and Choccy Milk, along with desktop theme detection and GamePad button types. See the
+[getting started guide](https://wiiuu.stoppedwumm.net/support/ui-library/) for downloads, the API
+reference and a Swing example. To build the library locally, run `./ui-library/build.sh`.
+
 ## Install
 
 Download [`WII-UU-latest.zip`](https://wiiuu.stoppedwumm.net/download/WII-UU-latest.zip), unzip

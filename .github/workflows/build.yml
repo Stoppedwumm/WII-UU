@@ -126,6 +126,19 @@ jobs:
           echo "VERSION=$v" >> "$GITHUB_ENV"
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
+      - name: Build and test the standalone UI library
+        run: |
+          ./ui-library/build.sh
+          ui_version="$(cat ui-library/VERSION)"
+          echo "UI_VERSION=$ui_version" >> "$GITHUB_ENV"
+          ui_jar="build/ui-library/WII-UU-UI-$ui_version.jar"
+          mkdir -p build/ui-example
+          javac --release 17 -cp "$ui_jar" -d build/ui-example docs/support/ui-library/UiDemo.java
+          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" UiDemo --snapshot build/ui-example/demo.png
+          test -s build/ui-example/demo.png
+          test -f build/ui-library/api/wiiuu/engine/GameScreen.html
+          cp -R build/ui-library/api docs/support/ui-library/
+
       - name: Smoke test (render the menu headless)
         run: |
           java -Djava.awt.headless=true -jar build/wiiuu.jar --home "$RUNNER_TEMP/wiiuu" \
@@ -182,6 +195,21 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs
+
+      - name: Publish the standalone UI library release
+        if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="wiiuu-ui-v$UI_VERSION"
+          if ! gh release view "$tag" > /dev/null 2>&1; then
+            gh release create "$tag" \
+              "build/ui-library/WII-UU-UI-$UI_VERSION.jar" \
+              "build/ui-library/WII-UU-UI-$UI_VERSION-javadoc.jar" \
+              "docs/support/ui-library/UiDemo.java" \
+              --target "$GITHUB_SHA" --latest=false --title "WII-UU UI Library $UI_VERSION" \
+              --notes "Standalone Java 17+ game screen renderer, display filters, desktop theme detection and GamePad button types. See the [getting started guide](https://wiiuu.stoppedwumm.net/support/ui-library/) for setup and examples."
+          fi
 
       - name: Publish release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
