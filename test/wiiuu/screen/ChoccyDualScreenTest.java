@@ -71,6 +71,8 @@ public final class ChoccyDualScreenTest {
         active.set(false);
         check(!stream.available(), "game ended");
 
+        checkSplitFrameBlending();
+
         Class<?> helper = Class.forName("wiiuu.choccy.ChoccyMilk");
         var ctor = helper.getDeclaredConstructor(Path.class, Path.class, Path.class, Path.class, OutputStream.class);
         ctor.setAccessible(true);
@@ -111,6 +113,21 @@ public final class ChoccyDualScreenTest {
         System.out.println("Choccy dual screen tests passed");
         System.exit(0);
     }
+    private static void checkSplitFrameBlending() {
+        var screen = new wiiuu.engine.GameScreen();
+        screen.look("off+blend", false);
+        screen.frame(new int[]{0xff0000, 0x00ff00}, 1, 1, 1f);
+        screen.frame(new int[]{0x0000ff, 0x00ff00}, 1, 1, 1f);
+        var image = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var graphics = image.createGraphics();
+        try {
+            screen.paint(graphics, 1, 1, null, null);
+            check((image.getRGB(0, 0) & 0xffffff) == 0x7f007f, "blend only the visible half of a DS frame");
+        } finally {
+            graphics.dispose();
+        }
+    }
+
     private static void check(boolean ok, String message) {
         if (!ok) throw new AssertionError(message);
     }

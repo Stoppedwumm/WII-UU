@@ -79,7 +79,7 @@ public final class GameScreen {
     private int[] blend(int[] rgb, int n) {
         int[] was = before;
         before = rgb.length == n ? rgb : java.util.Arrays.copyOf(rgb, n);
-        if (was == null || was.length != rgb.length) return rgb;
+        if (was == null || was.length != n) return rgb;
         int[] mixed = new int[n];
         for (int i = 0; i < n; i++) {
             int a = rgb[i], b = was[i];
