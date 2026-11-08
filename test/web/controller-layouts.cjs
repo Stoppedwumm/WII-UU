@@ -20,7 +20,8 @@ function element() {
 }
 
 const pad = element(), raceDrive = element(), controlLayout = element();
-const els = { pad, raceDrive, controlLayout };
+const layoutToggle = element();
+const els = { pad, raceDrive, controlLayout, layoutToggle };
 const game = { name: 'Mario Kart DS (Europe)', system: 'Nintendo DS' };
 const events = [], timers = new Map();
 let nextTimer = 0;
@@ -58,12 +59,22 @@ timers.values().next().value();
 dispatch('pointermove', 2, null, 50, 50);
 dispatch('pointermove', 2, null, 50, 90);
 dispatch('lostpointercapture', 2, null, 50, 90);
-controlLayout.value = 'standard';
-controlLayout.onchange();
+assert.equal(layoutToggle.textContent, 'Standard layout');
+layoutToggle.onclick();
+assert.equal(controlLayout.value, 'standard');
+assert.equal(layoutToggle.textContent, 'Racing layout');
 assert.equal(pad.classList.contains('racing'), false);
 assert.equal(timers.size, 0);
 assert.deepEqual(events, [
   ['LEFT', true], ['A', true], ['R', true], ['LEFT', false], ['RIGHT', true], ['R', false],
   ['L', true], ['L', false], ['L', true], ['A', false], ['RIGHT', false], ['L', false]
 ]);
+layoutToggle.onclick();
+assert.equal(controlLayout.value, 'mario-kart-ds');
+assert.equal(pad.classList.contains('racing'), true);
+context.S.game = null;
+context.updateControlLayout();
+assert.equal(layoutToggle.classList.contains('hidden'), true);
+assert.match(html, /data-b="MINUS">Select</);
+assert.match(html, /data-b="PLUS">Start</);
 console.log('GamePad controller-layout tests passed');

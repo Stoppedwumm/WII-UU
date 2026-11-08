@@ -170,6 +170,7 @@
   #pad.racing .col { justify-content: center; gap: 2vh; }
   #pad.racing .dpad { width: min(100%, 38vh); height: auto; aspect-ratio: 1; }
   .race-tools { width: 100%; grid-template-columns: 1fr 1fr; gap: .7vw; }
+  .race-tools [data-b="Y"] { grid-column: 1 / -1; }
   .race-tools .sh, .race-brake { font-size: clamp(10px, 3vh, 16px); }
   .race-brake { flex: none; width: 100%; }
   .race-drive { width: 100%; height: 48vh; grid-template-rows: 1fr 1.4fr 1fr; gap: 3px;
@@ -178,6 +179,8 @@
   .race-drive span { display: grid; place-items: center; padding: 0 2px; background: #3a3f47; }
   .race-drive [data-zone="forward"] { background: #295569; }
   .race-drive .on { background: var(--accent); color: #fff; }
+  #layoutToggle { flex: none; border: 0; border-radius: 999px; padding: 7px 10px;
+    background: var(--btn); color: var(--ink); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
   .race-layout select { font: inherit; color: inherit; max-width: 100%; }
 
   /* GamePad screen: live picture from the PC (second screen or TV mirror), touchable */
@@ -326,7 +329,8 @@
     </div>
     <div class="race-only race-tools">
       <div class="sh" data-b="Y">Map</div>
-      <div class="sh" data-b="PLUS">Pause</div>
+      <div class="sh" data-b="MINUS">Select</div>
+      <div class="sh" data-b="PLUS">Start</div>
     </div>
   </div>
 
@@ -449,6 +453,7 @@
       <div data-b="MINUS">&minus;</div>
       <div class="home" data-b="HOME">HOME</div>
       <div data-b="PLUS">+</div>
+      <button type="button" id="layoutToggle" class="hidden" data-ui>Racing layout</button>
     </div>
   </div>
 
@@ -1467,6 +1472,7 @@ function mark(b, on) {
 
 // Layouts change the browser controls. The game still receives ordinary RetroPad buttons.
 const controlLayout = $("controlLayout");
+const layoutToggle = $("layoutToggle");
 controlLayout.value = store.get("controlLayout") || "auto";
 if (!controlLayout.value) controlLayout.value = "auto";
 function racingLayout(game, choice) {
@@ -1475,6 +1481,8 @@ function racingLayout(game, choice) {
 }
 function updateControlLayout() {
   const racing = racingLayout(S.game, controlLayout.value);
+  layoutToggle.classList.toggle("hidden", !S.game);
+  layoutToggle.textContent = racing ? "Standard layout" : "Racing layout";
   if (pad.classList.contains("racing") === racing) return;
   releasePadTouches();
   pad.classList.toggle("racing", racing);
@@ -1482,6 +1490,10 @@ function updateControlLayout() {
 controlLayout.onchange = () => {
   store.set("controlLayout", controlLayout.value);
   updateControlLayout();
+};
+layoutToggle.onclick = () => {
+  controlLayout.value = pad.classList.contains("racing") ? "standard" : "mario-kart-ds";
+  controlLayout.onchange();
 };
 
 const raceDrive = $("raceDrive");
