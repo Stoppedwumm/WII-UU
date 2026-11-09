@@ -103,7 +103,7 @@ final class Mascot {
         float lift = (float) (Math.sin(Math.PI * hop) * s * 0.45f);
         float y = footY - s * 0.95f - bodyH / 2 - lift;
         // legs
-        g.setColor(MenuView.dark ? new Color(0xB0BEC5) : new Color(0x37474F));
+        g.setColor(walkingScene || MenuView.dark ? new Color(0xB0BEC5) : new Color(0x37474F));
         g.setStroke(new BasicStroke(Math.max(2f, s * 0.12f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         float walk = walkingScene ? stride * s * 0.25f : in < 1 ? (float) Math.sin(now / 60.0) * s * 0.25f : 0;
         g.drawLine((int) (x - s * 0.4f), (int) (y + bodyH / 2), (int) (x - s * 0.45f + walk), (int) (footY - lift * 0.3f));

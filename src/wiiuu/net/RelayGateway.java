@@ -21,7 +21,7 @@ public final class RelayGateway implements AutoCloseable {
     private static final Set<String> GET = Set.of("/", "/index.html", "/manifest.json", "/music.js", "/icon.png",
             "/api/status", "/api/layouts", "/api/frame", "/api/audio", "/api/library");
     private static final Set<String> POST = Set.of("/api/hello", "/api/input", "/api/launch", "/api/player",
-            "/api/state", "/api/layouts", "/api/close", "/api/idle");
+            "/api/state", "/api/layouts", "/api/close", "/api/idle", "/api/migration/skip");
     private final String secret;
     private final HttpServer server;
     private final ExecutorService executor;

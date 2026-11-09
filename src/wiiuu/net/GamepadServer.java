@@ -90,6 +90,9 @@ public final class GamepadServer {
             return null;
         }
 
+        /** Skip a finished migration cutscene identified by the paired controller. */
+        default void skipMigration(String id) {}
+
         /** The phone caught WII-UU cheating at its idle game: true if it really was. */
         default boolean idleCatch() {
             return false;
@@ -132,7 +135,12 @@ public final class GamepadServer {
     public record FormResult(boolean ok, String message) {}
 
     /** WII-UU playing by itself: the game, its score, and its latest remark (with an id and mood). */
-    public record Idle(String game, int score, String line, int lineId, String mood, String cheat, boolean watching) {}
+    public record Idle(String game, int score, String line, int lineId, String mood, String cheat, boolean watching,
+                       String migrationId, boolean canSkip) {
+        public Idle(String game, int score, String line, int lineId, String mood, String cheat, boolean watching) {
+            this(game, score, line, lineId, mood, cheat, watching, null, false);
+        }
+    }
 
     private static final long STALE_MS = 5000;
     /** paired phones are remembered (also across restarts) until unused for this long */
@@ -783,6 +791,12 @@ public final class GamepadServer {
                             send(ex, 200, "application/json; charset=utf-8",
                                     GamepadLayouts.json(config).getBytes(StandardCharsets.UTF_8));
                         }
+                        case "/api/migration/skip" -> {
+                            if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
+                            if (c.player <= 0) { json(ex, 403, error("A player controller is required")); return; }
+                            host.skipMigration(form(body(ex)).get("id"));
+                            ex.sendResponseHeaders(204, -1);
+                        }
                         case "/api/input" -> {
                             if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
                             input(c, body(ex));
@@ -1158,7 +1172,8 @@ public final class GamepadServer {
         j.key("idle");
         if (idle == null) j.val((String) null);
         else j.obj().kv("game", idle.game()).kv("score", idle.score()).kv("line", idle.line())
-                .kv("lineId", idle.lineId()).kv("mood", idle.mood()).kv("cheat", idle.cheat()).kv("watching", idle.watching()).endObj();
+                .kv("lineId", idle.lineId()).kv("mood", idle.mood()).kv("cheat", idle.cheat()).kv("watching", idle.watching())
+                .kv("migrationId", idle.migrationId()).kv("canSkip", idle.canSkip()).endObj();
         wiiuu.screen.OwnSound.Music m = wiiuu.screen.OwnSound.music();
         j.key("music");
         if (m == null || m.id() == null) j.val((String) null);

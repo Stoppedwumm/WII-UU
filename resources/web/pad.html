@@ -307,6 +307,9 @@
   #idleBusted span { font-size: 16vh; font-weight: 900; color: #e53935; border: 1.2vh solid #e53935; border-radius: 3vh; padding: 0 4vw;
     transform: rotate(-12deg); background: rgba(10,12,16,.6); animation: stamp .35s cubic-bezier(.2,1.6,.5,1); }
   @keyframes stamp { from { transform: rotate(-12deg) scale(2.4); opacity: 0; } to { transform: rotate(-12deg) scale(1); opacity: 1; } }
+  #migrationSkip { position: absolute; bottom: 8vh; border: 0; border-radius: 99px;
+    padding: 1.8vh 4vw; font: inherit; font-weight: 800; font-size: 3.4vh;
+    background: #62d2fb; color: #102638; cursor: pointer; }
   #idle .take { position: absolute; bottom: 4vh; left: 0; right: 0; text-align: center; font-size: 2.6vh; color: #6f7a85; }
   /* WII-UU closed or gone: the whole GamePad says so until it is back */
   #down { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; align-items: center;
@@ -551,6 +554,7 @@
   </div>
   <div class="bubble" id="idleSay">…</div>
   <div class="take">Tap anywhere to take over</div>
+  <button type="button" id="migrationSkip" class="hidden">Skip cutscene</button>
   <button id="idleCatch" class="hidden">Catch it cheating!</button>
   <div id="idleBusted" class="hidden"><span>BUSTED!</span></div>
 </div>
@@ -692,7 +696,7 @@ async function poll() {
     setOnline(true);
     showSignin(j.form);
     if (j.idle) {
-      showIdle(j.idle);
+      showIdle(j.idle, j.player > 0);
       // while it plays, look more often (so catching it cheating is quick)
       if (!S.fastPoll) S.fastPoll = setTimeout(() => { S.fastPoll = null; poll(); }, 400);
     } else hideIdle();
@@ -831,14 +835,30 @@ $("signinForm").addEventListener("submit", async (ev) => {
 });
 
 /** WII-UU playing by itself: its logo says what it thinks of its own game. */
-function showIdle(st) {
+function showIdle(st, player) {
   const el = $("idle");
   if (el.classList.contains("hidden")) { el.classList.remove("hidden"); S.idleLine = -1; }
+  const migration = st.migrationId || null;
+  if (migration !== (S.migration || null)) {
+    S.idleLine = -1;
+    if (migration) releasePadTouches();
+  }
+  S.migration = migration;
   S.watching = !!st.watching;
-  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  $("idlePlaying").innerHTML = (st.watching ? "Watching <b>" : st.game === "the internet" ? "Surfing <b>" : st.game === "a shopping spree" ? "Going on <b>" : st.game === "the menu" ? "Decorating <b>" : st.game === "fan mail" ? "Reading <b>" : st.game === "fanfic.com" ? "Up late on <b>" : st.game === "a banger" ? "Making <b>" : "Playing <b>") + esc(st.game) + "</b> on the TV"
-    + (st.score ? " · " + st.score : "");
-  document.querySelector("#idle .take").textContent = st.watching ? "Tap to pause or play" : "Tap anywhere to take over";
+  const skip = $("migrationSkip");
+  skip.classList.toggle("hidden", !(migration && st.canSkip && player));
+  skip.textContent = st.game === "Migration preview" ? "Skip preview" : "Skip cutscene";
+  const hint = document.querySelector("#idle .take");
+  if (migration) {
+    $("idlePlaying").textContent = st.game + " on the TV";
+    hint.textContent = st.game === "Migration preview" ? "Developer preview" :
+      st.canSkip ? "Transfer finished" : "The cutscene plays while migration runs";
+  } else {
+    const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    $("idlePlaying").innerHTML = (st.watching ? "Watching <b>" : st.game === "the internet" ? "Surfing <b>" : st.game === "a shopping spree" ? "Going on <b>" : st.game === "the menu" ? "Decorating <b>" : st.game === "fan mail" ? "Reading <b>" : st.game === "fanfic.com" ? "Up late on <b>" : st.game === "a banger" ? "Making <b>" : "Playing <b>") + esc(st.game) + "</b> on the TV"
+      + (st.score ? " · " + st.score : "");
+    hint.textContent = st.watching ? "Tap to pause or play" : "Tap anywhere to take over";
+  }
   $("idleSay").classList.toggle("quiet", !!st.watching && !st.line);
   const cheat = st.cheat || null, logo = $("idleLogo");
   if (cheat !== S.cheat) {
@@ -879,6 +899,8 @@ function setLogo(cls) {
 function hideIdle() {
   $("idle").classList.add("hidden");
   S.cheat = null;
+  S.migration = null;
+  $("migrationSkip").classList.add("hidden");
   $("idleGone").classList.add("hidden");
   $("idleCatch").classList.add("hidden");
   $("idleLogo").classList.remove("hidden");
@@ -896,7 +918,18 @@ $("idleCatch").addEventListener("pointerdown", async (e) => {
   poll();
 });
 
+$("migrationSkip").addEventListener("click", async () => {
+  const id = S.migration;
+  if (!id || $("migrationSkip").classList.contains("hidden")) return;
+  try {
+    await api("/api/migration/skip", { method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ id }) });
+  } catch (err) {}
+  poll();
+});
+
 $("idle").addEventListener("pointerdown", (e) => {
+  if (S.migration) return;
   e.preventDefault();
   if (S.watching) toast("⏯"); else hideIdle();          // a reaction video: A pauses it
   api("/api/input", { method: "POST", headers: { "Content-Type": "text/plain" }, body: "b A 1\nb A 0" }).catch(() => {});
@@ -1810,7 +1843,7 @@ document.addEventListener("contextmenu", (e) => e.preventDefault());
 // physical keyboard (handy for testing on a laptop)
 const KEYS = { ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT", KeyX: "A", KeyZ: "B",
                KeyS: "X", KeyA: "Y", KeyQ: "L", KeyW: "R", Enter: "PLUS", ShiftRight: "MINUS", KeyH: "HOME" };
-addEventListener("keydown", (e) => { const b = KEYS[e.code]; if (b && !e.repeat && !e.target.closest("#layoutEditor") && !["INPUT", "SELECT"].includes(e.target.tagName)) { press(b); e.preventDefault(); } });
+addEventListener("keydown", (e) => { const b = KEYS[e.code]; if (b && !S.migration && !e.repeat && !e.target.closest("#layoutEditor") && !["INPUT", "SELECT"].includes(e.target.tagName)) { press(b); e.preventDefault(); } });
 addEventListener("keyup", (e) => { const b = KEYS[e.code]; if (b && !e.target.closest("#layoutEditor") && !["INPUT", "SELECT"].includes(e.target.tagName)) release(b); });
 
 let lock = null;

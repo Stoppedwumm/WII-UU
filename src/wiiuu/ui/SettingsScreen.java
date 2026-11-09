@@ -1802,7 +1802,7 @@ public final class SettingsScreen {
     private List<Row> devRows() {
         List<Row> r = new ArrayList<>();
         r.add(new Header("Animations"));
-        r.add(new Action("Preview migration animation", "Watch WII-UU move between two computers without transferring files.",
+        r.add(new Action("Preview migration cutscene", "Watch the one-minute mascot story without transferring files.",
                 () -> MigrationPanel.preview(view), null, null));
         r.add(new Header("Idle activities"));
         r.add(new Info("Starts one now, without waiting. Any button takes over again."));
