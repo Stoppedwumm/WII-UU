@@ -5,7 +5,7 @@
 # Mode (in WII-UU) logs into your normal desktop; the "Return to WII-UU" icon there switches back.
 # Every boot starts in console mode again, just like a Steam Deck.
 #
-#   sudo wiiuu-console install [--user NAME] [--desktop SESSION] [--yes]
+#   sudo wiiuu-console install [--user NAME] [--desktop SESSION] [--yes] [--oem]
 #   sudo wiiuu-console uninstall             back to a normal desktop login
 #   wiiuu-console switch desktop|console     switch now (the current session ends)
 #   wiiuu-console status
@@ -195,6 +195,12 @@ write_files() {
   install -d "$SHARE"
   [ "$(readlink -f "$0")" = "$SELF_DST" ] || install -m 755 "$0" "$SELF_DST"
 
+  if [ "${OEM:-0}" = 1 ]; then
+    install -m 644 /dev/null "$SHARE/oem"
+  else
+    rm -f "$SHARE/oem"
+  fi
+
   # the console session: WII-UU full screen, restarted if it closes, with power/desktop handling
   cat > "$SESSION_BIN" <<'EOF'
 #!/usr/bin/env bash
@@ -216,6 +222,9 @@ fi
 WIIUU="$HOME/.local/bin/wiiuu"; [ -x "$WIIUU" ] || WIIUU="$(command -v wiiuu || echo wiiuu)"
 to_desktop() { sudo -n /usr/local/bin/wiiuu-console switch desktop || exit 0; sleep 30; exit 0; }
 
+args=(--fullscreen)
+[ ! -f /usr/local/share/wiiuu-console/oem ] || args+=(--appliance)
+
 fails=0
 while true; do
   # an update in progress: wait until its installer has finished before starting WII-UU again
@@ -225,7 +234,7 @@ while true; do
   fi
   for _ in $(seq 1 600); do [ -e "$data/updating" ] || break; sleep 1; done
   started=$(date +%s)
-  "$WIIUU" --fullscreen
+  "$WIIUU" "${args[@]}"
   code=$?
   echo "WII-UU exited with $code"
   case "$code" in
@@ -321,12 +330,14 @@ cmd_install() {
   need_root install "$@"
   TARGET_USER="${SUDO_USER:-}"
   DESKTOP=""
+  OEM=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --session-hint) user_session="$2"; shift ;;
       --user) TARGET_USER="$2"; shift ;;
       --desktop) DESKTOP="$2"; shift ;;
       --yes|-y) YES=1 ;;
+      --oem) OEM=1 ;;
       *) die "unknown option $1" ;;
     esac
     shift

@@ -36,6 +36,7 @@ import wiiuu.core.Config;
 import wiiuu.core.Cores;
 import wiiuu.core.Game;
 import wiiuu.core.GameSystem;
+import wiiuu.core.IntegrationApi;
 import wiiuu.core.Library;
 import wiiuu.core.Systems;
 import wiiuu.engine.GameScreen;
@@ -76,6 +77,7 @@ public final class App extends JPanel implements PadSink {
     private boolean onGames;
     private volatile Choccy.Session session;
     private volatile Game playing;
+    private long launchRequest;
     private volatile String status = "";
     private volatile long statusAt;
     private final boolean systemDark;
@@ -174,30 +176,34 @@ public final class App extends JPanel implements PadSink {
 
     // ---- playing ---------------------------------------------------------------------------------
 
-    void play(Game game) {
-        if (session != null) return;
+    boolean play(Game game) {
+        if (session != null) return false;
+        long request = ++launchRequest;
         if (!Choccy.available()) {
             if (!Choccy.canGetJava()) {
                 say(Choccy.unavailable());
-                return;
+                return false;
             }
             say("Getting Java for " + NAME + " (about 50 MB, once)… the game starts by itself");
             Choccy.getJava(() -> SwingUtilities.invokeLater(() -> {
+                if (request != launchRequest) return;
                 if (Choccy.available()) play(game);
                 else say("Couldn't get Java for " + NAME + " (see the log)");
             }));
-            return;
+            return true;
         }
         Path core;
         try {
-            core = cores.choccyCoreFor(game.system(), () -> SwingUtilities.invokeLater(() -> play(game)));
+            core = cores.choccyCoreFor(game.system(), () -> SwingUtilities.invokeLater(() -> {
+                if (request == launchRequest) play(game);
+            }));
         } catch (Cores.Downloading d) {
             say(d.getMessage());
-            return;
+            return d.queued();
         }
         if (core == null) {
             say("No core for " + game.system().name() + " could be found or downloaded");
-            return;
+            return false;
         }
         String id = game.system().id();
         String[] look = cores.choccyLook(game.system(), core);
@@ -212,7 +218,7 @@ public final class App extends JPanel implements PadSink {
                     }, log);
         } catch (IOException e) {
             say(NAME + " didn't start: " + e.getMessage());
-            return;
+            return false;
         }
         session = s;
         s.onStartup(text -> { screen.starting(text); repaint(); });
@@ -262,10 +268,12 @@ public final class App extends JPanel implements PadSink {
             repaint();
         }));
         repaint();
+        return true;
     }
 
     /** Saves and stops the game (it ends by itself after a moment; stopped hard if it doesn't). */
     private void stop() {
+        launchRequest++;
         Choccy.Session s = session;
         if (s == null) return;
         s.quit();
@@ -773,19 +781,21 @@ public final class App extends JPanel implements PadSink {
     public static void main(String[] args) throws Exception {
         Path home = Config.defaultHome();
         Path rom = null;
-        boolean noIntro = false;
+        boolean noIntro = false, fullscreen = false;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--home" -> home = Path.of(args[++i]);
                 case "--no-intro" -> noIntro = true;
+                case "--fullscreen" -> fullscreen = true;
                 case "--write-icon" -> {                 // the installers' menu icon
                     javax.imageio.ImageIO.write(Look.icon(256), "png", Path.of(args[++i]).toFile());
                     return;
                 }
                 case "--help", "-h" -> {
-                    System.out.println("usage: ChoccyMilk [--home DIR] [--no-intro] [GAME]\n"
+                    System.out.println("usage: ChoccyMilk [--home DIR] [--no-intro] [--fullscreen] [GAME]\n"
                             + "  --home DIR  settings folder (default ~/.wiiuu, shared with WII-UU)\n"
                             + "  --no-intro  no start animation (also: choccy.intro=false)\n"
+                            + "  --fullscreen  start in fullscreen\n"
                             + "  --write-icon FILE  saves the app icon as a PNG\n"
                             + "  GAME        a game file to play right away");
                     return;
@@ -796,6 +806,7 @@ public final class App extends JPanel implements PadSink {
         Config config = new Config(home);
         Files.createDirectories(home);
         Path start = rom;
+        boolean startFullscreen = fullscreen;
         boolean dark = wiiuu.engine.SystemTheme.isDark();
         boolean intro = !noIntro && rom == null && config.getBool("choccy.intro", true);
         SwingUtilities.invokeLater(() -> {
@@ -825,11 +836,19 @@ public final class App extends JPanel implements PadSink {
             f.setJMenuBar(app.menuBar());
             f.pack();
             f.setLocationRelativeTo(null);
-            f.setVisible(true);
+            if (startFullscreen) app.fullScreen();
+            else f.setVisible(true);
             app.requestFocusInWindow();
             if (intro) app.startIntro();
             new LocalPads(app, false).start();
             app.library.rescanAsync();
+            String version = App.class.getPackage().getImplementationVersion();
+            IntegrationApi.start(config, "choccy", version == null ? "dev" : version, app.library,
+                    game -> Cores.has(game.system()), new IntegrationApi.Controls() {
+                        @Override public Game current() { return app.playing; }
+                        @Override public boolean launch(Game game) { return app.play(game); }
+                        @Override public void stop() { app.stop(); }
+                    });
             if (start != null) {
                 Game g = gameFor(start.toAbsolutePath());
                 if (g == null) app.say("No console with a core plays " + start.getFileName());
