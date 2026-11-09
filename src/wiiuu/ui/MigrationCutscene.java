@@ -42,7 +42,7 @@ final class MigrationCutscene {
     }
 
     void paintScene(Graphics2D g, double time) {
-        int chapter = time < 14 ? 0 : time < 28 ? 1 : time < 47 ? 2 : 3;
+        int chapter = chapterAt(time);
         g.setPaint(new GradientPaint(0, 0, INK, WIDTH, HEIGHT, new Color(chapter == 2 ? 0x334b81 : 0x28617b)));
         g.fillRect(0, 0, WIDTH, HEIGHT);
         g.setColor(new Color(0x13273a));
@@ -64,16 +64,28 @@ final class MigrationCutscene {
         }
         g.setColor(new Color(0x101c29));
         g.fillRoundRect(30, 312, WIDTH - 60, 50, 14, 14);
-        String caption = switch (chapter) {
+        String caption = caption(chapter);
+        g.setFont(MenuView.font(Font.PLAIN, 18));
+        g.setColor(PAPER);
+        g.drawString(caption, (WIDTH - g.getFontMetrics().stringWidth(caption)) / 2, 343);
+    }
+
+    int chapter() {
+        return chapterAt(elapsed() % SECONDS);
+    }
+
+    private static int chapterAt(double time) {
+        return time < 14 ? 0 : time < 28 ? 1 : time < 47 ? 2 : 3;
+    }
+
+    String caption(int chapter) {
+        return switch (chapter) {
             case 0 -> "“Games, saves, settings … did I pack everything?”";
             case 1 -> "“Last box on board. Here we go!”";
             case 2 -> network ? "“So this is what the network looks like from the inside.”"
                               : "“Next stop, the new drive!”";
             default -> complete ? "“Everything made it. Welcome home!”" : "“I’ll set up while the last boxes come in.”";
         };
-        g.setFont(MenuView.font(Font.PLAIN, 18));
-        g.setColor(PAPER);
-        g.drawString(caption, (WIDTH - g.getFontMetrics().stringWidth(caption)) / 2, 343);
     }
 
     private void pack(Graphics2D g, double time) {

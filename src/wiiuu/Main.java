@@ -687,9 +687,16 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     /** Idle play, or a reaction video: what the GamePad's WII-UU logo says. */
     @Override
     public GamepadServer.Idle idle() {
+        GamepadServer.Idle scene = view == null ? null : view.idleState();
+        if (scene != null && scene.migrationId() != null) return scene;
         wiiuu.core.Reactions.Now now = reactions.now();
         if (now != null) return new GamepadServer.Idle(now.title(), 0, now.text(), now.id(), now.mood(), null, true);
-        return view == null ? null : view.idleState();
+        return scene;
+    }
+
+    @Override
+    public void skipMigration(String id) {
+        if (view != null) view.skipMigration(id);
     }
 
     @Override

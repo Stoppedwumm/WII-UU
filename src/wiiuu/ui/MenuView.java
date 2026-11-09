@@ -817,7 +817,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** For the GamePad page: what WII-UU is playing and saying, or null. */
     public wiiuu.net.GamepadServer.Idle idleState() {
-        return idleSnap;
+        var scene = migrationSnap;
+        return scene == null ? idleSnap : scene;
     }
 
     private boolean idleOwnMusic;                           // an idle sketch plays its own (the menu's pauses)
@@ -910,9 +911,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }                                 // started from Settings > Developer
 
     private MigrationPanel.Playback migration;
+    private volatile wiiuu.net.GamepadServer.Idle migrationSnap;
 
     void startMigration(MigrationPanel.Playback playback) {
         migration = playback;
+        migrationSnap = playback.gamepadState();
         setCursor(java.awt.Cursor.getDefaultCursor());
         requestFocusInWindow();
         repaint();
@@ -921,12 +924,19 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     void endMigration(MigrationPanel.Playback playback, String message) {
         if (migration != playback) return;
         migration = null;
+        migrationSnap = null;
         lastInput = System.currentTimeMillis();
         if (message != null) {
             if (settings != null) settings.reloadFromOutside(message);
             else showToast(message);
         }
         repaint();
+    }
+
+    public void skipMigration(String id) {
+        SwingUtilities.invokeLater(() -> {
+            if (migration != null) migration.skip(this, id);
+        });
     }
 
     /** Starts an idle activity right away (by its id; "" = the usual shuffle), once the menu is free. */
@@ -1854,7 +1864,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void tick() {
         if (migration != null) {
             if (migration.finished()) endMigration(migration, migration.result());
-            else repaint();
+            else {
+                migrationSnap = migration.gamepadState();
+                repaint();
+            }
             return;
         }
         boolean dirty = tickBoot();

@@ -111,6 +111,7 @@ final class MigrationPanel {
         private static final Rectangle2D PRIMARY = new Rectangle2D.Float(385, 399, 155, 35);
         private static final Rectangle2D CANCEL = new Rectangle2D.Float(553, 399, 138, 35);
         private final MigrationCutscene scene;
+        private final String id = java.util.UUID.randomUUID().toString();
         private final boolean network, preview;
         private final AtomicReference<Closeable> socket = new AtomicReference<>();
         private final AtomicBoolean cancelled = new AtomicBoolean();
@@ -150,6 +151,19 @@ final class MigrationPanel {
             if (preview) return null;
             return invitation != null ? "Data sent. Check the receiving computer."
                     : "Data is ready. Quit and reopen WII-UU to use the new location. The original files are kept.";
+        }
+
+        wiiuu.net.GamepadServer.Idle gamepadState() {
+            int chapter = scene.chapter();
+            String line = started ? scene.caption(chapter)
+                    : invitation == null ? "Preparing migration…" : "Waiting for the receiving computer.";
+            return new wiiuu.net.GamepadServer.Idle(preview ? "Migration preview" : "Migration", 0,
+                    line, started ? chapter * 2 + (complete ? 1 : 0) : invitation == null ? -2 : -3,
+                    complete ? "happy" : "focus", null, false, id, complete);
+        }
+
+        void skip(MenuView owner, String requestedId) {
+            if (complete && id.equals(requestedId)) confirm(owner);
         }
 
         void confirm(MenuView owner) {
