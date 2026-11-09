@@ -31,6 +31,7 @@ EMULATORS=0
 SHORTCUT=1
 UNINSTALL=0
 CONSOLE=0
+OEM=0
 BOOTSTRAP=0
 SKIP_MAINTENANCE="${WIIUU_SKIP_MAINTENANCE:-0}"
 [ "$OS" = "Darwin" ] && DEFAULT_PREFIX="$HOME/Library/Application Support/WII-UU"
@@ -59,8 +60,9 @@ while [ $# -gt 0 ]; do
     --uninstall) UNINSTALL=1 ;;
     --bootstrap) BOOTSTRAP=1 ;;
     --console-mode) CONSOLE=1 ;;
+    --oem) CONSOLE=1; OEM=1 ;;
     -h|--help)
-      echo "Usage: install.sh [--yes] [--uninstall] [--console-mode] [--with-emulators | --with-all-emulators]"
+      echo "Usage: install.sh [--yes] [--uninstall] [--console-mode | --oem] [--with-emulators | --with-all-emulators]"
       echo "Options: --prefix DIR  --bin DIR  --roms DIR  --port N  --no-shortcut"
       exit 0
       ;;
@@ -68,6 +70,12 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$OEM" = 1 ]; then
+  [ "$OS" = Linux ] || die "--oem requires Linux"
+  [ "$(id -u)" != 0 ] || die "run --oem as the console user, with sudo available"
+  [ "$BIN" = "$HOME/.local/bin" ] || die "--oem requires the default console launcher directory ($HOME/.local/bin)"
+fi
 
 cleanup_jar() {
   local candidate
@@ -438,10 +446,14 @@ if [ "$CONSOLE" = 1 ]; then
     warn "Console mode is for Linux (PCs and Raspberry Pi)."
   else
     say "Setting up console mode (needs sudo)"
-    cflags="--user $(id -un)"; [ "$YES" = 1 ] && cflags="$cflags --yes"
-    # shellcheck disable=SC2086
-    sudo env XDG_SESSION_DESKTOP="${XDG_SESSION_DESKTOP:-}" "$PREFIX/wiiuu-console" install --session-hint "${XDG_SESSION_DESKTOP:-${DESKTOP_SESSION:-}}" $cflags \
-      || warn "console mode was not set up; try again later with: sudo wiiuu-console install"
+    cflags=(--user "$(id -un)")
+    [ "$YES" = 1 ] && cflags+=(--yes)
+    [ "$OEM" = 1 ] && cflags+=(--oem)
+    [ -x "$PREFIX/wiiuu-console" ] || die "this package does not include the Console Mode tool"
+    sudo env XDG_SESSION_DESKTOP="${XDG_SESSION_DESKTOP:-}" "$PREFIX/wiiuu-console" install --session-hint "${XDG_SESSION_DESKTOP:-${DESKTOP_SESSION:-}}" "${cflags[@]}" || {
+      [ "$OEM" = 0 ] || die "OEM console mode was not set up"
+      warn "console mode was not set up; try again later with: sudo wiiuu-console install"
+    }
   fi
 fi
 

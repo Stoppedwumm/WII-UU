@@ -27,9 +27,18 @@ public final class Launcher {
     }
 
     public static final class LaunchException extends Exception {
+        private final boolean accepted;
+
         public LaunchException(String message) {
-            super(message);
+            this(message, false);
         }
+
+        private LaunchException(String message, boolean accepted) {
+            super(message);
+            this.accepted = accepted;
+        }
+
+        public boolean accepted() { return accepted; }
     }
 
     private final Config config;
@@ -43,6 +52,7 @@ public final class Launcher {
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private Process process;
     private Game current;
+    private long launchRequest;
     private String flatpakApp;
     /** macOS: `open -a <App>` starts the app via launchd, so it isn't our child; stop it by name */
     private String macApp;
@@ -242,7 +252,7 @@ public final class Launcher {
         return false;
     }
 
-    private void launchChoccy(Game game) throws LaunchException {
+    private void launchChoccy(Game game, long request) throws LaunchException {
         if (!Choccy.available()) {
             // no Java 22+ here: Choccy Milk gets its own, then the game starts by itself
             Choccy.getJava(() -> {
@@ -250,30 +260,20 @@ public final class Launcher {
                     for (Listener l : listeners) l.message("Couldn't get Java for Choccy Milk (see the log)");
                     return;
                 }
-                try {
-                    launch(game);
-                } catch (LaunchException e) {
-                    for (Listener l : listeners) l.message(e.getMessage());
-                }
+                retryLaunch(game, request);
             });
-            throw new LaunchException("Getting Java for Choccy Milk (about 50 MB, once)\u2026 the game starts by itself");
+            throw new LaunchException("Getting Java for Choccy Milk (about 50 MB, once)\u2026 the game starts by itself", true);
         }
         Elsewhere away = hereOnce.remove(game.path()) || (game.system().id().equals("nds") && DsOnline.enabled(config)) ? null : elsewhere.apply(game);
         if (away != null) {
             startElsewhere(game, away);
-            throw new LaunchException("Starting on " + away.name() + " (" + away.score() + ")\u2026");
+            throw new LaunchException("Starting on " + away.name() + " (" + away.score() + ")\u2026", true);
         }
         Path core;
         try {
-            core = retroArch.choccyCoreFor(game, () -> {
-                try {
-                    launch(game);
-                } catch (LaunchException e) {
-                    for (Listener l : listeners) l.message(e.getMessage());
-                }
-            });
+            core = retroArch.choccyCoreFor(game, () -> retryLaunch(game, request));
         } catch (Cores.Downloading d) {
-            throw new LaunchException(d.getMessage());
+            throw new LaunchException(d.getMessage(), d.queued());
         }
         if (core == null) throw new LaunchException("No core for " + game.system().name() + " found: install one in RetroArch's Online Updater");
         Path log = config.logDir().resolve(game.system().id() + ".log");
@@ -464,8 +464,9 @@ public final class Launcher {
         if (isRunning()) throw new LaunchException(current.name() + " is already running");
         String lending = lendingTo.get();
         if (lending != null) throw new LaunchException("This WII-UU is playing a game for " + lending + " right now");
+        long request = ++launchRequest;
         if (!OpenBased.handles(game) && !Reactions.handles(game) && choccyFor(game)) {
-            launchChoccy(game);
+            launchChoccy(game, request);
             return;
         }
         List<String> cmd = null;
@@ -480,15 +481,9 @@ public final class Launcher {
             try {
                 // after downloading a missing core, start the game by itself
                 java.awt.Rectangle where = split.apply(game);
-                cmd = retroArch.command(game, () -> {
-                    try {
-                        launch(game);
-                    } catch (LaunchException e) {
-                        for (Listener l : listeners) l.message(e.getMessage());
-                    }
-                }, where);
+                cmd = retroArch.command(game, () -> retryLaunch(game, request), where);
             } catch (Cores.Downloading d) {
-                throw new LaunchException(d.getMessage());
+                throw new LaunchException(d.getMessage(), d.queued());
             }
         }
         boolean viaRetroArch = cmd != null && !video;
@@ -565,6 +560,15 @@ public final class Launcher {
         });
     }
 
+    private synchronized void retryLaunch(Game game, long request) {
+        if (request != launchRequest) return;
+        try {
+            launch(game);
+        } catch (LaunchException e) {
+            for (Listener l : listeners) l.message(e.getMessage());
+        }
+    }
+
     /** Asks the emulator to quit, then force-kills it (and everything it started) if it refuses. */
     public void stop() {
         stop(false);
@@ -575,6 +579,7 @@ public final class Launcher {
         Process p;
         String flatpak, mac;
         synchronized (this) {
+            launchRequest++;
             p = process;
             flatpak = flatpakApp;
             mac = macApp;

@@ -68,11 +68,20 @@ public final class Cores {
         return triedDownload.add(systemId);
     }
 
-    /** Thrown when the core is being downloaded; the launch continues by itself afterwards. */
+    /** A core is unavailable, or is being downloaded for an automatic retry. */
     public static final class Downloading extends Exception {
+        private final boolean queued;
+
         public Downloading(String message) {
-            super(message);
+            this(message, false);
         }
+
+        public Downloading(String message, boolean queued) {
+            super(message);
+            this.queued = queued;
+        }
+
+        public boolean queued() { return queued; }
     }
 
     /**
@@ -160,7 +169,7 @@ public final class Cores {
         t.setDaemon(true);
         t.start();
         throw new Downloading("Getting the core for " + system.name() + " (" + CORES.get(id).get(0)
-                + ")\u2026 the game starts by itself in a moment");
+                + ")\u2026 the game starts by itself in a moment", true);
     }
 
     /** Native cores visible to Choccy Milk. Its own folder takes precedence over RetroArch's. */
@@ -191,7 +200,7 @@ public final class Cores {
         if (config.getBool("retroarch.download", true) && buildbot(Choccy.arch()) != null && triedDownload.add("selected:" + name)) {
             Thread fetch = new Thread(() -> { downloadChoccyCore(name); afterDownload.run(); }, "selected-core-download");
             fetch.setDaemon(true); fetch.start();
-            throw new Downloading("Getting selected core " + name + "… the game starts when it is installed");
+            throw new Downloading("Getting selected core " + name + "… the game starts when it is installed", true);
         }
         throw new Downloading("Selected core " + name + " is not installed. Download it in the core manager or select Automatic.");
     }
@@ -235,7 +244,7 @@ public final class Cores {
                 }, "core-download");
                 t.setDaemon(true);
                 t.start();
-                throw new Downloading("Getting " + want.get(0) + " for " + system.name() + "'s core settings\u2026 the game starts by itself in a moment");
+                throw new Downloading("Getting " + want.get(0) + " for " + system.name() + "'s core settings\u2026 the game starts by itself in a moment", true);
             }
             if (dsOnline) throw new Downloading("DS online needs melonDS DS. Install its libretro core, or enable core downloads and restart the app to retry.");
             System.out.println("[choccy] " + want.get(0) + " isn't available for this computer: " + system.name()
@@ -263,7 +272,7 @@ public final class Cores {
             }, "core-download");
             t.setDaemon(true);
             t.start();
-            throw new Downloading("Getting a core Choccy Milk can play " + system.name() + " with\u2026 the game starts by itself in a moment");
+            throw new Downloading("Getting a core Choccy Milk can play " + system.name() + " with\u2026 the game starts by itself in a moment", true);
         }
         return null;
     }

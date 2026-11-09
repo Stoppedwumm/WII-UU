@@ -184,7 +184,7 @@ public final class RetroArch {
             t.setDaemon(true);
             t.start();
             throw new Cores.Downloading("Getting the RetroArch core for " + game.system().name() + " (" + name
-                    + ")\u2026 the game starts by itself in a moment");
+                    + ")\u2026 the game starts by itself in a moment", true);
         }
         List<String> cmd = new ArrayList<>(exe);
         if (split == null && config.getBool("retroarch.fullscreen", true)) cmd.add("-f");

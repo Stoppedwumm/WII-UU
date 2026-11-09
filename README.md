@@ -1396,3 +1396,5 @@ not recognizing the game does not prevent Choccy Milk from displaying it. macOS 
 melonDS DS uses a normal JVM thread; the special coroutine-stack workaround is skipped
 for this core. CI checks the native frame path on macOS and Linux with Java 27 using a
 redistributable fixture core; a real game can still fail for core/BIOS/JIT/audio reasons.
+
+For local automation and Linux console image provisioning, see the [integration API and OEM setup guide](docs/integration-api.md).

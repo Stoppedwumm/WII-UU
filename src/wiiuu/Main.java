@@ -27,6 +27,7 @@ import javax.swing.UIManager;
 
 import wiiuu.core.Config;
 import wiiuu.core.Game;
+import wiiuu.core.IntegrationApi;
 import wiiuu.core.Launcher;
 import wiiuu.core.Library;
 import wiiuu.core.Updater;
@@ -147,7 +148,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         Path home = Config.defaultHome();
         Boolean fullscreen = null;
         Integer port = null;
-        boolean noServer = false, setup = false, noIntro = false;
+        boolean noServer = false, setup = false, noIntro = false, appliance = false;
         String snapshot = null, snapshotView = "home";
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -211,6 +212,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --home DIR                  settings folder (default ~/.wiiuu)
                               --check-update / --upgrade  check for / install a newer version (with its notes)
                               --changelog [VERSION]       what changed (since VERSION)
+                              --appliance                 start fullscreen without first-run or update prompts
                               --setup                     start with the setup guide (after the first-boot intro)
                               --no-intro                  with --setup: straight to the guide, no intro
                               --scrape                    find covers online for the games that have none
@@ -223,6 +225,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                                   F11 fullscreen, Ctrl+Q closes a running game.""".formatted(VERSION));
                     return;
                 }
+                case "--appliance" -> appliance = true;
                 case "--setup" -> setup = true;
                 case "--no-intro" -> noIntro = true;
                 case "--fps" -> System.setProperty("wiiuu.fps", "true");
@@ -237,6 +240,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         Config config = new Config(home);
         useGraphicsCard(config);
+        if (appliance && fullscreen == null) fullscreen = true;
         if (port != null) config.set("server.port", port.toString());
         if (fullscreen != null) config.set("ui.fullscreen", fullscreen.toString());
         freshInstall = !Files.exists(home.resolve("config.properties"));
@@ -262,8 +266,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         boolean startServer = !noServer && config.getBool("server.enabled", true);
         SwingUtilities.invokeAndWait(app::createWindow);
         // the first boot (or a restart into the guide): the fast-cut intro, then the setup guide
-        if ((firstRun || guideAsked) && !noIntro && config.getBool("ui.firstBootIntro", true)) SwingUtilities.invokeLater(app.view::startFirstBoot);
-        else if (firstRun || guideAsked) SwingUtilities.invokeLater(app.view::startGuide);
+        if ((guideAsked || (firstRun && !appliance)) && !noIntro && config.getBool("ui.firstBootIntro", true)) SwingUtilities.invokeLater(app.view::startFirstBoot);
+        else if (guideAsked || (firstRun && !appliance)) SwingUtilities.invokeLater(app.view::startGuide);
         app.library.addListener(s -> SwingUtilities.invokeLater(() -> app.view.setSnapshot(s)));
         // new games without covers: look for some (wiiuu --scrape, or Settings > Games, does it on request)
         app.library.addListener(s -> {
@@ -275,8 +279,23 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         app.openBased.refreshAsync();
         app.reactions.refreshAsync();
         if (startServer) app.startServer();
-        if (config.getBool("update.check", true)) app.checkForUpdateQuietly();
-        app.showWhatsNewAfterUpdate();
+        if (!appliance) {
+            if (config.getBool("update.check", true)) app.checkForUpdateQuietly();
+            app.showWhatsNewAfterUpdate();
+        }
+        IntegrationApi.start(config, "wiiuu", VERSION, app.library, game -> true, new IntegrationApi.Controls() {
+            @Override public Game current() { return app.launcher.current(); }
+            @Override public boolean launch(Game game) {
+                try {
+                    app.launcher.launch(game);
+                    return true;
+                } catch (Launcher.LaunchException e) {
+                    System.err.println("[integration] " + e.getMessage());
+                    return e.accepted();
+                }
+            }
+            @Override public void stop() { app.closeGame(); }
+        });
     }
 
     private void startServer() {
