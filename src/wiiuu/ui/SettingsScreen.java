@@ -1235,6 +1235,9 @@ public final class SettingsScreen {
 
     private List<Row> padRows() {
         List<Row> r = new ArrayList<>();
+        r.add(new Header("Controller layouts"));
+        r.add(new Action("Edit GamePad layouts", "Drag and resize controls on a canvas. Saved layouts are available on paired GamePads.",
+                view::openGamepadLayoutEditor, null, null));
         r.add(new Header("Phones"));
         r.add(toggle("Phone GamePad server", "Phones become GamePads by opening WII-UU's page. From the next start.",
                 "server.enabled", true, null));

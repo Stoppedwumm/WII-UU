@@ -7,15 +7,19 @@ function element() {
   const classes = new Set();
   const handlers = {};
   return {
-    handlers, value: '', children: [],
+    handlers, value: '', children: [], dataset: {}, style: {},
+    replaceChildren(...nodes) { this.children = nodes; },
     append(...nodes) { this.children.push(...nodes); },
     add() {},
+    remove() {},
     setAttribute() {},
     showModal() { this.open = true; },
     close() { this.open = false; },
     addEventListener(type, handler) { handlers[type] = handler; },
     classList: {
       contains: name => classes.has(name),
+      add: name => classes.add(name),
+      remove: name => classes.delete(name),
       toggle(name, on) { if (on) classes.add(name); else classes.delete(name); }
     },
     querySelectorAll: () => [],
@@ -32,12 +36,23 @@ const $ = id => els[id] ||= element();
 const game = { name: 'Mario Kart DS (Europe)', system: 'Nintendo DS' };
 const events = [], timers = new Map();
 let nextTimer = 0;
+let hostLayouts = [];
 const context = vm.createContext({
   $,
   S: { game, mode: 'game' },
   store: { get: key => stored.get(key), set: (key, value) => stored.set(key, value) },
   sendButton: (button, down) => events.push([button, down]),
   wakeLock() {},
+  encodeURIComponent,
+  api: async (path, options) => {
+    if (options?.body) {
+      const layout = JSON.parse(options.body);
+      hostLayouts = [...hostLayouts.filter(item => item.id !== layout.id), layout];
+    } else if (options?.method === 'POST') {
+      hostLayouts = hostLayouts.filter(item => !path.endsWith(item.id));
+    }
+    return { ok: true, json: async () => JSON.parse(JSON.stringify(hostLayouts)) };
+  },
   document: { ...element(), createElement: element }, window: element(),
   Option: function(text, value) { Object.assign(this, { text, value }); },
   crypto: { getRandomValues: () => [1, 2] },
@@ -60,7 +75,9 @@ const dispatch = (type, pointerId, selector, clientX, clientY) => {
 dispatch('pointerdown', 1, '[data-dpad]', 5, 50);
 dispatch('pointerdown', 2, '#raceDrive', 50, 50);
 dispatch('pointermove', 2, null, 50, 10);
-dispatch('pointermove', 1, null, 95, 50);
+dispatch('pointermove', 1, null, 35, 88); // drifting diagonally must keep left held
+assert.deepEqual(events, [['LEFT', true], ['A', true], ['R', true]]);
+dispatch('pointermove', 1, null, 95, 62);
 dispatch('pointermove', 2, null, 50, 50);
 dispatch('pointermove', 2, null, 50, 90);
 dispatch('pointermove', 2, null, 50, 95);
@@ -87,36 +104,41 @@ context.updateControlLayout();
 assert.equal(layoutToggle.classList.contains('hidden'), true);
 assert.match(html, /data-b="MINUS">Select</);
 assert.match(html, /data-b="PLUS">Start</);
-context.S.game = game;
-$('editLayouts').onclick();
-assert.equal($('layoutEditor').open, true);
-$('layoutName').value = 'My two-thumb layout';
-const fields = $('layoutFields').children;
-fields[0].children[2].value = 'B';
-fields[1].children[2].value = 'ZR';
-fields[2].children[2].value = 'ZL';
-fields[2].children[3].value = 'hold';
-$('layoutForm').onsubmit({ preventDefault() {} });
-assert.equal($('layoutEditor').open, false);
-assert.equal(controlLayout.value, 'custom-1-2');
-const saved = JSON.parse(stored.get('customLayouts'));
-assert.equal(saved[0].name, 'My two-thumb layout');
-events.length = 0;
-dispatch('pointerdown', 3, '#raceDrive', 50, 50);
-dispatch('pointermove', 3, null, 50, 10);
-dispatch('pointermove', 3, null, 50, 90);
-layoutToggle.onclick();
-assert.deepEqual(events, [['B', true], ['ZR', true], ['ZR', false], ['ZL', true], ['ZL', false], ['B', false]]);
-assert.equal(layoutToggle.textContent, 'Custom layout');
-layoutToggle.onclick();
-assert.equal(controlLayout.value, 'custom-1-2');
-$('editLayouts').onclick();
-assert.equal($('layoutName').value, 'My two-thumb layout');
-$('layoutName').value = 'Renamed layout';
-$('layoutForm').onsubmit({ preventDefault() {} });
-assert.equal(JSON.parse(stored.get('customLayouts'))[0].name, 'Renamed layout');
-$('editLayouts').onclick();
-$('deleteLayout').onclick();
-assert.equal(controlLayout.value, 'auto');
-assert.deepEqual(JSON.parse(stored.get('customLayouts')), []);
-console.log('GamePad controller-layout tests passed');
+(async () => {
+  context.S.game = game;
+  $('editLayouts').onclick();
+  assert.equal($('layoutEditor').open, true);
+  $('layoutName').value = 'My two-thumb layout';
+  const palette = $('layoutPalette'), canvas = $('layoutCanvas');
+  palette.handlers.pointerdown({ pointerId: 3, clientX: 10, clientY: -20, preventDefault() {},
+    target: { closest: () => ({ dataset: { kind: 'stick' } }) } });
+  palette.handlers.pointerup({ pointerId: 3, type: 'pointerup', clientX: 40, clientY: 35 });
+  const last = canvas.children.at(-1);
+  assert.equal(last.widget.type, 'stick');
+  canvas.handlers.pointerdown({ pointerId: 4, clientX: 40, clientY: 35, preventDefault() {},
+    target: { closest: () => last, classList: { contains: () => false } } });
+  canvas.handlers.pointermove({ pointerId: 4, clientX: 60, clientY: 55 });
+  canvas.handlers.pointerup({ pointerId: 4, type: 'pointerup' });
+  assert.equal(canvas.children.at(-1).widget.x, 51);
+  await $('layoutForm').onsubmit({ preventDefault() {} });
+  assert.equal($('layoutEditor').open, false);
+  assert.equal(controlLayout.value, 'custom-1-2');
+  assert.equal(pad.classList.contains('visual'), true);
+  assert.equal(hostLayouts[0].name, 'My two-thumb layout');
+  assert.equal(hostLayouts[0].widgets.at(-1).type, 'stick');
+
+  layoutToggle.onclick();
+  assert.equal(layoutToggle.textContent, 'Custom layout');
+  layoutToggle.onclick();
+  assert.equal(controlLayout.value, 'custom-1-2');
+  $('editLayouts').onclick();
+  assert.equal($('layoutName').value, 'My two-thumb layout');
+  $('layoutName').value = 'Renamed layout';
+  await $('layoutForm').onsubmit({ preventDefault() {} });
+  assert.equal(hostLayouts[0].name, 'Renamed layout');
+  $('editLayouts').onclick();
+  await $('deleteLayout').onclick();
+  assert.equal(controlLayout.value, 'auto');
+  assert.deepEqual(hostLayouts, []);
+  console.log('GamePad controller-layout tests passed');
+})().catch(e => { console.error(e); process.exitCode = 1; });

@@ -19,9 +19,9 @@ import java.util.concurrent.Executors;
 public final class RelayGateway implements AutoCloseable {
     private static final String COOKIE = "wiiuu_relay";
     private static final Set<String> GET = Set.of("/", "/index.html", "/manifest.json", "/music.js", "/icon.png",
-            "/api/status", "/api/frame", "/api/audio", "/api/library");
+            "/api/status", "/api/layouts", "/api/frame", "/api/audio", "/api/library");
     private static final Set<String> POST = Set.of("/api/hello", "/api/input", "/api/launch", "/api/player",
-            "/api/state", "/api/close", "/api/idle");
+            "/api/state", "/api/layouts", "/api/close", "/api/idle");
     private final String secret;
     private final HttpServer server;
     private final ExecutorService executor;

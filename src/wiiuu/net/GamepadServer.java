@@ -766,6 +766,23 @@ public final class GamepadServer {
                             if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
                             json(ex, 200, new Json().obj().kv("caught", host.idleCatch()).endObj());
                         }
+                        case "/api/layouts" -> {
+                            if ("POST".equals(method)) {
+                                if (c.player <= 0) { json(ex, 403, error("A player controller is required")); return; }
+                                try {
+                                    String delete = query(ex).get("delete");
+                                    if (delete != null) GamepadLayouts.delete(config, delete);
+                                    else GamepadLayouts.save(config, GamepadLayouts.parse(
+                                            wiiuu.core.MiniJson.parse(body(ex))));
+                                } catch (IllegalArgumentException | IndexOutOfBoundsException e) {
+                                    json(ex, 400, error("Invalid GamePad layout")); return;
+                                }
+                            } else if (!"GET".equals(method)) {
+                                json(ex, 405, error("GET or POST only")); return;
+                            }
+                            send(ex, 200, "application/json; charset=utf-8",
+                                    GamepadLayouts.json(config).getBytes(StandardCharsets.UTF_8));
+                        }
                         case "/api/input" -> {
                             if (!"POST".equals(method)) { json(ex, 405, error("POST only")); return; }
                             input(c, body(ex));
@@ -1078,6 +1095,7 @@ public final class GamepadServer {
         Game g = launcher.current();
         Json j = new Json().obj()
                 .kv("padBuild", page().build())
+                .kv("layoutVersion", GamepadLayouts.json(config).hashCode())
                 .kv("closing", closing)
                 .kv("mode", g == null ? "menu" : "game")
                 .kv("player", c.player)

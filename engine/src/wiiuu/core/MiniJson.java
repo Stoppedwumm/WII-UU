@@ -19,7 +19,7 @@ public final class MiniJson {
 
     public static Object parse(String text) {
         MiniJson p = new MiniJson(text);
-        Object v = p.value();
+        Object v = p.value(0);
         p.space();
         if (p.i != p.s.length()) throw p.error("trailing characters");
         return v;
@@ -43,7 +43,8 @@ public final class MiniJson {
         return v instanceof Double d ? d : null;
     }
 
-    private Object value() {
+    private Object value(int depth) {
+        if (depth > 100) throw error("too many nested values");
         space();
         if (i >= s.length()) throw error("unexpected end");
         char c = s.charAt(i);
@@ -58,7 +59,7 @@ public final class MiniJson {
                     String k = str();
                     space();
                     expect(':');
-                    m.put(k, value());
+                    m.put(k, value(depth + 1));
                     space();
                 } while (take(','));
                 expect('}');
@@ -69,7 +70,7 @@ public final class MiniJson {
                 List<Object> l = new ArrayList<>();
                 space();
                 if (peek(']')) return l;
-                do l.add(value()); while (take(','));
+                do l.add(value(depth + 1)); while (take(','));
                 space();
                 expect(']');
                 return l;
