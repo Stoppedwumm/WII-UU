@@ -1,0 +1,55 @@
+.oem-hero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 1.5rem;
+  align-items: center;
+}
+.oem-hero h1 { font-size: clamp(2rem, 5vw, 2.85rem); }
+.oem-tag {
+  margin: 0 0 .55rem;
+  color: var(--accent);
+  font-size: .85rem;
+  font-weight: 700;
+}
+.oem-hero figure { margin: 0; }
+.oem-hero img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: .35rem solid #262c34;
+  border-radius: .8rem;
+  box-shadow: 0 .4rem 1rem #0002;
+}
+.oem-hero figcaption { margin-top: .5rem; color: var(--muted); font-size: .875rem; }
+.oem-steps, .oem-switch {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: .65rem;
+  padding: 0;
+  margin-block: 1.5rem;
+}
+.oem-steps { list-style: none; }
+.oem-steps li, .oem-switch div {
+  margin: 0;
+  padding: .85rem 1rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: .75rem;
+}
+.oem-number {
+  display: inline-grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  margin-bottom: .4rem;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-weight: 750;
+}
+.oem-steps h2 { margin: 0; font-size: 1.1rem; }
+.oem-steps p, .oem-switch dd { margin: .3rem 0 0; color: var(--muted); }
+.oem-switch dt { color: var(--accent); font-size: .85rem; font-weight: 700; }
+.oem-switch strong { color: var(--ink); }
+summary { cursor: pointer; font-weight: 650; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }

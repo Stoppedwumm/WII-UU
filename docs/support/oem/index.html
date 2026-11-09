@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Set up a Linux PC or Raspberry Pi to boot directly into fullscreen WII-UU.">
+<title>Set up a WII-UU console · WII-UU Support</title>
+<link rel="icon" href="../../icon.png">
+<link rel="stylesheet" href="../support.css">
+<link rel="stylesheet" href="oem.css">
+</head>
+<body>
+<header>
+  <nav aria-label="Main">
+    <a class="brand" href="../../">WII-<b>UU</b></a>
+    <a href="../">Support</a>
+    <a href="../../#install">Downloads</a>
+  </nav>
+</header>
+<main>
+<article>
+  <div class="oem-hero">
+    <div>
+      <p class="oem-tag">Linux · PC or Raspberry Pi</p>
+      <h1>Set up a WII-UU console</h1>
+      <p class="lead">Turn on the device and go straight to the fullscreen game library. OEM mode signs into a dedicated console account and skips automatic setup and update prompts.</p>
+    </div>
+    <figure>
+      <img src="../../menu.png" width="1600" height="900" alt="WII-UU home menu with game systems and a Power button at the bottom">
+      <figcaption>The WII-UU home screen after startup</figcaption>
+    </figure>
+  </div>
+
+  <ol class="oem-steps">
+    <li><span class="oem-number" aria-hidden="true">1</span><h2><a href="#prepare">Prepare</a></h2><p>Linux desktop and console user</p></li>
+    <li><span class="oem-number" aria-hidden="true">2</span><h2><a href="#install">Install</a></h2><p>Enable OEM mode and add games</p></li>
+    <li><span class="oem-number" aria-hidden="true">3</span><h2><a href="#first-boot">Reboot</a></h2><p>Check fullscreen startup and controls</p></li>
+  </ol>
+
+  <h2 id="prepare">1. Prepare the device</h2>
+  <p>Start with a Linux desktop using an X11 session. Create a regular user for the console, sign in as that user, and make sure you can run <code>sudo</code> during setup. Use a WII-UU package built from a revision that includes OEM mode. <a href="https://github.com/Stoppedwumm/WII-UU/actions/runs/42621470196">Open a compatible GitHub Actions build</a>. If its artifact has expired, use a <a href="https://github.com/Stoppedwumm/WII-UU/actions/workflows/build.yml">newer build from the default branch</a>.</p>
+
+  <h2 id="install">2. Install OEM mode</h2>
+  <p>Extract the package and open a terminal in the folder containing <code>install.sh</code>. Run this as the console user.</p>
+  <pre><code>./install.sh --yes --oem --no-shortcut</code></pre>
+  <details>
+    <summary>WII-UU is already installed</summary>
+    <p>Replace <code>console</code> with the actual Linux username.</p>
+    <pre><code>sudo wiiuu-console install --user console --oem --yes</code></pre>
+  </details>
+  <p>Add the games, emulator cores, and system files needed by your device. For a preconfigured console, launch a game offline before shipping so you can catch any missing dependencies.</p>
+
+  <h2 id="first-boot">3. Reboot and check the console</h2>
+  <p>After reboot, the display manager signs into the console account and opens WII-UU fullscreen. Test controller input, audio, and a game launch. If you ship a separate GamePad, <a href="../gamepad/">check pairing and the second screen</a> too.</p>
+
+  <h2 id="desktop">Switch between WII-UU and the desktop</h2>
+  <dl class="oem-switch">
+    <div><dt>From WII-UU</dt><dd><strong>Power → Desktop Mode</strong></dd><dd>Opens your normal desktop.</dd></div>
+    <div><dt>From the desktop</dt><dd><strong>Return to WII-UU</strong></dd><dd>Opens the fullscreen console again.</dd></div>
+  </dl>
+  <details>
+    <summary>Remove Console Mode</summary>
+    <p>Run the following from the desktop to remove the console boot session.</p>
+    <pre><code>sudo wiiuu-console uninstall</code></pre>
+  </details>
+  <p>Building an image or a local companion app? See the <a href="https://github.com/Stoppedwumm/WII-UU/blob/b5e2720de061f85a3b9ae2c7b0679bd9b6b769ac/docs/integration-api.md">OEM provisioning and API reference</a>.</p>
+</article>
+</main>
+<footer>
+  <a href="../">All support articles</a> ·
+  <a href="https://github.com/Stoppedwumm/WII-UU/issues">Report a problem on GitHub</a>
+</footer>
+</body>
+</html>
