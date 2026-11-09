@@ -910,6 +910,25 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }                                 // started from Settings > Developer
 
+    private GamepadLayoutEditor layoutEditor;
+
+    void openGamepadLayoutEditor() {
+        if (layoutEditor != null) return;
+        layoutEditor = new GamepadLayoutEditor(config, () -> {
+            remove(layoutEditor);
+            layoutEditor = null;
+            lastInput = System.currentTimeMillis();
+            revalidate();
+            requestFocusInWindow();
+            repaint();
+        });
+        setLayout(new java.awt.BorderLayout());
+        add(layoutEditor, java.awt.BorderLayout.CENTER);
+        revalidate();
+        layoutEditor.transferFocus();
+        repaint();
+    }
+
     private MigrationPanel.Playback migration;
     private volatile wiiuu.net.GamepadServer.Idle migrationSnap;
 
@@ -953,7 +972,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     /** Any input: counts as someone being there; while WII-UU plays by itself, takes over (and does nothing else). */
     private boolean wakeIdle() {
         lastInput = System.currentTimeMillis();
-        if (migration != null) return true;
+        if (layoutEditor != null || migration != null) return true;
         if (idleGames == null) return false;
         String bye = idleGames.goodbye();
         endIdle();
@@ -1862,6 +1881,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     // ---- animation ----------------------------------------------------------------------
 
     private void tick() {
+        if (layoutEditor != null) return;
         if (migration != null) {
             if (migration.finished()) endMigration(migration, migration.result());
             else {

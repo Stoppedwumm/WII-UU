@@ -169,6 +169,7 @@
   #pad.racing .col > .standard-only { display: none; }
   #pad.racing .race-only { display: grid; }
   #pad.racing .col { justify-content: center; gap: 2vh; }
+  #pad.racing .dpad .d-left, #pad.racing .dpad .d-right { width: 41%; height: 40%; top: 30%; }
   #pad.racing .dpad { width: min(100%, 38vh); height: auto; aspect-ratio: 1; }
   .race-tools { width: 100%; grid-template-columns: 1fr 1fr; gap: .7vw; }
   .race-tools [data-layout-slot="map"] { grid-column: 1 / -1; }
@@ -186,6 +187,34 @@
 
   #layoutEditor { width: min(630px, 94vw); max-height: 92vh; padding: 16px; border: 0; border-radius: 16px;
     background: var(--screen); color: var(--screen-ink); touch-action: pan-y; }
+  #layoutEditor { width: min(96vw, 900px); }
+  #layoutCanvas { position: relative; aspect-ratio: 2.25; width: 100%; max-height: 44vh;
+    overflow: hidden; touch-action: none; border: 1px solid #72879a; border-radius: 12px; background: #24313e; }
+  #layoutCanvas::before { content: "GamePad screen"; position: absolute; inset: 6% 31% 13%;
+    display: grid; place-items: center; color: #a7b9c9; border: 1px dashed #a7b9c9; border-radius: 8px; }
+  #layoutPalette { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; touch-action: none; }
+  .layout-widget { position: absolute; overflow: hidden; display: grid; place-items: center;
+    border: 1px solid #8299ae; border-radius: 8px; background: #38526a; color: white; font-weight: 800;
+    touch-action: none; font-size: clamp(10px, 2.8vh, 17px); text-align: center; }
+  #layoutCanvas .layout-widget { cursor: grab; }
+  #layoutCanvas .widget-label { position: absolute; top: 0; left: 0; right: 0;
+    padding: 2px; font-size: 11px; background: #253848c9; pointer-events: none; }
+  #layoutCanvas .selected { outline: 2px solid #00e4ff; z-index: 1; }
+  .layout-drag-preview { position: fixed; z-index: 2; pointer-events: none; translate: -50% -50%;
+    padding: 4px 12px; border-radius: 8px; background: #007f9f; color: white; font-size: 13px; }
+  .layout-grip { position: absolute; right: 0; bottom: 0; width: 15px; height: 15px;
+    background: #00c8e9; cursor: nwse-resize; }
+  #customControls { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  #customControls > * { pointer-events: auto; }
+  #pad.visual > .col { visibility: hidden; }
+  #pad.visual .sys { position: relative; z-index: 3; }
+  #customControls .layout-widget { box-shadow: 0 2px 4px #17202b; }
+  #customControls .stick { border-radius: 50%; }
+  #customControls .race-drive { grid-template-rows: 1fr 1.4fr 1fr; }
+  #customControls .race-drive span { width: 100%; height: 100%; }
+  #layoutProperties { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  #layoutProperties label { display: inline-flex; gap: 4px; align-items: center; }
+  #layoutProperties input[type="number"] { width: 4em; }
   #layoutEditor::backdrop { background: #101318d9; }
   #layoutEditor h2 { margin: 0 0 8px; }
   #layoutEditor p { margin: 6px 0 12px; }
@@ -197,6 +226,7 @@
 
   /* GamePad screen: live picture from the PC (second screen or TV mirror), touchable */
   body.big #pad { grid-template-columns: .78fr 2.4fr .78fr; }
+  body.big #pad.visual { grid-template-columns: 1fr 1.3fr 1fr; }
   body.big { --stick: min(27vh, 13.5vw); --face: min(11vh, 6.2vw); }
   .lcd.full .bar { display: none; }
   .screenview { padding: 0; background: #000; overflow: hidden; touch-action: none; }
@@ -490,6 +520,7 @@
     </div>
     <div class="race-only sh race-brake" data-layout-slot="brake" data-b="B">Brake / Back</div>
   </div>
+  <div id="customControls" class="hidden"></div>
 </div>
 
 <dialog id="layoutEditor" aria-labelledby="layoutEditorTitle">
@@ -497,8 +528,15 @@
     <h2 id="layoutEditorTitle">Controller layouts</h2>
     <label>Edit <select id="layoutDraft"><option value="">New from Mario Kart DS</option></select></label>
     <label>Name <input id="layoutName" required maxlength="32" autocomplete="off"></label>
-    <p>The D-pad stays on the left. The right-thumb gesture holds the middle button while you slide up or down.</p>
-    <div id="layoutFields"></div>
+    <p>Drag a control onto the canvas. Drag placed controls to move them and use the corner handle to resize them.</p>
+    <div id="layoutPalette">
+      <button type="button" data-kind="button">Button</button>
+      <button type="button" data-kind="slider">Gesture slider</button>
+      <button type="button" data-kind="stick">Joystick</button>
+      <button type="button" data-kind="dpad">D-pad</button>
+    </div>
+    <div id="layoutCanvas" aria-label="Controller layout canvas"></div>
+    <div id="layoutProperties"></div>
     <div class="layout-editor-actions">
       <button type="submit">Save and use</button>
       <button type="button" id="deleteLayout" class="hidden">Delete</button>
@@ -650,6 +688,9 @@ async function poll() {
     const j = await r.json();
     if (j.closing) { setOnline(false); showDown(j.closing); return; }
     if (refreshPadIfOutdated(j.padBuild)) return;
+    if (j.layoutVersion !== undefined && j.layoutVersion !== layoutsVersion && !layoutEditor.open) {
+      refreshLayouts(j.layoutVersion).catch(() => {});
+    }
     S.fails = 0;
     hideDown();
     setOnline(true);
@@ -1570,27 +1611,30 @@ const KART_LAYOUT = {
     brake: { label: "Brake / Back", button: "B" }
   }
 };
-const layoutButtons = ["A", "B", "X", "Y", "L", "R", "ZL", "ZR", "PLUS", "MINUS", "UP", "DOWN", "LEFT", "RIGHT", "L3", "R3"];
-const layoutSlots = { forward: "Right hold", drift: "Slide up", item: "Slide down", map: "Left wide",
-                      select: "Left inner", start: "Left outer", brake: "Right button" };
+const layoutButtons = ["A", "B", "X", "Y", "L", "R", "ZL", "ZR", "PLUS", "MINUS", "HOME", "UP", "DOWN", "LEFT", "RIGHT", "L3", "R3",
+  "LS_UP", "LS_DOWN", "LS_LEFT", "LS_RIGHT", "RS_UP", "RS_DOWN", "RS_LEFT", "RS_RIGHT",
+  "BUZZ_RED", "BUZZ_BLUE", "BUZZ_ORANGE", "BUZZ_GREEN", "BUZZ_YELLOW"];
+const layoutSlots = Object.keys(KART_LAYOUT.controls);
 function validLayout(layout) {
   return !!layout && typeof layout.id === "string" && /^custom-[a-z0-9-]+$/.test(layout.id) &&
     typeof layout.name === "string" && !!layout.name.trim() && layout.name.length <= 32 &&
-    Object.keys(layoutSlots).every(key => {
+    (Array.isArray(layout.widgets) || layoutSlots.every(key => {
       const control = layout.controls?.[key];
       return control && typeof control.label === "string" && control.label.length <= 24 &&
         (control.button === "" || layoutButtons.includes(control.button)) &&
         (!KART_LAYOUT.controls[key].mode || ["tap", "hold"].includes(control.mode));
-    });
+    }));
 }
 let customLayouts = [];
 try {
   const saved = JSON.parse(store.get("customLayouts"));
   if (Array.isArray(saved)) customLayouts = saved.filter(validLayout);
 } catch (e) {}
+const localLayouts = customLayouts;
+let layoutsVersion, loadingLayouts = false;
 let lastGestureLayout = store.get("lastGestureLayout") || KART_LAYOUT.id;
 let activeLayout = null;
-let drivePointer = null, gesturePulse = null;
+const gesturePulses = new Map();
 function racingLayout(game, choice) {
   return !!game && (choice === KART_LAYOUT.id ||
     (choice === "auto" && game.system === "Nintendo DS" && /^mario kart ds\b/i.test(game.name)));
@@ -1604,10 +1648,16 @@ function updateControlLayout() {
   if (activeLayout === next) return;
   releasePadTouches();
   activeLayout = next;
-  pad.classList.toggle("racing", !!next);
+  const visual = !!next?.widgets;
+  pad.classList.toggle("racing", !!next && !visual);
+  pad.classList.toggle("visual", visual);
+  const layer = $("customControls");
+  layer.classList.toggle("hidden", !visual);
+  layer.replaceChildren(...(visual ? next.widgets.map(widgetElement) : []));
   if (!next) return;
   lastGestureLayout = next.id;
   store.set("lastGestureLayout", next.id);
+  if (visual) return;
   pad.querySelectorAll("[data-layout-slot], [data-zone]").forEach(el => {
     const control = next.controls[el.dataset.layoutSlot || el.dataset.zone];
     el.textContent = control.label || control.button;
@@ -1628,14 +1678,15 @@ controlLayout.onchange = () => selectControlLayout(controlLayout.value);
 layoutToggle.onclick = () => selectControlLayout(activeLayout ? "standard" :
   customLayouts.some(layout => layout.id === lastGestureLayout) ? lastGestureLayout : KART_LAYOUT.id);
 
-function stopGesturePulse() {
-  if (!gesturePulse) return;
-  clearTimeout(gesturePulse.timer);
-  release(gesturePulse.button);
-  gesturePulse = null;
+function stopGesturePulse(el) {
+  const pulse = gesturePulses.get(el);
+  if (!pulse) return;
+  clearTimeout(pulse.timer);
+  gesturePulses.delete(el);
+  release(pulse.button);
 }
 function driveMove(t, y) {
-  const r = raceDrive.getBoundingClientRect();
+  const r = t.el.getBoundingClientRect();
   const pos = (y - r.top) / r.height;
   const zone = pos < .29 ? "drift" : pos > .71 ? "item" : "forward";
   if (zone === t.zone) return;
@@ -1645,11 +1696,11 @@ function driveMove(t, y) {
   t.zoneButton = control.mode === "hold" ? control.button : "";
   if (t.zoneButton) press(t.zoneButton);
   if (control.mode === "tap" && control.button && control.button !== t.baseButton) {
-    stopGesturePulse();
+    stopGesturePulse(t.el);
     press(control.button);
-    gesturePulse = { button: control.button, timer: setTimeout(stopGesturePulse, 90) };
+    gesturePulses.set(t.el, { button: control.button, timer: setTimeout(() => stopGesturePulse(t.el), 90) });
   }
-  raceDrive.querySelectorAll("[data-zone]").forEach(el => el.classList.toggle("on", el.dataset.zone === zone));
+  t.el.querySelectorAll("[data-zone]").forEach(el => el.classList.toggle("on", el.dataset.zone === zone));
 }
 
 // Buzz! mode: shown while a Buzz! game runs; HOME or "GamePad" switch back to the normal layout
@@ -1669,23 +1720,38 @@ function onHome() {
 
 function buttonAt(x, y) {
   const el = document.elementFromPoint(x, y);
-  return el && el.closest("[data-b]") ? el.closest("[data-b]").dataset.b : null;
+  return el?.closest("[data-b]")?.dataset.b || null;
 }
 
-function dpadDirs(el, x, y) {
+function dpadDirs(el, x, y, racing, previous = []) {
   const r = el.getBoundingClientRect();
   const nx = (x - r.left - r.width / 2) / (r.width / 2), ny = (y - r.top - r.height / 2) / (r.height / 2);
+  if (racing) {
+    const steering = previous.includes("LEFT") || previous.includes("RIGHT");
+    if (Math.abs(nx) >= (steering ? .10 : .16) && (steering || Math.abs(ny) < .62 || Math.abs(nx) > .3))
+      return [nx < 0 ? "LEFT" : "RIGHT"];
+    if (Math.abs(ny) > .6 && !steering) return [ny < 0 ? "UP" : "DOWN"];
+    return [];
+  }
   if (Math.hypot(nx, ny) < 0.22) return [];
   const sector = ((Math.round(Math.atan2(ny, nx) / (Math.PI / 4)) % 8) + 8) % 8;
   return [["RIGHT"], ["RIGHT", "DOWN"], ["DOWN"], ["DOWN", "LEFT"], ["LEFT"], ["LEFT", "UP"], ["UP"], ["UP", "RIGHT"]][sector];
 }
 
+function moveDpad(t, x, y) {
+  t.dirs = dpadDirs(t.el, x, y, t.racing, t.dirs);
+  const now = [...new Set(t.dirs.map(dir => t.el.widget ? t.el.widget[dir.toLowerCase()] : dir).filter(Boolean))];
+  t.buttons.filter(b => !now.includes(b)).forEach(release);
+  now.filter(b => !t.buttons.includes(b)).forEach(press);
+  t.buttons = now;
+}
+
 function stickMove(t, x, y) {
-  const r = t.el.getBoundingClientRect(), rad = r.width / 2;
-  let dx = (x - r.left - rad) / (rad * 0.8), dy = (y - r.top - rad) / (rad * 0.8);
+  const r = t.el.getBoundingClientRect(), rx = r.width / 2, ry = r.height / 2;
+  let dx = (x - r.left - rx) / (rx * 0.8), dy = (y - r.top - ry) / (ry * 0.8);
   const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
   if (Math.hypot(dx, dy) > 0.15) t.moved = true;
-  t.knob.style.transform = "translate(" + (dx * rad * 0.48) + "px," + (dy * rad * 0.48) + "px)";
+  t.knob.style.transform = "translate(" + (dx * rx * 0.48) + "px," + (dy * ry * 0.48) + "px)";
   sendStick(t.idx, dx, dy);
 }
 
@@ -1695,28 +1761,34 @@ pad.addEventListener("pointerdown", (e) => {
   wakeLock();
   const stick = e.target.closest("[data-stick]");
   const dpad = e.target.closest("[data-dpad]");
-  if (activeLayout && e.target.closest("#raceDrive")) {
-    if (drivePointer !== null) return;
-    drivePointer = e.pointerId;
-    const controls = activeLayout.controls;
-    const t = { type: "drive", zone: null, controls, baseButton: controls.forward.button };
+  const slider = e.target.closest("[data-slider]") || (activeLayout && e.target.closest("#raceDrive"));
+  if (slider) {
+    if ([...touches.values()].some(t => t.el === slider)) return;
+    const controls = slider.widget ? sliderControls(slider.widget) : activeLayout.controls;
+    const t = { type: "drive", el: slider, zone: null, controls, baseButton: controls.forward.button };
     touches.set(e.pointerId, t);
-    try { raceDrive.setPointerCapture(e.pointerId); } catch (err) {}
+    try { slider.setPointerCapture(e.pointerId); } catch (err) {}
     if (t.baseButton) press(t.baseButton);
     driveMove(t, e.clientY);
   } else if (stick) {
-    const t = { type: "stick", el: stick, knob: stick.querySelector(".knob"), idx: +stick.dataset.stick, start: Date.now(), moved: false };
+    const axis = +stick.dataset.stick;
+    if ([...touches.values()].some(t => t.type === "stick" && t.idx === axis)) return;
+    const t = { type: "stick", el: stick, knob: stick.querySelector(".knob"), idx: axis, start: Date.now(), moved: false };
     stick.classList.add("on");
     touches.set(e.pointerId, t);
+    try { stick.setPointerCapture(e.pointerId); } catch (err) {}
     stickMove(t, e.clientX, e.clientY);
   } else if (dpad) {
-    const t = { type: "dpad", el: dpad, dirs: dpadDirs(dpad, e.clientX, e.clientY) };
-    t.dirs.forEach(press);
+    const t = { type: "dpad", el: dpad, racing: dpad.widget?.racing ?? !!activeLayout,
+      dirs: [], buttons: [] };
     touches.set(e.pointerId, t);
+    try { dpad.setPointerCapture(e.pointerId); } catch (err) {}
+    moveDpad(t, e.clientX, e.clientY);
   } else {
     const b = buttonAt(e.clientX, e.clientY);
     touches.set(e.pointerId, { type: "btn", b });
     if (b) press(b);
+    try { pad.setPointerCapture(e.pointerId); } catch (err) {}
   }
 }, { passive: false });
 
@@ -1726,12 +1798,8 @@ pad.addEventListener("pointermove", (e) => {
   e.preventDefault();
   if (t.type === "drive") driveMove(t, e.clientY);
   else if (t.type === "stick") stickMove(t, e.clientX, e.clientY);
-  else if (t.type === "dpad") {
-    const now = dpadDirs(t.el, e.clientX, e.clientY);
-    t.dirs.filter((d) => !now.includes(d)).forEach(release);
-    now.filter((d) => !t.dirs.includes(d)).forEach(press);
-    t.dirs = now;
-  } else {
+  else if (t.type === "dpad") moveDpad(t, e.clientX, e.clientY);
+  else {
     // slide between buttons like a real pad (e.g. A -> B)
     const b = buttonAt(e.clientX, e.clientY);
     if (b !== t.b && (b === null || !["HOME", "PLUS", "MINUS"].includes(b))) {
@@ -1747,10 +1815,9 @@ function end(e) {
   if (!t) return;
   touches.delete(e.pointerId);
   if (t.type === "drive") {
-    drivePointer = null;
     if (t.zoneButton) release(t.zoneButton);
     if (t.baseButton) release(t.baseButton);
-    raceDrive.querySelectorAll(".on").forEach(el => el.classList.remove("on"));
+    t.el.querySelectorAll(".on").forEach(el => el.classList.remove("on"));
   } else if (t.type === "stick") {
     t.el.classList.remove("on");
     t.knob.style.transform = "";
@@ -1759,7 +1826,7 @@ function end(e) {
       const b = t.idx === 0 ? "L3" : "R3";
       press(b); setTimeout(() => release(b), 80);
     }
-  } else if (t.type === "dpad") t.dirs.forEach(release);
+  } else if (t.type === "dpad") t.buttons.forEach(release);
   else if (t.b) release(t.b);
 }
 pad.addEventListener("pointerup", end);
@@ -1767,7 +1834,7 @@ pad.addEventListener("pointercancel", end);
 pad.addEventListener("lostpointercapture", end);
 function releasePadTouches() {
   for (const id of [...touches.keys()]) end({ pointerId: id });
-  stopGesturePulse();
+  for (const el of gesturePulses.keys()) stopGesturePulse(el);
 }
 window.addEventListener("blur", releasePadTouches);
 document.addEventListener("visibilitychange", () => { if (document.hidden) releasePadTouches(); });
@@ -1788,63 +1855,301 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 
 // ---------------------------------------------------------------- custom layout editor
 const layoutEditor = $("layoutEditor"), layoutDraft = $("layoutDraft");
-const layoutFields = new Map();
-for (const [key, title] of Object.entries(layoutSlots)) {
-  const row = document.createElement("div");
-  row.className = "layout-field";
-  const caption = document.createElement("span");
-  caption.textContent = title;
-  const label = document.createElement("input");
-  label.maxLength = 24;
-  label.setAttribute("aria-label", title + " label");
-  const button = document.createElement("select");
-  button.setAttribute("aria-label", title + " button");
-  button.add(new Option("None", ""));
-  for (const binding of layoutButtons) button.add(new Option(binding, binding));
-  row.append(caption, label, button);
-  let mode;
-  if (KART_LAYOUT.controls[key].mode) {
-    mode = document.createElement("select");
-    mode.setAttribute("aria-label", title + " behavior");
-    mode.add(new Option("Hold", "hold"));
-    mode.add(new Option("Tap", "tap"));
-    row.append(mode);
-  }
-  $("layoutFields").append(row);
-  layoutFields.set(key, { label, button, mode });
+const layoutCanvas = $("layoutCanvas"), layoutPalette = $("layoutPalette");
+const widgetNames = { button: "Button", slider: "Gesture slider", stick: "Joystick", dpad: "D-pad" };
+let draftWidgets = [], selectedWidget = -1, editDrag = null;
+let sharedLayouts = [];
+
+function newWidget(type, fields = {}) {
+  const defaults = {
+    button: { x: 5, y: 5, w: 12, h: 12, button: "A" },
+    slider: { x: 76, y: 18, w: 18, h: 60, label: "Forward", button: "A", up: "R", down: "L", upLabel: "Drift", downLabel: "Item" },
+    stick: { x: 5, y: 10, w: 19, h: 32 },
+    dpad: { x: 4, y: 35, w: 21, h: 38, label: "Steering", up: "UP", down: "DOWN", left: "LEFT", right: "RIGHT", racing: true }
+  };
+  return { type, label: widgetNames[type], button: "", up: "", down: "", left: "", right: "",
+    upMode: "hold", downMode: "tap", upLabel: "", downLabel: "", axis: 0, racing: false, ...defaults[type], ...fields };
 }
+
+function presetWidgets(controls) {
+  const bind = (key, x, y, w) => newWidget("button", {
+    x, y, w, h: 11, label: controls[key].label, button: controls[key].button
+  });
+  return [newWidget("dpad"), newWidget("slider", { label: controls.forward.label, button: controls.forward.button,
+    up: controls.drift.button, down: controls.item.button, upLabel: controls.drift.label, downLabel: controls.item.label, upMode: controls.drift.mode, downMode: controls.item.mode }),
+    bind("map", 4, 76, 21), bind("select", 4, 88, 10), bind("start", 15, 88, 10), bind("brake", 76, 80, 18)]
+    .filter(w => w.type !== "button" || w.button);
+}
+
+function sliderControls(widget) {
+  return { forward: { button: widget.button }, drift: { button: widget.up, mode: widget.upMode },
+    item: { button: widget.down, mode: widget.downMode } };
+}
+
+function place(el, w) {
+  Object.assign(el.style, { left: w.x + "%", top: w.y + "%", width: w.w + "%", height: w.h + "%" });
+}
+
+function widgetElement(w) {
+  const el = document.createElement("div");
+  el.className = "layout-widget";
+  el.widget = w;
+  place(el, w);
+  el.setAttribute("aria-label", w.label || widgetNames[w.type]);
+  if (w.type === "button") {
+    el.dataset.b = w.button;
+    el.textContent = w.label || w.button;
+  } else if (w.type === "stick") {
+    el.classList.add("stick");
+    el.dataset.stick = w.axis;
+    el.innerHTML = '<div class="knob"></div>';
+  } else if (w.type === "slider") {
+    el.classList.add("race-drive");
+    el.dataset.slider = "";
+    for (const [zone, label] of [["drift", w.upLabel || w.up || "—"], ["forward", w.label || w.button || "Hold"], ["item", w.downLabel || w.down || "—"]]) {
+      const span = document.createElement("span");
+      span.dataset.zone = zone;
+      span.textContent = label;
+      el.append(span);
+    }
+  } else if (w.type === "dpad") {
+    el.classList.add("dpad");
+    el.dataset.dpad = "";
+    el.innerHTML = '<div class="arm h"></div><div class="arm v"></div>';
+    for (const [dir, arrow] of [["up", "▲"], ["down", "▼"], ["left", "◀"], ["right", "▶"]]) {
+      const cell = document.createElement("div");
+      cell.className = "dir d-" + dir;
+      cell.dataset.dir = w[dir];
+      cell.textContent = arrow;
+      el.append(cell);
+    }
+  }
+  return el;
+}
+
+function keepInside(w) {
+  const clamp = (n, low, high) => Math.min(high, Math.max(low, Math.round(n)));
+  w.w = clamp(w.w, 5, 100); w.h = clamp(w.h, 5, 100);
+  w.x = clamp(w.x, 0, 100 - w.w); w.y = clamp(w.y, 0, 100 - w.h);
+}
+
+function drawLayout() {
+  layoutCanvas.replaceChildren(...draftWidgets.map((w, i) => {
+    const el = widgetElement(w);
+    el.dataset.index = i;
+    el.classList.toggle("selected", i === selectedWidget);
+    if (w.type === "stick" || w.type === "dpad") {
+      const label = document.createElement("span");
+      label.className = "widget-label";
+      label.textContent = w.label || widgetNames[w.type];
+      el.append(label);
+    }
+    const grip = document.createElement("span");
+    grip.className = "layout-grip";
+    el.append(grip);
+    return el;
+  }));
+}
+
+function editWidget(index) {
+  selectedWidget = index;
+  drawLayout();
+  const props = $("layoutProperties");
+  props.replaceChildren();
+  const w = draftWidgets[index];
+  if (!w) return;
+  function field(title, key, options, type = "text") {
+    const row = document.createElement("label");
+    row.textContent = title + " ";
+    const input = document.createElement(options ? "select" : "input");
+    if (options) for (const [label, value] of options) input.add(new Option(label, value));
+    else { input.type = type; input.maxLength = 24; }
+    if (type === "number") { input.min = key === "x" || key === "y" ? 0 : 5; input.max = 100; }
+    if (type === "checkbox") input.checked = w[key];
+    else input.value = w[key] ?? "";
+    input.onchange = () => {
+      w[key] = type === "checkbox" ? input.checked : type === "number" || key === "axis"
+        ? Number(input.value) : input.value;
+      keepInside(w);
+      if (type === "number") input.value = w[key];
+      drawLayout();
+    };
+    input.dataset.property = key;
+    row.append(input); props.append(row);
+  }
+  const bindings = [["None", ""], ...layoutButtons.map(b => [b, b])];
+  field("Label", "label");
+  if (w.type === "button" || w.type === "slider") field(w.type === "button" ? "Button" : "Held button", "button", bindings);
+  if (w.type === "slider" || w.type === "dpad") {
+    field("Up", "up", bindings); field("Down", "down", bindings);
+  }
+  if (w.type === "slider") {
+    const modes = [["Hold", "hold"], ["Tap", "tap"]];
+    field("Up action", "upMode", modes); field("Down action", "downMode", modes);
+    field("Up label", "upLabel"); field("Down label", "downLabel");
+  }
+  if (w.type === "stick") field("Stick", "axis", [["Left", 0], ["Right", 1]]);
+  if (w.type === "dpad") {
+    field("Left", "left", bindings); field("Right", "right", bindings);
+    field("Racing steering", "racing", null, "checkbox");
+  }
+  field("X", "x", null, "number"); field("Y", "y", null, "number");
+  field("Width", "w", null, "number"); field("Height", "h", null, "number");
+  const remove = document.createElement("button");
+  remove.type = "button"; remove.textContent = "Remove control";
+  remove.onclick = () => { draftWidgets.splice(index, 1); editWidget(-1); };
+  props.append(remove);
+}
+
+function addWidget(type, point) {
+  if (draftWidgets.length >= 32) { $("layoutError").textContent = "A layout can have up to 32 controls."; return; }
+  const w = newWidget(type);
+  if (point) {
+    w.x = point.x - w.w / 2; w.y = point.y - w.h / 2;
+    keepInside(w);
+  }
+  draftWidgets.push(w);
+  editWidget(draftWidgets.length - 1);
+}
+
+function canvasPoint(e) {
+  const r = layoutCanvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * 100, y: (e.clientY - r.top) / r.height * 100 };
+}
+
+layoutPalette.addEventListener("pointerdown", e => {
+  const type = e.target.closest("[data-kind]")?.dataset.kind;
+  if (!type || editDrag) return;
+  e.preventDefault();
+  layoutPalette.setPointerCapture(e.pointerId);
+  const ghost = document.createElement("span");
+  ghost.className = "layout-drag-preview";
+  ghost.textContent = widgetNames[type];
+  ghost.style.left = e.clientX + "px"; ghost.style.top = e.clientY + "px";
+  layoutEditor.append(ghost);
+  editDrag = { id: e.pointerId, type, x: e.clientX, y: e.clientY, ghost };
+});
+layoutPalette.addEventListener("pointermove", e => {
+  if (editDrag?.id !== e.pointerId || !editDrag.ghost) return;
+  editDrag.ghost.style.left = e.clientX + "px";
+  editDrag.ghost.style.top = e.clientY + "px";
+});
+layoutPalette.addEventListener("click", e => {
+  if (e.detail === 0 && e.target.dataset.kind) addWidget(e.target.dataset.kind);
+});
+layoutCanvas.addEventListener("pointerdown", e => {
+  if (editDrag) return;
+  const el = e.target.closest("[data-index]");
+  if (!el) { editWidget(-1); return; }
+  e.preventDefault();
+  const index = Number(el.dataset.index), resizing = e.target.classList.contains("layout-grip");
+  layoutCanvas.setPointerCapture(e.pointerId);
+  editWidget(index);
+  editDrag = { id: e.pointerId, index, resizing, point: canvasPoint(e), start: {...draftWidgets[index]} };
+});
+layoutCanvas.addEventListener("pointermove", e => {
+  if (editDrag?.id !== e.pointerId || editDrag.type) return;
+  const {index, resizing, point, start} = editDrag;
+  const w = draftWidgets[index], p = canvasPoint(e);
+  if (resizing) {
+    w.w = Math.min(100 - start.x, start.w + p.x - point.x);
+    w.h = Math.min(100 - start.y, start.h + p.y - point.y);
+  } else {
+    w.x = start.x + p.x - point.x;
+    w.y = start.y + p.y - point.y;
+  }
+  keepInside(w);
+  place(layoutCanvas.children[index], w);
+});
+function finishEditDrag(e) {
+  if (editDrag?.id !== e.pointerId) return;
+  const drag = editDrag;
+  editDrag = null;
+  drag.ghost?.remove();
+  if (drag.type && e.type === "pointerup") {
+    const point = canvasPoint(e);
+    if (point.x >= 0 && point.x <= 100 && point.y >= 0 && point.y <= 100) addWidget(drag.type, point);
+    else if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) addWidget(drag.type);
+  } else if (drag.index !== undefined) editWidget(drag.index);
+}
+for (const el of [layoutCanvas, layoutPalette]) {
+  for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(event, finishEditDrag);
+}
+
 function populateLayoutChoices() {
+  const selection = controlLayout.value;
   controlLayout.length = 3;
   layoutDraft.length = 1;
   for (const layout of customLayouts) {
     controlLayout.add(new Option(layout.name, layout.id));
     layoutDraft.add(new Option(layout.name, layout.id));
   }
+  controlLayout.value = selection || "auto";
+  if (!controlLayout.value) controlLayout.value = "auto";
 }
+
+function showLayouts(saved) {
+  sharedLayouts = Array.isArray(saved) ? saved.filter(validLayout) : [];
+  customLayouts = [...sharedLayouts, ...localLayouts.filter(local => !sharedLayouts.some(shared => shared.id === local.id))];
+  populateLayoutChoices();
+  updateControlLayout();
+}
+
+async function refreshLayouts(version) {
+  if (loadingLayouts) return;
+  loadingLayouts = true;
+  try {
+    const response = await api("/api/layouts");
+    if (!response.ok) return;
+    const selection = store.get("controlLayout");
+    showLayouts(await response.json());
+    if (selection && customLayouts.some(layout => layout.id === selection)) {
+      controlLayout.value = selection;
+      updateControlLayout();
+    }
+    layoutsVersion = version;
+  } finally { loadingLayouts = false; }
+}
+
 function editLayout(id) {
   const layout = customLayouts.find(profile => profile.id === id);
   layoutDraft.value = layout?.id || "";
   $("layoutName").value = layout?.name || "";
   $("layoutError").textContent = "";
   $("deleteLayout").classList.toggle("hidden", !layout);
-  for (const [key, fields] of layoutFields) {
-    const control = (layout || KART_LAYOUT).controls[key];
-    fields.label.value = control.label;
-    fields.button.value = control.button;
-    if (fields.mode) fields.mode.value = control.mode;
+  draftWidgets = layout?.widgets ? layout.widgets.map(w => ({...w})) : presetWidgets(layout?.controls || KART_LAYOUT.controls);
+  editWidget(-1);
+}
+
+function forgetLocal(id) {
+  const index = localLayouts.findIndex(layout => layout.id === id);
+  if (index >= 0) {
+    localLayouts.splice(index, 1);
+    store.set("customLayouts", JSON.stringify(localLayouts));
   }
 }
-function saveLayouts(layouts) {
-  const serialized = JSON.stringify(layouts);
-  store.set("customLayouts", serialized);
-  if (store.get("customLayouts") !== serialized) {
-    $("layoutError").textContent = "This browser could not save the layouts.";
-    return false;
+
+async function updateLayoutOnHost(id, layout) {
+  const controls = $("layoutForm").querySelectorAll("button, input, select");
+  const disabled = [...controls].map(el => el.disabled);
+  controls.forEach(el => { el.disabled = true; });
+  try {
+    const response = await api(layout ? "/api/layouts" : "/api/layouts?delete=" + encodeURIComponent(id), {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: layout ? JSON.stringify(layout) : ""
+    });
+    if (!response.ok) throw new Error("The WII-UU host could not save this layout.");
+    const saved = await response.json();
+    forgetLocal(id);
+    showLayouts(saved);
+    selectControlLayout(layout ? id : controlLayout.value === id ? "auto" : controlLayout.value);
+    layoutEditor.close();
+  } catch (e) {
+    $("layoutError").textContent = e.message;
+  } finally {
+    controls.forEach((el, index) => { el.disabled = disabled[index]; });
   }
-  customLayouts = layouts;
-  populateLayoutChoices();
-  return true;
 }
+
 populateLayoutChoices();
 controlLayout.value = store.get("controlLayout") || "auto";
 if (!controlLayout.value) controlLayout.value = "auto";
@@ -1853,31 +2158,21 @@ $("editLayouts").onclick = () => {
   editLayout(controlLayout.value);
   layoutEditor.showModal();
 };
+layoutEditor.addEventListener("close", () => {
+  editDrag?.ghost?.remove();
+  editDrag = null;
+});
 layoutDraft.onchange = () => editLayout(layoutDraft.value);
 $("cancelLayout").onclick = () => layoutEditor.close();
 $("deleteLayout").onclick = () => {
-  const id = layoutDraft.value, selected = controlLayout.value;
-  if (!id || !saveLayouts(customLayouts.filter(layout => layout.id !== id))) return;
-  selectControlLayout(selected === id ? "auto" : selected);
-  layoutEditor.close();
+  if (layoutDraft.value) return updateLayoutOnHost(layoutDraft.value, null);
 };
 $("layoutForm").onsubmit = e => {
   e.preventDefault();
   const id = layoutDraft.value || "custom-" + Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join("-");
-  const controls = Object.fromEntries([...layoutFields].map(([key, fields]) => [key, {
-    label: fields.label.value.trim(), button: fields.button.value, mode: fields.mode?.value
-  }]));
-  const layout = { id, name: $("layoutName").value.trim(), controls };
-  if (!validLayout(layout)) {
-    $("layoutError").textContent = "Enter a layout name and choose valid controls.";
-    return;
-  }
-  const layouts = layoutDraft.value
-    ? customLayouts.map(existing => existing.id === id ? layout : existing)
-    : [...customLayouts, layout];
-  if (!saveLayouts(layouts)) return;
-  selectControlLayout(id);
-  layoutEditor.close();
+  const name = $("layoutName").value.trim();
+  if (!name) { $("layoutError").textContent = "Enter a layout name."; return; }
+  return updateLayoutOnHost(id, { id, name, widgets: draftWidgets });
 };
 
 // ---------------------------------------------------------------- start

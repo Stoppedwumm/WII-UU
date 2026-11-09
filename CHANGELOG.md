@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.11 (2026-11-09)
+- Add a shared drag-and-drop GamePad layout editor on desktop and phone. Move and resize
+  buttons, D-pads, joysticks, and gesture sliders, then customize their labels and bindings.
+- Improve racing D-pad steering so diagonal thumb movement is less likely to drop left or right.
+
 ## 1.14.10 (2026-11-09)
 - Play a one-minute mascot cutscene in the main window during migration. It loops while the transfer runs and
   can be skipped when the transfer finishes. Preview it in Developer settings.
