@@ -142,7 +142,7 @@ public final class Choccy {
 
     // ---- Choccy Milk's own Java -------------------------------------------------------------------
 
-    private static volatile boolean downloading;
+    private static Runnable javaDownloadDone;
 
     /** Where Eclipse Adoptium has a Java 25 runtime for this computer, or null. */
     private static String jreUrl() {
@@ -161,11 +161,12 @@ public final class Choccy {
 
     /**
      * Downloads a Java 25 runtime (Eclipse Temurin, about 50 MB) into ~/.wiiuu/choccy/jre, in the
-     * background; then runs done (with Choccy Milk available, or not if it failed).
+     * background; then runs the latest launch callback, even if the download failed.
      */
-    public static void getJava(Runnable done) {
+    public static synchronized void getJava(Runnable done) {
+        boolean downloading = javaDownloadDone != null;
+        javaDownloadDone = java.util.Objects.requireNonNull(done);
         if (downloading) return;
-        downloading = true;
         Thread t = new Thread(() -> {
             Path dir = ownJre(), tmp = dir.resolveSibling("jre-download");
             try {
@@ -199,8 +200,12 @@ public final class Choccy {
             } catch (Exception e) {
                 System.err.println("[choccy] couldn't get Java: " + e.getMessage());
             } finally {
-                downloading = false;
-                done.run();
+                Runnable latest;
+                synchronized (Choccy.class) {
+                    latest = javaDownloadDone;
+                    javaDownloadDone = null;
+                }
+                latest.run();
             }
         }, "choccy-java");
         t.setDaemon(true);
