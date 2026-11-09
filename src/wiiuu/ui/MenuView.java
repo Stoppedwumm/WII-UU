@@ -909,6 +909,26 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }                                 // started from Settings > Developer
 
+    private MigrationPanel.Playback migration;
+
+    void startMigration(MigrationPanel.Playback playback) {
+        migration = playback;
+        setCursor(java.awt.Cursor.getDefaultCursor());
+        requestFocusInWindow();
+        repaint();
+    }
+
+    void endMigration(MigrationPanel.Playback playback, String message) {
+        if (migration != playback) return;
+        migration = null;
+        lastInput = System.currentTimeMillis();
+        if (message != null) {
+            if (settings != null) settings.reloadFromOutside(message);
+            else showToast(message);
+        }
+        repaint();
+    }
+
     /** Starts an idle activity right away (by its id; "" = the usual shuffle), once the menu is free. */
     void startIdle(String kind) {
         idleNow = kind;
@@ -923,6 +943,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     /** Any input: counts as someone being there; while WII-UU plays by itself, takes over (and does nothing else). */
     private boolean wakeIdle() {
         lastInput = System.currentTimeMillis();
+        if (migration != null) return true;
         if (idleGames == null) return false;
         String bye = idleGames.goodbye();
         endIdle();
@@ -1417,6 +1438,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void activate() {
+        if (migration != null) { migration.confirm(this); return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
@@ -1495,6 +1517,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void back() {
+        if (migration != null) { migration.back(this); return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
@@ -1581,6 +1604,13 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public boolean pressed(int player, wiiuu.input.PadButton b, boolean down) {
         if (down) lastInput = System.currentTimeMillis();
+        if (migration != null) {
+            if (down) {
+                if (b == wiiuu.input.PadButton.A || b == wiiuu.input.PadButton.PLUS) migration.confirm(this);
+                else if (b == wiiuu.input.PadButton.B || b == wiiuu.input.PadButton.HOME) migration.back(this);
+            }
+            return true;
+        }
         if (boss != null) {
             BossFight f = boss;
             SwingUtilities.invokeLater(() -> f.pad(b, down));
@@ -1633,7 +1663,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyTyped(KeyEvent e) {
-                if (settings != null && settings.wantsKeys()) {
+                if (migration == null && settings != null && settings.wantsKeys()) {
                     settings.keyTyped(e.getKeyChar());
                     settings.touch();
                     repaint();
@@ -1648,6 +1678,14 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
             @Override
             public void keyPressed(KeyEvent e) {
+                if (migration != null) {
+                    switch (e.getKeyCode()) {
+                        case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE -> activate();
+                        case KeyEvent.VK_ESCAPE, KeyEvent.VK_BACK_SPACE -> back();
+                        default -> { }
+                    }
+                    return;
+                }
                 if (boss != null) {
                     boss.key(e.getKeyCode(), true);
                     return;
@@ -1704,6 +1742,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             @Override
             public void mousePressed(MouseEvent e) {
                 requestFocusInWindow();
+                if (migration != null) {
+                    if (e.getButton() == MouseEvent.BUTTON1) migration.click(MenuView.this, e.getX(), e.getY());
+                    return;
+                }
                 if (boss != null) return;
                 if (wakeIdle()) return;
                 if (skipBoot()) return;
@@ -1810,6 +1852,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     // ---- animation ----------------------------------------------------------------------
 
     private void tick() {
+        if (migration != null) {
+            if (migration.finished()) endMigration(migration, migration.result());
+            else repaint();
+            return;
+        }
         boolean dirty = tickBoot();
         if (boss != null && settings == null) {
             boss.step();
@@ -2372,6 +2419,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
         if (boss != null && settings == null) {
             boss.paint(g, getWidth(), getHeight());
+            g.dispose();
+            Toolkit.getDefaultToolkit().sync();
+            return;
+        }
+        if (migration != null) {
+            migration.paint(g, getWidth(), getHeight());
             g.dispose();
             Toolkit.getDefaultToolkit().sync();
             return;

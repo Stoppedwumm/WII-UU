@@ -4,7 +4,7 @@ What changed in each WII-UU release, newest first. WII-UU shows these notes afte
 in Settings > General > What's new, and before installing an update.
 
 ## 1.14.10 (2026-11-09)
-- Play a one-minute mascot cutscene during migration. It loops while the transfer runs and
+- Play a one-minute mascot cutscene in the main window during migration. It loops while the transfer runs and
   can be skipped when the transfer finishes. Preview it in Developer settings.
 
 ## 1.14.9 (2026-11-08)

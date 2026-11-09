@@ -6,6 +6,8 @@ import wiiuu.net.Migration;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
+import java.awt.geom.Rectangle2D;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -19,7 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 final class MigrationPanel {
     private MigrationPanel() {}
 
-    static void open(Component owner, Config config) {
+    static void open(MenuView owner, Config config) {
         String[] choices = {"Move to another drive", "Send to another computer", "Receive from another computer"};
         int choice = JOptionPane.showOptionDialog(owner, "Close games and other WII-UU apps before transferring data.",
                 "Storage and migration", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, choices, choices[0]);
@@ -64,41 +66,11 @@ final class MigrationPanel {
         }
     }
 
-    static void preview(Component owner) {
-        var scene = new MigrationCutscene(true);
-        var dialog = new JDialog(SwingUtilities.getWindowAncestor(owner), "Migration cutscene preview",
-                Dialog.ModalityType.APPLICATION_MODAL);
-        var skip = new JButton("Skip preview");
-        skip.addActionListener(e -> dialog.dispose());
-        dialog.add(scene, BorderLayout.CENTER);
-        dialog.add(skip, BorderLayout.SOUTH);
-        fit(dialog, owner);
-        scene.complete();
-        scene.start();
-        var timer = new Timer(1000 / 30, e -> {
-            if (scene.elapsed() >= MigrationCutscene.SECONDS) dialog.dispose();
-            else scene.repaint();
-        });
-        timer.start();
-        try {
-            dialog.setVisible(true);
-        } finally {
-            timer.stop();
-        }
-    }
-
-    private static void fit(JDialog dialog, Component owner) {
-        dialog.pack();
-        Rectangle usable = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
-        GraphicsConfiguration graphics = owner.getGraphicsConfiguration();
-        if (graphics != null) {
-            usable = graphics.getBounds();
-            Insets edges = Toolkit.getDefaultToolkit().getScreenInsets(graphics);
-            usable.width -= edges.left + edges.right;
-            usable.height -= edges.top + edges.bottom;
-        }
-        dialog.setSize(Math.min(dialog.getWidth(), usable.width), Math.min(dialog.getHeight(), usable.height));
-        dialog.setLocationRelativeTo(owner);
+    static void preview(MenuView owner) {
+        Playback playback = new Playback(true, true);
+        playback.start();
+        playback.complete();
+        owner.startMigration(playback);
     }
 
     @FunctionalInterface
@@ -107,92 +79,159 @@ final class MigrationPanel {
                  java.util.function.Consumer<Closeable> socket) throws Exception;
     }
 
-    private static void run(Component owner, String title, boolean network, Transfer transfer) {
-        JTextField code = new JTextField(40);
-        code.setEditable(false);
-        code.setVisible(false);
-        JLabel status = new JLabel("Preparing…");
-        MigrationCutscene scene = new MigrationCutscene(network);
-        JButton cancel = new JButton("Cancel");
-        cancel.setEnabled(network);
-        JButton skip = new JButton("Skip cutscene");
-        skip.setEnabled(false);
-        JPanel controls = new JPanel();
-        controls.add(cancel);
-        controls.add(skip);
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
-        for (JComponent item : new JComponent[]{status, code, scene, controls}) {
-            if (panel.getComponentCount() != 0) panel.add(Box.createVerticalStrut(8));
-            item.setAlignmentX(Component.CENTER_ALIGNMENT);
-            panel.add(item);
-        }
-        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(owner), title, Dialog.ModalityType.APPLICATION_MODAL);
-        dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-        dialog.add(panel);
-        fit(dialog, owner);
-
-        AtomicReference<Closeable> socket = new AtomicReference<>();
-        AtomicBoolean cancelled = new AtomicBoolean();
-        cancel.addActionListener(e -> {
-            cancelled.set(true);
-            close(socket.get());
-            cancel.setEnabled(false);
-        });
-        double[] endAt = {Double.POSITIVE_INFINITY};
-        Timer timer = new Timer(1000 / 30, e -> {
-            if (scene.elapsed() >= endAt[0]) dialog.dispose();
-            else scene.repaint();
-        });
-        skip.addActionListener(e -> dialog.dispose());
+    private static void run(MenuView owner, String title, boolean network, Transfer transfer) {
+        Playback playback = new Playback(network, false);
+        owner.startMigration(playback);
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() throws Exception {
-                transfer.run(value -> SwingUtilities.invokeLater(() -> {
-                    status.setText("Copy this code to the receiving computer. It expires in five minutes.");
-                    code.setText(value);
-                    code.setVisible(true);
-                    fit(dialog, owner);
-                }), () -> SwingUtilities.invokeLater(() -> {
-                    status.setText("Transferring WII-UU data…");
-                    code.setVisible(false);
-                    scene.start();
-                    timer.start();
-                }), value -> {
-                    socket.set(value);
-                    if (cancelled.get()) close(value);
-                });
+                transfer.run(value -> SwingUtilities.invokeLater(() -> playback.invitation = value),
+                        () -> SwingUtilities.invokeLater(playback::start), playback::connection);
                 return null;
             }
 
             @Override protected void done() {
                 try {
                     get();
-                    cancel.setEnabled(false);
-                    skip.setEnabled(true);
-                    scene.complete();
-                    status.setText("Transfer finished. You can skip the cutscene.");
-                    endAt[0] = MigrationCutscene.endOfLoop(scene.elapsed());
+                    playback.complete();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    dialog.dispose();
+                    owner.endMigration(playback, title + " interrupted.");
                 } catch (ExecutionException e) {
-                    dialog.dispose();
-                    if (!cancelled.get()) JOptionPane.showMessageDialog(owner, e.getCause().getMessage(),
-                            title, JOptionPane.ERROR_MESSAGE);
+                    String message = playback.cancelled.get() ? "Transfer cancelled." : title + ": " + e.getCause().getMessage();
+                    owner.endMigration(playback, message);
                 }
             }
         }.execute();
-        try {
-            dialog.setVisible(true);
-        } finally {
-            timer.stop();
+    }
+
+    /** On-screen state, updated on the event thread except for the worker's socket registration. */
+    static final class Playback {
+        private static final int WIDTH = MigrationCutscene.WIDTH;
+        private static final int HEIGHT = MigrationCutscene.HEIGHT + 55;
+        private static final Rectangle2D PRIMARY = new Rectangle2D.Float(385, 399, 155, 35);
+        private static final Rectangle2D CANCEL = new Rectangle2D.Float(553, 399, 138, 35);
+        private final MigrationCutscene scene;
+        private final boolean network, preview;
+        private final AtomicReference<Closeable> socket = new AtomicReference<>();
+        private final AtomicBoolean cancelled = new AtomicBoolean();
+        private boolean started, complete;
+        private double endAt = Double.POSITIVE_INFINITY;
+        private String invitation;
+        private boolean copied;
+
+        Playback(boolean network, boolean preview) {
+            this.network = network;
+            this.preview = preview;
+            this.scene = new MigrationCutscene(network);
         }
-        if (skip.isEnabled()) {
-            String message = code.getText().isEmpty()
-                    ? "Data is ready. Quit and reopen WII-UU to use the new location. The original files are kept."
-                    : "Data sent. Check the receiving computer.";
-            JOptionPane.showMessageDialog(owner, message);
+
+        private void connection(Closeable value) {
+            socket.set(value);
+            if (cancelled.get()) close(value);
+        }
+
+        void start() {
+            started = true;
+            scene.start();
+        }
+
+        void complete() {
+            if (!started) start();
+            complete = true;
+            scene.complete();
+            endAt = MigrationCutscene.endOfLoop(scene.elapsed());
+        }
+
+        boolean finished() {
+            return complete && scene.elapsed() >= endAt;
+        }
+
+        String result() {
+            if (preview) return null;
+            return invitation != null ? "Data sent. Check the receiving computer."
+                    : "Data is ready. Quit and reopen WII-UU to use the new location. The original files are kept.";
+        }
+
+        void confirm(MenuView owner) {
+            if (complete) owner.endMigration(this, result());
+            else if (canCopy()) {
+                try {
+                    Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(invitation), null);
+                    copied = true;
+                } catch (IllegalStateException e) {
+                    copied = false;
+                }
+            }
+        }
+
+        void back(MenuView owner) {
+            if (complete) confirm(owner);
+            else if (canCancel()) {
+                cancelled.set(true);
+                close(socket.get());
+            }
+        }
+
+        void click(MenuView owner, int x, int y) {
+            double scale = scale(owner.getWidth(), owner.getHeight());
+            if (scale <= 0) return;
+            double px = (x - (owner.getWidth() - WIDTH * scale) / 2) / scale;
+            double py = (y - (owner.getHeight() - HEIGHT * scale) / 2) / scale;
+            if (PRIMARY.contains(px, py)) confirm(owner);
+            else if (CANCEL.contains(px, py) && canCancel()) back(owner);
+        }
+
+        private boolean canCopy() {
+            return invitation != null && !started && !cancelled.get();
+        }
+
+        private boolean canCancel() {
+            return network && !preview && !complete && !cancelled.get();
+        }
+
+        void paint(Graphics2D g, int w, int h) {
+            g.setColor(new Color(0x101c29));
+            g.fillRect(0, 0, w, h);
+            double scale = scale(w, h);
+            g.translate((w - WIDTH * scale) / 2, (h - HEIGHT * scale) / 2);
+            g.scale(scale, scale);
+            if (started) scene.paint(g);
+            else paintWaiting(g);
+            g.setFont(MenuView.font(Font.BOLD, 14));
+            g.setColor(new Color(0xaed2e7));
+            String status = preview ? "Developer preview" : complete ? "Transfer finished"
+                    : cancelled.get() ? "Cancelling transfer…" : started ? "Transferring WII-UU data…" : "Migration";
+            g.drawString(status, 30, 422);
+            if (complete) button(g, PRIMARY, preview ? "Skip preview" : "Skip cutscene");
+            else if (canCopy()) button(g, PRIMARY, copied ? "Code copied" : "Copy code");
+            if (canCancel()) button(g, CANCEL, "Cancel transfer");
+        }
+
+        private void paintWaiting(Graphics2D g) {
+            g.setColor(new Color(0x203348));
+            g.fillRect(0, 0, WIDTH, MigrationCutscene.HEIGHT);
+            g.setColor(Color.WHITE);
+            g.setFont(MenuView.font(Font.BOLD, 27));
+            g.drawString(invitation == null ? "Preparing migration…" : "Waiting for the receiving computer", 30, 92);
+            if (invitation == null) return;
+            g.setFont(MenuView.font(Font.PLAIN, 16));
+            g.drawString("Copy this code to the receiving computer. It expires in five minutes.", 30, 130);
+            g.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 16));
+            for (int i = 0; i < invitation.length(); i += 60) {
+                g.drawString(invitation.substring(i, Math.min(i + 60, invitation.length())), 30, 183 + i / 60 * 25);
+            }
+        }
+
+        private static void button(Graphics2D g, Rectangle2D bounds, String text) {
+            int x = (int) bounds.getX(), y = (int) bounds.getY(), w = (int) bounds.getWidth();
+            g.setColor(new Color(0x294b62));
+            g.fillRoundRect(x, y, w, (int) bounds.getHeight(), 16, 16);
+            g.setColor(Color.WHITE);
+            g.drawString(text, x + (w - g.getFontMetrics().stringWidth(text)) / 2, y + 23);
+        }
+
+        private static double scale(int w, int h) {
+            return Math.min(w / (double) WIDTH, h / (double) HEIGHT);
         }
     }
 

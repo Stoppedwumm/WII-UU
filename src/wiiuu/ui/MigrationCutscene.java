@@ -2,12 +2,12 @@ package wiiuu.ui;
 
 import java.awt.*;
 import java.awt.geom.Path2D;
-import javax.swing.JComponent;
 
 /** A four-chapter, one-minute mascot story shared by live migration and its developer preview. */
-final class MigrationCutscene extends JComponent {
+final class MigrationCutscene {
     static final double SECONDS = 60;
-    private static final int WIDTH = 720, HEIGHT = 390, FLOOR = 286;
+    static final int WIDTH = 720, HEIGHT = 390;
+    private static final int FLOOR = 286;
     private static final Color INK = new Color(0x203348);
     private static final Color BLUE = new Color(0x58d4f4);
     private static final Color PAPER = new Color(0xf1f7fd);
@@ -19,8 +19,6 @@ final class MigrationCutscene extends JComponent {
 
     MigrationCutscene(boolean network) {
         this.network = network;
-        setPreferredSize(new Dimension(WIDTH, HEIGHT));
-        setMaximumSize(new Dimension(WIDTH, HEIGHT));
     }
 
     void start() {
@@ -39,17 +37,8 @@ final class MigrationCutscene extends JComponent {
         return (Math.floor(elapsed / SECONDS) + 1) * SECONDS;
     }
 
-    @Override protected void paintComponent(Graphics graphics) {
-        var g = (Graphics2D) graphics.create();
-        try {
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            double scale = Math.min(getWidth() / (double) WIDTH, getHeight() / (double) HEIGHT);
-            g.translate((getWidth() - WIDTH * scale) / 2, (getHeight() - HEIGHT * scale) / 2);
-            g.scale(scale, scale);
-            paintScene(g, elapsed() % SECONDS);
-        } finally {
-            g.dispose();
-        }
+    void paint(Graphics2D g) {
+        paintScene(g, elapsed() % SECONDS);
     }
 
     void paintScene(Graphics2D g, double time) {
