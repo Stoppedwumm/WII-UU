@@ -6,12 +6,18 @@
 #   build/ChoccyMilk.jar    Choccy Milk on its own (choccy-app/, with the engine inside)
 set -euo pipefail
 cd "$(dirname "$0")"
-rm -rf build/classes build/engine build/choccy-classes build/cleanup-classes
+rm -rf build/classes build/engine build/choccy-classes build/cleanup-classes build/oem-classes
 mkdir -p build/classes build/engine build/choccy-classes build/cleanup-classes
 # The cleanup tool is independent of the engine and the main app.
 javac --release 17 -encoding UTF-8 -d build/cleanup-classes tools/cleanup/Cleanup.java
 jar --create --file build/WII-UU-Cleanup.jar --main-class wiiuu.cleanup.Cleanup -C build/cleanup-classes .
 echo "Built build/WII-UU-Cleanup.jar"
+# OEM Creator and its generated deployer have no dependencies beyond Java 17.
+mkdir -p build/oem-classes/oem
+javac --release 17 -encoding UTF-8 -d build/oem-classes tools/oem/OemTool.java
+cp tools/oem/provision.sh build/oem-classes/oem/
+jar --create --file build/WII-UU-OEM-Creator.jar --main-class wiiuu.oem.OemTool -C build/oem-classes .
+echo "Built build/WII-UU-OEM-Creator.jar"
 # the engine first, on its own: so it can't come to depend on either program
 find engine/src -name '*.java' > build/sources-engine.txt
 javac --release 17 -encoding UTF-8 -d build/engine @build/sources-engine.txt

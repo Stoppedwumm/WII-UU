@@ -53,6 +53,22 @@
   <h2 id="first-boot">3. Reboot and check the console</h2>
   <p>After reboot, the display manager signs into the console account and opens WII-UU fullscreen. Test controller input, audio, and a game launch. If you ship a separate GamePad, <a href="../gamepad/">check pairing and the second screen</a> too.</p>
 
+  <h2 id="fleet">Create a deployment JAR</h2>
+  <p>Use OEM Creator to build a terminal installer for one console or a batch of consoles. It needs Java 17 or newer and a WII-UU release ZIP built with OEM Creator.</p>
+  <p><a href="../../download/WII-UU-OEM-Creator.jar">Download WII-UU-OEM-Creator.jar</a></p>
+  <pre><code>java -jar WII-UU-OEM-Creator.jar</code></pre>
+  <ol>
+    <li>Enter the model name and choose the release ZIP. Press <kbd>E</kbd> to open WII-UU Settings, then close the window to return to the review menu. The creator exports portable UI, sound, GamePad server and emulator-mode settings.</li>
+    <li>Choose a new administrator login and password. The account gets root access through sudo. Choose a content directory with folders such as <code>roms/nds/</code>, <code>themes/</code>, <code>system/</code> or <code>choccy/</code>.</li>
+    <li>Review the menu, edit any choice, then create the deployment JAR. The default password is encrypted with a separate unlock passphrase.</li>
+  </ol>
+  <p>Run the generated JAR from Linux, macOS or WSL with OpenSSH. The target needs Debian or Ubuntu-family Linux, systemd, a working SSH server with password login, and an existing sudo account. Verify each host key and add it to your SSH known hosts first.</p>
+  <p>Enter a hostname such as <code>bigboi</code> for one unit or <code>bigboi-{}</code> with a CSV for a batch. For example, this CSV targets <code>bigboi-01</code> and <code>bigboi-02</code>.</p>
+  <pre><code>id
+01
+02</code></pre>
+  <p><strong>All data may be lost.</strong> Back up the targets before typing <code>DEPLOY</code>. The installer provisions the console and verifies SSH and sudo using the new account before deleting the old login. It keeps the old home directory. If installation stops partway and the replacement account already exists, inspect it before retrying. Reboot each finished console to run the first-start guide, including Wi-Fi and Ethernet setup.</p>
+
   <h2 id="desktop">Switch between WII-UU and the desktop</h2>
   <dl class="oem-switch">
     <div><dt>From WII-UU</dt><dd><strong>Power → Desktop Mode</strong></dd><dd>Opens your normal desktop.</dd></div>
