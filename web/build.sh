@@ -27,6 +27,7 @@ em++ -O3 web/src/choccy.cpp build/web/gambatte.a "${objects[@]}" \
   -o docs/demo/cores/choccy-gambatte.mjs
 cp "$core/COPYING" docs/demo/cores/GAMBATTE-LICENSE.txt
 python3 web/generate-filters.py
+python3 web/generate-menu.py
 python3 web/make-demo.py
 python3 - <<'PY'
 import json, re, pathlib

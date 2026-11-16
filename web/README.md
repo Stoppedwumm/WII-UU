@@ -13,14 +13,15 @@ same ROM and core. Keyboard, touch and standard browser gamepads are supported.
 Use `/demo/?app=choccy` for the standalone player view.
 
 The browser-specific Choccy Milk host in `src/choccy.cpp` implements the libretro
-callbacks used by Gambatte. The host, core, and WII-UU menu navigation run in
-WebAssembly. A module worker paces the emulator, Canvas presents video, and an
+callbacks used by Gambatte. The host and core run in WebAssembly. The port of the desktop menu
+uses DOM controls and Canvas icons. A module worker paces the emulator, Canvas presents video, and an
 AudioWorklet plays stereo audio. `docs/demo/ui/library.mjs` ports the published
 Java UI library's three types (`GameScreen`, `SystemTheme`, and `PadButton`).
 The pixel-filter generator reads the Java algorithms to keep them in sync.
 Browser callers can import the module directly and pass a Canvas2D context to
-`GameScreen.paint`. The desktop menu views, animations, DS emulation and phone
-GamePad pairing are outside the current preview.
+`GameScreen.paint`. The browser shell ports the desktop console grid, game library, dock and Settings layout.
+The console catalogue is generated from the same Java source used by the desktop.
+Idle animations, DS emulation, and phone GamePad pairing are outside the current preview.
 
 Install and activate Emscripten 4.0.10 using emsdk, then run:
 
