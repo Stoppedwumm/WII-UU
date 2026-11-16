@@ -58,8 +58,8 @@ public final class OemTool {
         if (input == null) throw new EOFException("Input closed");
         try {
             String value = new String(input);
-            if (value.isBlank() || value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0 || value.indexOf(0) >= 0)
-                throw new IOException("Enter a nonblank single-line password.");
+            if (value.isEmpty() || value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0 || value.indexOf(0) >= 0)
+                throw new IOException("Enter a nonempty single-line password.");
             if (confirm) {
                 char[] again = TERMINAL.readPassword("Repeat password: ");
                 try {
@@ -105,7 +105,6 @@ public final class OemTool {
                         case "3" -> {
                             String name = user(ask("Administrator login name"));
                             String next = password("Default administrator password", true);
-                            if (next.length() < 12 || next.contains(":")) throw new IOException("Use at least 12 characters and omit colons.");
                             admin = name;
                             secret = next;
                         }
@@ -122,7 +121,6 @@ public final class OemTool {
                             Path output = Path.of(filename).toAbsolutePath().normalize();
                             if (content != null && output.startsWith(content.normalize())) throw new IOException("Put the output JAR outside delivered files.");
                             String passphrase = password("Deployment unlock passphrase", true);
-                            if (passphrase.length() < 12) throw new IOException("Use an unlock passphrase of at least 12 characters.");
                             createJar(self, output, release, content, settings, model, admin, seal(secret, passphrase));
                             System.out.println("Created " + output);
                             return;

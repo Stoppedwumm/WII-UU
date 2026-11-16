@@ -3,6 +3,9 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.13 (2026-11-16)
+- Remove the OEM Creator's minimum lengths for administrator passwords and deployment unlock passphrases. Administrator passwords can now contain colons.
+
 ## 1.14.12 (2026-11-16)
 - Add an OEM Creator with editable console defaults and bundled games, themes, and system files.
 - Provision one console or a CSV-listed fleet over SSH. Verify the new administrator before removing the original login.
