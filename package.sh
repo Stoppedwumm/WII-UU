@@ -13,7 +13,7 @@ python3 tools/package-cloudflared.py
 WIIUU_BUILD_CHANNEL="${WIIUU_BUILD_CHANNEL:-release}" WIIUU_SLIM_RELAY=1 ./build.sh
 rm -rf "dist/$NAME" "dist/$NAME.zip"
 mkdir -p "dist/$NAME"
-cp build/wiiuu.jar build/ChoccyMilk.jar build/WII-UU-Cleanup.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"
+cp build/wiiuu.jar build/ChoccyMilk.jar build/WII-UU-Cleanup.jar build/WII-UU-OEM-Creator.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"
 cp -r console "dist/$NAME/"
 chmod +x "dist/$NAME/install.sh" "dist/$NAME/emulators.sh" "dist/$NAME/console/wiiuu-console"
 (cd dist && zip -qr -X "$NAME.zip" "$NAME")
@@ -26,7 +26,7 @@ for helper in build/cloudflared/*; do
   mkdir -p "$target"
   cp "$helper"/cloudflared* "$target/"
 done
-cp install.sh build/WII-UU-Cleanup.jar docs/download/
+cp install.sh build/WII-UU-Cleanup.jar build/WII-UU-OEM-Creator.jar docs/download/
 cp "dist/$NAME.zip" "docs/download/$NAME.zip"
 cp "dist/$NAME.zip" docs/download/WII-UU-latest.zip
 # the reactions editor on its own (it runs anywhere with Java 17+ and ffmpeg)

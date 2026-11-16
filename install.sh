@@ -170,6 +170,7 @@ if [ "$(uname)" = Darwin ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1
 say "Checking Java"
 JV="$(java_major)"
 if [ "${JV:-0}" -lt 17 ] 2>/dev/null; then
+  [ "${WIIUU_OEM_PREREQUISITES_READY:-0}" != 1 ] || die "OEM provisioning requires Java 17+ before running the user installer."
   warn "Java 17 or newer is required (found: ${JV:-none})."
   if ask "Install Java now?"; then install_java; else die "Java 17+ is required."; fi
   JV="$(java_major)"
@@ -184,7 +185,7 @@ if [ "$(uname)" = Darwin ] && command -v brew >/dev/null 2>&1 && [ "${JV:-0}" -l
     { $BREW upgrade openjdk 2>/dev/null || $BREW install openjdk; } \
       || warn "Java didn't install: games play in RetroArch / the emulators then (try: $BREW install openjdk)"
   fi
-elif ! ls -d /usr/lib/jvm/*/ 2>/dev/null | grep -Eq 'java-(2[2-9]|[3-9][0-9])-|jdk-(2[2-9]|[3-9][0-9])'; then
+elif [ "${WIIUU_OEM_PREREQUISITES_READY:-0}" != 1 ] && ! ls -d /usr/lib/jvm/*/ 2>/dev/null | grep -Eq 'java-(2[2-9]|[3-9][0-9])-|jdk-(2[2-9]|[3-9][0-9])'; then
   if [ "${JV:-0}" -lt 22 ] 2>/dev/null && command -v apt-get >/dev/null 2>&1 \
       && apt-cache show openjdk-25-jre >/dev/null 2>&1; then
     if ask "Install Java 25 for Choccy Milk (WII-UU's own game player)?"; then
@@ -390,7 +391,7 @@ fi
 # ffmpeg: fast GamePad screen streaming · x11-utils: finds emulator windows · python3 + uinput:
 # phones become real virtual controllers that every emulator detects on its own · pulseaudio-utils
 # (parec): the PC's sound on the phone (PulseAudio and PipeWire)
-if [ "$OS" = "Linux" ]; then
+if [ "$OS" = "Linux" ] && [ "${WIIUU_OEM_PREREQUISITES_READY:-0}" != 1 ]; then
   missing=""
   command -v ffmpeg >/dev/null 2>&1 || missing="$missing ffmpeg"
   command -v xwininfo >/dev/null 2>&1 || command -v xdotool >/dev/null 2>&1 || missing="$missing x11-utils"

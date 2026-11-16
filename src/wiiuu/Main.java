@@ -148,7 +148,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         Path home = Config.defaultHome();
         Boolean fullscreen = null;
         Integer port = null;
-        boolean noServer = false, setup = false, noIntro = false, appliance = false;
+        boolean noServer = false, setup = false, noIntro = false, appliance = false, oemSettings = false;
         String snapshot = null, snapshotView = "home";
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -226,6 +226,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                     return;
                 }
                 case "--appliance" -> appliance = true;
+                case "--oem-settings" -> oemSettings = true;
                 case "--setup" -> setup = true;
                 case "--no-intro" -> noIntro = true;
                 case "--fps" -> System.setProperty("wiiuu.fps", "true");
@@ -265,6 +266,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         boolean startServer = !noServer && config.getBool("server.enabled", true);
         SwingUtilities.invokeAndWait(app::createWindow);
+        if (oemSettings) {
+            SwingUtilities.invokeLater(app::openSettings);
+            return;
+        }
         // the first boot (or a restart into the guide): the fast-cut intro, then the setup guide
         if ((guideAsked || (firstRun && !appliance)) && !noIntro && config.getBool("ui.firstBootIntro", true)) SwingUtilities.invokeLater(app.view::startFirstBoot);
         else if (guideAsked || (firstRun && !appliance)) SwingUtilities.invokeLater(app.view::startGuide);
@@ -438,7 +443,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         if (config.getBool("input.localPads", true)) {
             new wiiuu.input.LocalPads(router, "east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())).start();
         }
-        frame = new JFrame("WII-UU");
+        frame = new JFrame(config.get("oem.model", "WII-UU"));
         frame.setIconImages(appIcons());          // every size, so Windows' taskbar and Alt+Tab never rescale
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         frame.addWindowListener(new WindowAdapter() {

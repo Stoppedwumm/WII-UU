@@ -39,7 +39,7 @@ import wiiuu.net.QrCode;
  * whose buttons, sticks and shoulders light up as they are pressed, on any phone or controller.
  */
 final class SetupGuide {
-    private enum Step { WELCOME, LOOK, SOUND, GAMEPAD, GAMES, CONTROLLERS, DONE }
+    private enum Step { WELCOME, LOOK, SOUND, NETWORK, GAMEPAD, GAMES, CONTROLLERS, DONE }
 
     private static final long SLIDE_MS = 480, OPEN_MS = 520, CLOSE_MS = 420;
 
@@ -137,6 +137,7 @@ final class SetupGuide {
                 out.add(new Item("Menu sounds", "switch", 1));
                 out.add(new Item("Music visualizer", "switch", 2));
             }
+            case NETWORK -> out.add(new Item("Open network settings", "action", 0));
             case GAMES -> out.add(new Item("RetroArch mode", "switch", 0));
             default -> { }
         }
@@ -342,6 +343,7 @@ final class SetupGuide {
                 save("ui.visualizer", !config.getBool("ui.visualizer", true));
                 view.setMusicEnabled(config.getBool("ui.music", true));     // re-reads the visualizer setting
             }
+            case "Open network settings" -> openNetworkSettings();
             case "RetroArch mode" -> save("retroarch.enabled", !config.getBool("retroarch.enabled", false));
             default -> { }
         }
@@ -787,11 +789,42 @@ final class SetupGuide {
         g.setComposite(c);
     }
 
+    private void openNetworkSettings() {
+        String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        List<List<String>> commands;
+        if (os.contains("win")) {
+            commands = List.of(List.of("explorer.exe", "ms-settings:network"));
+        } else if (os.contains("mac")) {
+            commands = List.of(List.of("open", "x-apple.systempreferences:com.apple.Network-Settings.extension"));
+        } else {
+            commands = List.of(List.of("gnome-control-center", "network"), List.of("nm-connection-editor"),
+                    List.of("xterm", "-T", "Network setup", "-e", "nmtui"));
+        }
+        for (List<String> command : commands) {
+            try {
+                Process process = new ProcessBuilder(command)
+                        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                        .redirectError(ProcessBuilder.Redirect.DISCARD).start();
+                process.onExit().thenAccept(result -> {
+                    if (result.exitValue() != 0) javax.swing.SwingUtilities.invokeLater(
+                            () -> view.showToast("Open Wi-Fi or Ethernet settings from your desktop."));
+                });
+                return;
+            } catch (java.io.IOException unavailable) {
+                // Try the next installed network settings application.
+            }
+        }
+        view.showToast("Open Wi-Fi or Ethernet settings from your desktop.");
+    }
+
     private String[] headline(Step s) {
         return switch (s) {
             case WELCOME -> new String[]{"Welcome", "Let's get your console ready. It only takes a minute."};
             case LOOK -> new String[]{"Pick your look", "Light, dark, or whatever your computer uses."};
             case SOUND -> new String[]{"Sound", "Music and sounds in the menu. Games keep their own sound."};
+            case NETWORK -> new String[]{"Connect to a network",
+                    "Plug in an Ethernet cable or choose your Wi-Fi network in system settings. "
+                            + "The GamePad can connect once both devices are on the same network."};
             case GAMEPAD -> new String[]{"Your phone is the GamePad",
                     "Join the same Wi-Fi as this computer, then scan the code with your phone's camera. "
                             + "It becomes a GamePad with buttons, sticks, and the TV picture."};
@@ -858,6 +891,7 @@ final class SetupGuide {
         g.setFont(MenuView.font(Font.PLAIN, h * 0.42f));
         g.drawString(it.label, x + h * 0.5f, y + h * 0.64f);
         boolean on = selected(it);
+        if (it.kind.equals("action")) return;
         if (it.kind.equals("radio")) {
             float d = h * 0.46f, rx = x + w - h * 0.5f - d, ry = y + (h - d) / 2;
             g.setColor(on ? MenuView.ACCENT : MenuView.TEXT_DIM);
