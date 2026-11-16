@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.0.0 (2026-11-16)
+- Run a fullscreen factory self-test after OEM provisioning. Review the check results, storage and game counts, then select Power off.
+- Keep customer setup scheduled until the setup guide is completed or dismissed, even if startup is interrupted.
+- The OEM Creator requires a WII-UU package with factory self-test support. Use the matching Creator and release package for new deployments.
+
 ## 1.14.13 (2026-11-16)
 - Remove the OEM Creator's minimum lengths for administrator passwords and deployment unlock passphrases. Administrator passwords can now contain colons.
 

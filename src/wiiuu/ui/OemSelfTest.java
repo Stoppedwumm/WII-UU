@@ -74,7 +74,7 @@ public final class OemSelfTest {
         List<Check> checks = new ArrayList<>();
         checks.add(new Check("Java runtime", Runtime.version().feature() >= 17, Runtime.version().toString()));
         checks.add(new Check("Setup guide", config.getBool("ui.setupNext", false), "first-run request"));
-        checks.add(new Check("Virtual controller device", Files.exists(Path.of("/dev/uinput")), "/dev/uinput"));
+        checks.add(new Check("Virtual controller device", Files.isWritable(Path.of("/dev/uinput")), "write access to /dev/uinput"));
         checks.add(new Check("Screen streaming", installed("ffmpeg"), "ffmpeg"));
         checks.add(new Check("Network Manager", works("systemctl", "is-active", "--quiet", "NetworkManager"), "service active"));
         try {
