@@ -393,7 +393,7 @@ public final class OemTool {
             String setup = "sudo -k -S -p '' -- bash -c " + quote(
                     "set -eu; command -v apt-get >/dev/null; "
                     + "export DEBIAN_FRONTEND=noninteractive; apt-get update; "
-                    + "apt-get install -y default-jre unzip sudo network-manager xterm; "
+                    + "apt-get install -y unzip; "
                     + "unzip -oq " + stage + "/payload.zip -d " + stage + "; "
                     + "bash " + stage + "/provision.sh " + stage + " " + quote(admin) + " " + quote(prefix));
             ssh(host, old, oldPassword, helper, setup, null, oldPassword + "\n", false);
