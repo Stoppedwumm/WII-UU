@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#00a8e8" />
+    <title>WII-UU · Web preview</title>
+    <link rel="icon" href="../icon.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="../">WII-<span>UU</span></a
+      ><span class="badge">WEB PREVIEW</span
+      ><span id="engine">Starting WebAssembly…</span><time id="clock"></time
+      ><button id="settings-button" aria-label="Settings">Settings</button>
+    </header>
+    <main id="home">
+      <div class="heading">
+        <div>
+          <p class="eyebrow">YOUR LITTLE CONSOLE, IN A BROWSER</p>
+          <h1 id="title">Make yourself at home.</h1>
+          <p>Pick a game. Get comfortable. Press play.</p>
+        </div>
+        <div class="mascot" aria-hidden="true">
+          <div class="eyes">• •</div>
+          <div class="smile"></div>
+          <small>MILK</small>
+        </div>
+      </div>
+      <div class="library-heading">
+        <h2>Your games</h2>
+        <span>Game Boy &amp; Game Boy Color</span>
+      </div>
+      <section id="games" aria-label="Game library"></section>
+      <div class="welcome">
+        <div>
+          <strong>A little taste of WII-UU.</strong>
+          <p>
+            Try Milk Run, our original Game Boy demo, or open your own .gb /
+            .gbc file. Games run locally on your device.
+          </p>
+        </div>
+        <button id="open-rom" class="primary">+ Open a game</button>
+      </div>
+      <footer>
+        <a href="../support/">Support</a
+        ><button id="about-button">About this preview</button
+        ><a href="?app=choccy">Choccy Milk standalone</a
+        ><span id="version"></span>
+      </footer>
+    </main>
+    <section id="player" hidden aria-label="Choccy Milk player">
+      <div class="player-bar">
+        <button id="home-button">Home</button><strong id="game-title"></strong
+        ><span id="stats">Starting…</span><button id="pause">Pause</button
+        ><button id="fullscreen">Fullscreen</button>
+      </div>
+      <div id="screen-wrap">
+        <canvas
+          id="screen"
+          tabindex="0"
+          width="960"
+          height="720"
+          aria-label="Game screen"
+        ></canvas>
+      </div>
+      <div class="player-tools">
+        <button id="save">Save state</button
+        ><button id="load">Load state</button
+        ><button id="export">Export state</button
+        ><button id="import">Import state</button
+        ><button id="reset">Reset</button
+        ><button id="screenshot">Screenshot</button
+        ><button id="sound">Sound on</button>
+      </div>
+      <div id="touch">
+        <div class="dpad">
+          <button data-pad="4" class="up" aria-label="Up">↑</button
+          ><button data-pad="6" class="left" aria-label="Left">←</button
+          ><button data-pad="7" class="right" aria-label="Right">→</button
+          ><button data-pad="5" class="down" aria-label="Down">↓</button>
+        </div>
+        <div class="middle">
+          <button data-pad="2">Select</button
+          ><button data-pad="3">Start</button>
+        </div>
+        <div class="ab">
+          <button data-pad="0">B</button><button data-pad="8">A</button>
+        </div>
+      </div>
+      <p class="keyboard-hint">
+        Move: arrow keys · A: X · B: Z · Start: Enter · Select: Shift · Pause:
+        Escape. USB/Bluetooth controllers supported.
+      </p>
+    </section>
+    <dialog id="settings">
+      <form method="dialog">
+        <h2>Make it yours</h2>
+        <label
+          >Appearance<select id="theme">
+            <option value="auto">Follow device</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="milk">Choccy Milk</option>
+          </select></label
+        ><label
+          >Picture filter<select id="filter">
+            <option value="off">Original pixels</option>
+            <option value="smooth">Smooth</option>
+            <option value="scale2x">Scale2x</option>
+            <option value="scale3x">Scale3x</option>
+            <option value="xbr2">xBR 2×</option>
+            <option value="xbr4">xBR 4×</option>
+            <option value="crt">CRT television</option>
+          </select></label
+        ><label class="check"
+          ><input type="checkbox" id="blend" /> Blend frames</label
+        ><label class="check"
+          ><input type="checkbox" id="stretch" /> Stretch picture to 16:9</label
+        ><label class="check"
+          ><input type="checkbox" id="touch-option" checked /> Show touch
+          controls</label
+        >
+        <p>
+          Settings and imported games stay in this browser. Export important
+          save states before clearing browser data.
+        </p>
+        <button class="primary">Done</button>
+      </form>
+    </dialog>
+    <dialog id="about">
+      <h2>A browser home for WII-UU</h2>
+      <p>
+        Choccy Milk’s browser host and the Gambatte Game Boy core run in
+        WebAssembly. The shared UI library has a Canvas port, including all
+        desktop picture filters.
+      </p>
+      <p>
+        This is a web preview, not the complete desktop application. DS and
+        other systems, phone pairing, online play, OEM setup, desktop
+        integrations and idle cutscenes are not included yet.
+      </p>
+      <p>
+        No ROMs are uploaded. Milk Run is an original included homebrew game.
+        Gambatte is GPL-2.0 licensed; its pinned source and build instructions
+        are linked below.
+      </p>
+      <p>
+        <a
+          href="https://github.com/libretro/gambatte-libretro/tree/77f2567d718b8973d02caa2daa8dce4953faf811"
+          >Gambatte source</a
+        >
+        · <a href="cores/GAMBATTE-LICENSE.txt">License</a> ·
+        <a
+          href="https://github.com/Stoppedwumm/WII-UU/tree/codex/webassembly-demo/web"
+          >Web source &amp; build</a
+        >
+      </p>
+      <form method="dialog"><button>Back to WII-UU</button></form>
+    </dialog>
+    <input id="rom-file" type="file" accept=".gb,.gbc" multiple hidden /><input
+      id="state-file"
+      type="file"
+      accept=".json"
+      hidden
+    />
+    <div id="toast" role="status" aria-live="polite"></div>
+    <noscript>This demo requires JavaScript and WebAssembly.</noscript>
+    <script type="module" src="app.mjs"></script>
+  </body>
+</html>
