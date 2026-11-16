@@ -3,6 +3,9 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.0.4 (2026-11-16)
+- Port the desktop console menu, game library and Settings layout to the web demo.
+
 ## 2.0.3 (2026-11-16)
 - Add a browser preview of WII-UU and Choccy Milk, with Game Boy emulation in WebAssembly and a web port of the shared UI library.
 

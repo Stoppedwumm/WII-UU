@@ -1,3 +1,4 @@
+import { desktopMenu, drawDockIcons } from "./ui/desktop-menu.mjs";
 import { GameScreen, SystemTheme } from "./ui/library.mjs";
 import { storage, romID } from "./storage.mjs";
 const $ = (id) => document.getElementById(id),
@@ -16,8 +17,7 @@ let serial = 0,
   audio,
   node,
   muted = false,
-  toastTimer,
-  selected = 0;
+  toastTimer;
 let games = [{ id: "milk-run", name: "Milk Run", demo: true }],
   framePending = false,
   settings = {
@@ -56,7 +56,6 @@ worker.onmessage = ({ data: m }) => {
     ready = true;
     $("engine").textContent = "Choccy Milk · WebAssembly";
     initialResolve();
-    notify("menu-count", { count: games.length });
     return;
   }
   if (m.id) {
@@ -143,42 +142,9 @@ function syncSettings() {
   $("touch-option").checked = settings.touch;
   applySettings();
 }
-function renderLibrary() {
-  $("games").replaceChildren();
-  games.forEach((game, index) => {
-    const tile = document.createElement("button");
-    tile.className = "tile" + (index === selected ? " selected" : "");
-    tile.dataset.index = index;
-    tile.setAttribute("aria-label", `Play ${game.name}`);
-    const art = document.createElement("span");
-    art.className = "tile-art";
-    art.textContent = game.demo ? "MILK" : "GB";
-    const info = document.createElement("span");
-    info.className = "tile-info";
-    info.textContent = game.name;
-    const sub = document.createElement("small");
-    sub.textContent = game.demo
-      ? "Original homebrew · Try it"
-      : "Your game · Saved locally";
-    info.append(sub);
-    tile.append(art, info);
-    tile.onclick = () => launch(game);
-    tile.onfocus = () => {
-      selected = index;
-      notify("menu-select", { index });
-    };
-    $("games").append(tile);
-  });
-  for (let i = games.length; i < 5; i++) {
-    const tile = document.createElement("button");
-    tile.className = "tile empty";
-    tile.textContent = "+";
-    tile.setAttribute("aria-label", "Add a Game Boy game");
-    tile.onclick = () => $("rom-file").click();
-    $("games").append(tile);
-  }
-  notify("menu-count", { count: games.length });
-}
+const standalone = new URLSearchParams(location.search).get("app") === "choccy";
+const menu = desktopMenu({ library: () => games, play: launch, standalone });
+drawDockIcons();
 async function setupAudio() {
   if (!audio) {
     audio = new AudioContext({ latencyHint: "interactive" });
@@ -274,7 +240,7 @@ async function home() {
     $("home").hidden = false;
     $("player").hidden = true;
     busy = false;
-    renderLibrary();
+    menu.render();
   }
 }
 async function pause(value = !paused) {
@@ -340,27 +306,26 @@ window.addEventListener("keydown", async (e) => {
       held.set("key:" + e.code, mask);
       flushInputs();
     }
-  } else if (
-    ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter"].includes(
-      e.code,
-    ) &&
-    ready &&
-    !busy
-  ) {
+  } else if (!busy && !e.repeat) {
+    const directions = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
+    if (directions[e.code]) menu.move(...directions[e.code]);
+    else if (
+      e.code === "KeyX" ||
+      (e.code === "Enter" && !e.target.closest("button,a"))
+    )
+      menu.open();
+    else if (e.code === "Escape" || e.code === "KeyZ") menu.back();
+    else if (e.code === "KeyQ") menu.changePage(-1);
+    else if (e.code === "KeyW") menu.changePage(1);
+    else if (e.code === "F5" || e.key === "-") $("refresh-button").click();
+    else if (e.key === "+") $("gamepad-button").click();
+    else return;
     e.preventDefault();
-    if (e.code === "Enter") {
-      if (!e.repeat) launch(games[selected]);
-      return;
-    }
-    const columns = getComputedStyle($("games")).gridTemplateColumns.split(
-      " ",
-    ).length;
-    selected = await call("menu-move", {
-      dx: e.code === "ArrowLeft" ? -1 : e.code === "ArrowRight" ? 1 : 0,
-      dy: e.code === "ArrowUp" ? -1 : e.code === "ArrowDown" ? 1 : 0,
-      columns,
-    });
-    renderLibrary();
   }
 });
 window.addEventListener("keyup", (e) => {
@@ -391,6 +356,8 @@ for (const button of document.querySelectorAll("[data-pad]")) {
   button.onpointercancel = release;
   button.onlostpointercapture = release;
 }
+let lastPadCount = -1,
+  lastMenuMask = 0;
 let lastPadNav = 0,
   lastPadAction = false;
 function draw(now) {
@@ -415,21 +382,30 @@ function draw(now) {
   }
   held.set("gamepads", mask);
   flushInputs();
-  if (!current && ready && !busy && !document.querySelector("dialog[open]")) {
+  const gamePadCount = Array.from(pads).filter(
+    (pad) => pad?.mapping === "standard",
+  ).length;
+  if (gamePadCount !== lastPadCount) {
+    lastPadCount = gamePadCount;
+    $("pad-status").classList.toggle("active", gamePadCount > 0);
+    $("pad-label").textContent = gamePadCount
+      ? `${gamePadCount} GamePad${gamePadCount === 1 ? "" : "s"}`
+      : "No GamePad";
+    $("pad-detail").textContent = gamePadCount
+      ? "Controller connected."
+      : "No standard controller detected.";
+  }
+  if (!current && !busy && !document.querySelector("dialog[open]")) {
     if ((navX || navY) && now - lastPadNav > 180) {
       lastPadNav = now;
-      const columns = getComputedStyle($("games")).gridTemplateColumns.split(
-        " ",
-      ).length;
-      call("menu-move", { dx: navX, dy: navY, columns })
-        .then((index) => {
-          selected = index;
-          renderLibrary();
-        })
-        .catch((e) => tell(e.message));
+      menu.move(navX, navY);
     }
-    if (action && !lastPadAction) launch(games[selected]);
+    if (action && !lastPadAction) menu.open();
+    if (mask & 256 && !(lastMenuMask & 256)) menu.back();
+    if (mask & 1024 && !(lastMenuMask & 1024)) menu.changePage(-1);
+    if (mask & 2048 && !(lastMenuMask & 2048)) menu.changePage(1);
   }
+  lastMenuMask = mask;
   lastPadAction = action;
   if (
     current &&
@@ -453,6 +429,7 @@ function draw(now) {
 new ResizeObserver(() => (framePending = true)).observe(canvas);
 requestAnimationFrame(draw);
 async function importROMs(files) {
+  let imported = false;
   for (const file of files) {
     try {
       if (!/\.(gb|gbc)$/i.test(file.name))
@@ -464,12 +441,13 @@ async function importROMs(files) {
       const game = { id, bytes, name: file.name.replace(/\.(gb|gbc)$/i, "") };
       await storage("put", "game:" + id, { kind: "game", ...game });
       if (!games.some((g) => g.id === id)) games.push(game);
+      imported = true;
       tell(`${game.name} added to your library.`);
     } catch (e) {
       tell(e.message);
     }
   }
-  renderLibrary();
+  if (imported) menu.showLibrary();
 }
 $("open-rom").onclick = () => $("rom-file").click();
 $("rom-file").onchange = async (e) => {
@@ -577,11 +555,38 @@ action("fullscreen", () =>
     ? document.exitFullscreen()
     : $("player").requestFullscreen(),
 );
-$("settings-button").onclick = () => {
+$("settings-button").onclick = $("player-settings").onclick = () => {
   clearInputs();
   $("settings").showModal();
 };
-$("about-button").onclick = () => $("about").showModal();
+for (const tab of document.querySelectorAll("[data-settings]")) {
+  tab.onclick = () => {
+    for (const panel of document.querySelectorAll("[data-panel]"))
+      panel.hidden = panel.dataset.panel !== tab.dataset.settings;
+    for (const button of document.querySelectorAll("[data-settings]"))
+      button.setAttribute("aria-pressed", String(button === tab));
+    $("settings-crumb").textContent = `› ${tab.textContent}`;
+  };
+}
+document.querySelector("[data-settings]").click();
+$("gamepad-button").onclick = $("pad-status").onclick = () =>
+  $("pad-dialog").showModal();
+$("power-button").onclick = () => $("power-dialog").showModal();
+$("about-button").onclick = () => {
+  $("power-dialog").close();
+  $("about").showModal();
+};
+action("menu-fullscreen", async () => {
+  $("power-dialog").close();
+  if (document.fullscreenElement) await document.exitFullscreen();
+  else await document.documentElement.requestFullscreen();
+});
+action("refresh-button", async () => {
+  const records = await storage("getAll");
+  games = [games[0], ...records.filter((record) => record?.kind === "game")];
+  menu.render();
+  tell("Library refreshed.");
+});
 setInterval(() => {
   if (current) storeSRAM().catch(() => {});
 }, 10000);
@@ -589,22 +594,21 @@ function clock() {
   $("clock").textContent = new Date().toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
+    hourCycle: "h23",
+  });
+  $("date").textContent = new Date().toLocaleDateString([], {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
   });
 }
 clock();
 setInterval(clock, 1000);
-if (new URLSearchParams(location.search).get("app") === "choccy") {
+if (standalone) {
   document.title = "Choccy Milk · Web preview";
-  document.querySelector(".brand").textContent = "Choccy Milk";
-  document.querySelector(".brand").href = "./";
-  document.querySelector(".eyebrow").hidden = true;
-  document.querySelector(".heading p:last-child").textContent =
-    "Open a Game Boy or Game Boy Color game.";
-  $("title").textContent = "Choccy Milk";
-  document.querySelector('footer a[href="?app=choccy"]').textContent =
-    "WII-UU menu";
-  document.querySelector('footer a[href="?app=choccy"]').href = "./";
-  if (settings.theme === "auto") settings.theme = "milk";
+  $("switch-app").textContent = "WII-UU menu";
+  $("switch-app").href = "./";
+  settings.theme = "milk";
 }
 try {
   const saved = await storage("get", "settings");
@@ -615,7 +619,7 @@ try {
   tell("Browser storage is unavailable. The built-in demo still works.");
 }
 syncSettings();
-renderLibrary();
+menu.render();
 fetch("version.json")
   .then((r) => r.json())
   .then((v) => ($("version").textContent = `WII-UU ${v.version} · Web preview`))

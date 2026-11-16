@@ -12,52 +12,81 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header>
-      <a class="brand" href="../">WII-<span>UU</span></a
-      ><span class="badge">WEB PREVIEW</span
-      ><span id="engine">Starting WebAssembly…</span><time id="clock"></time
-      ><button id="settings-button" aria-label="Settings">Settings</button>
-    </header>
     <main id="home">
-      <div class="heading">
-        <div>
-          <p class="eyebrow">YOUR LITTLE CONSOLE, IN A BROWSER</p>
-          <h1 id="title">Make yourself at home.</h1>
-          <p>Pick a game. Get comfortable. Press play.</p>
-        </div>
-        <div class="mascot" aria-hidden="true">
-          <div class="eyes">• •</div>
-          <div class="smile"></div>
-          <small>MILK</small>
+      <div class="desktop-top">
+        <button
+          class="desktop-pill"
+          id="menu-back"
+          aria-label="Return to systems"
+        >
+          <strong>WII-<span>UU</span></strong
+          ><span id="crumb">Home</span>
+        </button>
+        <div class="desktop-status">
+          <button class="desktop-pill" id="pad-status">
+            <span id="pad-label">No GamePad</span>
+          </button>
+          <div class="desktop-pill">
+            <time id="clock"></time><span id="date"></span>
+          </div>
         </div>
       </div>
-      <div class="library-heading">
-        <h2>Your games</h2>
-        <span>Game Boy &amp; Game Boy Color</span>
+      <div class="desktop-grid">
+        <section id="games" aria-label="Console menu"></section>
+        <section id="empty-system" hidden>
+          <h2 id="empty-title"></h2>
+          <p id="empty-help"></p>
+        </section>
+        <nav id="pages" aria-label="Menu pages"></nav>
       </div>
-      <section id="games" aria-label="Game library"></section>
-      <div class="welcome">
-        <div>
-          <strong>A little taste of WII-UU.</strong>
-          <p>
-            Try Milk Run, our original Game Boy demo, or open your own .gb /
-            .gbc file. Games run locally on your device.
-          </p>
-        </div>
-        <button id="open-rom" class="primary">+ Open a game</button>
+      <div class="desktop-footer">
+        <nav id="dock" aria-label="Console shortcuts">
+          <button id="gamepad-button">
+            <span class="dock-circle" aria-hidden="true">▣</span>GamePad
+          </button>
+          <button id="settings-button">
+            <span class="dock-circle" aria-hidden="true">⚙</span>Settings
+          </button>
+          <button id="refresh-button">
+            <span class="dock-circle" aria-hidden="true">↻</span>Refresh
+          </button>
+          <button id="power-button">
+            <span class="dock-circle" aria-hidden="true">⏻</span>Power
+          </button>
+        </nav>
+        <span id="menu-hint"></span>
+        <button id="open-rom">Import ROM</button>
       </div>
-      <footer>
-        <a href="../support/">Support</a
-        ><button id="about-button">About this preview</button
-        ><a href="?app=choccy">Choccy Milk standalone</a
-        ><span id="version"></span>
-      </footer>
     </main>
+    <dialog id="pad-dialog">
+      <h2>GamePad</h2>
+      <p>
+        Connect a USB or Bluetooth controller, then press a button on it. Touch
+        controls are available while playing.
+      </p>
+      <p id="pad-detail"></p>
+      <form method="dialog"><button>Back</button></form>
+    </dialog>
+    <dialog id="power-dialog">
+      <h2>Power</h2>
+      <button id="menu-fullscreen">Toggle fullscreen</button>
+      <button id="about-button">About WII-UU</button>
+      <p>
+        <a href="../">WII-UU website</a> · <a href="../support/">Support</a> ·
+        <a id="switch-app" href="?app=choccy">Choccy Milk</a>
+      </p>
+      <p>
+        <span id="engine">Starting WebAssembly…</span> ·
+        <span id="version"></span>
+      </p>
+      <form method="dialog"><button>Back</button></form>
+    </dialog>
     <section id="player" hidden aria-label="Choccy Milk player">
       <div class="player-bar">
         <button id="home-button">Home</button><strong id="game-title"></strong
         ><span id="stats">Starting…</span><button id="pause">Pause</button
-        ><button id="fullscreen">Fullscreen</button>
+        ><button id="fullscreen">Fullscreen</button
+        ><button id="player-settings">Settings</button>
       </div>
       <div id="screen-wrap">
         <canvas
@@ -99,37 +128,64 @@
     </section>
     <dialog id="settings">
       <form method="dialog">
-        <h2>Make it yours</h2>
-        <label
-          >Appearance<select id="theme">
-            <option value="auto">Follow device</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-            <option value="milk">Choccy Milk</option>
-          </select></label
-        ><label
-          >Picture filter<select id="filter">
-            <option value="off">Original pixels</option>
-            <option value="smooth">Smooth</option>
-            <option value="scale2x">Scale2x</option>
-            <option value="scale3x">Scale3x</option>
-            <option value="xbr2">xBR 2×</option>
-            <option value="xbr4">xBR 4×</option>
-            <option value="crt">CRT television</option>
-          </select></label
-        ><label class="check"
-          ><input type="checkbox" id="blend" /> Blend frames</label
-        ><label class="check"
-          ><input type="checkbox" id="stretch" /> Stretch picture to 16:9</label
-        ><label class="check"
-          ><input type="checkbox" id="touch-option" checked /> Show touch
-          controls</label
-        >
-        <p>
-          Settings and imported games stay in this browser. Export important
-          save states before clearing browser data.
-        </p>
-        <button class="primary">Done</button>
+        <div class="settings-heading">
+          <h2>Settings <small id="settings-crumb"></small></h2>
+          <button value="close" aria-label="Close settings">×</button>
+        </div>
+        <div class="settings-layout">
+          <nav aria-label="Settings categories">
+            <button type="button" data-settings="appearance">
+              Look &amp; sound
+            </button>
+            <button type="button" data-settings="games">Games</button>
+            <button type="button" data-settings="gamepad">
+              GamePad &amp; players
+            </button>
+            <button type="button" data-settings="system">System</button>
+          </nav>
+          <div class="settings-rows">
+            <section data-panel="appearance">
+              <label
+                >Appearance<select id="theme">
+                  <option value="auto">Follow device</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="milk">Choccy Milk</option>
+                </select></label
+              >
+            </section>
+            <section data-panel="games" hidden>
+              <label
+                >Picture filter<select id="filter">
+                  <option value="off">Original pixels</option>
+                  <option value="smooth">Smooth</option>
+                  <option value="scale2x">Scale2x</option>
+                  <option value="scale3x">Scale3x</option>
+                  <option value="xbr2">xBR 2×</option>
+                  <option value="xbr4">xBR 4×</option>
+                  <option value="crt">CRT television</option>
+                </select></label
+              ><label class="check"
+                ><input type="checkbox" id="blend" /> Blend frames</label
+              ><label class="check"
+                ><input type="checkbox" id="stretch" /> Stretch picture to
+                16:9</label
+              >
+            </section>
+            <section data-panel="gamepad" hidden>
+              <label class="check"
+                ><input type="checkbox" id="touch-option" checked /> Show touch
+                controls</label
+              >
+            </section>
+            <section data-panel="system" hidden>
+              <p>
+                Settings and imported games stay in this browser. Export
+                important save states before clearing browser data.
+              </p>
+            </section>
+          </div>
+        </div>
       </form>
     </dialog>
     <dialog id="about">
@@ -140,9 +196,9 @@
         desktop picture filters.
       </p>
       <p>
-        This is a web preview, not the complete desktop application. DS and
-        other systems, phone pairing, online play, OEM setup, desktop
-        integrations and idle cutscenes are not included yet.
+        The web version uses the desktop console menu. Game Boy and Game Boy
+        Color are playable. DS and other systems, phone pairing, online play,
+        OEM setup, and idle cutscenes still require the desktop application.
       </p>
       <p>
         No ROMs are uploaded. Milk Run is an original included homebrew game.
