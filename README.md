@@ -1398,3 +1398,10 @@ for this core. CI checks the native frame path on macOS and Linux with Java 27 u
 redistributable fixture core; a real game can still fail for core/BIOS/JIT/audio reasons.
 
 For local automation and Linux console image provisioning, see the [integration API and OEM setup guide](docs/integration-api.md).
+
+
+### Pull request version checks
+
+Increase the application version in `src/wiiuu/Main.java` above the target branch version and add a matching entry to `CHANGELOG.md`. After the pull request's Build workflow completes, GitHub Actions posts the **WII-UU / Version bump** status and leaves a review if the version is missing, invalid, or too low.
+
+To enforce this at merge time, add **WII-UU / Version bump** as a required status check in the target branch rules and require branches to be up to date before merging.

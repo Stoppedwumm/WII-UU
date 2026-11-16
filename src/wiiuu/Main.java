@@ -43,7 +43,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "2.0.0";
+    public static final String VERSION = "2.0.1";
 
     private final Config config;
     private final Library library;
