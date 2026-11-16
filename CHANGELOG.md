@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 1.14.12 (2026-11-16)
+- Add an OEM Creator with editable console defaults and bundled games, themes, and system files.
+- Provision one console or a CSV-listed fleet over SSH. Verify the new administrator before removing the original login.
+- Add Wi-Fi and Ethernet setup to the first-run guide and document OEM provisioning on the support site.
+- Add an opt-in local HTTP API for WII-UU and standalone Choccy Milk. List and launch games, check playback, stop games, and rescan the library.
+- Add Linux OEM console mode for booting directly into fullscreen WII-UU.
+
 ## 1.14.11 (2026-11-09)
 - Add a shared drag-and-drop GamePad layout editor on desktop and phone. Move and resize
   buttons, D-pads, joysticks, and gesture sliders, then customize their labels and bindings.
