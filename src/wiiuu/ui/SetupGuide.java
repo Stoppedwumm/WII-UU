@@ -479,6 +479,7 @@ final class SetupGuide {
 
     private void finish(boolean done) {
         config.set("ui.setupDone", "true");
+        config.set("ui.setupNext", null);
         config.save();
         closing = System.currentTimeMillis();
         if (!done) say("later");                     // (it says "done" on the last step)

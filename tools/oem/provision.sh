@@ -47,6 +47,10 @@ runuser -u "$admin" -- bash -eu -c '
   mkdir release
   unzip -oq release.zip -d release
   cd "release/$2"
+  if ! unzip -Z1 wiiuu.jar wiiuu/ui/OemSelfTest.class | grep -Fxq wiiuu/ui/OemSelfTest.class; then
+    echo "Use a WII-UU package that supports the OEM self-test." >&2
+    exit 1
+  fi
   WIIUU_OEM_PREREQUISITES_READY=1 bash install.sh --yes --no-shortcut --roms "$HOME/.wiiuu/roms"
 ' bash "$work" "$prefix"
 data="$target_home/.wiiuu"
@@ -61,3 +65,6 @@ test -s /etc/wiiuu-console.conf
 test -s /usr/share/xsessions/wiiuu.desktop
 test -f /usr/local/share/wiiuu-console/oem
 systemctl is-enabled --quiet wiiuu-console-boot.service
+runuser -u "$admin" -- sh -eu -c '
+  printf "%s\n" pending > "$1/oem-self-test"
+' sh "$data"

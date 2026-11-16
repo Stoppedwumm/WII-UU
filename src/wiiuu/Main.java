@@ -43,7 +43,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "1.14.13";
+    public static final String VERSION = "2.0.0";
 
     private final Config config;
     private final Library library;
@@ -149,6 +149,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         Boolean fullscreen = null;
         Integer port = null;
         boolean noServer = false, setup = false, noIntro = false, appliance = false, oemSettings = false;
+        boolean oemSelfTest = false;
         String snapshot = null, snapshotView = "home";
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -227,6 +228,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                 }
                 case "--appliance" -> appliance = true;
                 case "--oem-settings" -> oemSettings = true;
+                case "--oem-self-test" -> oemSelfTest = true;
                 case "--setup" -> setup = true;
                 case "--no-intro" -> noIntro = true;
                 case "--fps" -> System.setProperty("wiiuu.fps", "true");
@@ -240,6 +242,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             }
         }
         Config config = new Config(home);
+        if (oemSelfTest) {
+            wiiuu.ui.OemSelfTest.show(config);
+            return;
+        }
         useGraphicsCard(config);
         if (appliance && fullscreen == null) fullscreen = true;
         if (port != null) config.set("server.port", port.toString());
@@ -250,10 +256,6 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         firstRun = config.get("app.lastVersion", null) == null && !config.getBool("ui.setupDone", false);
         // Settings > System > Restart into the setup guide
         boolean guideAsked = config.getBool("ui.setupNext", false) || setup;
-        if (config.getBool("ui.setupNext", false)) {
-            config.set("ui.setupNext", null);
-            config.save();
-        }
 
         Main app = new Main(config);
         if (snapshot != null) {

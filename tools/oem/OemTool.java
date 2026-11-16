@@ -145,7 +145,12 @@ public final class OemTool {
             String prefix = entries.get(0).getName().replaceFirst("install\\.sh$", "");
             if (zip.getEntry(prefix + "console/wiiuu-console") == null || zip.getEntry(prefix + "wiiuu.jar") == null)
                 throw new IOException("The package must include wiiuu.jar and Console Mode.");
-            return prefix;
+            try (JarInputStream app = new JarInputStream(zip.getInputStream(zip.getEntry(prefix + "wiiuu.jar")))) {
+                for (JarEntry entry; (entry = app.getNextJarEntry()) != null;) {
+                    if (entry.getName().equals("wiiuu/ui/OemSelfTest.class")) return prefix;
+                }
+            }
+            throw new IOException("Choose a WII-UU package that supports the OEM self-test.");
         }
     }
 
@@ -405,6 +410,9 @@ public final class OemTool {
         // A fresh password-only login and fresh sudo authorization must succeed before removing the old account.
         ssh(host, admin, newPassword, helper, "sudo -k -S -p '' -- true", null, newPassword + "\n", false);
         ssh(host, admin, newPassword, helper, "sudo -k -S -p '' -- userdel -- " + quote(old),
+                null, newPassword + "\n", false);
+        ssh(host, admin, newPassword, helper,
+                "sudo -k -S -p '' -- systemd-run --on-active=5s systemctl reboot",
                 null, newPassword + "\n", false);
     }
 
