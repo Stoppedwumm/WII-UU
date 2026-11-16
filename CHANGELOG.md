@@ -3,6 +3,9 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.0.1 (2026-11-16)
+- Check that every pull request increases the WII-UU version and post a review when the version needs to change.
+
 ## 2.0.0 (2026-11-16)
 - Run a fullscreen factory self-test after OEM provisioning. Review the check results, storage and game counts, then select Power off.
 - Keep customer setup scheduled until the setup guide is completed or dismissed, even if startup is interrupted.
