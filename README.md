@@ -1405,3 +1405,38 @@ For local automation and Linux console image provisioning, see the [integration 
 Increase the application version in `src/wiiuu/Main.java` above the target branch version and add a matching entry to `CHANGELOG.md`. After the pull request's Build workflow completes, GitHub Actions posts the **WII-UU / Version bump** status and leaves a review if the version is missing, invalid, or too low.
 
 To enforce this at merge time, add **WII-UU / Version bump** as a required status check in the target branch rules and require branches to be up to date before merging.
+
+
+### Archive historical versions manually
+
+Run `python3 tools/archive-versions.py --list` to inspect all versions in the default
+branch's complete Git history. To rebuild and collect them:
+
+```sh
+python3 tools/archive-versions.py --output /path/to/drive/WII-UU-history.zip --work-dir /path/to/drive/tmp
+```
+
+This standalone script is not run by GitHub Actions. It requires Python 3.9+, Git,
+Bash, and each historical package script's build dependencies (normally JDK 22+,
+zip, and network access for downloads). On Windows use WSL with those tools installed.
+Old versions can require different dependencies or unavailable downloads.
+
+The ZIP contains a directory per version with its source ZIP, built release ZIP
+when successful, and build log. `manifest.json` records exact commits, SHA-256
+checksums, sizes, and build outcomes. These are new builds of historical source,
+not copies of original published release binaries. Versions are discovered from
+`src/wiiuu/Main.java` along the selected branch's first-parent history; the newest
+commit for each version is used. Unmerged branches and versions absent from Git
+history are not included. Use `--ref TAG_OR_BRANCH` to select another history.
+
+Use `--version 2.0.0` (repeatable) for selected versions, or `--source-only` to skip
+building. `--repository /path/to/full/repository` supports local history; shallow
+repositories are rejected. Only use trusted repositories because their historical
+packaging scripts execute locally. Each build uses an isolated temporary checkout;
+your working tree is not modified. Temporary files use `--work-dir` when supplied,
+otherwise the system temporary directory. Allow space for the Git history, one
+build, and the final archive. Existing output files are never overwritten.
+
+Failed builds retain their source and logs, continue to the next version, and cause
+an exit status of 1 after writing the archive. Exit status 0 means all selected
+builds succeeded (or all selected sources were archived in source-only mode).

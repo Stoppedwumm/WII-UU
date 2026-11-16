@@ -3,6 +3,9 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.0.2 (2026-11-16)
+- Add a manual historical-version archive builder with source snapshots, release packages, build logs, and checksums.
+
 ## 2.0.1 (2026-11-16)
 - Check that every pull request increases the WII-UU version and post a review when the version needs to change.
 
