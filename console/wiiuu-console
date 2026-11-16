@@ -233,13 +233,43 @@ while true; do
     IFS= read -r data < "$HOME/.wiiuu-location" || true
   fi
   for _ in $(seq 1 600); do [ -e "$data/updating" ] || break; sleep 1; done
+  launch_args=("${args[@]}")
+  factory="$data/oem-self-test"
+  if [ -f "$factory" ]; then
+    boot_id="$(cat /proc/sys/kernel/random/boot_id)" || exit 1
+    state="$(cat "$factory")" || exit 1
+    if [ "$state" = pending ]; then
+      next="$(mktemp "$factory.XXXXXXXX")" || exit 1
+      if ! printf '%s\n' "$boot_id" > "$next" || ! mv -f -- "$next" "$factory"; then
+        rm -f -- "$next"
+        exit 1
+      fi
+      state="$boot_id"
+    fi
+    if [ "$state" = "$boot_id" ]; then
+      launch_args+=(--oem-self-test)
+    else
+      # Provisioning wrote setupNext before arming the test. The guide clears it when dismissed.
+      rm -- "$factory" || exit 1
+    fi
+  fi
   started=$(date +%s)
-  "$WIIUU" "${args[@]}"
+  "$WIIUU" "${launch_args[@]}"
   code=$?
   echo "WII-UU exited with $code"
   case "$code" in
     10) to_desktop ;;
-    11) systemctl poweroff; sleep 30 ;;
+    11)
+      if sudo -n /usr/local/bin/wiiuu-console poweroff || systemctl poweroff; then
+        # systemd accepted the request. Stay in the session until shutdown stops us.
+        while sleep 60; do :; done
+        exit 0
+      fi
+      export WIIUU_POWEROFF_FAILED=1
+      fails=0
+      sleep 1
+      continue
+      ;;
     12) systemctl reboot; sleep 30 ;;
   esac
   # WII-UU closed or crashed: start it again; if it keeps failing, go to the desktop so nobody is stuck
@@ -273,8 +303,8 @@ EOF
 </openbox_config>
 EOF
 
-  # switching without a password prompt: only these exact commands
-  printf '%s ALL=(root) NOPASSWD: %s switch desktop, %s switch console\n' "$TARGET_USER" "$SELF_DST" "$SELF_DST" > "$SUDOERS.tmp"
+  # session actions without a password prompt: only these exact commands
+  printf '%s ALL=(root) NOPASSWD: %s switch desktop, %s switch console, %s poweroff\n' "$TARGET_USER" "$SELF_DST" "$SELF_DST" "$SELF_DST" > "$SUDOERS.tmp"
   chmod 440 "$SUDOERS.tmp"
   if command -v visudo >/dev/null && ! visudo -cf "$SUDOERS.tmp" >/dev/null; then
     rm -f "$SUDOERS.tmp"; die "could not write a valid sudoers rule"
@@ -417,6 +447,7 @@ case "${1:-}" in
   uninstall) shift; cmd_uninstall "$@" ;;
   switch) shift; cmd_switch "$@" ;;
   boot) cmd_boot ;;
+  poweroff) [ "$#" = 1 ] && [ "$(id -u)" = 0 ] && exec systemctl poweroff; exit 1 ;;
   status) cmd_status ;;
   *) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
