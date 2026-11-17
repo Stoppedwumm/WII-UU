@@ -3160,7 +3160,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         shadow(g, card, 10);
         g.setColor(CARD);
         g.fill(card);
-        QrCode qr = relayQr != null ? relayQr : this.qr;
+        QrCode qr = pairingQr();
         String padUrl = pairingUrl();
         pairingQrHit = pairingLinkHit = null;
         float qrSize = ch * 0.64f;
@@ -3189,7 +3189,14 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             g.drawString("The GamePad server is turned off in Settings.", tx, ly);
             return;
         }
-        for (String s : new String[]{relayPairing != null ? "1. Relay: connect your phone to the internet." : "1. Join the same Wi-Fi as this computer.", "2. Scan the code, or open:"}) {
+        boolean usingRelay = relayPairing != null;
+
+        for (String s : new String[]{
+            usingRelay
+                ? "1. Internet relay active. Connect from anywhere."
+                : "1. Join the same Wi-Fi as this computer.",
+                "2. Scan the QR code, or open:"
+        }) {
             g.drawString(ellipsize(g, s, tw), tx, ly);
             ly += ch * 0.075f;
         }
