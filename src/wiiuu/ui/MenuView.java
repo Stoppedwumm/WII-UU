@@ -598,10 +598,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private volatile String localPairing;
     private Rectangle2D pairingQrHit, pairingLinkHit;
     private volatile String relayPairing;
-    private QrCode relayQr;
+    private volatile boolean relayEnabled;
+    private volatile QrCode relayQr;
     public void showPadOverlay() { showPad = true; repaint(); }
 
-    public void setRelay(String url) {
+    public void setRelay(String url, boolean enabled) {
+        relayEnabled = enabled;
         relayPairing = url;
         pairingQrHit = pairingLinkHit = null;
         relayQr = url == null ? null : QrCode.encode(url);
@@ -1189,11 +1191,14 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     QrCode pairingQr() {
-        return serverOn ? relayQr != null ? relayQr : qr : null;
+        if (!serverOn) return null;
+        return relayEnabled ? relayQr : qr;
     }
 
     String pairingUrl() {
-        return serverOn ? relayPairing != null ? relayPairing : localPairing != null ? localPairing : padUrl : "";
+        if (!serverOn) return "";
+        if (relayEnabled) return relayPairing == null ? "" : relayPairing;
+        return localPairing != null ? localPairing : padUrl;
     }
 
     /** Both pairing surfaces use the exact QR URL, including its code or relay capability. */
@@ -3187,6 +3192,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         float ly = cy + ch * 0.32f;
         if (!serverOn) {
             g.drawString("The GamePad server is turned off in Settings.", tx, ly);
+            return;
+        }
+        if (relayEnabled && relayPairing == null) {
+            g.drawString("Connecting to internet relay...", tx, ly);
+            ly += ch * 0.075f;
+            g.drawString("Waiting for public Cloudflare URL.", tx, ly);
             return;
         }
         boolean usingRelay = relayPairing != null;

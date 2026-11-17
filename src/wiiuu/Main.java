@@ -43,7 +43,7 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "2.0.5";
+    public static final String VERSION = "2.0.6";
 
     private final Config config;
     private final Library library;
@@ -336,7 +336,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         server = new GamepadServer(config, library, launcher, router, this, screen, dsu);
         server.onRelayChanged(() -> SwingUtilities.invokeLater(() -> {
             GamepadServer current = server;
-            if (current != null) view.setRelay(current.relayPairingUrl());
+            if (current != null) view.setRelay(current.relayPairingUrl(), current.relayActive());
         }));
         // killed from outside (Console Mode's session, the system shutting down): the phones still hear it
         GamepadServer phones = server;
