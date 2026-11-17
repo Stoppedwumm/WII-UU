@@ -1262,12 +1262,12 @@ public final class SettingsScreen {
         r.add(new Action("Show relay pairing QR", "Shows the temporary internet link once the relay is ready.", () -> {
             var g = sv.gamepad().get();
             if (g == null || g.relayPairingUrl() == null) { say(g == null ? "GamePad server is off" : g.relayStatus()); return; }
-            view.setRelay(g.relayPairingUrl());
+            view.setRelay(g.relayPairingUrl(), g.relayActive());
             close(); view.showPadOverlay();
         }, null, null));
         r.add(new Action("Stop internet relay", "Closes the public link. Local GamePads continue to work.", () -> {
             var g = sv.gamepad().get(); if (g != null) g.stopRelay();
-            view.setRelay(null); say("Relay stopped. The pairing QR uses local Wi-Fi again.");
+            view.setRelay(null, false); say("Relay stopped. The pairing QR uses local Wi-Fi again.");
         }, null, null));
         r.add(new Link("Player order", "Which phone or controller is player 1, 2, 3... Games read player 1's controller first.",
                 () -> {
