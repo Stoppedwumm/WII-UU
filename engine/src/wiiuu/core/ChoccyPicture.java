@@ -3,6 +3,7 @@ package wiiuu.core;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -10,7 +11,7 @@ import java.util.Set;
  * How Choccy Milk draws a console's games: upscaling and widescreen, per console
  * ({@code choccy.<console>.upscale}, {@code choccy.<console>.widescreen}).
  *
- * <p>Choccy Milk draws without a graphics chip, so upscaling is one of
+ * <p>Upscaling is one of
  * <ul>
  * <li>a picture upscaler, for any console: <b>smooth</b> (softened), or for 2D consoles
  * <b>scale2x</b> / <b>scale3x</b>, which round off the edges of pixel art while keeping it
@@ -20,8 +21,8 @@ import java.util.Set;
  * </ul>
  * Widescreen is real where a core can show more of the game: PlayStation (the widescreen hack
  * of SwanStation and Beetle PSX, for 3D games) and Mega Drive (Genesis Plus GX Wide); for the
- * others the picture is stretched to 16:9 (right for games with a widescreen mode of their own,
- * like some N64 ones).
+ * N64 on Windows and Linux uses GLideN64 to render a wider view. Other consoles can stretch
+ * to 16:9 for games with their own widescreen mode.
  *
  * <p>Not bsnes-hd (HD Mode 7 and widescreen for the Super Nintendo): bsnes runs its chips on
  * 32 KB coroutine stacks, too small for the calls back into Choccy Milk (see {@link Cores#choccyCanRun}).
@@ -48,6 +49,11 @@ public final class ChoccyPicture {
             out.add(new String[]{"xbr4", "Rounded 4x (xBR)"});
         }
         out.add(new String[]{"crt", "CRT TV (scanlines)"});
+        if (n64OpenGlAvailable(system)) {
+            out.add(new String[]{"n64-540", "N64 540p wide / 480p 4:3 · clean sharpening"});
+            out.add(new String[]{"n64-720", "N64 720p · clean sharpening"});
+            out.add(new String[]{"n64-1080", "N64 1080p · clean sharpening"});
+        }
         if (HD.contains(system)) {
             out.add(new String[]{"hd2", "Internal resolution 2x"});
             out.add(new String[]{"hd4", "Internal resolution 4x"});
@@ -72,34 +78,50 @@ public final class ChoccyPicture {
 
     /** Whether widescreen shows more of the game on this console (false: the picture is stretched). */
     public static boolean realWidescreen(String system) {
-        return REAL_WIDE.contains(system);
+        return REAL_WIDE.contains(system) || n64OpenGlAvailable(system);
     }
 
-    /** Whether the emulator itself draws bigger (hd2 / hd4). */
+    public static boolean n64OpenGlAvailable(String system) {
+        if (!system.equals("n64") || ChoccyPicture.class.getResource("/wiiuu/choccy/OpenGl.class") == null) return false;
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String arch = Choccy.arch();
+        return os.contains("win") && arch.equals("x64")
+                || os.contains("linux") && (arch.equals("x64") || arch.equals("arm64"));
+    }
+
+    /** Whether the selected N64 picture needs GLideN64. */
+    public static boolean n64OpenGl(Config config, String system) {
+        return n64OpenGlAvailable(system) && (widescreen(config, system) || upscale(config, system).startsWith("n64-"));
+    }
+
+    /** Whether the emulator itself draws bigger. */
     public static boolean coreUpscale(Config config, String system) {
-        return upscale(config, system).startsWith("hd");
+        String u = upscale(config, system);
+        return u.startsWith("hd") || u.startsWith("n64-");
     }
 
     /** The upscaler the picture gets on its way to the screen: off, smooth, scale2x, scale3x, xbr2, xbr4, crt. */
     public static String filter(Config config, String system) {
         String u = upscale(config, system);
-        return u.startsWith("hd") ? "smooth" : u;           // drawn bigger already: only smoothed to the screen
+        if (u.startsWith("n64-")) return "sharp";
+        return u.startsWith("hd") ? "smooth" : u;
     }
 
     /** Whether the picture is stretched to 16:9 (widescreen on a console without real widescreen). */
     public static boolean stretch(Config config, String system) {
-        return widescreen(config, system) && !REAL_WIDE.contains(system);
+        return widescreen(config, system) && !realWidescreen(system);
     }
 
     /**
      * The core the settings need, best first, or null when the usual ones do: Beetle PSX for
-     * PlayStation upscaling, Genesis Plus GX Wide for Mega Drive widescreen.
+     * PlayStation upscaling, Genesis Plus GX Wide for Mega Drive widescreen, and Mupen64Plus-Next for N64 HD.
      */
     public static List<String> cores(Config config, String system) {
         boolean wide = widescreen(config, system), hd = coreUpscale(config, system);
         return switch (system) {
             case "ps1" -> hd ? List.of("mednafen_psx", "mednafen_psx_hw") : null;     // SwanStation does widescreen too
             case "genesis" -> wide ? List.of("genesis_plus_gx_wide") : null;
+            case "n64" -> n64OpenGl(config, system) ? List.of("mupen64plus_next") : null;
             default -> null;
         };
     }
@@ -120,6 +142,27 @@ public final class ChoccyPicture {
                 o.put("beetle_psx_hw_renderer", "software");         // no graphics chip: its software renderer upscales
                 o.put("swanstation_GPU_WidescreenHack", wide ? "true" : "false");
                 o.put("swanstation_Display_AspectRatio", wide ? "16:9" : "4:3");
+            }
+            case "n64" -> {
+                if (n64OpenGl(config, system)) {
+                    o.put("wiiuu.n64OpenGl", "true");
+                    o.put("mupen64plus-rdp-plugin", "gliden64");
+                    o.put("mupen64plus-rsp-plugin", "hle");
+                    o.put("mupen64plus-aspect", wide ? "16:9 adjusted" : "4:3");
+                    o.put("mupen64plus-169screensize", switch (u) {
+                        case "n64-540" -> "960x540";
+                        case "n64-1080" -> "1920x1080";
+                        default -> "1280x720";
+                    });
+                    o.put("mupen64plus-43screensize", switch (u) {
+                        case "n64-540" -> "640x480";
+                        case "n64-1080" -> "1440x1080";
+                        default -> "960x720";
+                    });
+                    o.put("mupen64plus-EnableNativeResFactor", "0");
+                    o.put("mupen64plus-EnableFBEmulation", "True");
+                }
+                o.put("wiiuu.audioResampler", "sinc");
             }
             default -> { }
         }

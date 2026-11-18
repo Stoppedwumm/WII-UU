@@ -32,7 +32,7 @@ public final class GameScreen {
     private volatile String startup;
     private volatile float aspect = 4f / 3;
     private long shownAt;
-    /** off (whole pixels), smooth, scale2x, scale3x, xbr2, xbr4, crt; and whether to stretch to 16:9 */
+    /** off (whole pixels), smooth, sharp, scale2x, scale3x, xbr2, xbr4, crt; and whether to stretch to 16:9 */
     private volatile String filter = "off";
     private volatile boolean stretch;
     /** each frame half the one before (games that flicker sprites for transparency look right) */
@@ -61,7 +61,8 @@ public final class GameScreen {
         if (n > 1 && w * h > 200_000) n = f.equals("crt") ? 2 : 1;   // already big (a high-resolution screen): less or no need
         BufferedImage img = new BufferedImage(w * n, h * n, BufferedImage.TYPE_INT_RGB);
         int[] out = ((DataBufferInt) img.getRaster().getDataBuffer()).getData();
-        if (f.equals("crt")) crt(rgb, w, h, n, out);
+        if (f.equals("sharp")) sharpen(rgb, w, h, out);
+        else if (f.equals("crt")) crt(rgb, w, h, n, out);
         else if (n == 4 && f.equals("xbr4")) {
             int[] mid = new int[w * h * 4];
             xbr2(rgb, w, h, mid);
@@ -196,6 +197,28 @@ public final class GameScreen {
         } else {
             px[me] = mix(e, newColor, 8);
         }
+    }
+
+    /** A light, range-limited unsharp mask at the core's render resolution. */
+    static void sharpen(int[] in, int w, int h, int[] out) {
+        rows(h, y -> {
+            int row = y * w, top = Math.max(0, y - 1) * w, bottom = Math.min(h - 1, y + 1) * w;
+            for (int x = 0; x < w; x++) {
+                int center = in[row + x], a = in[top + x], b = in[bottom + x];
+                int c = in[row + Math.max(0, x - 1)], d = in[row + Math.min(w - 1, x + 1)];
+                int rgb = 0;
+                for (int shift = 0; shift < 24; shift += 8) {
+                    int value = center >>> shift & 255;
+                    int n = a >>> shift & 255, s = b >>> shift & 255;
+                    int l = c >>> shift & 255, r = d >>> shift & 255;
+                    int low = Math.min(value, Math.min(Math.min(n, s), Math.min(l, r)));
+                    int high = Math.max(value, Math.max(Math.max(n, s), Math.max(l, r)));
+                    int corrected = value + (4 * value - n - s - l - r) / 18;
+                    rgb |= Math.max(low, Math.min(corrected, high)) << shift;
+                }
+                out[row + x] = rgb;
+            }
+        });
     }
 
     // ---- a CRT TV ------------------------------------------------------------------------------------

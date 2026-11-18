@@ -1361,13 +1361,31 @@ with letterboxing accounted for. These are WFC online settings, not local wirele
 Download Play, remote co-op streaming, or general rollback netplay. The GamePad relay
 carries controller/screen traffic and does not relay DS WFC packets.
 
+### Nintendo 64 widescreen and HD in Choccy Milk
+
+On Windows x64 and 64-bit Linux, open **F1 → Picture → Nintendo 64** in Choccy Milk
+(or **Settings → Games → Choccy Milk picture → Nintendo 64** in WII-UU). Turn on
+**Widescreen** for GLideN64's adjusted 16:9 view. Choose an N64 HD preset for
+540p, 720p, or 1080p with clean sharpening. With Widescreen off, HD preserves
+the 4:3 view. **CRT TV** with Widescreen uses 720p and adds scanlines.
+
+These modes use the Mupen64Plus-Next core and need desktop OpenGL 3.3. Select
+Mupen64Plus-Next or Automatic in the core manager. Restart the game after changing
+picture settings. If the driver cannot start OpenGL, turn Widescreen off and select
+Off or Smooth for software rendering. Some games show edge artifacts with adjusted
+widescreen. Enhanced N64 games run on the local Choccy Milk host.
+
+For Ocarina of Time, extract your ROM from its ZIP and open the `.z64` with **O**,
+or put it in the N64 library folder. N64 audio uses windowed-sinc resampling to
+48 kHz and keeps the game's region timing.
+
 ### Choosing and downloading Choccy Milk cores
 
 Open **Settings → Cores** in standalone Choccy Milk (**F1**), or **Settings → Games →
 Choccy Milk cores** in WII-UU. Select a console to see catalogue cores, installed status
 and file paths. **Download / reinstall** fetches a core from the libretro buildbot into
 WII-UU's Choccy Milk core folder; stop the running game first. Availability varies by
-platform, and Choccy Milk requires software rendering. Incompatible bsnes/higan cores
+platform. Most cores use software rendering. Incompatible bsnes/higan cores
 are omitted from the catalogue.
 
 Choose **Use selected core** to save a preference for the next game, or **Use Automatic**
@@ -1376,7 +1394,8 @@ both apps; closing the standalone Settings window without Save does not undo cor
 operations. Game saves and BIOS files are kept. Save states may not transfer between
 cores, and explicit core choices may change hardware upscaling/widescreen behavior.
 
-Explicit core choices override automatic picture-driven choices. **DS online** keeps
+Explicit core choices override automatic picture-driven choices. N64 HD and adjusted
+widescreen require Mupen64Plus-Next. **DS online** keeps
 melonDS DS as a requirement; turn it off before choosing another DS core. Missing chosen
 cores can download on launch when **Download missing cores automatically** is enabled.
 If a selection cannot be installed, the app reports that instead of silently using another

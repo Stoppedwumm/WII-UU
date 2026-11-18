@@ -91,7 +91,9 @@ final class SettingsDialog {
             JComboBox<String> up = new JComboBox<>(ups.stream().map(x -> x[1]).toArray(String[]::new));
             for (int i = 0; i < ups.size(); i++) if (ups.get(i)[0].equals(filters.get(gs.id()))) up.setSelectedIndex(i);
             up.addActionListener(e -> filters.put(gs.id(), ups.get(up.getSelectedIndex())[0]));
-            JCheckBox wide = new JCheckBox("Widescreen", wides.get(gs.id())); wide.addActionListener(e -> wides.put(gs.id(), wide.isSelected()));
+            JCheckBox wide = new JCheckBox(ChoccyPicture.n64OpenGlAvailable(gs.id())
+                    ? "Widescreen (GLideN64)" : "Widescreen", wides.get(gs.id()));
+            wide.addActionListener(e -> wides.put(gs.id(), wide.isSelected()));
             JCheckBox blend = new JCheckBox("Blend frames", blends.get(gs.id())); blend.addActionListener(e -> blends.put(gs.id(), blend.isSelected()));
             options.add(new JLabel("Upscaling")); options.add(up); options.add(wide); options.add(blend);
             options.add(new JLabel("Core rendering changes take effect on the next game.")); options.revalidate(); options.repaint();
