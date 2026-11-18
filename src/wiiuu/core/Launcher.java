@@ -264,7 +264,10 @@ public final class Launcher {
             });
             throw new LaunchException("Getting Java for Choccy Milk (about 50 MB, once)\u2026 the game starts by itself", true);
         }
-        Elsewhere away = hereOnce.remove(game.path()) || (game.system().id().equals("nds") && DsOnline.enabled(config)) ? null : elsewhere.apply(game);
+        String system = game.system().id();
+        boolean localOnly = hereOnce.remove(game.path()) || system.equals("nds") && DsOnline.enabled(config)
+                || ChoccyPicture.n64OpenGl(config, system);
+        Elsewhere away = localOnly ? null : elsewhere.apply(game);
         if (away != null) {
             startElsewhere(game, away);
             throw new LaunchException("Starting on " + away.name() + " (" + away.score() + ")\u2026", true);

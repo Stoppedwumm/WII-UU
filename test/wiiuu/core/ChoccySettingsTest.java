@@ -40,11 +40,27 @@ public final class ChoccySettingsTest {
         check(custom.get("wiiuu.username").equals(name), "profile reaches helper");
         check(custom.get("melonds_mac_address_mode").equals("from-username"), "explicit identity selection");
         c.set("choccy.nds.dns", "bad"); rejects(() -> DsOnline.options(c), "bad DNS rejected before launch");
+        Cores cores = new Cores(c);
+        var n64Software = cores.choccyOptions("n64");
+        check("angrylion".equals(n64Software.get("mupen64plus-rdp-plugin")), "N64 software default");
+        check("sinc".equals(n64Software.get("wiiuu.audioResampler")), "N64 sinc audio");
+        if (ChoccyPicture.n64OpenGlAvailable("n64")) {
+            c.set("choccy.n64.widescreen", "true");
+            c.set("choccy.n64.upscale", "n64-1080");
+            var wide = cores.choccyOptions("n64");
+            check("gliden64".equals(wide.get("mupen64plus-rdp-plugin")), "N64 selects GLideN64");
+            check("16:9 adjusted".equals(wide.get("mupen64plus-aspect")), "N64 widescreen adjusts the 3D view");
+            check("1920x1080".equals(wide.get("mupen64plus-169screensize")), "N64 sets the internal wide resolution");
+            check(!ChoccyPicture.stretch(c, "n64"), "N64 never stretches enhanced frames");
+            check("sharp".equals(ChoccyPicture.filter(c, "n64")), "N64 HD includes clean sharpening");
+            c.set("choccy.n64.widescreen", "false");
+            check("4:3".equals(cores.choccyOptions("n64").get("mupen64plus-aspect")), "N64 HD preserves 4:3");
+        }
         GameScreen screen = new GameScreen();
         screen.frame(new int[256 * 384], 256, 384, 2f / 3);
         var viewport = screen.pictureBounds(1000, 600);
         check(viewport.width == 400 && viewport.height == 600 && viewport.x == 300, "DS stylus letterboxing");
-        System.out.println("Choccy settings and DS online tests passed");
+        System.out.println("Choccy picture, input and DS online settings tests passed");
     }
     private static void rejects(Runnable action, String label) {
         try { action.run(); } catch (IllegalArgumentException expected) { return; }

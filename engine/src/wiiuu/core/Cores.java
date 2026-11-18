@@ -213,6 +213,12 @@ public final class Cores {
     public Path choccyCoreFor(GameSystem system, Runnable afterDownload) throws Downloading {
         boolean dsOnline = system.id().equals("nds") && DsOnline.enabled(config);
         String selected = config.get("choccy.core." + system.id(), "").trim();
+        if (ChoccyPicture.n64OpenGl(config, system.id())) {
+            if (!selected.isEmpty() && !selected.equals("mupen64plus_next")) {
+                throw new Downloading("N64 widescreen or HD needs Mupen64Plus-Next. Select it or Automatic in the core manager.");
+            }
+            return selectedCore("mupen64plus_next", afterDownload);
+        }
         if (!dsOnline && !selected.isEmpty()) {
             if (!CoreManager.catalogue(system.id()).contains(selected)) throw new Downloading("Invalid selected core. Choose a core in the core manager or use Automatic.");
             return selectedCore(selected, afterDownload);
@@ -322,21 +328,23 @@ public final class Cores {
         return config.home().resolve("system");
     }
 
-    /** Core options Choccy Milk gives this console's cores: N64 without OpenGL (and without the recompiler if it crashed). */
+    /** Core options for Choccy Milk, including the selected N64 renderer and CPU. */
     public java.util.Map<String, String> choccyOptions(String systemId) {
         java.util.Map<String, String> o = new java.util.LinkedHashMap<>(ChoccyPicture.options(config, systemId));
         if (systemId.equals("nds")) o.putAll(DsOnline.options(config));
         if (systemId.equals("n64")) {
-            // the software renderer (Angrylion: no OpenGL needed) on every processor core
-            o.put("mupen64plus-rdp-plugin", "angrylion");
-            o.put("mupen64plus-angrylion-multithread", "all threads");
-            o.put("parallel-n64-gfxplugin", "angrylion");
-            o.put("parallel-n64-angrylion-multithread", "all threads");
-            // the fastest RSP that works with it: Mupen64Plus-Next turns "hle" into its recompiling RSP
-            // (parallel) there; ParaLLEl N64 serves retail games with HLE and homebrew with cxd4 on "auto"
-            // (not on a Mac, where it played well already: the recompiling RSP may not get JIT memory there)
-            o.put("mupen64plus-rsp-plugin", MAC ? "cxd4" : "hle");
-            o.put("parallel-n64-rspplugin", "auto");
+            if (!ChoccyPicture.n64OpenGl(config, systemId)) {
+                // the software renderer (Angrylion: no OpenGL needed) on every processor core
+                o.put("mupen64plus-rdp-plugin", "angrylion");
+                o.put("mupen64plus-angrylion-multithread", "all threads");
+                o.put("parallel-n64-gfxplugin", "angrylion");
+                o.put("parallel-n64-angrylion-multithread", "all threads");
+                // the fastest RSP that works with it: Mupen64Plus-Next turns "hle" into its recompiling RSP
+                // (parallel) there; ParaLLEl N64 serves retail games with HLE and homebrew with cxd4 on "auto"
+                // (not on a Mac, where it played well already: the recompiling RSP may not get JIT memory there)
+                o.put("mupen64plus-rsp-plugin", MAC ? "cxd4" : "hle");
+                o.put("parallel-n64-rspplugin", "auto");
+            }
             if (choccyN64Interpreter()) {
                 o.put("mupen64plus-cpucore", "cached_interpreter");
                 o.put("parallel-n64-cpucore", "cached_interpreter");

@@ -1077,7 +1077,7 @@ public final class SettingsScreen {
             List<Row> r = new ArrayList<>();
             r.add(new Info("How Choccy Milk draws each console's games. Upscaling: pixel art 2x / 3x rounds off the stair steps of "
                     + "2D graphics and stays crisp; Rounded (xBR) follows edges at any angle; CRT TV looks like an old TV; Smooth softens; Internal resolution (PlayStation) has the emulator draw its 3D "
-                    + "at a higher resolution itself. Widescreen shows more of the game where the emulator can (PlayStation 3D "
+                    + "at a higher resolution itself. Widescreen shows more of the game where the emulator can (N64 on Windows/Linux, PlayStation 3D "
                     + "games, Mega Drive) and stretches the picture elsewhere. From the next game."));
             for (String id : CHOCCY_CONSOLES) {
                 GameSystem sys = Systems.ALL.stream().filter(x -> x.id().equals(id)).findFirst().orElse(null);
@@ -1096,7 +1096,9 @@ public final class SettingsScreen {
             List<String> names = new ArrayList<>();
             for (String[] u : ups) names.add(u[1]);
             String hdHelp = id.equals("ps1") ? " Internal resolution: Beetle PSX draws the 3D at 2x / 4x (downloaded once; 4x needs a "
-                    + "fast computer, too much for a Raspberry Pi)." : "";
+                    + "fast computer, too much for a Raspberry Pi)."
+                    : wiiuu.core.ChoccyPicture.n64OpenGlAvailable(id)
+                    ? " N64 HD uses Mupen64Plus-Next and OpenGL 3.3." : "";
             r.add(new Choice("Upscaling", "Pixel art: crisp. Rounded (xBR): round curves, 4x wants a fast computer. CRT TV: "
                     + "scanlines. All done by the computer showing the game." + hdHelp,
                     () -> names, () -> {
@@ -1108,6 +1110,9 @@ public final class SettingsScreen {
                 config.save();
             }));
             String wideHelp = switch (id) {
+                case "n64" -> wiiuu.core.ChoccyPicture.n64OpenGlAvailable(id)
+                        ? "GLideN64 draws a wider 3D view. Some scenes can show edge artifacts. Requires OpenGL 3.3."
+                        : "Stretches the display to 16:9.";
                 case "ps1" -> "3D games show more to the sides (SwanStation's or Beetle PSX's widescreen hack). 2D parts and "
                         + "pre-drawn backgrounds can look stretched or cut off.";
                 case "genesis" -> "Genesis Plus GX Wide draws more of the level to the sides (downloaded once). Some games show "

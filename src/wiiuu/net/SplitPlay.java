@@ -541,9 +541,12 @@ public final class SplitPlay {
         if (rom != own) Files.setLastModifiedTime(rom, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis()));
         Path core = games.core(system);
         Map<String, String> options = new LinkedHashMap<>(games.options(system));
+        boolean localN64Renderer = options.containsKey("wiiuu.n64OpenGl");
         for (String line : f.getOrDefault("o", "").split("\n")) {
             int eq = line.indexOf('=');
-            if (eq > 0 && !line.startsWith("wiiuu.")) options.put(line.substring(0, eq), line.substring(eq + 1));
+            if (eq <= 0 || line.startsWith("wiiuu.")) continue;
+            String key = line.substring(0, eq);
+            if (!localN64Renderer || !options.containsKey(key)) options.put(key, line.substring(eq + 1));
         }
         options.put("wiiuu.sound", "pipe");
         Path saves = config.home().resolve("saves").resolve(system);

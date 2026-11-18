@@ -43,7 +43,7 @@ import static java.lang.foreign.ValueLayout.JAVA_SHORT;
  * players' buttons and sticks on stdin, and draws the frames it sends on stdout in its own
  * window. Sound plays here. If a core crashes, only this process goes.
  *
- * <p>Software-rendered cores only (no OpenGL / Vulkan contexts). Built with the Foreign Function
+ * <p>Software rendering by default, with offscreen OpenGL for the desktop N64 profile. Built with the Foreign Function
  * &amp; Memory API, so it needs Java 22 or newer (WII-UU itself doesn't).
  *
  * <pre>
@@ -85,6 +85,8 @@ public final class ChoccyMilk {
     private float aspect = 4f / 3;
     private int baseW = 256, baseH = 240;
     private boolean wantsHardware;
+    private OpenGl graphics;
+    private SincResampler sinc;
     private MemorySegment systemDirC, saveDirC, usernameC;
 
     // input: written by the stdin thread, read by the core's thread
@@ -126,7 +128,7 @@ public final class ChoccyMilk {
             System.err.println("usage: ChoccyMilk CORE ROM SAVES SYSTEM [key=value ...]");
             System.exit(2);
         }
-        OutputStream stdout = framesOut();
+        OutputStream stdout = framesOut(java.util.Arrays.asList(args).contains("wiiuu.n64OpenGl=true"));
         System.setOut(System.err);                          // stdout is for frames only; anything printed goes to the log
         ChoccyMilk m = new ChoccyMilk(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), Path.of(args[3]), stdout);
         for (int i = 4; i < args.length; i++) {
@@ -161,9 +163,11 @@ public final class ChoccyMilk {
      * Where the frames go: stdout, but on Linux and macOS a copy of it, with the real stdout (file 1)
      * then pointed at stderr: cores printf to stdout, and that mustn't land in the middle of a frame.
      */
-    private static OutputStream framesOut() {
+    private static OutputStream framesOut(boolean n64OpenGl) throws Exception {
         OutputStream plain = new java.io.FileOutputStream(java.io.FileDescriptor.out);
-        if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")) return plain;
+        if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) {
+            return n64OpenGl ? WindowsFrameOutput.open() : plain;
+        }
         try {
             Linker linker = Linker.nativeLinker();
             SymbolLookup libc = linker.defaultLookup();
@@ -192,6 +196,10 @@ public final class ChoccyMilk {
     // ---- running a game ----------------------------------------------------------------------------
 
     private void play() throws Throwable {
+        if ("true".equals(overrides.get("wiiuu.n64OpenGl"))) {
+            progress("Opening N64 OpenGL renderer…");
+            graphics = new OpenGl(arena);
+        }
         progress("Loading native core…");
         Linker linker = Linker.nativeLinker();
         SymbolLookup lib = SymbolLookup.libraryLookup(corePath, arena);
@@ -244,12 +252,16 @@ public final class ChoccyMilk {
         boolean loaded = (boolean) fn(linker, lib, "retro_load_game", FunctionDescriptor.of(JAVA_BOOLEAN, ADDRESS)).invokeExact(game);
         if (!loaded) {
             throw new IllegalStateException(wantsHardware
-                    ? name + " needs OpenGL / Vulkan, which Choccy Milk doesn't do: this console plays in RetroArch instead"
+                    ? name + " requested a graphics context this Choccy Milk profile cannot open"
                     : name + " couldn't load this game");
         }
         MemorySegment av = arena.allocate(40, 8);
         fn(linker, lib, "retro_get_system_av_info", FunctionDescriptor.ofVoid(ADDRESS)).invokeExact(av);
         readAv(av);
+        if (graphics != null) {
+            if (!wantsHardware) throw new IllegalStateException("This N64 core did not open GLideN64.");
+            graphics.start(baseW, baseH);
+        }
         getMemoryData = fn(linker, lib, "retro_get_memory_data", FunctionDescriptor.of(ADDRESS, JAVA_INT));
         serializeSize = fn(linker, lib, "retro_serialize_size", FunctionDescriptor.of(JAVA_LONG));
         serialize = fn(linker, lib, "retro_serialize", FunctionDescriptor.of(JAVA_BOOLEAN, ADDRESS, JAVA_LONG));
@@ -260,6 +272,7 @@ public final class ChoccyMilk {
             if (!unloaded) writeSave();
         }, "choccy-save"));
         pipeSound = "pipe".equals(overrides.get("wiiuu.sound"));
+        if ("sinc".equals(overrides.get("wiiuu.audioResampler"))) sinc = new SincResampler(OUT_RATE);
         if (!pipeSound) { progress("Opening audio…"); openAudio(); }
         progress("Starting video…");
         send('R', name);
@@ -317,6 +330,7 @@ public final class ChoccyMilk {
         }
         writeSave();
         unloaded = true;                                    // from here on, the core's memory is going away
+        if (graphics != null) graphics.stop();
         fn(linker, lib, "retro_unload_game", FunctionDescriptor.ofVoid()).invokeExact();
         fn(linker, lib, "retro_deinit", FunctionDescriptor.ofVoid()).invokeExact();
     }
@@ -460,9 +474,14 @@ public final class ChoccyMilk {
                 pixelFormat = f;
                 return true;
             }
-            case 14 -> {                                    // SET_HW_RENDER: no OpenGL / Vulkan here
+            case 14 | EXPERIMENTAL, 14 -> {                 // SET_HW_RENDER
                 wantsHardware = true;
-                return false;
+                return graphics != null && graphics.register(data);
+            }
+            case 56 -> {                                    // GET_PREFERRED_HW_RENDER
+                if (graphics == null) return false;
+                data.reinterpret(4).set(JAVA_INT, 0, 3);      // RETRO_HW_CONTEXT_OPENGL_CORE
+                return true;
             }
             case 15 -> {                                    // GET_VARIABLE
                 MemorySegment var = data.reinterpret(16);
@@ -552,33 +571,11 @@ public final class ChoccyMilk {
                     return;
                 }
             }
-            MemorySegment src = data.reinterpret(pitch * h);
             int n = w * h;
             if (pixels.length < n) pixels = new int[n];
-            for (int y = 0; y < h; y++) {
-                long row = y * pitch;
-                int o = y * w;
-                switch (pixelFormat) {
-                    case PIXEL_XRGB8888 -> {
-                        MemorySegment.copy(src, JAVA_INT, row, pixels, o, w);
-                        for (int x = 0; x < w; x++) pixels[o + x] &= 0xFFFFFF;
-                    }
-                    case PIXEL_RGB565 -> {
-                        for (int x = 0; x < w; x++) {
-                            int v = src.get(JAVA_SHORT, row + 2L * x) & 0xFFFF;
-                            int r = (v >> 11) & 31, gg = (v >> 5) & 63, b = v & 31;
-                            pixels[o + x] = (r << 3 | r >> 2) << 16 | (gg << 2 | gg >> 4) << 8 | (b << 3 | b >> 2);
-                        }
-                    }
-                    default -> {
-                        for (int x = 0; x < w; x++) {
-                            int v = src.get(JAVA_SHORT, row + 2L * x) & 0xFFFF;
-                            int r = (v >> 10) & 31, gg = (v >> 5) & 31, b = v & 31;
-                            pixels[o + x] = (r << 3 | r >> 2) << 16 | (gg << 3 | gg >> 2) << 8 | (b << 3 | b >> 2);
-                        }
-                    }
-                }
-            }
+            if (data.address() == -1L) {                     // RETRO_HW_FRAME_BUFFER_VALID
+                if (hideFrame || graphics == null || !graphics.read(pixels, w, h)) return;
+            } else copySoftwareFrame(data.reinterpret(pitch * h), w, h, pitch);
             synchronized (frameLock) {
                 int[] t = sending;                          // hand it over; the writer's old buffer is free again
                 sending = pixels;
@@ -590,6 +587,33 @@ public final class ChoccyMilk {
             }
         } catch (Throwable t) {
             System.err.println("[choccy] video: " + t);
+        }
+    }
+
+    private void copySoftwareFrame(MemorySegment src, int w, int h, long pitch) {
+        for (int y = 0; y < h; y++) {
+            long row = y * pitch;
+            int o = y * w;
+            switch (pixelFormat) {
+                case PIXEL_XRGB8888 -> {
+                    MemorySegment.copy(src, JAVA_INT, row, pixels, o, w);
+                    for (int x = 0; x < w; x++) pixels[o + x] &= 0xFFFFFF;
+                }
+                case PIXEL_RGB565 -> {
+                    for (int x = 0; x < w; x++) {
+                        int v = src.get(JAVA_SHORT, row + 2L * x) & 0xFFFF;
+                        int r = (v >> 11) & 31, gg = (v >> 5) & 63, b = v & 31;
+                        pixels[o + x] = (r << 3 | r >> 2) << 16 | (gg << 2 | gg >> 4) << 8 | (b << 3 | b >> 2);
+                    }
+                }
+                default -> {
+                    for (int x = 0; x < w; x++) {
+                        int v = src.get(JAVA_SHORT, row + 2L * x) & 0xFFFF;
+                        int r = (v >> 10) & 31, gg = (v >> 5) & 31, b = v & 31;
+                        pixels[o + x] = (r << 3 | r >> 2) << 16 | (gg << 3 | gg >> 2) << 8 | (b << 3 | b >> 2);
+                    }
+                }
+            }
         }
     }
 
@@ -700,8 +724,13 @@ public final class ChoccyMilk {
             play(line, in, n);
             return;
         }
-        int out = resampler.push(in, n, sampleRate);
-        play(line, resampler.out(), out);
+        if (sinc != null) {
+            int out = sinc.push(in, n, sampleRate);
+            play(line, sinc.out(), out);
+        } else {
+            int out = resampler.push(in, n, sampleRate);
+            play(line, resampler.out(), out);
+        }
     }
 
 
