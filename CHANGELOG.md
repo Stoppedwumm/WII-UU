@@ -3,6 +3,10 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.0.7 (2026-11-18)
+- Add adjusted widescreen and HD rendering with sharpening to Nintendo 64 games in Choccy Milk on Windows and Linux.
+- Improve Nintendo 64 audio with windowed-sinc resampling to 48 kHz.
+
 ## 2.0.6 (2026-11-17)
 - Show a waiting message instead of a local GamePad QR code while the Cloudflare internet relay starts.
 - Switch the GamePad pairing QR and link to the public relay address when the tunnel is ready.
