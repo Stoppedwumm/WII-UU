@@ -28,7 +28,8 @@ The standalone Java 17+ UI library packages the game screen renderer and display
 WII-UU and Choccy Milk, along with desktop theme detection and GamePad button types. Version 1.1.0
 also shares WII-UU’s theme scripting and menu palettes, Choccy Milk’s Cocoa/Milk painting and icons,
 its intro animation with custom titles and taglines, and the menu background, shadows, vector icons,
-font caching and text layout. See the
+font caching and text layout. The library also exports a configurable animated mascot and an audio
+visualizer with FFT spectrum analysis, ambient bars, a spectrum ring and waveform painting. See the
 [getting started guide](https://wiiuu.stoppedwumm.net/support/ui-library/) for downloads, the API
 reference and a Swing example. To build the library locally, run `./ui-library/build.sh`.
 

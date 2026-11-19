@@ -3,6 +3,8 @@
 ## 1.1.0 (2026-11-19)
 
 - Move the existing `wiiuu.ui.ThemeScript` parser into the shared engine and standalone JAR, preserving its package and API.
+- Extract `AnimatedMascot`: branded appearance, live theme and clock providers, speech bubbles, gaze tracking, walking, hops and hit testing. WII-UU-specific dialogue stays in the app.
+- Extract `AudioVisualizer`: configurable sample rate, host-supplied mono PCM and nanosecond clock, FFT analysis, spectrum bars/ring and waveform. WII-UU audio capture stays in the app.
 - Extract `MenuPainter` for menu backgrounds, soft shadows and GamePad/settings/refresh/power vector icons.
 - Extract `UiFonts` for desktop font discovery and independent font caches, and `UiText` for width-aware ellipsis and wrapping. Both apps use the shared helpers.
 - Export `MenuPalette` with WII-UU's light/dark colours and a convenience method for evaluating themes without console tiles.

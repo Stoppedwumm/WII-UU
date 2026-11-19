@@ -17,6 +17,8 @@ sources=(
   engine/src/wiiuu/ui/MenuPainter.java
   engine/src/wiiuu/ui/UiFonts.java
   engine/src/wiiuu/ui/UiText.java
+  engine/src/wiiuu/ui/AnimatedMascot.java
+  engine/src/wiiuu/ui/AudioVisualizer.java
 )
 javac --release 17 -encoding UTF-8 -d "$out/classes" "${sources[@]}"
 printf 'Implementation-Title: WII-UU UI Library\nImplementation-Version: %s\nAutomatic-Module-Name: wiiuu.ui.library\n' "$version" > "$out/manifest.txt"
