@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  * "## version (date)" heading per release, newest first, then a line of summary and "- " points.
  */
 public final class Changelog {
-    private static final Pattern HEADING = Pattern.compile("^##\\s+v?(\\d+(?:\\.\\d+)*)\\s*(?:\\((.*)\\))?\\s*$");
+    private static final Pattern HEADING = Pattern.compile("^##\\s+v?(\\d+(?:\\.\\d+)*(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?)\\s*(?:\\((.*)\\))?\\s*$");
 
     /** One release: its summary lines (may be empty) and its points. */
     public record Entry(String version, String date, List<String> summary, List<String> points) {}
@@ -71,8 +71,12 @@ public final class Changelog {
     public List<Entry> between(String after, String upTo) {
         List<Entry> out = new ArrayList<>();
         for (Entry e : entries) {
-            if (after != null && !Updater.newer(e.version(), after)) continue;
-            if (upTo != null && Updater.newer(e.version(), upTo)) continue;
+            // Cycle headings (e.g. 2.0.9) apply to their betas once, without repeating every beta.
+            boolean cycle = !Version.parse(e.version()).prerelease();
+            String lower = after != null && cycle ? Version.parse(after).base() : after;
+            String upper = upTo != null && cycle ? Version.parse(upTo).base() : upTo;
+            if (lower != null && !Updater.newer(e.version(), lower)) continue;
+            if (upper != null && Updater.newer(e.version(), upper)) continue;
             out.add(e);
         }
         return out;

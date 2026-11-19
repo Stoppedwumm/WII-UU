@@ -631,9 +631,23 @@ wiiuu-emulators --source     <span class="c"># build everything from source</spa
     tiles.appendChild(t);
   }
 
+  // Explicit beta opt-in; stable download links keep the final-release feed.
+  const betaLink = document.createElement("a");
+  betaLink.hidden = true;
+  betaLink.className = "btn";
+  betaLink.href = "beta/download/WII-UU-latest.zip";
+  betaLink.textContent = "Download beta";
+  const mainDownload = document.querySelector('a[href="download/WII-UU-latest.zip"]');
+  if (mainDownload) mainDownload.parentNode.appendChild(betaLink);
+  fetch("beta/version.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null)
+    .then(j => { if (j && j.zip) { betaLink.hidden = false; betaLink.href = j.zip; betaLink.textContent = "Beta " + (j.releaseVersion || j.version); } }).catch(() => {});
+
   // version from the release manifest, so this page never shows an old number
   fetch("version.json", { cache: "no-store" }).then(r => r.json())
-    .then(j => { if (j.version) document.getElementById("ver").textContent = j.version; }).catch(() => {});
+    .then(j => {
+      if (j.version) document.getElementById("ver").textContent = j.version;
+      if (j.zip) document.querySelectorAll('a[href="download/WII-UU-latest.zip"]').forEach(a => { a.href = j.zip; });
+    }).catch(() => {});
 
   // release notes from the same CHANGELOG.md that ships in the app
   const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

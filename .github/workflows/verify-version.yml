@@ -54,7 +54,7 @@ jobs:
               const before = base.split('.').map(BigInt);
               const after = head.split('.').map(BigInt);
               const firstChange = before.findIndex((value, index) => value !== after[index]);
-              return firstChange >= 0 && after[firstChange] > before[firstChange];
+              return firstChange < 0 || after[firstChange] > before[firstChange];
             }
 
             const errors = [];
@@ -67,14 +67,14 @@ jobs:
               if (!before) throw new Error('Base branch has no valid WII-UU version.');
               if (after && increased(before, after)) continue;
               const message = after
-                ? 'WII-UU version ' + after + ' must be higher than the target branch version ' + before + '.'
-                : 'Set a valid WII-UU version higher than ' + before + ' in `' + path + '`.';
+                ? 'WII-UU version ' + after + ' must not be lower than the target release version ' + before + '.'
+                : 'Set a valid WII-UU version at least ' + before + ' in `' + path + '`.';
               errors.push({ pr, before, message });
             }
             await github.rest.repos.createCommitStatus({
               ...repo, sha: run.head_sha, context: statusContext,
               state: errors.length ? 'failure' : 'success',
-              description: errors.length ? 'Increase WII-UU VERSION in src/wiiuu/Main.java' : 'WII-UU version increased',
+              description: errors.length ? 'Fix target version (must not go backwards)' : 'Release target valid; beta number is automatic',
               target_url: context.serverUrl + '/' + repo.owner + '/' + repo.repo + '/actions/runs/' + context.runId
             });
             for (const { pr, before, message } of errors) {
@@ -85,7 +85,7 @@ jobs:
                   review.body?.includes(marker))) {
                 await github.rest.pulls.createReview({
                   ...repo, pull_number: pr.number, commit_id: pr.head.sha, event: 'COMMENT',
-                  body: marker + '\n' + message + ' Update `' + path + '` before merging.'
+                  body: marker + '\n' + message + ' Update `' + path + '` before merging. Ordinary PRs may retain the release target; beta numbers are automatic.'
                 });
               }
             }

@@ -9,12 +9,12 @@ public final class BuildInfoTest {
     public static void main(String[] args) throws Exception {
         Path root = Files.createTempDirectory("build-channel-test");
         URL classes = BuildInfo.class.getProtectionDomain().getCodeSource().getLocation();
-        for (String channel : new String[]{"beta", "release", "unknown", "missing"}) {
+        for (String channel : new String[]{"beta", "release", "stable", "unknown", "missing"}) {
             Path metadata = Files.createDirectory(root.resolve(channel));
-            if (!channel.equals("missing")) Files.writeString(metadata.resolve("wiiuu-build.properties"), "channel=" + channel + "\n");
+            if (!channel.equals("missing")) Files.writeString(metadata.resolve("wiiuu-build.properties"), "channel=" + channel + "\nversion=2.0.9-beta.7+g123\nbaseVersion=2.0.9\nbuild=7\ncommit=123\n");
             try (URLClassLoader loader = new URLClassLoader(new URL[]{metadata.toUri().toURL(), classes}, ClassLoader.getPlatformClassLoader())) {
                 boolean actual = (boolean) loader.loadClass("wiiuu.core.BuildInfo").getMethod("beta").invoke(null);
-                if (actual != channel.equals("beta")) throw new AssertionError("Wrong beta marker for " + channel);
+                if (actual != !(channel.equals("release") || channel.equals("stable"))) throw new AssertionError("Wrong beta marker for " + channel);
             }
         }
         System.out.println("Build channel tests passed");

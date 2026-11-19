@@ -15,3 +15,6 @@ dist/WII-UU-presentation*
 # release zips from package.sh (the website copy lives in docs/download)
 dist/WII-UU-*.zip
 __pycache__/
+# Archive service state and upload credentials
+archive/.env
+archive/data/

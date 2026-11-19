@@ -40,6 +40,9 @@ import wiiuu.core.IntegrationApi;
 import wiiuu.core.Library;
 import wiiuu.core.Systems;
 import wiiuu.engine.GameScreen;
+import wiiuu.ui.MilkTheme;
+import wiiuu.ui.UiText;
+import wiiuu.ui.MilkIntro;
 import wiiuu.input.LocalPads;
 import wiiuu.input.PadButton;
 import wiiuu.input.PadSink;
@@ -57,8 +60,8 @@ public final class App extends JPanel implements PadSink {
     public static final String NAME = "Choccy Milk";
 
     /** the look (Cocoa or Milk), and the start animation while it plays */
-    private volatile Look look;
-    private volatile Intro intro;
+    private volatile MilkTheme look;
+    private volatile MilkIntro intro;
     private final Timer animation = new Timer(16, e -> repaint());
 
     private final Config config;
@@ -85,7 +88,7 @@ public final class App extends JPanel implements PadSink {
     App(Config config, boolean systemDark) {
         this.config = config;
         this.systemDark = systemDark;
-        this.look = Look.pick(config.get("choccy.theme", "auto"), systemDark);
+        this.look = MilkTheme.pick(config.get("choccy.theme", "auto"), systemDark);
         this.cores = new Cores(config);
         this.library = new Library(config);
         String version = App.class.getPackage().getImplementationVersion();
@@ -292,7 +295,7 @@ public final class App extends JPanel implements PadSink {
 
     /** Plays the start animation (once, when the window opens). */
     void startIntro() {
-        intro = new Intro(look);
+        intro = new MilkIntro(look, NAME, "games, straight from the glass");
         animation.start();
     }
 
@@ -326,7 +329,7 @@ public final class App extends JPanel implements PadSink {
 
     /** T: Cocoa (dark) or Milk (light), remembered. */
     private void switchLook() {
-        look = look.dark ? Look.MILK : Look.COCOA;
+        look = look.dark ? MilkTheme.MILK : MilkTheme.COCOA;
         config.set("choccy.theme", look.dark ? "cocoa" : "milk");
         config.save();
         setBackground(look.bgBottom);
@@ -372,7 +375,7 @@ public final class App extends JPanel implements PadSink {
         }
         try {
             if (SettingsDialog.show(frame, config, () -> session != null)) {
-                look = Look.pick(config.get("choccy.theme", "auto"), systemDark);
+                look = MilkTheme.pick(config.get("choccy.theme", "auto"), systemDark);
                 setBackground(look.bgBottom); library.rescanAsync();
                 say("Settings saved. DS online/core changes apply after restarting the game.");
             }
@@ -618,7 +621,7 @@ public final class App extends JPanel implements PadSink {
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         Layout l = new Layout();
         long now = System.currentTimeMillis();
-        Intro in = intro;
+        MilkIntro in = intro;
         if (in == null || in.cover(now) < 1) {
             look.paintPage(g, l.w, l.h, l.band, l.u, now);
             paintTitle(g, l);
@@ -643,9 +646,9 @@ public final class App extends JPanel implements PadSink {
         float u = l.u;
         // the glass of chocolate milk, on the chocolate band
         float gx = 34 * u, gy = 26 * u, gw = 40 * u, gh = 56 * u;
-        Look.glass(g, gx, gy, gw, gh, 0.8f, 1, 1, 0.5f, System.currentTimeMillis() / 1400.0,
+        MilkTheme.glass(g, gx, gy, gw, gh, 0.8f, 1, 1, 0.5f, System.currentTimeMillis() / 1400.0,
                 new Color(0xF6E9DC), new Color(0xFFF7EE), new Color(0x8A5232), new Color(0xB07650));
-        g.setFont(Look.font(Font.BOLD, 40 * u));
+        g.setFont(MilkTheme.font(Font.BOLD, 40 * u));
         FontMetrics fm = g.getFontMetrics();
         float tx = gx + gw + 22 * u, ty = gy + 40 * u;
         g.setColor(new Color(0, 0, 0, 60));
@@ -654,7 +657,7 @@ public final class App extends JPanel implements PadSink {
         g.drawString("Choccy ", tx, ty);
         g.setColor(new Color(0xF2C9A0));
         g.drawString("Milk", tx + fm.stringWidth("Choccy "), ty);
-        g.setFont(Look.font(Font.PLAIN, 14 * u));
+        g.setFont(MilkTheme.font(Font.PLAIN, 14 * u));
         g.setColor(new Color(0xE6CDB8));
         g.drawString("libretro cores, no RetroArch needed  ·  part of WII-UU", tx + 2 * u, gy + 62 * u);
         // which look, at the right of the band
@@ -666,12 +669,12 @@ public final class App extends JPanel implements PadSink {
 
     private void paintSystems(Graphics2D g, Layout l) {
         float u = l.u;
-        g.setFont(Look.font(Font.BOLD, 17 * u));
+        g.setFont(MilkTheme.font(Font.BOLD, 17 * u));
         FontMetrics fm = g.getFontMetrics();
-        g.setFont(Look.font(Font.BOLD, 13 * u));
+        g.setFont(MilkTheme.font(Font.BOLD, 13 * u));
         g.setColor(look.dim);
         g.drawString("CONSOLES", 36 * u, l.top - 24 * u);
-        g.setFont(Look.font(Font.BOLD, 17 * u));
+        g.setFont(MilkTheme.font(Font.BOLD, 17 * u));
         for (int i = 0; i < systems.size(); i++) {
             GameSystem s = systems.get(i);
             float y = l.top + i * l.row;
@@ -688,7 +691,7 @@ public final class App extends JPanel implements PadSink {
             drop.curveTo(dx - 7 * u, dy - 1 * u, dx - 3 * u, dy - 4 * u, dx, dy - 9 * u);
             g.setColor(s.color());
             g.fill(drop);
-            g.setColor(Look.alpha(look.text, 0.22f));             // so dark ones show on Cocoa too
+            g.setColor(MilkTheme.alpha(look.text, 0.22f));             // so dark ones show on Cocoa too
             g.setStroke(new BasicStroke(1f * u));
             g.draw(drop);
             g.setColor(chosen && !onGames ? look.pickText : chosen ? look.text : look.dim);
@@ -707,7 +710,7 @@ public final class App extends JPanel implements PadSink {
         if (sel >= scroll + l.rows) scroll = sel - l.rows + 1;
         float x = l.split + 8 * u, w = l.w - x - 28 * u;
         float px = x - 10 * u, py = l.top - 10 * u, pw = w + 20 * u, ph = l.rows * l.row + 20 * u;
-        g.setFont(Look.font(Font.BOLD, 13 * u));
+        g.setFont(MilkTheme.font(Font.BOLD, 13 * u));
         g.setColor(look.dim);
         String head = systems.get(Math.min(sys, systems.size() - 1)).name().toUpperCase(java.util.Locale.ROOT)
                 + "  ·  " + list.size() + (list.size() == 1 ? " GAME" : " GAMES");
@@ -718,19 +721,19 @@ public final class App extends JPanel implements PadSink {
         g.setColor(look.panelEdge);
         g.setStroke(new BasicStroke(1.2f * u));
         g.draw(new RoundRectangle2D.Float(px, py, pw, ph, 22 * u, 22 * u));
-        g.setFont(Look.font(Font.PLAIN, 18 * u));
+        g.setFont(MilkTheme.font(Font.PLAIN, 18 * u));
         FontMetrics fm = g.getFontMetrics();
         for (int r = 0; r < l.rows && scroll + r < list.size(); r++) {
             int i = scroll + r;
             float y = l.top + r * l.row;
             if (i == sel) look.pick(g, x, y + 3 * u, w, l.row - 6 * u, u, onGames);
-            g.setColor(i == sel && onGames ? look.pickText : i == sel ? look.text : Look.mix(look.text, look.panel, 0.18f));
+            g.setColor(i == sel && onGames ? look.pickText : i == sel ? look.text : MilkTheme.mix(look.text, look.panel, 0.18f));
             g.drawString(fit(list.get(i).name(), fm, w - 32 * u), x + 18 * u, y + l.row / 2 + fm.getAscent() * 0.36f);
         }
         if (list.size() > l.rows) {                    // where in the list
             float th = ph - 24 * u, bar = Math.max(24 * u, th * l.rows / list.size());
             float by = py + 12 * u + (th - bar) * scroll / Math.max(1, list.size() - l.rows);
-            g.setColor(Look.alpha(look.accent, 0.5f));
+            g.setColor(MilkTheme.alpha(look.accent, 0.5f));
             g.fill(new RoundRectangle2D.Float(px + pw - 9 * u, by, 4 * u, bar, 4 * u, 4 * u));
         }
     }
@@ -738,12 +741,12 @@ public final class App extends JPanel implements PadSink {
     private void paintEmpty(Graphics2D g, Layout l) {
         float u = l.u;
         float gh = 120 * u, gw = gh * 0.72f;
-        Look.glass(g, 46 * u, l.top + 10 * u, gw, gh, 0.12f, 0, 0, 0.4f, System.currentTimeMillis() / 1600.0,
+        MilkTheme.glass(g, 46 * u, l.top + 10 * u, gw, gh, 0.12f, 0, 0, 0.4f, System.currentTimeMillis() / 1600.0,
                 look.dark ? look.milk : look.choc, look.milk, look.choc, look.chocLight);
-        g.setFont(Look.font(Font.BOLD, 24 * u));
+        g.setFont(MilkTheme.font(Font.BOLD, 24 * u));
         g.setColor(look.text);
         g.drawString("The glass is empty.", 46 * u + gw + 30 * u, l.top + 50 * u);
-        g.setFont(Look.font(Font.PLAIN, 18 * u));
+        g.setFont(MilkTheme.font(Font.PLAIN, 18 * u));
         g.setColor(look.dim);
         String[] lines = {
                 "Put games in a folder per console under " + config.romBase() + "  (nes, snes, gb, gba, n64, ...),",
@@ -753,7 +756,7 @@ public final class App extends JPanel implements PadSink {
 
     private void paintFooter(Graphics2D g, Layout l) {
         float u = l.u;
-        g.setFont(Look.font(Font.PLAIN, 14 * u));
+        g.setFont(MilkTheme.font(Font.PLAIN, 14 * u));
         FontMetrics fm = g.getFontMetrics();
         boolean news = !status.isEmpty() && System.currentTimeMillis() - statusAt < 12000;
         String text = news ? status
@@ -761,7 +764,7 @@ public final class App extends JPanel implements PadSink {
                 + (ra.signedIn() ? "RetroAchievements: " + ra.user() : "RetroAchievements sign-in");
         if (news) {                                     // news in a little caramel pill
             float tw = Math.min(fm.stringWidth(text), l.w - 80 * u) + 28 * u, th = 28 * u;
-            g.setColor(Look.alpha(look.accent, look.dark ? 0.22f : 0.16f));
+            g.setColor(MilkTheme.alpha(look.accent, look.dark ? 0.22f : 0.16f));
             g.fill(new RoundRectangle2D.Float(24 * u, l.h - 22 * u - th * 0.68f, tw, th, th, th));
             g.setColor(look.dark ? look.accent : look.choc);
         } else {
@@ -771,9 +774,7 @@ public final class App extends JPanel implements PadSink {
     }
 
     private static String fit(String s, FontMetrics fm, float w) {
-        if (fm.stringWidth(s) <= w) return s;
-        while (s.length() > 1 && fm.stringWidth(s + "…") > w) s = s.substring(0, s.length() - 1);
-        return s + "…";
+        return UiText.ellipsize(s, fm, w);
     }
 
     // ---- starting --------------------------------------------------------------------------------
@@ -788,7 +789,7 @@ public final class App extends JPanel implements PadSink {
                 case "--no-intro" -> noIntro = true;
                 case "--fullscreen" -> fullscreen = true;
                 case "--write-icon" -> {                 // the installers' menu icon
-                    javax.imageio.ImageIO.write(Look.icon(256), "png", Path.of(args[++i]).toFile());
+                    javax.imageio.ImageIO.write(MilkTheme.icon(256), "png", Path.of(args[++i]).toFile());
                     return;
                 }
                 case "--help", "-h" -> {
@@ -813,11 +814,11 @@ public final class App extends JPanel implements PadSink {
             App app = new App(config, dark);
             JFrame f = new JFrame(NAME);
             app.frame = f;
-            f.setIconImages(Look.icons());
+            f.setIconImages(MilkTheme.icons());
             f.getContentPane().setBackground(app.look.bgTop);       // no grey before the first paint
             f.setBackground(app.look.bgTop);
             try {
-                if (java.awt.Taskbar.isTaskbarSupported()) java.awt.Taskbar.getTaskbar().setIconImage(Look.icon(256));
+                if (java.awt.Taskbar.isTaskbarSupported()) java.awt.Taskbar.getTaskbar().setIconImage(MilkTheme.icon(256));
             } catch (UnsupportedOperationException | SecurityException ignored) {
                 // no Dock / taskbar icon here
             }

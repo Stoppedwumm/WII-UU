@@ -25,7 +25,13 @@ your own legally dumped games and, where an emulator requires it, your own firmw
 ## WII-UU UI Library
 
 The standalone Java 17+ UI library packages the game screen renderer and display filters shared by
-WII-UU and Choccy Milk, along with desktop theme detection and GamePad button types. See the
+WII-UU and Choccy Milk, along with desktop theme detection and GamePad button types. Version 1.1.0
+also shares WII-UU’s theme scripting and menu palettes, Choccy Milk’s Cocoa/Milk painting and icons,
+its intro animation with custom titles and taglines, and the menu background, shadows, vector icons,
+font caching and text layout. The library also exports a configurable animated mascot and an audio
+visualizer with FFT spectrum analysis, ambient bars, a spectrum ring and waveform painting.
+The `Ui` toolkit adds built-in Swing controls (buttons, toggles, checkboxes, labels, fields,
+dropdowns and progress bars), cards and layouts, with live light/dark/custom themes. See the
 [getting started guide](https://wiiuu.stoppedwumm.net/support/ui-library/) for downloads, the API
 reference and a Swing example. To build the library locally, run `./ui-library/build.sh`.
 
@@ -1297,7 +1303,7 @@ Only install artifacts from builds you trust: they contain executable applicatio
 
 For a first Windows install, extract the downloaded artifact ZIP and double-click
 `install.bat` in the extracted folder. New artifacts contain the installation files
-directly, so there is no second ZIP to extract. Development builds display a **BETA** badge at the top of the screen, including during Choccy Milk gameplay. Release builds have no badge. `build.sh` defaults to beta; `package.sh` defaults to release. Set `WIIUU_BUILD_CHANNEL=beta` or `release` to override. Actions builds on the default branch and version tags are releases; pull-request and other branch builds are beta.
+directly, so there is no second ZIP to extract. Development builds display a badge with their target version and beta number. Stable builds have no badge. Both `build.sh` and `package.sh` default to beta; default-branch Actions builds publish numbered prereleases. Stable releases require an exact `vMAJOR.MINOR.PATCH` tag matching `Main.VERSION`. See [the release workflow](docs/support/releases.md).
 
 On the GamePad **Now playing** page, tap **Show touch screen** to choose the lower
 DS screen. **Show TV here** shows the upper screen instead. Both options remain
@@ -1419,12 +1425,13 @@ redistributable fixture core; a real game can still fail for core/BIOS/JIT/audio
 For local automation and Linux console image provisioning, see the [integration API and OEM setup guide](docs/integration-api.md).
 
 
-### Pull request version checks
+### Versions, beta builds and updates
 
-Increase the application version in `src/wiiuu/Main.java` above the target branch version and add a matching entry to `CHANGELOG.md`. After the pull request's Build workflow completes, GitHub Actions posts the **WII-UU / Version bump** status and leaves a review if the version is missing, invalid, or too low.
+`Main.VERSION` is the single target release version; packaged `BuildInfo.version()` supplies the full build identity. Ordinary PRs can keep the same target; CI assigns beta identities such as `2.0.9-beta.123.1+gabcdef123456` (run 123, attempt 1). A rerun gets a different attempt so published archives remain immutable. `--version` prints the exact installed identity; `--build-info` also shows channel, commit and source timestamp.
 
-To enforce this at merge time, add **WII-UU / Version bump** as a required status check in the target branch rules and require branches to be up to date before merging.
+Settings > System > Updates lets you choose **Stable** or **Beta**. Stable subscribers receive final releases only. Beta subscribers consider both feeds, so a final release supersedes its betas. Channels never trigger automatic downgrades. Existing `update.url` overrides still work; custom archives can set `update.stableUrl` and `update.betaUrl`.
 
+See [release/version documentation](docs/support/releases.md) and the [Node archive deployment guide](archive/README.md) for the port-8081 service and Cloudflare Tunnel setup.
 
 ### Archive historical versions manually
 

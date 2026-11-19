@@ -43,7 +43,10 @@ import wiiuu.ui.SettingsScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
-    public static final String VERSION = "2.0.7";
+    /** Canonical target release. Build scripts and legacy version checks read this declaration. */
+    public static final String VERSION = "2.0.9";
+    /** Exact installed version, including beta/run identity from the packaged metadata. */
+    public static final String BUILD_VERSION = wiiuu.core.BuildInfo.version();
 
     private final Config config;
     private final Library library;
@@ -200,8 +203,13 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                     System.out.print(wiiuu.ui.Themes.reference());
                     return;
                 }
+                case "--build-info" -> {
+                    System.out.println(wiiuu.core.BuildInfo.description());
+                    System.out.println("Built: " + wiiuu.core.BuildInfo.builtAt() + " · " + wiiuu.core.BuildInfo.branch());
+                    return;
+                }
                 case "--version" -> {
-                    System.out.println("WII-UU " + VERSION);
+                    System.out.println("WII-UU " + BUILD_VERSION);
                     return;
                 }
                 case "--help", "-h" -> {
@@ -211,6 +219,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --port N                    GamePad web server port (default 8080)
                               --no-server                 do not start the phone GamePad server
                               --home DIR                  settings folder (default ~/.wiiuu)
+                              --build-info               show channel, commit and build date
                               --check-update / --upgrade  check for / install a newer version (with its notes)
                               --changelog [VERSION]       what changed (since VERSION)
                               --appliance                 start fullscreen without first-run or update prompts
@@ -223,7 +232,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --install-virtual-display   Windows: install the virtual display (split DS/3DS screens)
                               --virtual-display-off       Windows: switch the virtual display off (split screens)
                             Keys: arrows move, Enter opens, Esc back, F1 settings, F2 GamePad, F5 refresh,
-                                  F11 fullscreen, Ctrl+Q closes a running game.""".formatted(VERSION));
+                                  F11 fullscreen, Ctrl+Q closes a running game.""".formatted(BUILD_VERSION));
                     return;
                 }
                 case "--appliance" -> appliance = true;
@@ -290,7 +299,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             if (config.getBool("update.check", true)) app.checkForUpdateQuietly();
             app.showWhatsNewAfterUpdate();
         }
-        IntegrationApi.start(config, "wiiuu", VERSION, app.library, game -> true, new IntegrationApi.Controls() {
+        IntegrationApi.start(config, "wiiuu", BUILD_VERSION, app.library, game -> true, new IntegrationApi.Controls() {
             @Override public Game current() { return app.launcher.current(); }
             @Override public boolean launch(Game game) {
                 try {
@@ -507,7 +516,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     @Override
     public void openSettings() {
         view.openSettings(new SettingsScreen.Services(config, openBased, () -> server == null ? null : server.url(),
-                () -> view.startGuide(), this::restartIntoGuide, new Updater(config, VERSION), () -> {
+                () -> view.startGuide(), this::restartIntoGuide, new Updater(config, BUILD_VERSION), () -> {
                     quitReason = "update";
                     quit();
                 }, () -> {
@@ -1009,11 +1018,11 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
     private void showWhatsNewAfterUpdate() {
         String before = config.get("app.lastVersion", null);
-        if (VERSION.equals(before)) return;
-        config.set("app.lastVersion", VERSION);
+        if (BUILD_VERSION.equals(before)) return;
+        config.set("app.lastVersion", BUILD_VERSION);
         config.save();
-        if (freshInstall || firstRun || (before != null && !Updater.newer(VERSION, before))) return;     // first install, or a downgrade
-        java.util.List<wiiuu.core.Changelog.Entry> all = wiiuu.core.Changelog.bundled().between(before, VERSION);
+        if (freshInstall || firstRun || (before != null && !Updater.newer(BUILD_VERSION, before))) return;     // first install, or a downgrade
+        java.util.List<wiiuu.core.Changelog.Entry> all = wiiuu.core.Changelog.bundled().between(before, BUILD_VERSION);
         // updated from a version that didn't keep track: this version's notes
         java.util.List<wiiuu.core.Changelog.Entry> notes = before == null && all.size() > 1 ? all.subList(0, 1) : all;
         if (notes.isEmpty()) return;
@@ -1023,12 +1032,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             if (view.isBooting() || view.guideShowing()) return;
             wait.stop();
             if (!config.getBool("ui.whatsNew", true)) {
-                view.showToast("Updated to WII-UU " + VERSION + " - what's new: Settings (F1) > System");
+                view.showToast("Updated to WII-UU " + BUILD_VERSION + " - what's new: Settings (F1) > System");
                 return;
             }
-            wiiuu.ui.ChangelogDialog.show(frame, "What's new in WII-UU " + VERSION,
-                    before == null ? "WII-UU was updated to " + VERSION + "."
-                            : "WII-UU was updated from " + before + " to " + VERSION + ".", notes, false);
+            wiiuu.ui.ChangelogDialog.show(frame, "What's new in WII-UU " + BUILD_VERSION,
+                    before == null ? "WII-UU was updated to " + BUILD_VERSION + "."
+                            : "WII-UU was updated from " + before + " to " + BUILD_VERSION + ".", notes, false);
         });
         wait.start();
     }
@@ -1037,7 +1046,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     private void checkForUpdateQuietly() {
         Thread t = new Thread(() -> {
             try {
-                Updater.Release rel = new Updater(config, VERSION).check();
+                Updater.Release rel = new Updater(config, BUILD_VERSION).check();
                 if (rel != null) {
                     SwingUtilities.invokeLater(() -> view.showToast("WII-UU " + rel.version()
                             + " is available - Settings (F1) > System > Check for updates"));
@@ -1168,9 +1177,9 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     }
 
     private static int cliUpgrade(Config config, boolean install) {
-        Updater u = new Updater(config, VERSION);
+        Updater u = new Updater(config, BUILD_VERSION);
         try {
-            System.out.println("WII-UU " + VERSION + ": checking " + config.get("update.url", Updater.DEFAULT_URL));
+            System.out.println("WII-UU " + BUILD_VERSION + ": checking " + u.channel() + " channel (" + u.feedUrl() + ")");
             Updater.Release rel = u.check();
             if (rel == null) {
                 System.out.println("You have the newest version.");

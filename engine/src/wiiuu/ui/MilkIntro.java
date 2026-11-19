@@ -1,4 +1,4 @@
-package choccymilk;
+package wiiuu.ui;
 
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
@@ -14,32 +14,51 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.GeneralPath;
 
 /**
- * Choccy Milk's start: a glass of milk drops in, chocolate syrup pours into it and gets stirred
- * in, a straw lands in it, the chocolate band runs down from the top and the name pops in letter
- * by letter, then it all fades into the game list. About three seconds; any key, click or button
- * skips it (choccy.intro=false or --no-intro: none).
+ * A reusable chocolate-milk intro: a glass drops in, syrup pours in, a straw lands and the
+ * host application's title appears letter by letter. It fades out after 3.5 seconds.
+ * The host owns repaint scheduling, the underlying screen and any input that skips the intro.
  */
-final class Intro {
-    static final long LENGTH = 3500;
+public final class MilkIntro {
+    public static final long LENGTH = 3500;
 
-    private final long start = System.currentTimeMillis();
-    private final Look look;
+    private final long start;
+    private final String title, tagline;
+    private final MilkTheme look;
 
-    Intro(Look look) {
-        this.look = look;
+    /** Start an intro now, with the host application's title and tagline. */
+    public MilkIntro(MilkTheme look, String title, String tagline) {
+        this(look, title, tagline, System.currentTimeMillis());
     }
 
-    boolean done(long now) {
+    /** Start at an explicit timestamp, for deterministic rendering or a host animation clock. */
+    public MilkIntro(MilkTheme look, String title, String tagline, long start) {
+        this.look = java.util.Objects.requireNonNull(look);
+        this.title = java.util.Objects.requireNonNull(title);
+        this.tagline = java.util.Objects.requireNonNull(tagline);
+        this.start = start;
+    }
+
+    public boolean done(long now) {
         return now - start >= LENGTH;
     }
 
     /** How much of the intro covers the list (1, then fading to 0 at the end). */
-    float cover(long now) {
+    public float cover(long now) {
         long t = now - start;
         return t < 3050 ? 1 : Math.max(0, 1 - (t - 3050) / 450f);
     }
 
-    void paint(Graphics2D g, int w, int h, long now) {
+    /** Paint without changing the caller's graphics state. The host schedules repaints and skipping. */
+    public void paint(Graphics2D graphics, int w, int h, long now) {
+        Graphics2D g = (Graphics2D) graphics.create();
+        try {
+            paintIntro(g, w, h, now);
+        } finally {
+            g.dispose();
+        }
+    }
+
+    private void paintIntro(Graphics2D g, int w, int h, long now) {
         float t = now - start;
         float cover = cover(now);
         if (cover <= 0) return;
@@ -60,7 +79,7 @@ final class Intro {
             AffineTransform at = g.getTransform();
             g.translate(0, -bh * 1.5f * (1 - easeOut(band)));
             g.setPaint(new GradientPaint(0, 0, look.band, 0, bh, look.bandShade));
-            g.fill(Look.drips(w, bh, u, easeOut(range(t, 1800, 2600))));
+            g.fill(MilkTheme.drips(w, bh, u, easeOut(range(t, 1800, 2600))));
             g.setTransform(at);
         }
 
@@ -105,7 +124,7 @@ final class Intro {
         Composite c2 = g.getComposite();
         g.setComposite(AlphaComposite.SrcOver.derive(cover * appear));
         Color edge = look.dark ? new Color(0xF6E9DC) : new Color(0x6B3E26);
-        Look.glass(g, gx, gyNow, gw, gh, fill, mix, straw, slosh, t / 650.0, edge, look.milk, look.choc, look.chocLight);
+        MilkTheme.glass(g, gx, gyNow, gw, gh, fill, mix, straw, slosh, t / 650.0, edge, look.milk, look.choc, look.chocLight);
         g.setComposite(c2);
 
         // splashes where the syrup lands
@@ -117,7 +136,7 @@ final class Intro {
                 float x = gx + gw * 0.42f + dir * life * gw * 0.5f;
                 float y = gyNow + gh * 0.12f - (float) (Math.sin(life * Math.PI) * gh * 0.22f) + life * gh * 0.08f;
                 float r = (2.4f + (i % 3)) * u * (1 - life * 0.4f);
-                g.setColor(Look.mix(look.milk, look.choc, Math.min(1, mix + 0.4f)));
+                g.setColor(MilkTheme.mix(look.milk, look.choc, Math.min(1, mix + 0.4f)));
                 g.fill(new Ellipse2D.Float(x - r, y - r, r * 2, r * 2));
             }
         }
@@ -140,8 +159,8 @@ final class Intro {
         }
 
         // the name, letter by letter
-        String name = App.NAME;
-        Font f = Look.font(Font.BOLD, 64 * u);
+        String name = title;
+        Font f = MilkTheme.font(Font.BOLD, 64 * u);
         g.setFont(f);
         FontMetrics fm = g.getFontMetrics();
         float tx = (w - fm.stringWidth(name)) / 2f, ty = gy + gh + 30 * u + fm.getAscent();
@@ -157,7 +176,7 @@ final class Intro {
                 g.translate(-cw / 2, fm.getAscent() * 0.35f);
                 Composite c3 = g.getComposite();
                 g.setComposite(AlphaComposite.SrcOver.derive(cover * Math.min(1, k * 2.5f)));
-                g.setColor(Look.alpha(look.choc, look.dark ? 0.55f : 0.18f));
+                g.setColor(MilkTheme.alpha(look.choc, look.dark ? 0.55f : 0.18f));
                 g.drawString(ch, 0, 4 * u);
                 g.setColor(i < 6 ? (look.dark ? look.milk : look.choc) : look.accent);
                 g.drawString(ch, 0, 0);
@@ -168,9 +187,9 @@ final class Intro {
         }
         float tag = range(t, 2450, 2850);
         if (tag > 0) {
-            g.setFont(Look.font(Font.PLAIN, 18 * u));
+            g.setFont(MilkTheme.font(Font.PLAIN, 18 * u));
             FontMetrics fs = g.getFontMetrics();
-            String line = "games, straight from the glass";
+            String line = tagline;
             Composite c4 = g.getComposite();
             g.setComposite(AlphaComposite.SrcOver.derive(cover * tag));
             g.setColor(look.dim);
