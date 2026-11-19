@@ -24,8 +24,11 @@ def identity(base, env):
     ref = env.get("GITHUB_REF", "")
     tag = ref.removeprefix("refs/tags/") if ref.startswith("refs/tags/") else ""
     channel = env.get("WIIUU_BUILD_CHANNEL", "auto")
+    release_branch = ref.removeprefix("refs/heads/release/") if ref.startswith("refs/heads/release/") else ""
+    if release_branch and release_branch != base:
+        raise ValueError(f"Release branch {release_branch!r} does not match target {base}")
     if channel == "auto":
-        channel = "stable" if tag and "-" not in tag else "beta"
+        channel = "stable" if release_branch or tag and "-" not in tag else "beta"
     if channel == "release":
         channel = "stable"  # compatibility for existing build scripts
     if channel not in ("stable", "beta"):
