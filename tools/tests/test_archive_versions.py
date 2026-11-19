@@ -64,6 +64,18 @@ class ArchiveTest(unittest.TestCase):
             self.assertEqual(list((root / 'work').iterdir()), [])
             self.assertEqual(git('status', '--porcelain'), '')
 
+    def test_new_version_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            def git(*args):
+                return subprocess.check_output(['git', '-C', str(repo), *args], text=True).strip()
+            git('init', '-q'); git('config', 'user.email', 'test@example.invalid'); git('config', 'user.name', 'Test')
+            (repo / 'VERSION').write_text('2.0.9\n')
+            git('add', '.'); git('commit', '-qm', 'single version source')
+            result = subprocess.run([sys.executable, str(SCRIPT), '--repository', str(repo), '--list'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('2.0.9\t' + git('rev-parse', 'HEAD'), result.stdout)
+
 
 if __name__ == '__main__':
     unittest.main()

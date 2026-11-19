@@ -23,11 +23,15 @@ def versions(repo, ref):
     # Newest commit for each version, including fixes made after its version bump.
     found = {}
     for commit in git(repo, 'rev-list', '--first-parent', ref).splitlines():
-        result = subprocess.run(['git', '-C', str(repo), 'show', f'{commit}:{VERSION_FILE}'],
-                                capture_output=True, text=True)
-        match = VERSION.search(result.stdout)
-        if match:
-            found.setdefault(match[1], commit)
+        target = subprocess.run(['git', '-C', str(repo), 'show', f'{commit}:VERSION'], capture_output=True, text=True)
+        if target.returncode == 0 and re.fullmatch(r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)', target.stdout.strip()):
+            found.setdefault(target.stdout.strip(), commit)
+        else:
+            result = subprocess.run(['git', '-C', str(repo), 'show', f'{commit}:{VERSION_FILE}'],
+                                    capture_output=True, text=True)
+            match = VERSION.search(result.stdout)
+            if match:
+                found.setdefault(match[1], commit)
     return sorted(found.items(), key=lambda item: tuple(map(int, item[0].split('.'))))
 
 

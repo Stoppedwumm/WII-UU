@@ -8,6 +8,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 rm -rf build/classes build/engine build/choccy-classes build/cleanup-classes build/oem-classes
 mkdir -p build/classes build/engine build/choccy-classes build/cleanup-classes
+python3 tools/build-version.py
+APP_VERSION="$(python3 -c 'import json; print(json.load(open("build/version.json"))["version"])')"
 # The cleanup tool is independent of the engine and the main app.
 javac --release 17 -encoding UTF-8 -d build/cleanup-classes tools/cleanup/Cleanup.java
 jar --create --file build/WII-UU-Cleanup.jar --main-class wiiuu.cleanup.Cleanup -C build/cleanup-classes .
@@ -66,13 +68,10 @@ if [ -d build/cloudflared ]; then
     cp -r build/cloudflared/. build/classes/cloudflared/
   fi
 fi
-# Development builds carry the badge; release packaging explicitly chooses release.
-BUILD_CHANNEL="${WIIUU_BUILD_CHANNEL:-beta}"
-case "$BUILD_CHANNEL" in beta|release) ;; *) echo "Unknown build channel: $BUILD_CHANNEL" >&2; exit 1 ;; esac
-printf 'channel=%s\n' "$BUILD_CHANNEL" > build/classes/wiiuu-build.properties
+cp build/wiiuu-build.properties build/classes/wiiuu-build.properties
 # the release notes WII-UU shows after an update (Settings > General > What's new)
 [ -f CHANGELOG.md ] && cp CHANGELOG.md build/classes/CHANGELOG.md
-printf 'Main-Class: wiiuu.Main\n' > build/manifest.txt
+printf 'Main-Class: wiiuu.Main\nImplementation-Version: %s\n' "$APP_VERSION" > build/manifest.txt
 jar --create --file build/wiiuu.jar --manifest build/manifest.txt -C build/classes .
 echo "Built build/wiiuu.jar"
 # the reactions editor (reaction mode's videos): the same classes, its own start
@@ -86,7 +85,7 @@ find choccy-app/src -name '*.java' > build/sources-app.txt
 javac --release 17 -encoding UTF-8 -cp build/engine -d build/choccy-classes @build/sources-app.txt
 cp -r build/engine/. build/choccy-classes/
 [ -d choccy-app/resources ] && cp -r choccy-app/resources/. build/choccy-classes/
-APP_VERSION="$(grep -o 'VERSION = "[^"]*"' src/wiiuu/Main.java | cut -d'"' -f2)"
+cp build/wiiuu-build.properties build/choccy-classes/wiiuu-build.properties
 printf 'Main-Class: choccymilk.App\nEnable-Native-Access: ALL-UNNAMED\nImplementation-Version: %s\n' "$APP_VERSION" > build/manifest-choccy.txt
 jar --create --file build/ChoccyMilk.jar --manifest build/manifest-choccy.txt -C build/choccy-classes .
 echo "Built build/ChoccyMilk.jar"

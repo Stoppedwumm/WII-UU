@@ -2,15 +2,18 @@
 # Builds the jar and the release zip: dist/WII-UU-<version>.zip
 set -euo pipefail
 cd "$(dirname "$0")"
-VERSION="$(grep -o 'VERSION = "[^"]*"' src/wiiuu/Main.java | cut -d'"' -f2)"
-NAME="WII-UU-$VERSION"
+python3 tools/build-version.py > /dev/null
+BASE_VERSION="$(python3 -c 'import json; print(json.load(open("build/version.json"))["baseVersion"])')"
 # every release says what changed: WII-UU shows it after updating
-if ! grep -qE "^## v?${VERSION//./\\.}( |$)" CHANGELOG.md; then
-  echo "CHANGELOG.md has no '## $VERSION' entry: add what changed first." >&2
+if ! grep -qE "^## v?${BASE_VERSION//./\\.}( |$)" CHANGELOG.md; then
+  echo "CHANGELOG.md has no '## $BASE_VERSION' entry: add what changed first." >&2
   exit 1
 fi
 python3 tools/package-cloudflared.py
-WIIUU_BUILD_CHANNEL="${WIIUU_BUILD_CHANNEL:-release}" WIIUU_SLIM_RELAY=1 ./build.sh
+WIIUU_SLIM_RELAY=1 ./build.sh
+VERSION="$(python3 -c 'import json; print(json.load(open("build/version.json"))["releaseVersion"])')"
+CHANNEL="$(python3 -c 'import json; print(json.load(open("build/version.json"))["channel"])')"
+NAME="WII-UU-$VERSION"
 rm -rf "dist/$NAME" "dist/$NAME.zip"
 mkdir -p "dist/$NAME"
 cp build/wiiuu.jar build/ChoccyMilk.jar build/WII-UU-Cleanup.jar build/WII-UU-OEM-Creator.jar install.sh emulators.sh install.ps1 install.bat README.md CHANGELOG.md "dist/$NAME/"
@@ -26,18 +29,19 @@ for helper in build/cloudflared/*; do
   mkdir -p "$target"
   cp "$helper"/cloudflared* "$target/"
 done
-cp install.sh build/WII-UU-Cleanup.jar build/WII-UU-OEM-Creator.jar docs/download/
+if [ "$CHANNEL" = stable ]; then
+  DOWNLOAD=docs/download
+else
+  DOWNLOAD=docs/beta/download
+fi
+mkdir -p "$DOWNLOAD"
+cp install.sh build/WII-UU-Cleanup.jar build/WII-UU-OEM-Creator.jar "$DOWNLOAD/"
 cp "dist/$NAME.zip" "docs/download/$NAME.zip"
-cp "dist/$NAME.zip" docs/download/WII-UU-latest.zip
+cp "dist/$NAME.zip" "$DOWNLOAD/WII-UU-latest.zip"
 # the reactions editor on its own (it runs anywhere with Java 17+ and ffmpeg)
-cp build/WII-UU-Reactions.jar docs/download/WII-UU-Reactions.jar
+cp build/WII-UU-Reactions.jar "$DOWNLOAD/WII-UU-Reactions.jar"
 # Choccy Milk on its own (Java 17+; it gets the newer Java its player needs by itself)
-cp build/ChoccyMilk.jar docs/download/ChoccyMilk.jar
+cp build/ChoccyMilk.jar "$DOWNLOAD/ChoccyMilk.jar"
 # the notes, for the website and for installed copies about to update (next to version.json)
-cp CHANGELOG.md docs/changelog.md
-# version.json tells installed copies (Settings > Check for updates, wiiuu --upgrade) what's newest
-BASE_URL="${WIIUU_SITE:-https://wiiuu.stoppedwumm.net}"
-SHA="$(sha256sum "dist/$NAME.zip" | cut -d' ' -f1)"
-printf '{\n  "version": "%s",\n  "zip": "%s/download/%s.zip",\n  "sha256": "%s"\n}\n' \
-  "$VERSION" "$BASE_URL" "$NAME" "$SHA" > docs/version.json
-echo "Packaged dist/$NAME.zip (also docs/download/, docs/version.json)"
+if [ "$CHANNEL" = stable ]; then cp CHANGELOG.md docs/changelog.md; else cp CHANGELOG.md docs/beta/changelog.md; fi
+python3 tools/write-update-manifest.py

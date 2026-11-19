@@ -2302,12 +2302,14 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             if (BETA_BUILD) {
                 Graphics2D badge = (Graphics2D) g0.create();
                 badge.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                int bw = 74, bh = 24, bx = Math.max(4, (getWidth() - bw) / 2);
+                badge.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+                String label = wiiuu.core.BuildInfo.badge();
+                int bw = badge.getFontMetrics().stringWidth(label) + 24, bh = 24, bx = Math.max(4, (getWidth() - bw) / 2);
                 badge.setColor(new Color(35, 27, 12, 230));
                 badge.fillRoundRect(bx, 6, bw, bh, 12, 12);
                 badge.setColor(new Color(255, 205, 100));
                 badge.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-                badge.drawString("BETA", bx + (bw - badge.getFontMetrics().stringWidth("BETA")) / 2, 23);
+                badge.drawString(label, bx + 12, 23);
                 badge.dispose();
             }
         } finally {

@@ -64,7 +64,7 @@ public final class Launcher {
                 new DolphinInput(config), new PadIniInput(config, PadIniInput.pcsx2()),
                 new PadIniInput(config, PadIniInput.duckstation()));
         this.retroArch = new RetroArch(config);
-        this.ra = new RaConnect(config, "WII-UU/" + wiiuu.Main.VERSION);
+        this.ra = new RaConnect(config, "WII-UU/" + wiiuu.Main.BUILD_VERSION);
         Choccy.setHome(config.home());
         for (InputPatch p : inputPatches) p.recover();
     }

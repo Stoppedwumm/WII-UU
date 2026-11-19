@@ -1,11 +1,8 @@
 name: Build
 
-# Builds the jar and the release zip on every push and pull request, and keeps the zip as a
-# downloadable artifact.
-# On the default branch it then publishes the website (docs/) to GitHub Pages with the freshly
-# built zip in download/ and a matching version.json, so the site and "Check for updates" always
-# offer the newest build. (Settings → Pages → Source must be "GitHub Actions".)
-# Pushing a tag such as v1.3.0 also publishes a GitHub release with the zip.
+# Branch builds are numbered betas; only exact version tags publish final releases.
+# Each channel keeps its own feed/download, backed by immutable GitHub/optional archive assets.
+# All PRs build/test artifacts, but never publish releases or deploy the website.
 on:
   push:
     branches: ["**"]
@@ -66,9 +63,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/installer-tests
-          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java src/wiiuu/core/BuildInfo.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java
+          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java engine/src/wiiuu/core/BuildInfo.java engine/src/wiiuu/core/Version.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java test/wiiuu/core/VersionTest.java test/wiiuu/core/UpdateChannelsTest.java
           java -cp build/installer-tests wiiuu.core.ActionsBuildTest
           java -cp build/installer-tests wiiuu.core.BuildInfoTest
+          java -cp build/installer-tests wiiuu.core.VersionTest
+          java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.UpdateChannelsTest
+          python3 -m unittest discover -s tools/tests -p 'test_release*.py'
       - name: Check Windows installer syntax
         if: runner.os == 'Windows'
         shell: pwsh
@@ -100,6 +100,9 @@ jobs:
           java -Djava.awt.headless=true -cp build/installer-tests wiiuu.net.RelayTest
 
   build:
+    concurrency:
+      group: wiiuu-packaging-${{ github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v')) && 'publish' || github.ref }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -111,18 +114,21 @@ jobs:
           distribution: temurin
           java-version: "25"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test Node archive server
+        run: node --test archive/test/*.test.mjs
+
       - name: Build jar and release zip (also copies it into docs/download and writes docs/version.json)
         id: version
         run: |
           chmod +x build.sh package.sh
-          if [[ "$GITHUB_REF" == refs/tags/v* || ( "$GITHUB_EVENT_NAME" != pull_request && "$GITHUB_REF_NAME" == "${{ github.event.repository.default_branch }}" ) ]]; then
-            export WIIUU_BUILD_CHANNEL=release
-          else
-            export WIIUU_BUILD_CHANNEL=beta
-          fi
+          # build-version.py validates tags against Main.VERSION; all branch/PR builds are beta.
           ./package.sh
-          unzip -p build/wiiuu.jar wiiuu-build.properties | grep -Fx "channel=$WIIUU_BUILD_CHANNEL"
-          v="$(grep -o 'VERSION = "[^"]*"' src/wiiuu/Main.java | cut -d'"' -f2)"
+          v="$(python3 -c 'import json; print(json.load(open("build/version.json"))["releaseVersion"])')"
+          channel="$(python3 -c 'import json; print(json.load(open("build/version.json"))["channel"])')"
+          echo "CHANNEL=$channel" >> "$GITHUB_ENV"
           echo "VERSION=$v" >> "$GITHUB_ENV"
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
@@ -209,12 +215,45 @@ jobs:
           path: build/actions-artifact/WII-UU-${{ env.VERSION }}/
           if-no-files-found: error
 
-      - name: Keep only the current zip on the site
-        if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
-        run: find docs/download -name 'WII-UU-*.zip' ! -name "WII-UU-$VERSION.zip" ! -name 'WII-UU-latest.zip' -delete
+      - name: Upload to optional archive service
+        if: vars.WIIUU_ARCHIVE_URL != '' && github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          ARCHIVE_TOKEN: ${{ secrets.WIIUU_ARCHIVE_TOKEN }}
+          ARCHIVE_URL: ${{ vars.WIIUU_ARCHIVE_URL }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "v$VERSION" > /dev/null 2>&1; then
+            node archive/client.mjs --url "$ARCHIVE_URL" --manifest build/release-feed/version.json \
+              --asset "dist/WII-UU-$VERSION.zip" --asset CHANGELOG.md \
+              --asset build/ChoccyMilk.jar --asset build/WII-UU-Cleanup.jar \
+              --asset build/WII-UU-OEM-Creator.jar --asset build/WII-UU-Reactions.jar \
+              --write-manifest build/release-feed/version.json
+          fi
+
+      - name: Publish versioned application release
+        if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$VERSION"
+          flags=(--latest=false --prerelease)
+          if [ "$CHANNEL" = stable ]; then flags=(--latest); fi
+          if ! gh release view "$tag" > /dev/null 2>&1; then
+            gh release create "$tag" "dist/WII-UU-$VERSION.zip" build/release-feed/version.json \
+              CHANGELOG.md build/WII-UU-Reactions.jar --target "$GITHUB_SHA" \
+              --title "WII-UU $VERSION" --generate-notes "${flags[@]}"
+          fi
+
+      - name: Assemble stable and beta website channels from published releases
+        if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases" > build/published-releases.json
+          python3 tools/stage-release-site.py build/published-releases.json
 
       - name: Package the website
-        if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+        if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs
@@ -238,21 +277,14 @@ jobs:
               --notes "Standalone Java 17+ game screen renderer, display filters, theme scripting, menu palettes and backgrounds, shadows, vector icons, font caching and text layout, Cocoa/Milk painting and icons, reusable intro animation, animated mascots, audio spectrum analysis and visualization, themed Swing controls and app layouts, desktop theme detection and GamePad button types. See the [getting started guide](https://wiiuu.stoppedwumm.net/support/ui-library/) for setup and examples."
           fi
 
-      - name: Publish release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" "dist/WII-UU-$VERSION.zip" \
-            --title "WII-UU $VERSION" --generate-notes
 
   pages:
     needs: build
-    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+    if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     concurrency:
       group: pages
-      cancel-in-progress: true
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}

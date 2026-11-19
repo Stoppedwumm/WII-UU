@@ -29,6 +29,7 @@ import java.util.zip.ZipInputStream;
  */
 public final class Updater {
     public static final String DEFAULT_URL = "https://wiiuu.stoppedwumm.net/version.json";
+    public static final String BETA_URL = "https://wiiuu.stoppedwumm.net/beta/version.json";
     private static final String OS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
 
     public record Release(String version, String zipUrl, String sha256) {}
@@ -41,17 +42,62 @@ public final class Updater {
     public Updater(Config config, String currentVersion) {
         this.config = config;
         this.current = currentVersion;
+        // Persist the initial subscription so promotion from beta to final does not silently opt out.
+        synchronized (config) {
+            if (config.get("update.channel", null) == null) {
+                String initial;
+                try { initial = Version.parse(currentVersion).prerelease() ? "beta" : "stable"; }
+                catch (IllegalArgumentException e) { initial = "stable"; }
+                config.set("update.channel", initial);
+                config.save();
+            }
+        }
     }
 
-    /** @return the newer release, or null when up to date */
+    /** The subscription is independent of the installed build; stable never receives prereleases. */
+    public String channel() {
+        String fallback;
+        try { fallback = Version.parse(current).prerelease() ? "beta" : "stable"; }
+        catch (IllegalArgumentException e) { fallback = "stable"; }
+        return "beta".equals(config.get("update.channel", fallback)) ? "beta" : "stable";
+    }
+
+    public String feedUrl() {
+        return config.get("update.url", channel().equals("beta") ? config.get("update.betaUrl", BETA_URL) : config.get("update.stableUrl", DEFAULT_URL));
+    }
+
+    /** Beta subscribers consider both feeds so a final release supersedes a beta of the same version. */
     public Release check() throws IOException, InterruptedException {
-        String url = config.get("update.url", DEFAULT_URL);
-        HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(15))
+        String custom = config.get("update.url", null);
+        if (custom != null) return readRelease(custom, false);
+        Release stable = null, beta = null;
+        IOException failure = null;
+        try { stable = readRelease(config.get("update.stableUrl", DEFAULT_URL), false); }
+        catch (IOException e) { failure = e; }
+        if (channel().equals("beta")) {
+            try { beta = readRelease(config.get("update.betaUrl", BETA_URL), true); }
+            catch (IOException e) { if (failure == null) failure = e; else failure.addSuppressed(e); }
+        }
+        if (stable == null && beta == null && failure != null) throw failure;
+        return beta != null && (stable == null || newer(beta.version(), stable.version())) ? beta : stable;
+    }
+
+    private Release readRelease(String url, boolean optional) throws IOException, InterruptedException {
+        HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(15))
                 .header("User-Agent", "WII-UU/" + current).build(), HttpResponse.BodyHandlers.ofString());
-        if (r.statusCode() != 200) throw new IOException("update check failed: HTTP " + r.statusCode());
-        String body = r.body();
+        if (optional && response.statusCode() == 404) return null;
+        if (response.statusCode() != 200) throw new IOException("update check failed: HTTP " + response.statusCode());
+        String body = response.body();
         Release rel = new Release(field(body, "version"), field(body, "zip"), field(body, "sha256"));
-        if (rel.version() == null || rel.zipUrl() == null) throw new IOException("unexpected version.json");
+        if (rel.version() == null || rel.zipUrl() == null) throw new IOException("unexpected update manifest");
+        try {
+            Version version = Version.parse(rel.version());
+            URI zip = URI.create(rel.zipUrl());
+            if (!"https".equals(zip.getScheme()) && !"http".equals(zip.getScheme())) throw new IllegalArgumentException("Invalid ZIP URL");
+            String declaredChannel = field(body, "channel");
+            if ("stable".equals(declaredChannel) && version.prerelease()) throw new IOException("Stable feed contains a prerelease");
+            if (channel().equals("stable") && (version.prerelease() || "beta".equals(declaredChannel))) return null;
+        } catch (IllegalArgumentException e) { throw new IOException("Invalid update manifest", e); }
         return newer(rel.version(), current) ? rel : null;
     }
 
@@ -61,7 +107,9 @@ public final class Updater {
      */
     public List<Changelog.Entry> notes(Release rel) {
         try {
-            URI url = URI.create(config.get("update.url", DEFAULT_URL)).resolve("changelog.md");
+            boolean beta = Version.parse(rel.version()).prerelease();
+            URI url = URI.create(config.get("update.url", beta ? config.get("update.betaUrl", BETA_URL)
+                    : config.get("update.stableUrl", DEFAULT_URL))).resolve("changelog.md");
             HttpResponse<String> r = http.send(HttpRequest.newBuilder(url).timeout(Duration.ofSeconds(15))
                     .header("User-Agent", "WII-UU/" + current).build(), HttpResponse.BodyHandlers.ofString());
             if (r.statusCode() != 200) return List.of();
@@ -74,22 +122,10 @@ public final class Updater {
         }
     }
 
-    /** Numeric, dot-separated comparison: 1.10.0 > 1.9.2. */
+    /** Semantic-version precedence; build metadata does not trigger updates. Malformed values are rejected. */
     public static boolean newer(String candidate, String than) {
-        String[] a = candidate.split("[.-]"), b = than.split("[.-]");
-        for (int i = 0; i < Math.max(a.length, b.length); i++) {
-            int x = i < a.length ? num(a[i]) : 0, y = i < b.length ? num(b[i]) : 0;
-            if (x != y) return x > y;
-        }
-        return false;
-    }
-
-    private static int num(String s) {
-        try {
-            return Integer.parseInt(s.replaceAll("\\D.*", ""));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+        try { return Version.parse(candidate).compareTo(Version.parse(than)) > 0; }
+        catch (IllegalArgumentException e) { return false; }
     }
 
     private static String field(String json, String key) {

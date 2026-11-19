@@ -3,7 +3,10 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
-## 2.0.8 (2026-11-19)
+## 2.0.9 (2026-11-19)
+- Introduce a single release target, automatically numbered beta builds with CI attempt/commit metadata, and semantic version ordering.
+- Separate stable and beta updates, add an update-channel selector, and publish stable builds only from explicit version tags.
+- Include a dependency-free Node.js release archive on port 8081, immutable checksum-verified releases, channel feeds and optional GitHub Actions uploads.
 - Add built-in themed Swing buttons, form controls, cards and layouts to the UI library, and use them in Choccy Milk Settings.
 - Expand the standalone UI library to 1.1.0 with theme scripting, light/dark menu palettes, backgrounds, shadows, vector icons, font caching and text layout.
 - Export the animated mascot and audio spectrum visualizer with configurable branding, audio input and clocks.

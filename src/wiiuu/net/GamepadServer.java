@@ -593,7 +593,7 @@ public final class GamepadServer {
         http.createContext("/", this::handle);
         http.start();
         if (config.getBool("peers.enabled", true)) {
-            peers = new Peers(config, new PeerHost(), port, wiiuu.Main.VERSION);
+            peers = new Peers(config, new PeerHost(), port, wiiuu.Main.BUILD_VERSION);
             split = new SplitPlay(config, peers, new SplitPlay.Games() {
                 @Override
                 public boolean busy() {
@@ -1207,7 +1207,7 @@ public final class GamepadServer {
             try (InputStream in = GamepadServer.class.getResourceAsStream("/web/pad.html")) {
                 if (in == null) throw new IOException("pad.html missing from jar");
                 byte[] template = in.readAllBytes();
-                String build = wiiuu.Main.VERSION + "-" + UUID.nameUUIDFromBytes(template);
+                String build = wiiuu.Main.BUILD_VERSION + "-" + UUID.nameUUIDFromBytes(template);
                 String html = new String(template, StandardCharsets.UTF_8).replace("__WIIUU_PAD_BUILD__", build);
                 pageCache = new PadPage(build, html.getBytes(StandardCharsets.UTF_8));
             }

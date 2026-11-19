@@ -1641,7 +1641,7 @@ public final class SettingsScreen {
     private Path actionsBuild;
     private String actionsBuildStatus = "Download a successful build artifact, then select its ZIP here";
 
-    private String updateStatus = "Version " + wiiuu.Main.VERSION;
+    private String updateStatus = "Version " + wiiuu.Main.BUILD_VERSION;
     private Updater.Release release;
     private List<Changelog.Entry> releaseNotes = List.of();
     private boolean updating;
@@ -1654,6 +1654,16 @@ public final class SettingsScreen {
             MigrationPanel.open(view, config);
         }, () -> config.home().toString(), null));
         r.add(new Header("Updates"));
+        r.add(new Info(wiiuu.core.BuildInfo.description() + " · built " + wiiuu.core.BuildInfo.builtAt()));
+        r.add(new Choice("Update channel", "Stable: final releases only. Beta: numbered previews and final releases. "
+                + "Changing channels keeps this installation; older versions are never installed automatically.",
+                () -> List.of("Stable", "Beta"),
+                () -> sv.updater() != null && sv.updater().channel().equals("beta") ? 1 : 0,
+                i -> {
+                    if (updating) { say("Wait for the current update check to finish."); return; }
+                    config.set("update.channel", i == 1 ? "beta" : "stable");
+                    config.save(); release = null; releaseNotes = List.of(); updateStatus = "Channel changed — check for updates";
+                }));
         r.add(new Action("Check for updates", null, this::updatesPressed, () -> updateStatus, null));
         if (release != null) {
             r.add(new Action("Update to " + release.version(), "Your settings, games, paired phones and emulators are kept. "
@@ -1723,7 +1733,7 @@ public final class SettingsScreen {
             r.add(new Action("Accessibility", null, () -> openMacPane("Privacy_Accessibility"), null, null));
         }
         r.add(new Header("About"));
-        r.add(new Info("WII-UU " + wiiuu.Main.VERSION + ". Settings are in " + config.home().resolve("config.properties")));
+        r.add(new Info("WII-UU " + wiiuu.Main.BUILD_VERSION + ". Settings are in " + config.home().resolve("config.properties")));
         return r;
     }
 
@@ -1891,7 +1901,7 @@ public final class SettingsScreen {
             try {
                 rel = sv.updater().check();
                 if (rel != null) notes = sv.updater().notes(rel);
-                status = rel == null ? "You have the newest version (" + wiiuu.Main.VERSION + ")" : "Version " + rel.version() + " is out";
+                status = rel == null ? "No newer " + sv.updater().channel() + " release (" + wiiuu.Main.BUILD_VERSION + ")" : "Version " + rel.version() + " is out";
             } catch (Exception e) {
                 status = "Could not check: " + e.getMessage();
             }
