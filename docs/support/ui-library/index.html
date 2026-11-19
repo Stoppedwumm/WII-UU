@@ -26,7 +26,32 @@
   <li><a href="UiDemo.java">Download the renderer example</a></li>
   <li><a href="ThemeDemo.java">Download the theme and animation example</a></li>
 </ul>
-<h2>Run the example</h2>
+<h2>Build an app with built-in controls</h2>
+<p><code>Ui</code> is a Swing toolkit with buttons, primary actions, toggles, checkboxes, labels, headings, text fields, text areas, dropdowns, progress bars, scroll panes, cards and page backgrounds. Factories return Swing controls with their normal models, action listeners, keyboard/clipboard handling and accessible roles. It does not install a global look-and-feel.</p>
+<pre><code>import wiiuu.ui.Ui;
+import wiiuu.ui.UiTheme;
+
+SwingUtilities.invokeLater(() -&gt; {
+    Ui ui = new Ui(UiTheme.light());
+    JTextField name = ui.textField("My project", 24);
+    JButton save = ui.primaryButton("Save", e -&gt; System.out.println(name.getText()));
+    JPanel form = ui.card(new BorderLayout(0, 12));
+    form.add(ui.label("Project name", name), BorderLayout.NORTH);
+    form.add(name, BorderLayout.CENTER);
+    form.add(ui.row(save), BorderLayout.SOUTH);
+    JFrame frame = new JFrame("My app");
+    frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    frame.setContentPane(form);
+    frame.getRootPane().setDefaultButton(save);
+    frame.pack();
+    frame.setLocationRelativeTo(null);
+    frame.setVisible(true);
+});</code></pre>
+<p>The example uses ordinary <code>javax.swing.*</code> and <code>java.awt.*</code> imports. Add listeners with the factory overload or <code>addActionListener</code>. Assign button mnemonics with <code>setMnemonic</code>, and label form controls with <code>ui.label(caption, control)</code>. The host owns window creation, action logic, validation, and any Enter/Escape shortcuts for dialogs.</p>
+<p>Switch an existing control tree using <code>ui.setTheme(UiTheme.dark(), root)</code>. The change preserves text, documents, selected values, listeners, models and enabled states. Future controls use the new theme; apply it separately to each existing window with <code>ui.applyTheme(otherRoot)</code>. Only toolkit-created components are restyled. Custom dropdown renderers are retained and remain responsible for their own appearance. <code>UiTheme.from(themeResult)</code> also supports evaluated theme files.</p>
+<p>Use <code>ui.row(controls...)</code> and <code>ui.column(gap, controls...)</code> for quick layouts, or pass normal Swing layout managers to <code>panel</code>, <code>card</code> and <code>page</code>. Create, modify and theme controls on Swing’s event dispatch thread. The library has no networking or application framework dependency.</p>
+<p><a href="ControlsDemo.java">Download the complete form example</a>, which includes working actions and a theme switch. Compile against the same JAR as the renderer example below. Run <code>ControlsDemo</code> or <code>ControlsDemo --dark</code>; use <code>ControlsDemo --snapshot controls.png --dark</code> for a headless preview.</p>
+<h2>Run the renderer example</h2>
 <p>Put <code>UiDemo.java</code> and <code>WII-UU-UI-1.1.0.jar</code> in the same folder. Compile the example with a JDK, then run it.</p>
 <pre><code>javac -cp WII-UU-UI-1.1.0.jar UiDemo.java
 java -cp "WII-UU-UI-1.1.0.jar:." UiDemo</code></pre>

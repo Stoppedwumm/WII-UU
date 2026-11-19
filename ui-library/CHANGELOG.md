@@ -2,6 +2,7 @@
 
 ## 1.1.0 (2026-11-19)
 
+- Add `Ui`, `UiTheme` and `UiButton`: themed Swing controls, native event/model/keyboard support, rounded button states, form inputs, containers and live theme changes. Include a complete controls example and use the toolkit in Choccy Milk Settings.
 - Move the existing `wiiuu.ui.ThemeScript` parser into the shared engine and standalone JAR, preserving its package and API.
 - Extract `AnimatedMascot`: branded appearance, live theme and clock providers, speech bubbles, gaze tracking, walking, hops and hit testing. WII-UU-specific dialogue stays in the app.
 - Extract `AudioVisualizer`: configurable sample rate, host-supplied mono PCM and nanosecond clock, FFT analysis, spectrum bars/ring and waveform. WII-UU audio capture stays in the app.

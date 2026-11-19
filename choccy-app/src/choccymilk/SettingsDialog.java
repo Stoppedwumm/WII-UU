@@ -7,34 +7,37 @@ import java.util.*;
 import javax.swing.*;
 import wiiuu.core.*;
 import wiiuu.input.ChoccyKeys;
+import wiiuu.ui.Ui;
+import wiiuu.ui.UiTheme;
 
 /** Standalone settings: edits are staged until Save, including captured keyboard assignments. */
 final class SettingsDialog {
     private SettingsDialog() {}
     static boolean show(JFrame owner, Config config, java.util.function.BooleanSupplier gameRunning) {
+        Ui ui = new Ui(UiTheme.light());
         JDialog dialog = new JDialog(owner, "Choccy Milk settings", true);
         JTabbedPane tabs = new JTabbedPane();
-        JPanel general = new JPanel(new GridLayout(0, 1, 8, 8));
+        JPanel general = ui.panel(new GridLayout(0, 1, 8, 8));
         general.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
-        JComboBox<String> theme = new JComboBox<>(new String[]{"auto", "cocoa", "milk"});
+        JComboBox<String> theme = ui.comboBox(new String[]{"auto", "cocoa", "milk"});
         theme.setSelectedItem(config.get("choccy.theme", "auto"));
-        JCheckBox intro = new JCheckBox("Play startup animation", config.getBool("choccy.intro", true));
-        JTextField roms = new JTextField(config.romBase().toString(), 30);
-        JTextField bios = new JTextField(config.get("choccy.systemDir", ""), 30);
-        general.add(new JLabel("Theme")); general.add(theme); general.add(intro);
-        general.add(new JLabel("Game library folder (shared with WII-UU)")); general.add(folder(roms));
-        general.add(new JLabel("BIOS / system folder (blank: automatic)")); general.add(folder(bios));
-        general.add(new JLabel("Game folders and BIOS changes apply to the next game."));
+        JCheckBox intro = ui.checkBox("Play startup animation", config.getBool("choccy.intro", true));
+        JTextField roms = ui.textField(config.romBase().toString(), 30);
+        JTextField bios = ui.textField(config.get("choccy.systemDir", ""), 30);
+        general.add(ui.label("Theme")); general.add(theme); general.add(intro);
+        general.add(ui.label("Game library folder (shared with WII-UU)")); general.add(folder(ui, roms));
+        general.add(ui.label("BIOS / system folder (blank: automatic)")); general.add(folder(ui, bios));
+        general.add(ui.label("Game folders and BIOS changes apply to the next game."));
         tabs.addTab("General", general);
         tabs.addTab("Cores", new wiiuu.engine.CoreManagerPanel(config, gameRunning));
 
         Map<String, Integer> keys = new LinkedHashMap<>(ChoccyKeys.load(config));
-        JPanel keyboard = new JPanel(new GridLayout(0, 3, 8, 5));
+        JPanel keyboard = ui.panel(new GridLayout(0, 3, 8, 5));
         keyboard.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         Map<String, JButton> keyButtons = new LinkedHashMap<>();
         for (String action : keys.keySet()) {
-            keyboard.add(new JLabel(action));
-            JButton capture = new JButton(keyName(keys.get(action)));
+            keyboard.add(ui.label(action));
+            JButton capture = ui.button(keyName(keys.get(action)));
             keyButtons.put(action, capture);
             capture.setFocusTraversalKeysEnabled(false);
             capture.addActionListener(e -> { capture.setText("Press a key…"); capture.putClientProperty("capture", true); capture.requestFocusInWindow(); });
@@ -50,60 +53,60 @@ final class SettingsDialog {
                 @Override public void focusLost(FocusEvent e) { capture.putClientProperty("capture", false); capture.setText(keyName(keys.get(action))); }
             });
             keyboard.add(capture);
-            JButton clear = new JButton("Unbind");
+            JButton clear = ui.button("Unbind");
             clear.addActionListener(e -> { keys.put(action, 0); capture.setText("Unbound"); });
             keyboard.add(clear);
         }
-        JButton reset = new JButton("Restore default keys");
+        JButton reset = ui.button("Restore default keys");
         reset.addActionListener(e -> { keys.clear(); keys.putAll(ChoccyKeys.defaults()); keyButtons.forEach((a, button) -> button.setText(keyName(keys.get(a)))); });
-        JPanel keyboardPage = new JPanel(new BorderLayout(8, 8));
-        keyboardPage.add(new JLabel("Click an assignment, then press a key. F1 always opens Settings."), BorderLayout.NORTH);
-        keyboardPage.add(new JScrollPane(keyboard), BorderLayout.CENTER); keyboardPage.add(reset, BorderLayout.SOUTH);
+        JPanel keyboardPage = ui.panel(new BorderLayout(8, 8));
+        keyboardPage.add(ui.label("Click an assignment, then press a key. F1 always opens Settings."), BorderLayout.NORTH);
+        keyboardPage.add(ui.scrollPane(keyboard), BorderLayout.CENTER); keyboardPage.add(reset, BorderLayout.SOUTH);
         tabs.addTab("Keyboard", keyboardPage);
 
-        JPanel online = new JPanel(new GridLayout(0, 1, 8, 8));
+        JPanel online = ui.panel(new GridLayout(0, 1, 8, 8));
         online.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
-        JCheckBox wfc = new JCheckBox("Enable DS online (WFC replacement services)", DsOnline.enabled(config));
-        JTextField dns = new JTextField(DsOnline.dns(config), 25);
-        JTextField name = new JTextField(DsOnline.username(config), 12);
-        JCheckBox unique = new JCheckBox("Derive DS MAC from this profile name", config.getBool("choccy.nds.online.uniqueMac", false));
-        online.add(wfc); online.add(new JLabel("DNS override (IPv4; blank uses the melonDS DS core's default service)")); online.add(dns);
-        online.add(new JLabel("DS profile name (1–10 letters, digits, _ or -)")); online.add(name); online.add(unique);
-        online.add(new JLabel("Changing the MAC/profile may affect existing online profiles and Pokémon saves."));
-        online.add(new JLabel("Uses melonDS DS indirect networking. Restart the game after changes."));
-        online.add(new JLabel("In the game's WFC setup, connect to melonAP, then use its online/friend-code menu."));
-        online.add(new JLabel("Game/server compatibility and SSL patches depend on the replacement service."));
-        online.add(new JLabel("These settings are shared with WII-UU. Local wireless / Download Play is separate."));
+        JCheckBox wfc = ui.checkBox("Enable DS online (WFC replacement services)", DsOnline.enabled(config));
+        JTextField dns = ui.textField(DsOnline.dns(config), 25);
+        JTextField name = ui.textField(DsOnline.username(config), 12);
+        JCheckBox unique = ui.checkBox("Derive DS MAC from this profile name", config.getBool("choccy.nds.online.uniqueMac", false));
+        online.add(wfc); online.add(ui.label("DNS override (IPv4; blank uses the melonDS DS core's default service)")); online.add(dns);
+        online.add(ui.label("DS profile name (1–10 letters, digits, _ or -)")); online.add(name); online.add(unique);
+        online.add(ui.label("Changing the MAC/profile may affect existing online profiles and Pokémon saves."));
+        online.add(ui.label("Uses melonDS DS indirect networking. Restart the game after changes."));
+        online.add(ui.label("In the game's WFC setup, connect to melonAP, then use its online/friend-code menu."));
+        online.add(ui.label("Game/server compatibility and SSL patches depend on the replacement service."));
+        online.add(ui.label("These settings are shared with WII-UU. Local wireless / Download Play is separate."));
         tabs.addTab("DS online", online);
 
-        JPanel picture = new JPanel(new BorderLayout());
-        JComboBox<GameSystem> console = new JComboBox<>(Systems.ALL.stream().filter(Cores::has).toArray(GameSystem[]::new));
+        JPanel picture = ui.panel(new BorderLayout());
+        JComboBox<GameSystem> console = ui.comboBox(Systems.ALL.stream().filter(Cores::has).toArray(GameSystem[]::new));
         console.setRenderer(new DefaultListCellRenderer() { @Override public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean s, boolean f) {
             return super.getListCellRendererComponent(l, v instanceof GameSystem gs ? gs.name() : v, i, s, f);
         }});
         Map<String, String> filters = new HashMap<>(); Map<String, Boolean> wides = new HashMap<>(), blends = new HashMap<>();
         for (GameSystem gs : Systems.ALL) { filters.put(gs.id(), ChoccyPicture.upscale(config, gs.id())); wides.put(gs.id(), ChoccyPicture.widescreen(config, gs.id())); blends.put(gs.id(), ChoccyPicture.blend(config, gs.id())); }
-        JPanel options = new JPanel(new GridLayout(0, 1, 8, 8));
+        JPanel options = ui.panel(new GridLayout(0, 1, 8, 8));
         Runnable rebuild = () -> {
             GameSystem gs = (GameSystem) console.getSelectedItem(); if (gs == null) return;
             options.removeAll();
             var ups = ChoccyPicture.upscalers(gs.id());
-            JComboBox<String> up = new JComboBox<>(ups.stream().map(x -> x[1]).toArray(String[]::new));
+            JComboBox<String> up = ui.comboBox(ups.stream().map(x -> x[1]).toArray(String[]::new));
             for (int i = 0; i < ups.size(); i++) if (ups.get(i)[0].equals(filters.get(gs.id()))) up.setSelectedIndex(i);
             up.addActionListener(e -> filters.put(gs.id(), ups.get(up.getSelectedIndex())[0]));
-            JCheckBox wide = new JCheckBox(ChoccyPicture.n64OpenGlAvailable(gs.id())
+            JCheckBox wide = ui.checkBox(ChoccyPicture.n64OpenGlAvailable(gs.id())
                     ? "Widescreen (GLideN64)" : "Widescreen", wides.get(gs.id()));
             wide.addActionListener(e -> wides.put(gs.id(), wide.isSelected()));
-            JCheckBox blend = new JCheckBox("Blend frames", blends.get(gs.id())); blend.addActionListener(e -> blends.put(gs.id(), blend.isSelected()));
-            options.add(new JLabel("Upscaling")); options.add(up); options.add(wide); options.add(blend);
-            options.add(new JLabel("Core rendering changes take effect on the next game.")); options.revalidate(); options.repaint();
+            JCheckBox blend = ui.checkBox("Blend frames", blends.get(gs.id())); blend.addActionListener(e -> blends.put(gs.id(), blend.isSelected()));
+            options.add(ui.label("Upscaling")); options.add(up); options.add(wide); options.add(blend);
+            options.add(ui.label("Core rendering changes take effect on the next game.")); options.revalidate(); options.repaint();
         };
         console.addActionListener(e -> rebuild.run()); rebuild.run();
         picture.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16)); picture.add(console, BorderLayout.NORTH); picture.add(options, BorderLayout.CENTER);
         tabs.addTab("Picture", picture);
 
         boolean[] saved = {false};
-        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        JButton save = ui.primaryButton("Save"); JButton cancel = ui.button("Cancel");
         save.addActionListener(e -> {
             try {
                 ChoccyKeys.validate(keys);
@@ -123,14 +126,17 @@ final class SettingsDialog {
             } catch (IllegalArgumentException invalid) { JOptionPane.showMessageDialog(dialog, invalid.getMessage(), "Settings", JOptionPane.ERROR_MESSAGE); }
         });
         cancel.addActionListener(e -> dialog.dispose());
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT)); buttons.add(new JLabel("A running game continues while Settings is open.")); buttons.add(cancel); buttons.add(save);
+        JPanel buttons = ui.panel(new FlowLayout(FlowLayout.RIGHT)); buttons.add(ui.label("A running game continues while Settings is open.")); buttons.add(cancel); buttons.add(save);
         dialog.add(tabs, BorderLayout.CENTER); dialog.add(buttons, BorderLayout.SOUTH);
         dialog.setMinimumSize(new Dimension(800, 540)); dialog.setSize(880, 620); dialog.setLocationRelativeTo(owner);
+        dialog.getRootPane().setDefaultButton(save);
+        dialog.getRootPane().registerKeyboardAction(e -> dialog.dispose(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                JComponent.WHEN_IN_FOCUSED_WINDOW);
         dialog.setVisible(true); return saved[0];
     }
     private static String keyName(int code) { return code == 0 ? "Unbound" : KeyEvent.getKeyText(code); }
-    private static JPanel folder(JTextField field) {
-        JPanel row = new JPanel(new BorderLayout(8, 0)); JButton choose = new JButton("Browse…");
+    private static JPanel folder(Ui ui, JTextField field) {
+        JPanel row = ui.panel(new BorderLayout(8, 0)); JButton choose = ui.button("Browse…");
         choose.addActionListener(e -> { JFileChooser picker = new JFileChooser(); picker.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
             if (picker.showOpenDialog(row) == JFileChooser.APPROVE_OPTION) field.setText(picker.getSelectedFile().toString()); });
         row.add(field, BorderLayout.CENTER); row.add(choose, BorderLayout.EAST); return row;

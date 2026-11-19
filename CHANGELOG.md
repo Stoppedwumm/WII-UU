@@ -4,6 +4,7 @@ What changed in each WII-UU release, newest first. WII-UU shows these notes afte
 in Settings > General > What's new, and before installing an update.
 
 ## 2.0.8 (2026-11-19)
+- Add built-in themed Swing buttons, form controls, cards and layouts to the UI library, and use them in Choccy Milk Settings.
 - Expand the standalone UI library to 1.1.0 with theme scripting, light/dark menu palettes, backgrounds, shadows, vector icons, font caching and text layout.
 - Export the animated mascot and audio spectrum visualizer with configurable branding, audio input and clocks.
 - Share Choccy Milk's Cocoa/Milk painting, window icons and configurable intro animation with other Java desktop apps.

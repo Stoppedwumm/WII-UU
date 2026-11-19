@@ -29,7 +29,9 @@ WII-UU and Choccy Milk, along with desktop theme detection and GamePad button ty
 also shares WII-UU’s theme scripting and menu palettes, Choccy Milk’s Cocoa/Milk painting and icons,
 its intro animation with custom titles and taglines, and the menu background, shadows, vector icons,
 font caching and text layout. The library also exports a configurable animated mascot and an audio
-visualizer with FFT spectrum analysis, ambient bars, a spectrum ring and waveform painting. See the
+visualizer with FFT spectrum analysis, ambient bars, a spectrum ring and waveform painting.
+The `Ui` toolkit adds built-in Swing controls (buttons, toggles, checkboxes, labels, fields,
+dropdowns and progress bars), cards and layouts, with live light/dark/custom themes. See the
 [getting started guide](https://wiiuu.stoppedwumm.net/support/ui-library/) for downloads, the API
 reference and a Swing example. To build the library locally, run `./ui-library/build.sh`.
 
