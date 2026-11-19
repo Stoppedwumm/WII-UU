@@ -4,6 +4,9 @@ What changed in each WII-UU release, newest first. WII-UU shows these notes afte
 in Settings > General > What's new, and before installing an update.
 
 ## 2.0.9 (2026-11-19)
+- Browse the release archive from Settings > System > Updates, with channel filters, pagination, build details, release notes and verified installation of exact builds.
+- Allow deliberate archive downgrades/reinstalls after confirmation, and follow the selected build's update channel.
+- Add an explicit stable-promotion workflow for the current default-branch commit.
 - Introduce a single release target, automatically numbered beta builds with CI attempt/commit metadata, and semantic version ordering.
 - Separate stable and beta updates, add an update-channel selector, and publish stable builds only from explicit version tags.
 - Include a dependency-free Node.js release archive on port 8081, immutable checksum-verified releases, channel feeds and optional GitHub Actions uploads.
