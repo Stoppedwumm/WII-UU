@@ -133,8 +133,12 @@ jobs:
           echo "UI_VERSION=$ui_version" >> "$GITHUB_ENV"
           ui_jar="build/ui-library/WII-UU-UI-$ui_version.jar"
           mkdir -p build/ui-example
-          javac --release 17 -cp "$ui_jar" -d build/ui-example docs/support/ui-library/UiDemo.java
+          javac --release 17 -cp "$ui_jar" -d build/ui-example docs/support/ui-library/UiDemo.java docs/support/ui-library/ThemeDemo.java test/wiiuu/ui/UiLibraryTest.java
           java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" UiDemo --snapshot build/ui-example/demo.png
+          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" ThemeDemo --snapshot build/ui-example/themes.png
+          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" wiiuu.ui.UiLibraryTest
+          test -s build/ui-example/themes.png
+          test -f build/ui-library/api/wiiuu/ui/ThemeScript.html
           test -s build/ui-example/demo.png
           test -f build/ui-library/api/wiiuu/engine/GameScreen.html
           cp -R build/ui-library/api docs/support/ui-library/
@@ -207,8 +211,9 @@ jobs:
               "build/ui-library/WII-UU-UI-$UI_VERSION.jar" \
               "build/ui-library/WII-UU-UI-$UI_VERSION-javadoc.jar" \
               "docs/support/ui-library/UiDemo.java" \
+              "docs/support/ui-library/ThemeDemo.java" \
               --target "$GITHUB_SHA" --latest=false --title "WII-UU UI Library $UI_VERSION" \
-              --notes "Standalone Java 17+ game screen renderer, display filters, desktop theme detection and GamePad button types. See the [getting started guide](https://wiiuu.stoppedwumm.net/support/ui-library/) for setup and examples."
+              --notes "Standalone Java 17+ game screen renderer, display filters, theme scripting, menu palettes, Cocoa/Milk painting and icons, reusable intro animation, desktop theme detection and GamePad button types. See the [getting started guide](https://wiiuu.stoppedwumm.net/support/ui-library/) for setup and examples."
           fi
 
       - name: Publish release (tags only)

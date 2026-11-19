@@ -91,7 +91,7 @@ public final class Themes {
     public static ThemeScript.Result evaluate(String source, String fallbackName, boolean systemDark) throws ThemeScript.Error {
         java.util.Set<String> ids = new java.util.LinkedHashSet<>();
         for (GameSystem s : Systems.ALL) ids.add(s.id());
-        return ThemeScript.evaluate(source, fallbackName, MenuView::builtInColours,
+        return ThemeScript.evaluate(source, fallbackName, MenuPalette::colours,
                 id -> Systems.byId(id).map(GameSystem::color).orElse(null), ids, systemDark);
     }
 

@@ -19,18 +19,19 @@
 <main>
 <article>
 <h1>WII-UU UI Library</h1>
-<p>Use the same game screen renderer, display filters, and button types that WII-UU and Choccy Milk share. The standalone JAR works with Java 17 or newer and uses Java desktop APIs. Emulation, the GamePad server, and the WII-UU launcher are separate applications.</p>
+<p>Use the same game screen renderer, display filters, and button types that WII-UU and Choccy Milk share. Version 1.1.0 also includes theme scripting, menu palettes, Cocoa/Milk painting and icons, and a reusable intro animation. The standalone JAR works with Java 17 or newer and uses Java desktop APIs. Emulation, the GamePad server, and the WII-UU launcher are separate applications.</p>
 <ul>
-  <li><a href="https://github.com/Stoppedwumm/WII-UU/releases/tag/wiiuu-ui-v1.0.0">Download the official 1.0.0 release</a></li>
+  <li><a href="https://github.com/Stoppedwumm/WII-UU/releases/tag/wiiuu-ui-v1.1.0">Download the official 1.1.0 release</a></li>
   <li><a href="api/">Browse the Java API reference</a></li>
-  <li><a href="UiDemo.java">Download the Swing example</a></li>
+  <li><a href="UiDemo.java">Download the renderer example</a></li>
+  <li><a href="ThemeDemo.java">Download the theme and animation example</a></li>
 </ul>
 <h2>Run the example</h2>
-<p>Put <code>UiDemo.java</code> and <code>WII-UU-UI-1.0.0.jar</code> in the same folder. Compile the example with a JDK, then run it.</p>
-<pre><code>javac -cp WII-UU-UI-1.0.0.jar UiDemo.java
-java -cp "WII-UU-UI-1.0.0.jar:." UiDemo</code></pre>
+<p>Put <code>UiDemo.java</code> and <code>WII-UU-UI-1.1.0.jar</code> in the same folder. Compile the example with a JDK, then run it.</p>
+<pre><code>javac -cp WII-UU-UI-1.1.0.jar UiDemo.java
+java -cp "WII-UU-UI-1.1.0.jar:." UiDemo</code></pre>
 <p>On Windows, use the following launch command.</p>
-<pre><code>java -cp "WII-UU-UI-1.0.0.jar;." UiDemo</code></pre>
+<pre><code>java -cp "WII-UU-UI-1.1.0.jar;." UiDemo</code></pre>
 <h2>Render your own frames</h2>
 <ol>
   <li>Create a <code>wiiuu.engine.GameScreen</code> and call <code>look</code> to choose a filter and optional widescreen stretch.</li>
@@ -38,6 +39,17 @@ java -cp "WII-UU-UI-1.0.0.jar:." UiDemo</code></pre>
   <li>Call <code>paint</code> from your Swing component’s <code>paintComponent</code> method. Request a repaint after delivering each frame.</li>
 </ol>
 <p>Use <code>pictureBounds</code> to map input through letterboxing, <code>announce</code> to draw a temporary notification, and <code>GameScreen.key</code> to translate common keys to <code>wiiuu.input.PadButton</code>. <code>SystemTheme.isDark()</code> queries the desktop theme. Call it off the Swing event thread if you need to keep the UI responsive.</p>
+<h2>Themes and animation</h2>
+<p><code>wiiuu.ui.MenuPalette.colours(dark)</code> returns an independent map of WII-UU’s menu colours. Evaluate a <code>.wtheme</code> string with <code>MenuPalette.evaluate(source, fallbackName, systemDark)</code>. Its result includes colours, font preferences, warnings and dark-mode metadata. Apps with console tiles can use <code>ThemeScript.evaluate</code> with their own palette and console-colour providers. Loading files and applying the resulting colours belong to the host app.</p>
+<p><code>MilkTheme.COCOA</code> and <code>MilkTheme.MILK</code> expose Choccy Milk’s colours, background, selection pills, shadows, glass artwork and window icons. <code>MilkTheme.pick(setting, systemDark)</code> supports auto, cocoa/dark and milk/light.</p>
+<pre><code>MilkTheme look = MilkTheme.COCOA;
+MilkIntro intro = new MilkIntro(look, "My app", "Welcome");
+// In paintComponent, using the same millisecond clock:
+long now = System.currentTimeMillis();
+look.paintPage(g, getWidth(), getHeight(), 80, 1, now);
+intro.paint(g, getWidth(), getHeight(), now);</code></pre>
+<p>The host owns repaint scheduling and skip input. <code>done(now)</code> reports completion after 3.5 seconds; <code>cover(now)</code> reports fade opacity. The explicit-start constructor supports deterministic snapshots. The intro preserves the caller’s graphics state; other painting methods use the supplied context, so use a copy from <code>Graphics2D.create()</code>.</p>
+<p>Compile <code>ThemeDemo.java</code> against the same JAR as above, then run <code>ThemeDemo</code>. For a headless preview, append <code>--snapshot themes.png</code>.</p>
 </article>
 </main>
 <footer><a href="https://github.com/Stoppedwumm/WII-UU">Source on GitHub</a></footer>

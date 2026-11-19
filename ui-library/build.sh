@@ -10,6 +10,10 @@ sources=(
   engine/src/wiiuu/engine/GameScreen.java
   engine/src/wiiuu/engine/SystemTheme.java
   engine/src/wiiuu/input/PadButton.java
+  engine/src/wiiuu/ui/ThemeScript.java
+  engine/src/wiiuu/ui/MenuPalette.java
+  engine/src/wiiuu/ui/MilkTheme.java
+  engine/src/wiiuu/ui/MilkIntro.java
 )
 javac --release 17 -encoding UTF-8 -d "$out/classes" "${sources[@]}"
 printf 'Implementation-Title: WII-UU UI Library\nImplementation-Version: %s\nAutomatic-Module-Name: wiiuu.ui.library\n' "$version" > "$out/manifest.txt"
