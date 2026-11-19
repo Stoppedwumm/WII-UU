@@ -1,6 +1,6 @@
 name: Build
 
-# Branch builds are numbered betas; only exact version tags publish final releases.
+# Branch builds are numbered betas; exact tags or explicit default-branch promotion publish stable releases.
 # Each channel keeps its own feed/download, backed by immutable GitHub/optional archive assets.
 # All PRs build/test artifacts, but never publish releases or deploy the website.
 on:
@@ -9,6 +9,12 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      channel:
+        description: Publish a beta or promote the current default-branch commit to stable
+        type: choice
+        options: [beta, stable]
+        default: beta
 
 permissions:
   contents: write
@@ -63,11 +69,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/installer-tests
-          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java engine/src/wiiuu/core/BuildInfo.java engine/src/wiiuu/core/Version.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java test/wiiuu/core/VersionTest.java test/wiiuu/core/UpdateChannelsTest.java
+          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java engine/src/wiiuu/core/BuildInfo.java engine/src/wiiuu/core/Version.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java test/wiiuu/core/VersionTest.java test/wiiuu/core/UpdateChannelsTest.java engine/src/wiiuu/core/MiniJson.java src/wiiuu/core/ReleaseArchive.java test/wiiuu/core/ReleaseArchiveTest.java
           java -cp build/installer-tests wiiuu.core.ActionsBuildTest
           java -cp build/installer-tests wiiuu.core.BuildInfoTest
           java -cp build/installer-tests wiiuu.core.VersionTest
           java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.UpdateChannelsTest
+          java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.ReleaseArchiveTest
           python3 -m unittest discover -s tools/tests -p 'test_release*.py'
       - name: Check Windows installer syntax
         if: runner.os == 'Windows'
@@ -122,8 +129,15 @@ jobs:
 
       - name: Build jar and release zip (also copies it into docs/download and writes docs/version.json)
         id: version
+        env:
+          REQUESTED_CHANNEL: ${{ inputs.channel }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           chmod +x build.sh package.sh
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$REQUESTED_CHANNEL" = stable ]; then
+            [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] || { echo "Stable promotion must run on the default branch" >&2; exit 1; }
+            export WIIUU_BUILD_CHANNEL=stable
+          fi
           # build-version.py validates tags against Main.VERSION; all branch/PR builds are beta.
           ./package.sh
           v="$(python3 -c 'import json; print(json.load(open("build/version.json"))["releaseVersion"])')"

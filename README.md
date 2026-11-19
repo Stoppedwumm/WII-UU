@@ -1303,7 +1303,7 @@ Only install artifacts from builds you trust: they contain executable applicatio
 
 For a first Windows install, extract the downloaded artifact ZIP and double-click
 `install.bat` in the extracted folder. New artifacts contain the installation files
-directly, so there is no second ZIP to extract. Development builds display a badge with their target version and beta number. Stable builds have no badge. Both `build.sh` and `package.sh` default to beta; default-branch Actions builds publish numbered prereleases. Stable releases require an exact `vMAJOR.MINOR.PATCH` tag matching `Main.VERSION`. See [the release workflow](docs/support/releases.md).
+directly, so there is no second ZIP to extract. Development builds display a badge with their target version and beta number. Stable builds have no badge. Both `build.sh` and `package.sh` default to beta; default-branch Actions builds publish numbered prereleases. Stable releases use an exact `vMAJOR.MINOR.PATCH` tag matching `Main.VERSION`; the explicit stable workflow option can create it after testing the default branch. See [the release workflow](docs/support/releases.md).
 
 On the GamePad **Now playing** page, tap **Show touch screen** to choose the lower
 DS screen. **Show TV here** shows the upper screen instead. Both options remain
@@ -1429,7 +1429,7 @@ For local automation and Linux console image provisioning, see the [integration 
 
 `Main.VERSION` is the single target release version; packaged `BuildInfo.version()` supplies the full build identity. Ordinary PRs can keep the same target; CI assigns beta identities such as `2.0.9-beta.123.1+gabcdef123456` (run 123, attempt 1). A rerun gets a different attempt so published archives remain immutable. `--version` prints the exact installed identity; `--build-info` also shows channel, commit and source timestamp.
 
-Settings > System > Updates lets you choose **Stable** or **Beta**. Stable subscribers receive final releases only. Beta subscribers consider both feeds, so a final release supersedes its betas. Channels never trigger automatic downgrades. Existing `update.url` overrides still work; custom archives can set `update.stableUrl` and `update.betaUrl`.
+Settings > System > Updates lets you choose **Stable** or **Beta**. Its **Release archive** page lists archived builds with channel filters, pagination, details and release notes, and can install, reinstall or explicitly downgrade to a selected version. Stable subscribers receive final releases only. Beta subscribers consider both feeds, so a final release supersedes its betas. Channels never trigger automatic downgrades. Existing `update.url` overrides still work; custom archives can set `update.stableUrl` and `update.betaUrl`.
 
 See [release/version documentation](docs/support/releases.md) and the [Node archive deployment guide](archive/README.md) for the port-8081 service and Cloudflare Tunnel setup.
 

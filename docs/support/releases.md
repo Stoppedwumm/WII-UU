@@ -19,6 +19,10 @@ git tag v2.0.9
 git push origin v2.0.9
 ```
 
+Alternatively, use Actions > Build > Run workflow on the default branch and choose `stable`. The workflow tests and packages a stable build, creates its version tag/release, uploads to the configured archive and refreshes the stable feed. Stable promotion from other branches is rejected. The default dispatch choice remains beta.
+
+Settings > System > Updates > Release archive opens the public archive inside WII-UU. Filter All/Stable/Beta, page through versions and open a build for its exact version, commit, publish date, release notes and checksum. Installation downloads and verifies the selected ZIP, then uses the existing installer/restart flow. Choosing an older build is an explicit downgrade with a second confirmation; reinstalling the same version is also supported. Future updates follow the selected build's channel. The archive URL can be customized with `archive.url`; browsing needs no upload token. No server update is required for this browser.
+
 Tags that disagree with `Main.VERSION` or use unsupported channel formats fail the build. `WIIUU_BUILD_CHANNEL=stable` supports deliberate local stable packaging; `release` remains an alias. Otherwise both build scripts produce betas. The UI library retains its independent `ui-library/VERSION`.
 
 Update comparisons follow semantic-version precedence: beta.10 > beta.2, a final release > any prerelease of the same version, and build metadata is ignored. Legacy one/two-part stored versions remain comparable. Malformed update versions are rejected.

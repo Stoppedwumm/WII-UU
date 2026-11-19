@@ -35,6 +35,7 @@ import wiiuu.core.Config;
 import wiiuu.core.GameSystem;
 import wiiuu.core.Systems;
 import wiiuu.core.Updater;
+import wiiuu.core.ReleaseArchive;
 import wiiuu.input.KeyMap;
 import wiiuu.input.PadButton;
 
@@ -1674,6 +1675,8 @@ public final class SettingsScreen {
                 for (String s : e.points()) r.add(new Info("•  " + s));
             }
         }
+        r.add(new Link("Release archive", "Browse, inspect and install archived stable or beta builds without leaving WII-UU.",
+                null, this::openArchive));
         r.add(new Action("GitHub Actions builds", "Open successful builds in your browser (GitHub sign-in may be required).", () -> {
             try {
                 java.awt.Desktop.getDesktop().browse(java.net.URI.create("https://github.com/Stoppedwumm/WII-UU/actions/workflows/build.yml"));
@@ -1848,6 +1851,146 @@ public final class SettingsScreen {
             say("The Developer tab is hidden again.");
         }, null, null));
         return r;
+    }
+
+    // Archive state belongs to this Settings session; networking always runs off the UI thread.
+    private static final int ARCHIVE_PAGE_SIZE = 12;
+    private Page archivePage;
+    private ReleaseArchive.Page archiveBuilds;
+    private int archiveFilter, archiveOffset;
+    private boolean archiveLoading;
+    private String archiveStatus = "Loading archive…";
+
+    private Page openArchive() {
+        if (archivePage == null) archivePage = new Page("Release archive", this::archiveRows);
+        if (archiveBuilds == null && !archiveLoading) loadArchive();
+        return archivePage;
+    }
+
+    private List<Row> archiveRows() {
+        List<Row> r = new ArrayList<>();
+        r.add(new Choice("Show builds", "Filter the archive by release channel.", () -> List.of("All", "Stable", "Beta"),
+                () -> archiveFilter, i -> {
+                    if (archiveLoading) return;
+                    archiveFilter = i; archiveOffset = 0; loadArchive(); reload(true);
+                }));
+        r.add(new Action("Refresh archive", null, this::loadArchive, () -> archiveLoading ? "Loading…" : archiveStatus, null));
+        if (archiveLoading) { r.add(new Info("Loading builds from the archive…")); return r; }
+        if (archiveBuilds == null) { r.add(new Info(archiveStatus)); return r; }
+        if (archiveBuilds.builds().isEmpty()) r.add(new Info("No builds in this channel yet."));
+        else r.add(new Info("Showing " + (archiveOffset + 1) + "–" + (archiveOffset + archiveBuilds.builds().size()) + " of " + archiveBuilds.total()));
+        for (ReleaseArchive.Build build : archiveBuilds.builds()) {
+            r.add(new Link(build.releaseVersion(), "View build details, release notes and installation options.",
+                    () -> (build.installed(wiiuu.Main.BUILD_VERSION) ? "Installed · " : "") + build.channel()
+                            + (build.bytes() > 0 ? String.format(java.util.Locale.ROOT, " · %.1f MiB", build.bytes() / 1048576.0) : ""),
+                    () -> archiveDetails(build)));
+        }
+        if (archiveOffset > 0) r.add(new Action("Previous page", null, () -> {
+            if (archiveLoading) return;
+            archiveOffset = Math.max(0, archiveOffset - ARCHIVE_PAGE_SIZE); loadArchive(); reload(true);
+        }, null, null));
+        if (archiveBuilds.hasMore()) r.add(new Action("Next page", null, () -> {
+            if (archiveLoading) return;
+            archiveOffset += ARCHIVE_PAGE_SIZE; loadArchive(); reload(true);
+        }, null, null));
+        return r;
+    }
+
+    private void loadArchive() {
+        if (archiveLoading) return;
+        archiveLoading = true;
+        archiveBuilds = null;
+        int offset = archiveOffset;
+        String filter = List.of("all", "stable", "beta").get(archiveFilter);
+        if (page == archivePage) reload(false);
+        Thread worker = new Thread(() -> {
+            ReleaseArchive.Page result = null;
+            String status;
+            try { result = new ReleaseArchive(config).list(filter, offset, ARCHIVE_PAGE_SIZE); status = "Archive is up to date"; }
+            catch (Exception e) { status = "Could not load archive: " + e.getMessage(); }
+            ReleaseArchive.Page loaded = result;
+            String message = status;
+            SwingUtilities.invokeLater(() -> {
+                archiveLoading = false; archiveBuilds = loaded; archiveStatus = message;
+                if (page == archivePage) reload(false);
+                view.repaint();
+            });
+        }, "release-archive-list");
+        worker.setDaemon(true); worker.start();
+    }
+
+    private Page archiveDetails(ReleaseArchive.Build build) {
+        List<Changelog.Entry> notes = new ArrayList<>();
+        String[] status = {"Loading release notes…"};
+        Page details = new Page(build.releaseVersion(), () -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info("Build: " + build.version()));
+            r.add(new Info("Channel: " + build.channel() + " · commit " + build.commit()));
+            if (!build.publishedAt().isBlank()) r.add(new Info("Published: " + build.publishedAt()));
+            boolean installed = build.installed(wiiuu.Main.BUILD_VERSION);
+            boolean older = Updater.newer(wiiuu.Main.BUILD_VERSION, build.version());
+            if (installed) r.add(new Info("This version is currently installed."));
+            if (older) r.add(new Info("This build is older than your installed version. Installing it will downgrade WII-UU."));
+            r.add(new Action(installed ? "Reinstall this build" : "Install this build",
+                    "Download and verify this exact build, then restart. Settings, games and emulators are kept. "
+                            + "Future updates will follow the " + build.channel() + " channel.",
+                    () -> installArchiveBuild(build), () -> updating ? updateStatus : null,
+                    older ? "Press A again to downgrade to " + build.releaseVersion() : "Press A again to install " + build.releaseVersion()));
+            r.add(new Header("Release notes"));
+            if (notes.isEmpty()) r.add(new Info(status[0]));
+            for (Changelog.Entry entry : notes) {
+                r.add(new Header(entry.version()));
+                for (String text : entry.summary()) r.add(new Info(text));
+                for (String text : entry.points()) r.add(new Info(text));
+            }
+            r.add(new Header("Verification"));
+            r.add(new Info("SHA-256: " + build.release().sha256()));
+            return r;
+        });
+        Thread worker = new Thread(() -> {
+            List<Changelog.Entry> loaded = List.of();
+            String message;
+            try { loaded = new ReleaseArchive(config).notes(build); message = "No release notes were published for this build."; }
+            catch (Exception e) { message = "Could not load notes: " + e.getMessage(); }
+            List<Changelog.Entry> result = loaded;
+            String text = message;
+            SwingUtilities.invokeLater(() -> {
+                notes.addAll(result); status[0] = text;
+                if (page == details) reload(false);
+                view.repaint();
+            });
+        }, "release-archive-notes");
+        worker.setDaemon(true); worker.start();
+        return details;
+    }
+
+    private void installArchiveBuild(ReleaseArchive.Build build) {
+        if (updating || sv.updater() == null) return;
+        if (view.gameRunning()) { say("Close the current game before installing another build."); return; }
+        updating = true;
+        updateStatus = "Downloading " + build.releaseVersion() + "…";
+        Thread worker = new Thread(() -> {
+            String previousChannel = config.get("update.channel", "stable");
+            boolean changedChannel = false;
+            try {
+                Path directory = sv.updater().download(build.release());
+                config.set("update.channel", build.channel());
+                changedChannel = true;
+                config.saveChecked();
+                sv.updater().installAfterExit(directory);
+                SwingUtilities.invokeLater(() -> {
+                    updateStatus = "Installing: WII-UU restarts in a moment";
+                    sv.exitForUpgrade().run();
+                });
+            } catch (Exception error) {
+                if (changedChannel) { config.set("update.channel", previousChannel); config.save(); }
+                SwingUtilities.invokeLater(() -> {
+                    updating = false; updateStatus = "Archive install failed: " + error.getMessage(); say(updateStatus);
+                    reload(false); view.repaint();
+                });
+            }
+        }, "release-archive-install");
+        worker.setDaemon(true); worker.start();
     }
 
     private void chooseActionsBuild() {
