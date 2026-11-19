@@ -1,6 +1,6 @@
 name: Build
 
-# Branch builds are numbered betas; exact tags or explicit default-branch promotion publish stable releases.
+# Development branches are betas; versioned release branches, tags or explicit promotion publish stable releases.
 # Each channel keeps its own feed/download, backed by immutable GitHub/optional archive assets.
 # All PRs build/test artifacts, but never publish releases or deploy the website.
 on:
@@ -108,7 +108,7 @@ jobs:
 
   build:
     concurrency:
-      group: wiiuu-packaging-${{ github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v')) && 'publish' || github.ref }}
+      group: wiiuu-packaging-${{ github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/'))) && 'publish' || github.ref }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     outputs:
@@ -134,11 +134,15 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           chmod +x build.sh package.sh
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$REQUESTED_CHANNEL" = stable ]; then
-            [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] || { echo "Stable promotion must run on the default branch" >&2; exit 1; }
-            export WIIUU_BUILD_CHANNEL=stable
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            if [ "$REQUESTED_CHANNEL" = stable ]; then
+              [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] || { echo "Stable promotion must run on the default branch" >&2; exit 1; }
+              export WIIUU_BUILD_CHANNEL=stable
+            else
+              export WIIUU_BUILD_CHANNEL=beta
+            fi
           fi
-          # build-version.py validates tags against Main.VERSION; all branch/PR builds are beta.
+          # build-version.py validates tags against Main.VERSION; development/PR builds remain beta.
           ./package.sh
           v="$(python3 -c 'import json; print(json.load(open("build/version.json"))["releaseVersion"])')"
           channel="$(python3 -c 'import json; print(json.load(open("build/version.json"))["channel"])')"
@@ -230,7 +234,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload to optional archive service
-        if: vars.WIIUU_ARCHIVE_URL != '' && github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v'))
+        if: vars.WIIUU_ARCHIVE_URL != '' && github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')))
         env:
           ARCHIVE_TOKEN: ${{ secrets.WIIUU_ARCHIVE_TOKEN }}
           ARCHIVE_URL: ${{ vars.WIIUU_ARCHIVE_URL }}
@@ -245,7 +249,7 @@ jobs:
           fi
 
       - name: Publish versioned application release
-        if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')))
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -259,7 +263,7 @@ jobs:
           fi
 
       - name: Assemble stable and beta website channels from published releases
-        if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')))
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -267,7 +271,7 @@ jobs:
           python3 tools/stage-release-site.py build/published-releases.json
 
       - name: Package the website
-        if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')))
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs
@@ -294,7 +298,7 @@ jobs:
 
   pages:
     needs: build
-    if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/v'))
+    if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')))
     runs-on: ubuntu-latest
     concurrency:
       group: pages

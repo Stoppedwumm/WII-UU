@@ -19,6 +19,8 @@ git tag v2.0.9
 git push origin v2.0.9
 ```
 
+A branch named `release/2.0.9` matching `Main.VERSION` also publishes the pinned commit as stable through the same pipeline. A release branch whose version differs from the source target is rejected. This permits stable promotion through git/API operations as well as the browser; ordinary development branches still publish betas.
+
 Alternatively, use Actions > Build > Run workflow on the default branch and choose `stable`. The workflow tests and packages a stable build, creates its version tag/release, uploads to the configured archive and refreshes the stable feed. Stable promotion from other branches is rejected. The default dispatch choice remains beta.
 
 Settings > System > Updates > Release archive opens the public archive inside WII-UU. Filter All/Stable/Beta, page through versions and open a build for its exact version, commit, publish date, release notes and checksum. Installation downloads and verifies the selected ZIP, then uses the existing installer/restart flow. Choosing an older build is an explicit downgrade with a second confirmation; reinstalling the same version is also supported. Future updates follow the selected build's channel. The archive URL can be customized with `archive.url`; browsing needs no upload token. No server update is required for this browser.

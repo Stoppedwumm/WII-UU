@@ -29,6 +29,9 @@ class ReleaseSystemTests(unittest.TestCase):
         self.assertEqual(beta['version'], '2.0.9-beta.123.2+g' + 'a' * 12)
         stable = identity('2.0.9', {**env, 'GITHUB_REF': 'refs/tags/v2.0.9'})
         self.assertEqual((stable['version'], stable['channel']), ('2.0.9', 'stable'))
+        pinned = identity('2.0.9', {**env, 'GITHUB_REF': 'refs/heads/release/2.0.9'})
+        self.assertEqual((pinned['version'], pinned['channel']), ('2.0.9', 'stable'))
+        with self.assertRaises(ValueError): identity('2.0.9', {**env, 'GITHUB_REF': 'refs/heads/release/2.0.8'})
         tagged = identity('2.0.9', {**env, 'GITHUB_REF': 'refs/tags/v2.0.9-beta.4'})
         self.assertEqual(tagged['releaseVersion'], '2.0.9-beta.4')
         for bad in ['refs/tags/v2.0.8', 'refs/tags/v2.0.9-rc.1']:
