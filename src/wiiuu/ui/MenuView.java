@@ -33,7 +33,6 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -151,7 +150,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             }
             if (!family.equals(fontFamily)) {
                 fontFamily = family;
-                FONTS.clear();
+                FONTS.family(family);
             }
         }
         themeVersion++;
@@ -321,7 +320,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private static volatile String fontFamily = FONT;
     /** Sprites are drawn at the selected (largest) size so zooming in never upsamples. */
     private static final float SPRITE_SCALE = 1.06f;
-    private static final Map<Long, Font> FONTS = new ConcurrentHashMap<>();
+    private static final UiFonts FONTS = new UiFonts(FONT);
 
     private enum Screen { HOME, GAMES }
 
@@ -2546,25 +2545,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private static BufferedImage renderBackground(int w, int h) {
-        {
-            BufferedImage bg = new BufferedImage(Math.max(1, w), Math.max(1, h), BufferedImage.TYPE_INT_RGB);
-            Graphics2D b = bg.createGraphics();
-            b.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            b.setPaint(new GradientPaint(0, 0, BG_TOP, 0, h, BG_BOTTOM));
-            b.fillRect(0, 0, w, h);
-            // the Wii U menu's faint pinstripes
-            b.setColor(STRIPE);
-            for (int y = 0; y < h; y += 6) b.fillRect(0, y, w, 2);
-            // soft light blooms
-            b.setPaint(new java.awt.RadialGradientPaint(w * 0.18f, h * 0.2f, w * 0.5f,
-                    new float[]{0, 1}, new Color[]{BLOOM, new Color(BLOOM.getRed(), BLOOM.getGreen(), BLOOM.getBlue(), 0)}));
-            b.fillRect(0, 0, w, h);
-            b.setPaint(new java.awt.RadialGradientPaint(w * 0.9f, h * 0.95f, w * 0.45f,
-                    new float[]{0, 1}, new Color[]{BLOOM_ACCENT, new Color(BLOOM_ACCENT.getRed(), BLOOM_ACCENT.getGreen(), BLOOM_ACCENT.getBlue(), 0)}));
-            b.fillRect(0, 0, w, h);
-            b.dispose();
-            return bg;
-        }
+        return MenuPainter.background(w, h, Map.of("background-top", BG_TOP, "background-bottom", BG_BOTTOM,
+                "stripes", STRIPE, "glow", BLOOM, "accent-glow", BLOOM_ACCENT));
     }
 
     private void paintTopBar(Graphics2D g, Layout L) {
@@ -3018,46 +3000,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private void drawDockIcon(Graphics2D g, Dock d, Rectangle2D r, Color c) {
-        float cx = (float) r.getCenterX(), cy = (float) r.getCenterY(), s = (float) r.getWidth() * 0.42f;
-        g.setColor(c);
-        g.setStroke(new BasicStroke(s * 0.14f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        switch (d) {
-            case GAMEPAD -> drawGamepadIcon(g, cx - s * 0.75f, cy - s * 0.45f, s * 1.5f, s * 0.9f, c);
-            case SETTINGS -> {
-                for (int k = 0; k < 8; k++) {
-                    double a = Math.PI * 2 * k / 8;
-                    g.draw(new Line2D.Double(cx + Math.cos(a) * s * 0.45, cy + Math.sin(a) * s * 0.45,
-                            cx + Math.cos(a) * s * 0.72, cy + Math.sin(a) * s * 0.72));
-                }
-                g.draw(new Ellipse2D.Float(cx - s * 0.45f, cy - s * 0.45f, s * 0.9f, s * 0.9f));
-                g.fill(new Ellipse2D.Float(cx - s * 0.16f, cy - s * 0.16f, s * 0.32f, s * 0.32f));
-            }
-            case REFRESH -> {
-                g.draw(new Arc2D.Float(cx - s * 0.6f, cy - s * 0.6f, s * 1.2f, s * 1.2f, 70, 290, Arc2D.OPEN));
-                Path2D head = new Path2D.Float();
-                double ax = cx + Math.cos(Math.toRadians(70)) * s * 0.6, ay = cy - Math.sin(Math.toRadians(70)) * s * 0.6;
-                head.moveTo(ax - s * 0.32, ay - s * 0.22);
-                head.lineTo(ax + s * 0.05, ay);
-                head.lineTo(ax - s * 0.25, ay + s * 0.3);
-                g.draw(head);
-            }
-            case POWER -> {
-                g.draw(new Arc2D.Float(cx - s * 0.6f, cy - s * 0.55f, s * 1.2f, s * 1.2f, 120, 300, Arc2D.OPEN));
-                g.draw(new Line2D.Float(cx, cy - s * 0.75f, cx, cy - s * 0.05f));
-            }
-        }
-        g.setStroke(new BasicStroke(1));
+        MenuPainter.icon(g, MenuPainter.Icon.valueOf(d.name()), r, c);
     }
 
     private static void drawGamepadIcon(Graphics2D g, float x, float y, float w, float h, Color c) {
-        g.setColor(c);
-        RoundRectangle2D body = new RoundRectangle2D.Float(x, y, w, h, h * 0.5f, h * 0.5f);
-        g.setStroke(new BasicStroke(Math.max(1.5f, h * 0.12f)));
-        g.draw(body);
-        g.fill(new RoundRectangle2D.Float(x + w * 0.28f, y + h * 0.22f, w * 0.44f, h * 0.56f, h * 0.12f, h * 0.12f));
-        g.fill(new Ellipse2D.Float(x + w * 0.07f, y + h * 0.36f, h * 0.28f, h * 0.28f));
-        g.fill(new Ellipse2D.Float(x + w * 0.93f - h * 0.28f, y + h * 0.36f, h * 0.28f, h * 0.28f));
-        g.setStroke(new BasicStroke(1));
+        MenuPainter.gamepad(g, x, y, w, h, c);
     }
 
     private void paintToast(Graphics2D g, Layout L) {
@@ -3257,50 +3204,21 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** Soft drop shadow built from a few growing translucent fills (fills are far cheaper than wide strokes). */
     private static void shadow(Graphics2D g, Shape s, int depth) {
-        Rectangle2D b = s.getBounds2D();
-        boolean round = s instanceof RoundRectangle2D;
-        boolean oval = s instanceof Ellipse2D;
-        double arc = round ? ((RoundRectangle2D) s).getArcWidth() : 0;
-        int layers = Math.min(4, depth);
-        for (int i = layers; i >= 1; i--) {
-            double grow = depth * 0.45 * i / layers, dy = depth * 0.35 * i / layers + 1;
-            g.setColor(new Color(SHADOW_RGB.getRed(), SHADOW_RGB.getGreen(), SHADOW_RGB.getBlue(),
-                    Math.min(255, (9 + (layers - i) * 3) * shadowBoost)));
-            double x = b.getX() - grow, y = b.getY() - grow + dy, w = b.getWidth() + 2 * grow, h = b.getHeight() + 2 * grow;
-            if (round) g.fill(new RoundRectangle2D.Double(x, y, w, h, arc + 2 * grow, arc + 2 * grow));
-            else if (oval) g.fill(new Ellipse2D.Double(x, y, w, h));
-            else {
-                g.translate(0, dy);
-                g.fill(s);
-                g.translate(0, -dy);
-            }
-        }
+        MenuPainter.shadow(g, s, depth, SHADOW_RGB, shadowBoost);
     }
 
     static Font font(int style, float size) {
-        float sz = Math.max(8f, Math.round(size * 2) / 2f); // half-point buckets keep the cache small
-        return FONTS.computeIfAbsent(((long) style << 32) | Float.floatToIntBits(sz),
-                k -> new Font(fontFamily, style, 1).deriveFont(style, sz));
+        return FONTS.font(style, size);
     }
 
-    private static Set<String> installedFonts;
-
     private static boolean fontInstalled(String family) {
-        if (GraphicsEnvironment.isHeadless()) return false;
-        if (installedFonts == null) installedFonts = Set.copyOf(Arrays.asList(
-                GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames()));
-        return installedFonts.contains(family);
+        return !GraphicsEnvironment.isHeadless() && UiFonts.installed(family);
     }
 
     private static String pickFont() {
         if (GraphicsEnvironment.isHeadless()) return Font.SANS_SERIF;
-        Set<String> have = Set.copyOf(Arrays.asList(
-                GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames()));
-        for (String f : new String[]{"Nunito", "Rodin NTLG", "Segoe UI", "Helvetica Neue", "SF Pro Display",
-                "Noto Sans", "Ubuntu", "Cantarell", "DejaVu Sans"}) {
-            if (have.contains(f)) return f;
-        }
-        return Font.SANS_SERIF;
+        return UiFonts.choose("Nunito", "Rodin NTLG", "Segoe UI", "Helvetica Neue", "SF Pro Display",
+                "Noto Sans", "Ubuntu", "Cantarell", "DejaVu Sans");
     }
 
     /** Sets the largest font up to {@code size} at which {@code s} fits in {@code maxW}. */
@@ -3330,39 +3248,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private static String ellipsize(Graphics2D g, String s, float maxW) {
-        FontMetrics fm = g.getFontMetrics();
-        if (fm.stringWidth(s) <= maxW) return s;
-        String dots = "\u2026";
-        int end = s.length();
-        while (end > 0 && fm.stringWidth(s.substring(0, end) + dots) > maxW) end--;
-        return s.substring(0, end).trim() + dots;
+        return UiText.ellipsize(s, g.getFontMetrics(), maxW);
     }
 
     private static List<String> wrap(Graphics2D g, String s, float maxW, int maxLines) {
-        FontMetrics fm = g.getFontMetrics();
-        List<String> lines = new ArrayList<>();
-        StringBuilder cur = new StringBuilder();
-        String[] words = s.split(" ");
-        for (int i = 0; i < words.length; i++) {
-            String next = cur.isEmpty() ? words[i] : cur + " " + words[i];
-            if (fm.stringWidth(next) <= maxW || cur.isEmpty()) {
-                cur.setLength(0);
-                cur.append(next);
-            } else {
-                lines.add(cur.toString());
-                cur.setLength(0);
-                cur.append(words[i]);
-                if (lines.size() == maxLines - 1) {
-                    cur.setLength(0);
-                    cur.append(String.join(" ", Arrays.copyOfRange(words, i, words.length)));
-                    break;
-                }
-            }
-        }
-        if (!cur.isEmpty()) lines.add(cur.toString());
-        List<String> out = new ArrayList<>();
-        for (String l : lines) out.add(ellipsize(g, l, maxW));
-        return out;
+        return UiText.wrap(s, g.getFontMetrics(), maxW, maxLines);
     }
 
     private static String initials(String name) {

@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.0.8 (2026-11-19)
+- Expand the standalone UI library to 1.1.0 with theme scripting, light/dark menu palettes, backgrounds, shadows, vector icons, font caching and text layout.
+- Share Choccy Milk's Cocoa/Milk painting, window icons and configurable intro animation with other Java desktop apps.
+- Use the shared components in WII-UU and Choccy Milk; improve clipping and text fitting for small labels.
+
 ## 2.0.7 (2026-11-18)
 - Add adjusted widescreen and HD rendering with sharpening to Nintendo 64 games in Choccy Milk on Windows and Linux.
 - Improve Nintendo 64 audio with windowed-sinc resampling to 48 kHz.

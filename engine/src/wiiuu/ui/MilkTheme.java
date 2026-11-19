@@ -5,7 +5,6 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
-import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.geom.Ellipse2D;
@@ -15,7 +14,6 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 /**
  * Choccy Milk's own look: Cocoa (dark) and Milk (light), following the computer unless chosen
@@ -95,19 +93,8 @@ public final class MilkTheme {
     /** A rounded, friendly face when the computer has one; the standard sans otherwise. */
     public static synchronized String family() {
         if (family == null) {
-            family = Font.SANS_SERIF;
-            try {
-                Set<String> have = Set.of(GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames());
-                for (String f : new String[]{"Nunito", "Varela Round", "Quicksand", "Comfortaa", "M PLUS Rounded 1c",
-                        "Arial Rounded MT Bold", "SF Pro Rounded", "Ubuntu", "Segoe UI", "Helvetica Neue", "DejaVu Sans"}) {
-                    if (have.contains(f)) {
-                        family = f;
-                        break;
-                    }
-                }
-            } catch (RuntimeException | Error e) {
-                // headless or no fonts: the standard one
-            }
+            family = UiFonts.choose("Nunito", "Varela Round", "Quicksand", "Comfortaa", "M PLUS Rounded 1c",
+                    "Arial Rounded MT Bold", "SF Pro Rounded", "Ubuntu", "Segoe UI", "Helvetica Neue", "DejaVu Sans");
         }
         return family;
     }

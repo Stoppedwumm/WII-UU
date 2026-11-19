@@ -41,6 +41,7 @@ import wiiuu.core.Library;
 import wiiuu.core.Systems;
 import wiiuu.engine.GameScreen;
 import wiiuu.ui.MilkTheme;
+import wiiuu.ui.UiText;
 import wiiuu.ui.MilkIntro;
 import wiiuu.input.LocalPads;
 import wiiuu.input.PadButton;
@@ -773,9 +774,7 @@ public final class App extends JPanel implements PadSink {
     }
 
     private static String fit(String s, FontMetrics fm, float w) {
-        if (fm.stringWidth(s) <= w) return s;
-        while (s.length() > 1 && fm.stringWidth(s + "…") > w) s = s.substring(0, s.length() - 1);
-        return s + "…";
+        return UiText.ellipsize(s, fm, w);
     }
 
     // ---- starting --------------------------------------------------------------------------------

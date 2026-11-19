@@ -66,7 +66,65 @@ public final class UiLibraryTest {
                 check(image.getRGB(10, 10) != 0, "page rendered");
             }
         }
+        checkMenuHelpers();
         System.out.println("Standalone UI library checks passed");
+    }
+
+    private static void checkMenuHelpers() {
+        UiFonts fonts = new UiFonts(java.awt.Font.SANS_SERIF);
+        check(fonts.font(0, 16.01f) == fonts.font(0, 16.1f), "font size buckets");
+        check(fonts.font(0, 0).getSize2D() == 8, "minimum font size");
+        java.awt.Font old = fonts.font(0, 16);
+        fonts.family(java.awt.Font.MONOSPACED);
+        check(!fonts.font(0, 16).getFamily().equals(old.getFamily()), "family switch invalidates cache");
+        check(new UiFonts(java.awt.Font.SANS_SERIF).font(0, 16).getFamily().equals(old.getFamily()), "font caches independent");
+        check(UiFonts.choose("missing-font-13489").equals(java.awt.Font.SANS_SERIF), "font fallback");
+        for (boolean dark : new boolean[]{false, true}) {
+            Map<String, Color> palette = MenuPalette.colours(dark);
+            BufferedImage image = MenuPainter.background(640, 400, palette);
+            check(image.getWidth() == 640 && image.getRGB(0, 0) != image.getRGB(0, 399), "menu gradient");
+            check(MenuPainter.background(0, -1, palette).getWidth() == 1, "minimum background dimensions");
+            Graphics2D g = image.createGraphics();
+            g.translate(3, 4);
+            g.setClip(0, 0, 620, 380);
+            g.setColor(Color.MAGENTA);
+            g.setStroke(new java.awt.BasicStroke(3));
+            var transform = g.getTransform();
+            var clip = g.getClip().getBounds();
+            var paint = g.getPaint();
+            var stroke = g.getStroke();
+            int x = 30;
+            for (MenuPainter.Icon icon : MenuPainter.Icon.values()) {
+                var box = new java.awt.geom.RoundRectangle2D.Float(x, 40, 80, 80, 16, 16);
+                MenuPainter.shadow(g, box, 10, palette.get("shadow"), dark ? 3 : 1);
+                MenuPainter.icon(g, icon, box.getBounds2D(), palette.get("icon"));
+                x += 100;
+            }
+            MenuPainter.gamepad(g, 30, 160, 100, 70, palette.get("accent"));
+            check(g.getTransform().equals(transform) && g.getClip().getBounds().equals(clip)
+                    && g.getPaint().equals(paint) && g.getStroke().equals(stroke), "menu painters preserve graphics state");
+            g.setFont(fonts.font(0, 16));
+            var metrics = g.getFontMetrics();
+            float width = metrics.stringWidth("A short label");
+            check(UiText.ellipsize("Short", metrics, width).equals("Short"), "short text unchanged");
+            check(UiText.ellipsize("Long label", metrics, 0).isEmpty(), "zero text width");
+            check(UiText.ellipsize("Long label", metrics, 1).isEmpty(), "ellipsis cannot fit");
+            for (String text : new String[]{"A label that is far too long", "A \uD83D\uDE80 journey across the stars"}) {
+                String fitted = UiText.ellipsize(text, metrics, width);
+                check(metrics.stringWidth(fitted) <= width, "fitted text width");
+                for (int i = 0; i < fitted.length(); i++) {
+                    if (Character.isHighSurrogate(fitted.charAt(i)))
+                        check(++i < fitted.length() && Character.isLowSurrogate(fitted.charAt(i)), "complete surrogate pairs");
+                }
+                for (int limit : new int[]{1, 2, 3}) {
+                    var lines = UiText.wrap(text, metrics, width, limit);
+                    check(lines.size() <= limit, "line count limit");
+                    for (String line : lines) check(metrics.stringWidth(line) <= width, "wrapped text width");
+                }
+            }
+            check(UiText.wrap("words", metrics, width, 0).isEmpty(), "zero line limit");
+            g.dispose();
+        }
     }
 
     private static void check(boolean condition, String message) {

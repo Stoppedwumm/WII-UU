@@ -3,6 +3,8 @@
 ## 1.1.0 (2026-11-19)
 
 - Move the existing `wiiuu.ui.ThemeScript` parser into the shared engine and standalone JAR, preserving its package and API.
+- Extract `MenuPainter` for menu backgrounds, soft shadows and GamePad/settings/refresh/power vector icons.
+- Extract `UiFonts` for desktop font discovery and independent font caches, and `UiText` for width-aware ellipsis and wrapping. Both apps use the shared helpers.
 - Export `MenuPalette` with WII-UU's light/dark colours and a convenience method for evaluating themes without console tiles.
 - Move Choccy Milk's appearance into public `MilkTheme`: Cocoa/Milk colours, background painting, selection pills, shadows, glass artwork, font selection and window icons.
 - Move Choccy Milk's intro into public `MilkIntro`, with custom title/tagline and an optional explicit start timestamp. Keep repaint scheduling and skip input in the host app.
