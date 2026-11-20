@@ -12,7 +12,8 @@ const runtime = createRuntime({ emit, directories: { ROMS: roms, DOWNLOADS: path
 const input = readline.createInterface({ input: process.stdin, terminal: false });
 input.on('line', line => {
     if (line.length > 1024) return;
-    try { const event = JSON.parse(line); if (event.type === 'activate' && typeof event.id === 'string') runtime.dispatch(event.id); }
+    try { const event = JSON.parse(line); if (event.type === 'activate' && typeof event.id === 'string') runtime.dispatch(event.id);
+        else if (event.type === 'text' && typeof event.id === 'string' && typeof event.value === 'string') runtime.submitText(event.id, event.value); }
     catch (error) { emit({ type: 'error', message: error.message }); }
 });
 let stopping = false;
