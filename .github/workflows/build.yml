@@ -212,6 +212,11 @@ jobs:
           java --add-modules jdk.httpserver -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.NativePluginScreenTest
           java -cp build/classes:build/tests wiiuu.core.NativePluginBridgeTest build/plugin-host/node_modules/electron/dist
 
+      - name: Test native Linux Wi-Fi list parsing
+        run: |
+          javac --release 17 -cp build/classes -d build/tests test/wiiuu/ui/LinuxNetworkPickerTest.java
+          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.LinuxNetworkPickerTest
+
       - name: Test Choccy Milk dual screens and pointer input
         run: |
           javac --release 22 -cp build/classes -d build/tests test/wiiuu/screen/ChoccyDualScreenTest.java
