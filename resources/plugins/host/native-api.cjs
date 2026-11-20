@@ -15,12 +15,22 @@ function text(value, max = 160) {
     if (typeof value !== 'string' || value.length > max) throw new Error(`Expected text of at most ${max} characters`);
     return value;
 }
-function createRuntime({ emit, directories, fetchImpl = fetch, log = () => {} }) {
+function createRuntime({ emit, directories, fetchImpl = fetch, log = () => {}, browserAuth: hostAuth = null }) {
     const logger = Object.freeze({
         debug: (...args) => log('debug', args.map(String).join(' ')),
         info: (...args) => log('info', args.map(String).join(' ')),
         warn: (...args) => log('warn', args.map(String).join(' ')),
         error: (...args) => log('error', args.map(String).join(' '))
+    });
+    const browserAuth = Object.freeze({
+        open: async url => {
+            const target = httpURL(url);
+            if (!hostAuth) throw new Error('Browser authentication is not available in this host');
+            await hostAuth.open(target.href);
+        },
+        close: () => { if (hostAuth) hostAuth.close(); },
+        // User confirmation only, not proof that an unrelated HTTP client has clearance.
+        isAuthenticated: () => !!hostAuth?.isAuthenticated()
     });
     const callbacks = new Map(), buttons = new Map(), inputs = new Map(), controllers = new Set();
     const views = [], downloads = new Set();
@@ -184,7 +194,7 @@ function createRuntime({ emit, directories, fetchImpl = fetch, log = () => {} })
     async function run(source, filename = 'native-plugin.js') {
         context = vm.createContext({ NPlugin, NButton, ViewType, Directories, downloadManager,
             fetch: request, URL, URLSearchParams, AbortController, AbortSignal,
-            logger, console: { log: logger.info, info: logger.info, warn: logger.warn, error: logger.error, debug: logger.debug } });
+            logger, browserAuth, console: { log: logger.info, info: logger.info, warn: logger.warn, error: logger.error, debug: logger.debug } });
         // Reviewed bundled JavaScript only. A vm context is not a sandbox for untrusted code.
         await new vm.Script(`(async () => {\n${source}\n})()`, { filename }).runInContext(context, { timeout: 1000 });
         if (!definition || !views.length) throw new Error('Define an NPlugin and at least one newView');
