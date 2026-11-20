@@ -13,11 +13,13 @@ public final class NativePluginSessionTest {
             try { NativePluginSession.parseView(MiniJson.parse(invalid)); throw new AssertionError("Accepted invalid native model"); }
             catch (IllegalArgumentException expected) { }
         }
-        String textModel = "{\\"id\\":\\"v1\\",\\"title\\":\\"Search\\",\\"status\\":\\"\\",\\"closeButton\\":true,\\"entries\\":[{\\"id\\":\\"e1\\",\\"title\\":\\"Game\\",\\"imageURL\\":\\"\\",\\"buttons\\":[],\\"textField\\":{\\"id\\":\\"t2\\",\\"placeholder\\":\\"Search games\\",\\"value\\":\\"Mario\\"}}]}";
+        String textModel = """
+                {"id":"v1","title":"Search","status":"","closeButton":true,"entries":[{"id":"e1","title":"Game","imageURL":"","buttons":[],"textField":{"id":"t2","placeholder":"Search games","value":"Mario"}}]}
+                """;
         var input = NativePluginSession.parseView(MiniJson.parse(textModel)).entries().get(0).textField();
         if (input == null || !input.value().equals("Mario") || !input.id().equals("t2"))
             throw new AssertionError("Native text field protocol lost content");
-        try { NativePluginSession.parseView(MiniJson.parse(textModel.replace("\\"t2\\"", "\\"b2\\""))); throw new AssertionError("Invalid input ID accepted"); }
+        try { NativePluginSession.parseView(MiniJson.parse(textModel.replace("\"t2\"", "\"b2\""))); throw new AssertionError("Invalid input ID accepted"); }
         catch (IllegalArgumentException expected) { }
         try { view.entries().clear(); throw new AssertionError("Mutable native model"); } catch (UnsupportedOperationException expected) { }
         System.out.println("Native view protocol validation passed");
