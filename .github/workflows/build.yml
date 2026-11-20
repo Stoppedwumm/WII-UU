@@ -218,10 +218,11 @@ jobs:
           javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/DemoDeviceTest.java
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.DemoDeviceTest
 
-      - name: Test multi-user profile isolation
+      - name: Test multi-user profiles and sign-out UI
         run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/UserProfilesTest.java
+          javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/UserProfilesTest.java test/wiiuu/ui/SignOutPowerTest.java
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.UserProfilesTest
+          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.SignOutPowerTest
 
       - name: Test native Linux Wi-Fi list parsing
         run: |
