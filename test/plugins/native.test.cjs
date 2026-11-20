@@ -126,3 +126,34 @@ test('native text field submits typed values, updates model and rejects invalid 
     await tick();
     assert.equal(model().status, 'Searched: Paper Mario');
 });
+
+test('native logger emits diagnostics and HTTP requests include browser headers', async t => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wiiuu-native-logging-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const messages = [];
+    let ua, accept;
+    const runtime = createRuntime({
+        emit: () => {},
+        directories: { ROMS: dir, DOWNLOADS: dir },
+        log: (level, message) => messages.push([level, message]),
+        fetchImpl: async (_url, options) => {
+            ua = options.headers.get('user-agent');
+            accept = options.headers.get('accept');
+            return new Response('<html>denied</html>', { status: 403,
+                headers: { 'content-type': 'text/html' } });
+        }
+    });
+    t.after(() => runtime.close());
+    await runtime.run(`
+        const view = NPlugin('Logging').newView(ViewType.PANELS);
+        logger.info('Starting test');
+        const response = await fetch('https://example.com/roms');
+        logger.warn('HTTP', response.status);
+        await response.text();
+    `);
+    assert.match(ua, /Chrome\\//);
+    assert.match(accept, /text\\/html/);
+    assert.ok(messages.some(([level, msg]) => level === 'info' && msg.includes('Starting test')));
+    assert.ok(messages.some(([level, msg]) => level === 'warn' && msg.includes('403')));
+    assert.ok(messages.some(([level, msg]) => level === 'info' && msg.includes('HTTP 403')));
+});
