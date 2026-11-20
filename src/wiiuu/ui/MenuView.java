@@ -1384,6 +1384,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void navigate(int dx, int dy) {
+        // The changelog is a separate Swing window, not an in-menu overlay.
+        // Its controller focus must take precedence over menu navigation.
+        if (ChangelogDialog.controllerNavigate(dx, dy)) return;
         if (nativePlugin != null && migration == null) { nativePlugin.navigate(dx, dy); return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
@@ -1646,6 +1649,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     @Override
     public boolean pressed(int player, wiiuu.input.PadButton b, boolean down) {
         if (down) lastInput = System.currentTimeMillis();
+        if (ChangelogDialog.controllerButton(b, down)) return true;
         if (migration != null) {
             if (down) {
                 if (b == wiiuu.input.PadButton.A || b == wiiuu.input.PadButton.PLUS) migration.confirm(this);
