@@ -8,6 +8,7 @@ in Settings > General > What's new, and before installing an update.
 - Separate users' WII-UU preferences, RetroAchievements/OpenBased accounts, plugin browser data and Choccy Milk saves.
 - Keep ROMs, installed emulators and device-level configuration shared, and preserve existing data as the default user.
 - Restart user-specific services on profile switch; add cross-platform profile isolation and migration regression tests.
+- Add **Sign Out & Shut Down** to the console Power menu and user-profile settings; the next boot shows the user chooser again, even with only one profile.
 
 ## 2.1.2 (2026-11-20)
 - Add a cross-platform Developer UI test for the Linux-native network picker, with sample Wi-Fi networks and a working mock password flow.
