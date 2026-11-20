@@ -31,6 +31,8 @@ final class LinuxNetworkPicker {
     private static final String[] COMMANDS = {"Shift", "Symbols", "Space", "Erase", "Cancel", "Connect"};
 
     private final MenuView view;
+    /** Preview never invokes nmcli, including refresh and connection attempts. */
+    private final boolean preview;
     private List<Network> networks = List.of();
     private final Map<Integer, Rectangle2D> hits = new LinkedHashMap<>();
     private final StringBuilder password = new StringBuilder();
@@ -39,7 +41,18 @@ final class LinuxNetworkPicker {
     private boolean typing, shift, symbols, busy, closed;
     private String status = "Scanning for nearby Wi-Fi networks...";
 
-    LinuxNetworkPicker(MenuView view) { this.view = view; refresh(); }
+    LinuxNetworkPicker(MenuView view) { this(view, false); }
+
+    /** Cross-platform developer preview. The sample networks are never real system connections. */
+    LinuxNetworkPicker(MenuView view, boolean preview) {
+        this.view = view;
+        this.preview = preview;
+        refresh();
+    }
+
+    boolean isPreview() { return preview; }
+    List<Network> visibleNetworks() { return List.copyOf(networks); }
+    String message() { return status; }
     static boolean supported() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux");
     }
@@ -150,6 +163,12 @@ final class LinuxNetworkPicker {
             status = "Enter a Wi-Fi password";
             return;
         }
+        if (preview) {
+            wipePassword();
+            typing = false;
+            connect(selected, null);
+            return;
+        }
         String secret = password.toString();
         wipePassword();
         typing = false;
@@ -158,6 +177,19 @@ final class LinuxNetworkPicker {
 
     private void refresh() {
         if (busy || closed) return;
+        if (preview) {
+            // Static fixtures for visual/control testing on any OS, with no process launch.
+            networks = List.of(
+                    new Network("WII-UU Demo", 93, "WPA2", true),
+                    new Network("Guest Wi-Fi", 77, "--", false),
+                    new Network("Home Network", 68, "WPA2", false),
+                    new Network("WPA3 Test", 59, "WPA3", false),
+                    new Network("Enterprise (unavailable)", 34, "802.1X", false));
+            focus = 0;
+            busy = false;
+            status = "Demo networks only. No system settings will be changed.";
+            return;
+        }
         busy = true;
         status = "Scanning for nearby Wi-Fi networks...";
         Thread task = new Thread(() -> {
@@ -189,6 +221,12 @@ final class LinuxNetworkPicker {
     }
 
     private void connect(Network network, String secret) {
+        if (preview) {
+            networks = networks.stream().map(n -> new Network(n.ssid(), n.signal(), n.security(),
+                    n.ssid().equals(network.ssid()))).toList();
+            status = "Preview: simulated connection to " + network.ssid() + ". No changes made.";
+            return;
+        }
         busy = true;
         status = "Connecting to " + network.ssid() + "...";
         Thread task = new Thread(() -> {
@@ -327,10 +365,11 @@ final class LinuxNetworkPicker {
         g.fill(new RoundRectangle2D.Float(x, y, bw, 6 * u, 6 * u, 6 * u));
         g.setColor(MenuView.TEXT);
         g.setFont(MenuView.font(Font.BOLD, 32 * u));
-        g.drawString("Choose a Wi-Fi network", x + pad, y + 58 * u);
+        g.drawString(preview ? "Wi-Fi picker preview" : "Choose a Wi-Fi network", x + pad, y + 58 * u);
         g.setFont(MenuView.font(Font.PLAIN, 16 * u));
         g.setColor(MenuView.TEXT_DIM);
-        g.drawString("Linux · NetworkManager", x + pad, y + 84 * u);
+        g.drawString(preview ? "Developer preview · simulated networks · no system changes"
+                : "Linux · NetworkManager", x + pad, y + 84 * u);
         g.drawString(trim(g, status, bw - 2 * pad), x + pad, y + 112 * u);
         hits.clear();
         if (typing) drawKeyboard(g, x, y, bw, bh, u);
