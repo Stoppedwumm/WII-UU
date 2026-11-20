@@ -97,13 +97,10 @@ public final class DemoDevice {
         }
     }
 
-    public static void scheduleReset(Config config, Path zip) throws IOException {
-        verify(zip);
+    /** Factory reset is independent of backup. The UI requires explicit confirmation. */
+    public static void scheduleReset(Config config) throws IOException {
         if (Files.exists(pending(config.home()))) throw new IOException("A demo operation is already scheduled.");
-        // Do not allow any backup to be stored inside folders that the reset touches.
-        Path backup = zip.toRealPath(), home = config.home().toAbsolutePath().normalize();
-        if (backup.startsWith(home)) throw new IOException("Backup must be outside the WII-UU data directory.");
-        writePending(config.home(), "reset", backup);
+        writePending(config.home(), "reset", null);
     }
 
     public static void scheduleRestore(Config config, Path zip) throws IOException {
@@ -116,7 +113,7 @@ public final class DemoDevice {
 
     private static void writePending(Path home, String operation, Path zip) throws IOException {
         Path marker = pending(home);
-        Files.writeString(marker, operation + "\n" + zip.toAbsolutePath() + "\n", StandardCharsets.UTF_8,
+        Files.writeString(marker, operation + "\n" + (zip == null ? "" : zip.toAbsolutePath()) + "\n", StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE_NEW);
     }
 
@@ -127,8 +124,12 @@ public final class DemoDevice {
         List<String> lines = Files.readAllLines(marker, StandardCharsets.UTF_8);
         if (lines.size() != 2 || !List.of("reset", "restore").contains(lines.get(0)))
             throw new IOException("Invalid demo operation marker");
-        Path zip = Path.of(lines.get(1));
-        verify(zip); // An unplugged or modified USB must not cause any reset.
+        Path zip = null;
+        if ("restore".equals(lines.get(0))) {
+            if (lines.get(1).isBlank()) throw new IOException("Restore requires a USB backup.");
+            zip = Path.of(lines.get(1));
+            verify(zip); // Unplugged or modified USB must not overwrite local data.
+        }
         Path actualHome = home.toAbsolutePath().normalize();
         Path parent = actualHome.getParent();
         if (parent == null || !Files.isDirectory(parent)) throw new IOException("Invalid data directory");
