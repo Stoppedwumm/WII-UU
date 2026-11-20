@@ -151,8 +151,8 @@ test('native logger emits diagnostics and HTTP requests include browser headers'
         logger.warn('HTTP', response.status);
         await response.text();
     `);
-    assert.match(ua, /Chrome\\//);
-    assert.match(accept, /text\\/html/);
+    assert.ok(ua.includes('Chrome/'));
+    assert.ok(accept.includes('text/html'));
     assert.ok(messages.some(([level, msg]) => level === 'info' && msg.includes('Starting test')));
     assert.ok(messages.some(([level, msg]) => level === 'warn' && msg.includes('403')));
     assert.ok(messages.some(([level, msg]) => level === 'info' && msg.includes('HTTP 403')));
