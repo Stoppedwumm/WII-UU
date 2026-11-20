@@ -15,8 +15,24 @@ function text(value, max = 160) {
     if (typeof value !== 'string' || value.length > max) throw new Error(`Expected text of at most ${max} characters`);
     return value;
 }
-function createRuntime({ emit, directories, fetchImpl = fetch }) {
-    const callbacks = new Map(), buttons = new Map(), controllers = new Set();
+function createRuntime({ emit, directories, fetchImpl = fetch, log = () => {}, browserAuth: hostAuth = null }) {
+    const logger = Object.freeze({
+        debug: (...args) => log('debug', args.map(String).join(' ')),
+        info: (...args) => log('info', args.map(String).join(' ')),
+        warn: (...args) => log('warn', args.map(String).join(' ')),
+        error: (...args) => log('error', args.map(String).join(' '))
+    });
+    const browserAuth = Object.freeze({
+        open: async url => {
+            const target = httpURL(url);
+            if (!hostAuth) throw new Error('Browser authentication is not available in this host');
+            await hostAuth.open(target.href);
+        },
+        close: () => { if (hostAuth) hostAuth.close(); },
+        // User confirmation only, not proof that an unrelated HTTP client has clearance.
+        isAuthenticated: () => !!hostAuth?.isAuthenticated()
+    });
+    const callbacks = new Map(), buttons = new Map(), inputs = new Map(), controllers = new Set();
     const views = [], downloads = new Set();
     let active, definition, sequence = 0, scheduled = false, disposed = false;
     function update() {
@@ -58,8 +74,20 @@ function createRuntime({ emit, directories, fetchImpl = fetch }) {
                 close() { if (!disposed) emit({ type: 'close' }); },
                 clear() {
                     model.entries = [];
+                    const inputRefs = new Set(views.flatMap(v => v.entries.map(e => e.textField?.id).filter(Boolean)));
+                    for (const id of inputs.keys()) if (!inputRefs.has(id)) inputs.delete(id);
                     const referenced = new Set(views.flatMap(v => v.entries.flatMap(e => e.buttons)));
                     for (const id of buttons.keys()) if (!referenced.has(id)) { callbacks.delete(id); buttons.delete(id); }
+                    update(); return view;
+                },
+                addTextField(label, placeholder = '', initialValue = '', onSubmit) {
+                    text(label); text(placeholder); text(initialValue, 256);
+                    if (typeof onSubmit !== 'function') throw new Error('Text field needs onSubmit callback');
+                    if (model.entries.length >= 500) throw new Error('A view supports at most 500 entries');
+                    const id = `t${++sequence}`;
+                    inputs.set(id, { onSubmit, value: initialValue });
+                    model.entries.push({ id: `e${++sequence}`, title: label, imageURL: '', buttons: [],
+                        textField: { id, placeholder, value: initialValue } });
                     update(); return view;
                 },
                 addEntry(title, imageURL = '', actions = []) {
@@ -83,9 +111,16 @@ function createRuntime({ emit, directories, fetchImpl = fetch }) {
         try {
             // Validate every redirect so the API cannot be redirected to file:/ or credentials URLs.
             let target = String(url), response;
-            let currentOptions = { ...options, signal, redirect: 'manual' };
+            const clientHeaders = new Headers(options.headers);
+            // Ordinary browser content negotiation. This is not an anti-bot bypass.
+            if (!clientHeaders.has('User-Agent')) clientHeaders.set('User-Agent',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+            if (!clientHeaders.has('Accept')) clientHeaders.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+            if (!clientHeaders.has('Accept-Language')) clientHeaders.set('Accept-Language', 'en-US,en;q=0.9');
+            let currentOptions = { ...options, headers: clientHeaders, signal, redirect: 'manual' };
             for (let count = 0; count < 10; count++) {
                 response = await fetchImpl(target, currentOptions);
+                logger.info('HTTP', response.status, new URL(target).origin + new URL(target).pathname);
                 if (![301, 302, 303, 307, 308].includes(response.status)) break;
                 const location = response.headers.get('location');
                 await response.body?.cancel();
@@ -159,11 +194,25 @@ function createRuntime({ emit, directories, fetchImpl = fetch }) {
     async function run(source, filename = 'native-plugin.js') {
         context = vm.createContext({ NPlugin, NButton, ViewType, Directories, downloadManager,
             fetch: request, URL, URLSearchParams, AbortController, AbortSignal,
-            console: { log: (...args) => console.error(...args), error: (...args) => console.error(...args) } });
+            logger, browserAuth, console: { log: logger.info, info: logger.info, warn: logger.warn, error: logger.error, debug: logger.debug } });
         // Reviewed bundled JavaScript only. A vm context is not a sandbox for untrusted code.
         await new vm.Script(`(async () => {\n${source}\n})()`, { filename }).runInContext(context, { timeout: 1000 });
         if (!definition || !views.length) throw new Error('Define an NPlugin and at least one newView');
         update();
+    }
+    async function submitText(id, value) {
+        if (disposed || typeof value !== 'string' || value.length > 256) return;
+        const input = inputs.get(id);
+        if (!input || !active?.entries.some(e => e.textField?.id === id)) return;
+        input.value = value;
+        for (const entry of active.entries) if (entry.textField?.id === id) entry.textField.value = value;
+        update();
+        try {
+            context.__invokeText = () => input.onSubmit(value);
+            await new vm.Script('__invokeText()', { filename: 'native-text-field' })
+                .runInContext(context, { timeout: 1000 });
+        } catch (error) { status(`Plugin error: ${String(error.message).slice(0, 470)}`); }
+        finally { delete context.__invokeText; }
     }
     async function dispatch(id) {
         if (disposed || !callbacks.has(id) || !active?.entries.some(e => e.buttons.includes(id)) || buttons.get(id).busy) return;
@@ -179,9 +228,9 @@ function createRuntime({ emit, directories, fetchImpl = fetch }) {
     function close() {
         disposed = true;
         for (const controller of controllers) controller.abort();
-        controllers.clear(); callbacks.clear(); buttons.clear();
+        controllers.clear(); callbacks.clear(); buttons.clear(); inputs.clear();
         return Promise.allSettled([...downloads]);
     }
-    return { run, dispatch, close };
+    return { run, dispatch, submitText, close };
 }
 module.exports = { createRuntime, ViewType };

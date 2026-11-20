@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.1 (2026-11-20)
+- Add a controller-friendly native ROMSFUN plugin with catalog browsing, game details, version selection and downloadable files.
+- Add native text fields and free-text ROMSFUN search in the general JavaScript plugin API.
+- Add per-plugin logging, HTTP response diagnostics and browser-style request headers.
+- Add an isolated Electron browser authentication window for interactive website access, without exporting cookies or challenge tokens to native plugins.
+- Improve HTTP 403 reporting and provide an option to open ROMSFUN in a browser.
+
 ## 2.1.0 (2026-11-20)
 - Add JavaScript native apps with NPlugin, panel views, image entries, NButton callbacks, awaited fetch and cancellable downloads, drawn directly in the WII-UU menu.
 - Add a source-bundled JavaScript plugin store in Settings > System, with persistent activation and apps in the bottom bar.

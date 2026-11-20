@@ -91,7 +91,7 @@ public final class PluginStore {
     }
     private static synchronized void prepare(Config config) throws IOException {
         Path dir = Files.createDirectories(runtime(config));
-        for (String file : List.of("package.json", "package-lock.json", "main.cjs", "api.cjs", "native-api.cjs", "native-host.cjs"))
+        for (String file : List.of("package.json", "package-lock.json", "main.cjs", "api.cjs", "native-api.cjs", "native-host.cjs", "auth-window.cjs"))
             copy("host/" + file, dir.resolve(file));
         copy("catalog.json", dir.resolve("catalog.json"));
         Files.createDirectories(dir.resolve("store"));

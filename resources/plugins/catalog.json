@@ -17,5 +17,12 @@
     "description": "Native WII-UU panels, JavaScript buttons and multiple views.",
     "script": "native-demo.js",
     "type": "native"
+  },
+  {
+    "id": "romsfun",
+    "name": "ROMSFUN",
+    "description": "Controller-friendly native ROM catalog, game details, variants and explicit downloads.",
+    "script": "romsfun.js",
+    "type": "native"
   }
 ]

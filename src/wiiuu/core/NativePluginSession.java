@@ -9,7 +9,10 @@ import java.util.function.Consumer;
 /** Bounded JSON-lines bridge between reviewed JavaScript definitions and WII-UU's native UI. */
 public final class NativePluginSession implements AutoCloseable {
     public record Button(String id, String label, boolean busy) {}
-    public record Entry(String id, String title, String imageURL, List<Button> buttons) {}
+    public record TextField(String id, String placeholder, String value) {}
+    public record Entry(String id, String title, String imageURL, List<Button> buttons, TextField textField) {
+        public Entry(String id, String title, String imageURL, List<Button> buttons) { this(id, title, imageURL, buttons, null); }
+    }
     public record View(String id, String title, boolean closeButton, String status, List<Entry> entries) {}
     private volatile Process process;
     private volatile boolean closed;
@@ -94,17 +97,48 @@ public final class NativePluginSession implements AutoCloseable {
                 if (!(button.get("busy") instanceof Boolean)) throw new IllegalArgumentException("Invalid button state");
                 buttons.add(new Button(id(button), string(button, "label", 48), Boolean.TRUE.equals(button.get("busy"))));
             }
-            entries.add(new Entry(entryId, string(entry, "title", 160), image, List.copyOf(buttons)));
+            TextField textField = null;
+            if (entry.get("textField") != null) {
+                Map<String, Object> inputField = MiniJson.object(entry.get("textField"));
+                String fieldId = id(inputField);
+                if (!fieldId.startsWith("t") || !ids.add(fieldId)) throw new IllegalArgumentException("Duplicate or invalid text field ID");
+                textField = new TextField(fieldId, string(inputField, "placeholder", 160),
+                        string(inputField, "value", 256));
+                if (!buttons.isEmpty()) throw new IllegalArgumentException("Text fields cannot have buttons");
+            }
+            entries.add(new Entry(entryId, string(entry, "title", 160), image, List.copyOf(buttons), textField));
         }
         return new View(viewId, title, (Boolean) model.get("closeButton"), status, List.copyOf(entries));
     }
+    private static String jsonString(String value) {
+        StringBuilder out = new StringBuilder("\"");
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"' -> out.append("\\\"");
+                case '\\' -> out.append("\\\\");
+                case '\n' -> out.append("\\n");
+                case '\r' -> out.append("\\r");
+                case '\t' -> out.append("\\t");
+                default -> { if (c < 32) out.append(String.format("\\u%04x", (int) c)); else out.append(c); }
+            }
+        }
+        return out.append('"').toString();
+    }
+    public void submitText(String id, String value) {
+        if (closed || !id.matches("t[0-9]+") || value == null || value.length() > 256) return;
+        send("{\"type\":\"text\",\"id\":\"" + id + "\",\"value\":" + jsonString(value) + "}\n");
+    }
     public void activate(String id) {
         if (closed || !id.matches("b[0-9]+")) return;
+        send("{\"type\":\"activate\",\"id\":\"" + id + "\"}\n");
+    }
+    private void send(String json) {
         try { commands.submit(() -> {
             Process host = process;
             if (closed || host == null || !host.isAlive()) return;
             try {
-                host.getOutputStream().write(("{\"type\":\"activate\",\"id\":\"" + id + "\"}\n").getBytes(StandardCharsets.UTF_8));
+                host.getOutputStream().write(json.getBytes(StandardCharsets.UTF_8));
                 host.getOutputStream().flush();
             } catch (IOException ignored) { close(); }
         }); } catch (RejectedExecutionException ignored) { }
