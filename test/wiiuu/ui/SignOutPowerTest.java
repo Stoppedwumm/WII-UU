@@ -50,6 +50,9 @@ public final class SignOutPowerTest {
                 }
                 check(index >= 0, "Power menu contains a sign-out action");
                 check(label.contains("Sign Out"), "Sign-out action has a readable label");
+                boolean console = "1".equals(System.getenv("WIIUU_CONSOLE"));
+                check(label.contains(console ? "Shut Down" : "Quit"),
+                        "Power action is labeled correctly for console or desktop");
                 action.set(null);
                 Method choose = MenuView.class.getDeclaredMethod("choosePower", int.class);
                 choose.setAccessible(true);
