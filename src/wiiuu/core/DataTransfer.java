@@ -46,12 +46,21 @@ public final class DataTransfer {
 
     /** Writes a streaming ZIP without making a second local copy of the data. */
     public static void send(Config config, OutputStream out) throws IOException {
+        sendArchive(config, out, true);
+    }
+
+    /** Full local backup, including app settings and local downloaded helpers (unlike LAN migration). */
+    public static void sendFull(Config config, OutputStream out) throws IOException {
+        sendArchive(config, out, false);
+    }
+
+    private static void sendArchive(Config config, OutputStream out, boolean network) throws IOException {
         // The caller owns the transport so it can receive an acknowledgement after the ZIP.
         try (var zip = new ZipOutputStream(new FilterOutputStream(out) {
             @Override public void close() throws IOException { flush(); }
         })) {
             zip.setLevel(Deflater.BEST_SPEED);
-            visit(config, true, (source, name, directory) -> {
+            visit(config, network, (source, name, directory) -> {
                 zip.putNextEntry(new ZipEntry(name + (directory ? "/" : "")));
                 if (!directory) Files.copy(source, zip);
                 zip.closeEntry();
