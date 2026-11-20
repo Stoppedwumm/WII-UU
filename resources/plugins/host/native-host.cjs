@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const readline = require('node:readline');
+const { spawn } = require('node:child_process');
 const { createRuntime } = require('./native-api.cjs');
 const [id, home, roms] = process.argv.slice(2);
 const emit = value => process.stdout.write(JSON.stringify(value) + '\n');
@@ -21,7 +22,47 @@ function log(level, message) {
         fs.appendFileSync(logFile, line, { encoding: 'utf8', mode: 0o600 });
     } catch (error) { process.stderr.write('[native plugin log] ' + error.message + '\n'); }
 }
-const runtime = createRuntime({ emit, log,
+let authChild = null;
+let authConfirmed = false;
+function openAuthBrowser(url) {
+    const target = new URL(url);
+    if (target.protocol !== 'https:' || target.hostname !== 'romsfun.com' ||
+        target.username || target.password) throw new Error('Authentication site not permitted');
+    if (authChild && authChild.exitCode === null) return;
+    authConfirmed = false;
+    const env = { ...process.env };
+    delete env.ELECTRON_RUN_AS_NODE;
+    delete env.NODE_OPTIONS;
+    const child = spawn(process.execPath,
+        [path.join(__dirname, 'auth-window.cjs'), id, home, target.href], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    authChild = child;
+    let buffer = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', chunk => {
+        buffer += chunk;
+        if (buffer.length > 8192) buffer = '';
+        let index;
+        while ((index = buffer.indexOf('\\n')) >= 0) {
+            const line = buffer.slice(0, index); buffer = buffer.slice(index + 1);
+            try { if (JSON.parse(line).type === 'confirmed') { authConfirmed = true; log('info', 'Browser session acknowledged'); } }
+            catch (_) {}
+        }
+    });
+    child.stderr.on('data', data => log('warn', String(data).slice(0, 500)));
+    child.on('error', error => log('error', error.message));
+    child.on('exit', () => { if (authChild === child) authChild = null; });
+    log('info', 'Opening isolated authentication browser');
+}
+function closeAuthBrowser() {
+    if (authChild && authChild.exitCode === null) authChild.kill();
+    authChild = null;
+}
+const browserAuth = Object.freeze({
+    open: url => { openAuthBrowser(url); return Promise.resolve(); },
+    close: () => { closeAuthBrowser(); },
+    isAuthenticated: () => authConfirmed
+});
+const runtime = createRuntime({ emit, log, browserAuth,
     directories: { ROMS: roms, DOWNLOADS: path.join(home, 'downloads') } });
 const input = readline.createInterface({ input: process.stdin, terminal: false });
 input.on('line', line => {
@@ -34,6 +75,7 @@ let stopping = false;
 async function stop() {
     if (stopping) return;
     stopping = true; input.close();
+    closeAuthBrowser();
     await runtime.close();
     process.exit(0);
 }
