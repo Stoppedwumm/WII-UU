@@ -489,16 +489,21 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
      * timer or music, and the theme as it is.
      */
     MenuView(Config config, boolean preview) {
+        this(config, preview, null);
+    }
+
+    /** Offscreen preview with injectable actions, for controller/power UI tests. */
+    MenuView(Config config, boolean preview, Actions previewActions) {
         this.config = config;
         reloadPluginDock();
-        this.actions = new Actions() {
+        this.actions = previewActions == null ? new Actions() {
             @Override public void launch(Game game) { }
             @Override public void openSettings() { }
             @Override public void quit() { }
             @Override public void refresh() { }
             @Override public void power(String action) { }
             @Override public void closeGame() { }
-        };
+        } : previewActions;
         setOpaque(true);
         booting = false;
         revealed = true;
