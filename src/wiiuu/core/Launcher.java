@@ -282,7 +282,7 @@ public final class Launcher {
         Path log = config.logDir().resolve(game.system().id() + ".log");
         Choccy.Session session;
         try {
-            session = Choccy.play(core, game.path(), config.home().resolve("saves").resolve(game.system().id()),
+            session = Choccy.play(core, game.path(), config.userHome().resolve("saves").resolve(game.system().id()),
                     retroArch.systemDir(), retroArch.choccyOptions(game.system().id()),
                     (px, w, h, a) -> choccyScreen.frame(px, w, h, a), log);
         } catch (IOException e) {
