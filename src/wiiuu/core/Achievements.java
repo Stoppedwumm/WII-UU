@@ -81,7 +81,7 @@ public final class Achievements {
 
     public Achievements(Config config) {
         this.config = config;
-        this.cache = config.home().resolve("cache").resolve("retroachievements");
+        this.cache = config.userHome().resolve("cache").resolve("retroachievements");
     }
 
     public boolean configured() {

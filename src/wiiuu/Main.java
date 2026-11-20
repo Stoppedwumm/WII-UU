@@ -22,6 +22,7 @@ import java.util.concurrent.CompletableFuture;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
@@ -44,7 +45,7 @@ import wiiuu.ui.SettingsScreen;
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
     /** Canonical target release. Build scripts and legacy version checks read this declaration. */
-    public static final String VERSION = "2.1.2";
+    public static final String VERSION = "2.1.3";
     /** Exact installed version, including beta/run identity from the packaged metadata. */
     public static final String BUILD_VERSION = wiiuu.core.BuildInfo.version();
 
@@ -153,7 +154,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         Integer port = null;
         boolean noServer = false, setup = false, noIntro = false, appliance = false, oemSettings = false;
         boolean oemSelfTest = false;
-        String snapshot = null, snapshotView = "home";
+        String snapshot = null, snapshotView = "home", requestedUser = null;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--fullscreen" -> fullscreen = true;
@@ -161,6 +162,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                 case "--port" -> port = Integer.parseInt(args[++i]);
                 case "--no-server" -> noServer = true;
                 case "--home" -> home = Paths.get(args[++i]);
+                case "--user" -> requestedUser = args[++i];
+                case "--list-users" -> {
+                    for (Config.Users.Profile p : Config.Users.list(home))
+                        System.out.println(p.id() + "\t" + p.name());
+                    return;
+                }
                 case "--snapshot" -> snapshot = args[++i];
                 case "--snapshot-view" -> snapshotView = args[++i];
                 case "--write-icon" -> {
@@ -219,6 +226,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --port N                    GamePad web server port (default 8080)
                               --no-server                 do not start the phone GamePad server
                               --home DIR                  settings folder (default ~/.wiiuu)
+                              --user ID                   select a local WII-UU user without prompting
+                              --list-users                 list profile IDs and names
                               --build-info               show channel, commit and build date
                               --check-update / --upgrade  check for / install a newer version (with its notes)
                               --changelog [VERSION]       what changed (since VERSION)
@@ -252,6 +261,36 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         // Process USB demo reset/restore before opening any settings, databases or plugin files.
         wiiuu.core.DemoDevice.applyPending(home);
+        if (requestedUser != null) {
+            Config.Users.select(home, requestedUser);
+        } else if (!oemSelfTest && !oemSettings && snapshot == null && !GraphicsEnvironment.isHeadless()) {
+            List<Config.Users.Profile> users = Config.Users.list(home);
+            if (Config.Users.chooserRequired(home)) {
+                String[] names = users.stream().map(Config.Users.Profile::name).toArray(String[]::new);
+                javax.swing.JComboBox<String> choice = new javax.swing.JComboBox<>(names);
+                choice.setSelectedItem(Config.Users.active(home).name());
+                String stop = "1".equals(System.getenv("WIIUU_CONSOLE")) ? "Shut Down" : "Quit WII-UU";
+                int answer = JOptionPane.showOptionDialog(null,
+                        new Object[] {"Choose who is playing:", choice},
+                        "WII-UU users", JOptionPane.DEFAULT_OPTION,
+                        JOptionPane.QUESTION_MESSAGE, null,
+                        new String[] {"Start", stop}, "Start");
+                if (answer != 0) {
+                    // Keep the chooser for the next startup even if only one user
+                    // remains. A cancelled sign-in must never resume the last profile.
+                    Config.Users.requireChooserOnNextBoot(home);
+                    if ("1".equals(System.getenv("WIIUU_CONSOLE"))) System.exit(11);
+                    return;
+                }
+                String name = (String) choice.getSelectedItem();
+                for (Config.Users.Profile profile : users) {
+                    if (profile.name().equals(name)) {
+                        Config.Users.select(home, profile.id());
+                        break;
+                    }
+                }
+            }
+        }
         Config config = new Config(home);
         if (oemSelfTest) {
             wiiuu.ui.OemSelfTest.show(config);
@@ -518,7 +557,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     @Override
     public void openSettings() {
         view.openSettings(new SettingsScreen.Services(config, openBased, () -> server == null ? null : server.url(),
-                () -> view.startGuide(), this::restartIntoGuide, new Updater(config, BUILD_VERSION), () -> {
+                () -> view.startGuide(), this::restartIntoGuide, this::restartForUser,
+                new Updater(config, BUILD_VERSION), () -> {
                     quitReason = "update";
                     quit();
                 }, () -> {
@@ -757,6 +797,17 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         quit();
     }
 
+    /** Restart all profile-bound services (achievements, plugins, credentials, saves) before switching. */
+    private void restartForUser() {
+        quitReason = "restart";
+        try {
+            Updater.restartAfterExit();
+        } catch (IOException e) {
+            System.err.println("[users] restart failed; restart WII-UU manually: " + e.getMessage());
+        }
+        quit();
+    }
+
     @Override
     public void quit() {
         launcher.stop(true);        // make sure the emulator is really gone before we exit
@@ -782,10 +833,21 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
      */
     @Override
     public void power(String action) {
+        if ("signout".equals(action)) {
+            // Persist the next-boot chooser request before stopping anything.
+            // On a write error leave the console running rather than pretending to log out.
+            try {
+                Config.Users.requireChooserOnNextBoot(config.home());
+            } catch (IOException e) {
+                view.showToast("Could not sign out: " + e.getMessage());
+                return;
+            }
+        }
         int code = switch (action) {
             case "desktop" -> 10;
             case "shutdown" -> 11;
             case "restart" -> 12;
+            case "signout" -> "1".equals(System.getenv("WIIUU_CONSOLE")) ? 11 : 0;
             default -> 0;
         };
         launcher.stop(true);

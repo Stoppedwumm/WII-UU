@@ -101,7 +101,7 @@ public final class OpenBased implements Launcher.Listener {
     private Path backdropFile(String artwork) {
         if (artwork == null || !artwork.startsWith("/api/v1/artwork/")) return null;
         try {
-            Path file = config.home().resolve("cache").resolve("openbased").resolve("backdrops")
+            Path file = config.userHome().resolve("cache").resolve("openbased").resolve("backdrops")
                     .resolve(artwork.substring(artwork.lastIndexOf('/') + 1).replaceAll("[^A-Za-z0-9_-]", ""));
             Files.createDirectories(file.getParent());
             if (!Files.exists(file)) download(artwork, file);
@@ -623,7 +623,7 @@ public final class OpenBased implements Launcher.Listener {
             Double total = MiniJson.number(answer.get("total"));
             if (items.isEmpty() || total == null || all.size() >= total) break;
         }
-        Path cache = config.home().resolve("cache").resolve("openbased");
+        Path cache = config.userHome().resolve("cache").resolve("openbased");
         Files.createDirectories(cache.resolve("posters"));
         List<String> order = new ArrayList<>();
         for (String id : first) if (all.containsKey(id)) order.add(id);

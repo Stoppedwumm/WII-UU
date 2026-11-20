@@ -64,7 +64,7 @@ public final class PluginStore {
         return CATALOG.stream().filter(e -> enabled(config, e)).toList();
     }
     public static boolean enabled(Config config, Entry entry) { return config.getBool("plugin." + entry.id() + ".enabled", false); }
-    private static String key(Config config, Entry entry) { return config.home().toAbsolutePath() + "/" + entry.id(); }
+    private static String key(Config config, Entry entry) { return config.userHome().toAbsolutePath() + "/" + entry.id(); }
     public static synchronized void setEnabled(Config config, Entry entry, boolean enabled) {
         if (!CATALOG.contains(entry)) throw new IllegalArgumentException("Unknown plugin");
         config.set("plugin." + entry.id() + ".enabled", Boolean.toString(enabled));
@@ -168,7 +168,7 @@ public final class PluginStore {
         prepare(config);
         ProcessBuilder builder = new ProcessBuilder(executable(config).toAbsolutePath().toString(),
                 runtime(config).resolve("native-host.cjs").toAbsolutePath().toString(), entry.id(),
-                config.home().toAbsolutePath().toString(), config.romBase().toAbsolutePath().toString())
+                config.userHome().toAbsolutePath().toString(), config.romBase().toAbsolutePath().toString())
                 .redirectError(ProcessBuilder.Redirect.appendTo(log(config, "plugin-" + entry.id() + ".log").toFile()));
         builder.environment().put("ELECTRON_RUN_AS_NODE", "1");
         builder.environment().remove("NODE_OPTIONS");
@@ -190,7 +190,7 @@ public final class PluginStore {
                     if (old != null && old.isAlive()) { report.accept(entry.name() + " is already open. Switch to its window."); return; }
                     prepare(config);
                     ProcessBuilder builder = new ProcessBuilder(executable(config).toString(), runtime(config).toAbsolutePath().toString(),
-                            entry.id(), config.home().toAbsolutePath().toString(), config.romBase().toAbsolutePath().toString())
+                            entry.id(), config.userHome().toAbsolutePath().toString(), config.romBase().toAbsolutePath().toString())
                             .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.appendTo(log(config, "plugin-" + entry.id() + ".log").toFile()));
                     builder.environment().remove("ELECTRON_RUN_AS_NODE");
                     Process process = builder.start();

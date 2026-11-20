@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.3 (2026-11-20)
+- Add multiple local user profiles with a user chooser at startup and profile management under Settings > System.
+- Separate users' WII-UU preferences, RetroAchievements/OpenBased accounts, plugin browser data and Choccy Milk saves.
+- Keep ROMs, installed emulators and device-level configuration shared, and preserve existing data as the default user.
+- Restart user-specific services on profile switch; add cross-platform profile isolation and migration regression tests.
+- Add **Sign Out & Shut Down** to the console Power menu and user-profile settings; the next boot shows the user chooser again, even with only one profile.
+
 ## 2.1.2 (2026-11-20)
 - Add a cross-platform Developer UI test for the Linux-native network picker, with sample Wi-Fi networks and a working mock password flow.
 - Keep preview mode strictly offline: it never calls NetworkManager, joins a network, or changes host settings.

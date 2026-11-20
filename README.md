@@ -95,6 +95,31 @@ java -jar WII-UU-Cleanup.jar --apply
 For custom paths, pass `--temp-dir DIR` or `--emu-root DIR` (the same root as
 `emulators.sh --prefix`). Build the JAR from source with `./build.sh` and find it in `build/`.
 
+## Local user profiles
+
+Open **Settings > System > User profiles** to add, rename, switch or archive local users.
+With two or more users, WII-UU asks who is playing at startup. Use **--list-users** to
+see profile IDs, or **--user ID** to launch a particular profile without the chooser.
+Switching accounts restarts WII-UU, so the current user's account sessions and
+game-save handles are closed first. On a console, select **Power → Sign Out & Shut Down**
+(or **Settings → System → User profiles → Sign out & shut down**) to end the
+current session and power off. The next boot shows the user chooser, even with
+only one configured user. The startup chooser also has a **Shut Down** button, so
+the console can be powered off before anyone signs in. On a desktop, **Sign Out & Quit**
+closes WII-UU without powering off the PC.
+
+The existing installation is the **Default user**; its `config.properties` and saves
+remain exactly where they were. Additional users store their personal settings and
+Choccy Milk saves under `<WIIUU_HOME>/profiles/<user-id>/`. RetroAchievements and
+OpenBased sign-ins, UI/input preferences and plugin browser sessions are user-specific.
+ROMs, shared storage, emulators, the GamePad server and console configuration remain
+shared. Peer save synchronization uses the current user's saves.
+
+Profiles are a **convenience feature, not a security boundary**: there is no profile
+password or OS account isolation, and other programs or emulators that manage their
+own files may still use shared save locations. Removing a profile only hides it from
+the chooser; its files are retained to prevent accidental loss.
+
 ## Storage and migration
 
 Open **Settings → System → Storage and migration**. Choose a drive and a new folder to switch

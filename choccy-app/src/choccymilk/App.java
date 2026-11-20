@@ -214,7 +214,7 @@ public final class App extends JPanel implements PadSink {
         Path log = config.logDir().resolve("choccy-" + id + ".log");
         Choccy.Session s;
         try {
-            s = Choccy.play(core, game.path(), config.home().resolve("saves").resolve(id), cores.systemDir(),
+            s = Choccy.play(core, game.path(), config.userHome().resolve("saves").resolve(id), cores.systemDir(),
                     cores.choccyOptions(id), (px, w, h, a) -> {
                         screen.frame(px, w, h, a);
                         repaint();

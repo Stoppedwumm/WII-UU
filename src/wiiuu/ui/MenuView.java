@@ -419,8 +419,15 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private static List<PowerItem> powerItems() {
         return CONSOLE
                 ? List.of(new PowerItem("Desktop Mode", "desktop"), new PowerItem("Restart", "restart"),
-                        new PowerItem("Shut Down", "shutdown"), new PowerItem("Cancel", null))
-                : List.of(new PowerItem("Quit WII-UU", "quit"), new PowerItem("Cancel", null));
+                        new PowerItem("Shut Down", "shutdown"),
+                        new PowerItem("Sign Out & Shut Down", "signout"), new PowerItem("Cancel", null))
+                : List.of(new PowerItem("Quit WII-UU", "quit"),
+                        new PowerItem("Sign Out & Quit", "signout"), new PowerItem("Cancel", null));
+    }
+
+    /** Finish the active local user session and show the chooser on the next boot. */
+    public void signOut() {
+        actions.power("signout");
     }
 
     /** Opens the Power menu (the dock's Power button). */
@@ -482,16 +489,21 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
      * timer or music, and the theme as it is.
      */
     MenuView(Config config, boolean preview) {
+        this(config, preview, null);
+    }
+
+    /** Offscreen preview with injectable actions, for controller/power UI tests. */
+    MenuView(Config config, boolean preview, Actions previewActions) {
         this.config = config;
         reloadPluginDock();
-        this.actions = new Actions() {
+        this.actions = previewActions == null ? new Actions() {
             @Override public void launch(Game game) { }
             @Override public void openSettings() { }
             @Override public void quit() { }
             @Override public void refresh() { }
             @Override public void power(String action) { }
             @Override public void closeGame() { }
-        };
+        } : previewActions;
         setOpaque(true);
         booting = false;
         revealed = true;
