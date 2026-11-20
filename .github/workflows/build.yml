@@ -298,6 +298,8 @@ jobs:
         run: |
           gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases" > build/published-releases.json
           python3 tools/stage-release-site.py build/published-releases.json
+          python3 -c 'import json; print("Stable update feed staged:", json.load(open("docs/version.json"))["version"])'
+          python3 -c 'import json; print("Beta update feed staged:", json.load(open("docs/beta/version.json"))["version"])'
 
       - name: Package the website
         if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')))
@@ -327,8 +329,10 @@ jobs:
 
   pages:
     needs: build
-    # GitHub Pages deploys only from the default branch; release/* builds still publish GitHub Releases.
-    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+    # A release/* build publishes the stable GitHub release in the build job.
+    # Deploy its freshly staged stable feed AFTER that release exists.
+    # Otherwise the default-branch deploy can win the race and leave /version.json one version behind.
+    if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/heads/release/'))
     runs-on: ubuntu-latest
     concurrency:
       group: pages

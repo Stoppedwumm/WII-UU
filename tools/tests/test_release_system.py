@@ -74,6 +74,20 @@ class ReleaseSystemTests(unittest.TestCase):
             malformed = {**stable, 'tag_name': 'wiiuu-ui-v99.0.0'}
             self.assertIsNone(site.select([malformed], False))
 
+    def test_stable_release_branch_deploys_pages_after_release_publish(self):
+        """A release/* build must also deploy Pages or clients keep the previous stable feed."""
+        workflow = (ROOT / '.github/workflows/build.yml').read_text()
+        pages = workflow.split('\n  pages:\n', 1)[1]
+        self.assertIn('needs: build', pages)
+        self.assertIn("startsWith(github.ref, 'refs/heads/release/')", pages)
+        self.assertIn("github.ref_name == github.event.repository.default_branch", pages)
+        self.assertIn("github.event_name != 'pull_request'", pages)
+        release_stage = workflow.index('name: Publish versioned application release')
+        feed_stage = workflow.index('name: Assemble stable and beta website channels')
+        package_site = workflow.index('name: Package the website')
+        self.assertLess(release_stage, feed_stage)
+        self.assertLess(feed_stage, package_site)
+
     def test_first_deployment_preserves_live_stable_instead_of_old_checkout(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
