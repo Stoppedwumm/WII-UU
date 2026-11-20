@@ -19,7 +19,8 @@ public final class SignOutPowerTest {
         AtomicReference<String> action = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             try {
-                MenuView menu = new MenuView(config, new MenuView.Actions() {
+                // Offscreen preview does not start a Swing timer that could keep CI alive.
+                MenuView menu = new MenuView(config, true, new MenuView.Actions() {
                     @Override public void launch(Game game) {}
                     @Override public void openSettings() {}
                     @Override public void quit() { action.set("quit"); }
