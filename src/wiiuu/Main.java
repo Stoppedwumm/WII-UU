@@ -276,8 +276,9 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                         JOptionPane.QUESTION_MESSAGE, null,
                         new String[] {"Start", stop}, "Start");
                 if (answer != 0) {
-                    // Shut Down / Cancel at the account chooser must not automatically
-                    // resume another person's session. A sign-out marker stays intact.
+                    // Keep the chooser for the next startup even if only one user
+                    // remains. A cancelled sign-in must never resume the last profile.
+                    Config.Users.requireChooserOnNextBoot(home);
                     if ("1".equals(System.getenv("WIIUU_CONSOLE"))) System.exit(11);
                     return;
                 }
