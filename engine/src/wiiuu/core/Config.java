@@ -7,6 +7,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 import java.util.Properties;
 
 /** Properties-backed settings stored in ~/.wiiuu/config.properties (or $WIIUU_HOME). */
@@ -14,11 +20,35 @@ public final class Config {
     private final Path home;
     private final Path file;
     private final Properties props = new Properties();
+    private final Properties userProps = new Properties();
+    private final String userId;
+    private final Path userFile;
 
     public Config(Path home) {
         this.home = home;
         this.file = home.resolve("config.properties");
+        this.userId = Users.activeId(home);
+        this.userFile = "default".equals(userId) ? null
+                : Users.dataHome(home, userId).resolve("config.properties");
         load();
+    }
+
+    /** Data owned by the active WII-UU user. The legacy default user's folder is unchanged. */
+    public Path userHome() {
+        return "default".equals(userId) ? home : Users.dataHome(home, userId);
+    }
+
+    public String userId() { return userId; }
+
+    /** Global device keys remain shared; profile preferences and credentials never fall back to another user. */
+    private static boolean personal(String key) {
+        if (key.startsWith("ui.")) return !key.equals("ui.setupDone")
+                && !key.equals("ui.setupNext") && !key.equals("ui.firstBootIntro");
+        return key.startsWith("ra.") || key.startsWith("openbased.")
+                || key.startsWith("input.") || key.startsWith("keys.")
+                || key.startsWith("choccy.") || key.startsWith("retroarch.")
+                || key.startsWith("scraper.ss.") || key.startsWith("plugins.")
+                || key.startsWith("plugin.") || key.startsWith("favorites.");
     }
 
     public static Path defaultHome() {
@@ -68,11 +98,16 @@ public final class Config {
     }
 
     private void load() {
-        if (!Files.exists(file)) return;
-        try (InputStream in = Files.newInputStream(file)) {
-            props.load(in);
+        read(file, props);
+        if (userFile != null) read(userFile, userProps);
+    }
+
+    private static void read(Path path, Properties target) {
+        if (!Files.exists(path)) return;
+        try (InputStream in = Files.newInputStream(path)) {
+            target.load(in);
         } catch (IOException e) {
-            System.err.println("[config] could not read " + file + ": " + e.getMessage());
+            System.err.println("[config] could not read " + path + ": " + e.getMessage());
         }
     }
 
@@ -87,18 +122,26 @@ public final class Config {
     public synchronized void saveChecked() throws IOException {
         Files.createDirectories(home);
         try (OutputStream out = Files.newOutputStream(file)) {
-            props.store(out, "WII-UU settings. {rom} in a command is replaced by the game path.");
+            props.store(out, "WII-UU shared device settings. {rom} is replaced by the game path.");
+        }
+        if (userFile != null) {
+            Files.createDirectories(userFile.getParent());
+            try (OutputStream out = Files.newOutputStream(userFile)) {
+                userProps.store(out, "WII-UU private user settings.");
+            }
         }
     }
 
     public synchronized String get(String key, String def) {
-        String v = props.getProperty(key);
+        Properties source = userFile != null && personal(key) ? userProps : props;
+        String v = source.getProperty(key);
         return v == null ? def : v;
     }
 
     public synchronized void set(String key, String value) {
-        if (value == null) props.remove(key);
-        else props.setProperty(key, value);
+        Properties target = userFile != null && personal(key) ? userProps : props;
+        if (value == null) target.remove(key);
+        else target.setProperty(key, value);
     }
 
     public int getInt(String key, int def) {
@@ -111,6 +154,118 @@ public final class Config {
 
     public boolean getBool(String key, boolean def) {
         return Boolean.parseBoolean(get(key, Boolean.toString(def)).trim());
+    }
+
+    /**
+     * Local WII-UU user profiles. Names are display-only; directories always use random IDs.
+     * Legacy installations are the immutable-ID "default" user without any migration.
+     * Removing a user hides it from the menu, but leaves its files for manual recovery.
+     */
+    public static final class Users {
+        public record Profile(String id, String name) {}
+        private Users() {}
+
+        private static Path folder(Path home) { return home.resolve("profiles"); }
+        private static Path index(Path home) { return folder(home).resolve("index.properties"); }
+        private static Path dataHome(Path home, String id) {
+            if (!validId(id) || "default".equals(id)) throw new IllegalArgumentException("Invalid user ID");
+            return folder(home).resolve(id);
+        }
+        private static boolean validId(String id) {
+            return id != null && ("default".equals(id) || id.matches("[a-f0-9]{32}"));
+        }
+        private static Properties read(Path home) {
+            Properties p = new Properties();
+            Config.read(index(home), p);
+            if (!p.containsKey("user.default")) p.setProperty("user.default", "Default user");
+            return p;
+        }
+        private static void write(Path home, Properties p) throws IOException {
+            Path folder = folder(home);
+            Files.createDirectories(folder);
+            Path tmp = Files.createTempFile(folder, ".profiles-", ".tmp");
+            try {
+                try (OutputStream out = Files.newOutputStream(tmp)) {
+                    p.store(out, "WII-UU local user list; profile files live in ID-based subfolders.");
+                }
+                try {
+                    Files.move(tmp, index(home), StandardCopyOption.ATOMIC_MOVE,
+                            StandardCopyOption.REPLACE_EXISTING);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(tmp, index(home), StandardCopyOption.REPLACE_EXISTING);
+                }
+            } finally { Files.deleteIfExists(tmp); }
+        }
+        private static String cleanName(String raw) {
+            String name = raw == null ? "" : raw.strip();
+            if (name.isEmpty() || name.length() > 32
+                    || name.codePoints().anyMatch(Character::isISOControl))
+                throw new IllegalArgumentException("User name must be 1-32 visible characters");
+            return name;
+        }
+        private static void unique(Properties p, String name, String exclude) {
+            for (String key : p.stringPropertyNames())
+                if (key.startsWith("user.") && !key.equals("user." + exclude)
+                        && name.equalsIgnoreCase(p.getProperty(key)))
+                    throw new IllegalArgumentException("A user with this name already exists");
+        }
+        public static synchronized List<Profile> list(Path home) {
+            Properties p = read(home);
+            List<Profile> result = new ArrayList<>();
+            for (String key : p.stringPropertyNames()) {
+                if (!key.startsWith("user.")) continue;
+                String id = key.substring(5);
+                if (validId(id)) result.add(new Profile(id, p.getProperty(key)));
+            }
+            result.sort(Comparator.comparing((Profile u) -> !u.id().equals("default"))
+                    .thenComparing(Profile::name, String.CASE_INSENSITIVE_ORDER));
+            return List.copyOf(result);
+        }
+        public static synchronized String activeId(Path home) {
+            Properties p = read(home);
+            String id = p.getProperty("active", "default");
+            return validId(id) && p.containsKey("user." + id) ? id : "default";
+        }
+        public static synchronized Profile active(Path home) {
+            String id = activeId(home);
+            return list(home).stream().filter(p -> p.id().equals(id)).findFirst()
+                    .orElse(new Profile("default", "Default user"));
+        }
+        public static synchronized Profile create(Path home, String rawName) throws IOException {
+            String name = cleanName(rawName);
+            Properties p = read(home);
+            unique(p, name, null);
+            String id = UUID.randomUUID().toString().replace("-", "");
+            Files.createDirectories(dataHome(home, id));
+            p.setProperty("user." + id, name);
+            write(home, p);
+            return new Profile(id, name);
+        }
+        public static synchronized void rename(Path home, String id, String rawName) throws IOException {
+            String name = cleanName(rawName);
+            Properties p = read(home);
+            if (!validId(id) || !p.containsKey("user." + id))
+                throw new IllegalArgumentException("Unknown user");
+            unique(p, name, id);
+            p.setProperty("user." + id, name);
+            write(home, p);
+        }
+        public static synchronized void select(Path home, String id) throws IOException {
+            Properties p = read(home);
+            if (!validId(id) || !p.containsKey("user." + id))
+                throw new IllegalArgumentException("Unknown user");
+            p.setProperty("active", id);
+            write(home, p);
+        }
+        public static synchronized void remove(Path home, String id) throws IOException {
+            Properties p = read(home);
+            if (!validId(id) || "default".equals(id) || !p.containsKey("user." + id))
+                throw new IllegalArgumentException("Cannot remove that user");
+            if (id.equals(activeId(home))) throw new IllegalArgumentException("Switch users before removing the active one");
+            p.remove("user." + id);
+            write(home, p);
+            // Deliberately retain profile data for recovery; no recursive deletion.
+        }
     }
 
     // ---- typed accessors ---------------------------------------------------------------
