@@ -186,7 +186,7 @@ public final class Peers {
         this.host = host;
         this.port = port;
         this.version = version;
-        this.saves = config.home().resolve("saves");
+        this.saves = config.userHome().resolve("saves");
         String id = config.get("peer.id", "");
         if (id.isBlank()) {
             id = token().substring(0, 16);
