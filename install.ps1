@@ -26,6 +26,8 @@ if (-not $PSBoundParameters.ContainsKey("Roms") -and
 }
 $StartMenu = Join-Path ([Environment]::GetFolderPath("Programs")) "WII-UU.lnk"
 $DesktopLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "WII-UU.lnk"
+$ChoccyStartMenu = Join-Path ([Environment]::GetFolderPath("Programs")) "Choccy Milk.lnk"
+$ChoccyDesktopLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "Choccy Milk.lnk"
 $Systems = "nes snes gb n64 gba gc nds wii 3ds wiiu switch sms genesis saturn dc ps1 ps2 psp ps3 ps4".Split(" ")
 
 function Say($m) { Write-Host "==> $m" -ForegroundColor Cyan }
@@ -76,7 +78,7 @@ if (-not $Uninstall -and -not $Yes -and -not [Console]::IsInputRedirected -and
 
 if ($Uninstall) {
     Say "Removing WII-UU"
-    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $Prefix, $StartMenu, $DesktopLnk
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $Prefix, $StartMenu, $DesktopLnk, $ChoccyStartMenu, $ChoccyDesktopLnk
     Ok "Removed. Your ROMs ($Roms) and settings ($ConfDir) were kept."
     exit 0
 }
@@ -122,6 +124,10 @@ $jar = @((Join-Path $Here "wiiuu.jar"), (Join-Path $Here "build\wiiuu.jar")) | W
 if (-not $jar) { throw "wiiuu.jar not found next to install.ps1 (use the release zip, or build with build.sh first)." }
 New-Item -ItemType Directory -Force -Path $Prefix | Out-Null
 Copy-Item -Force $jar (Join-Path $Prefix "wiiuu.jar")
+$choccyJar = @((Join-Path $Here "ChoccyMilk.jar"), (Join-Path $Here "build\ChoccyMilk.jar")) |
+    Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if (-not $choccyJar) { throw "ChoccyMilk.jar not found next to install.ps1 (use the complete release zip, or build with build.sh first)." }
+Copy-Item -LiteralPath $choccyJar -Destination (Join-Path $Prefix "ChoccyMilk.jar") -Force
 $cleaner = Get-CleanupJar
 $installedCleaner = Join-Path $Prefix "WII-UU-Cleanup.jar"
 if ($cleaner -and $cleaner -ne $installedCleaner) {
@@ -133,6 +139,8 @@ $ErrorActionPreference = "Continue"
 $ErrorActionPreference = "Stop"
 Set-Content -Encoding ASCII -Path (Join-Path $Prefix "wiiuu.cmd") -Value "@echo off`r`nstart `"`" `"$javaw`" -Xmx384m -jar `"$Prefix\wiiuu.jar`" %*"
 Ok "Launcher: $Prefix\wiiuu.cmd"
+Set-Content -Encoding ASCII -Path (Join-Path $Prefix "ChoccyMilk.cmd") -Value "@echo off`r`nstart `"`" `"$javaw`" -jar `"$Prefix\ChoccyMilk.jar`" %*"
+Ok "Choccy Milk launcher: $Prefix\ChoccyMilk.cmd"
 
 Say "Creating ROM folders in $Roms"
 foreach ($s in $Systems) { New-Item -ItemType Directory -Force -Path (Join-Path $Roms $s) | Out-Null }
@@ -153,6 +161,39 @@ Set-Conf "server.port" "$Port"
 Set-Content -Path $conf -Value $lines -Encoding ASCII
 Ok "Settings: $conf"
 
+# ---------------------------------------------------------------- Choccy Milk icon
+# The standalone app writes a PNG. Wrap it as a PNG-compressed Windows ICO for its shortcut.
+# This works on Windows Vista and newer without ImageMagick or other dependencies.
+$choccyPng = Join-Path $Prefix "ChoccyMilk.png"
+$choccyIco = Join-Path $Prefix "ChoccyMilk.ico"
+$ErrorActionPreference = "Continue"
+& java -jar (Join-Path $Prefix "ChoccyMilk.jar") --write-icon $choccyPng 2>&1 | Out-Null
+$ErrorActionPreference = "Stop"
+if (Test-Path -LiteralPath $choccyPng -PathType Leaf) {
+    $pngBytes = [IO.File]::ReadAllBytes($choccyPng)
+    $stream = New-Object IO.MemoryStream
+    $writer = New-Object IO.BinaryWriter($stream)
+    try {
+        $writer.Write([uint16]0)             # reserved
+        $writer.Write([uint16]1)             # icon
+        $writer.Write([uint16]1)             # one image
+        $writer.Write([byte]0)               # width 256
+        $writer.Write([byte]0)               # height 256
+        $writer.Write([byte]0)               # palette
+        $writer.Write([byte]0)               # reserved
+        $writer.Write([uint16]1)             # planes
+        $writer.Write([uint16]32)            # bits per pixel
+        $writer.Write([uint32]$pngBytes.Length)
+        $writer.Write([uint32]22)            # offset to the PNG bytes
+        $writer.Write($pngBytes)
+        $writer.Flush()
+        [IO.File]::WriteAllBytes($choccyIco, $stream.ToArray())
+    } finally {
+        $writer.Dispose()
+        $stream.Dispose()
+    }
+}
+
 # ---------------------------------------------------------------- shortcuts
 $shell = New-Object -ComObject WScript.Shell
 foreach ($lnkPath in @($StartMenu, $DesktopLnk)) {
@@ -165,7 +206,20 @@ foreach ($lnkPath in @($StartMenu, $DesktopLnk)) {
     if (Test-Path (Join-Path $Prefix "wiiuu.ico")) { $lnk.IconLocation = "$Prefix\wiiuu.ico,0" }
     $lnk.Save()
 }
-Ok "Shortcuts on the Start menu and Desktop"
+foreach ($lnkPath in @($ChoccyStartMenu, $ChoccyDesktopLnk)) {
+    $lnk = $shell.CreateShortcut($lnkPath)
+    $lnk.TargetPath = $javaw
+    $lnk.Arguments = "-jar `"$Prefix\ChoccyMilk.jar`""
+    $lnk.WorkingDirectory = $Prefix
+    $lnk.Description = "Choccy Milk standalone emulator"
+    if (Test-Path -LiteralPath $choccyIco -PathType Leaf) {
+        $lnk.IconLocation = "$choccyIco,0"
+    } elseif (Test-Path -LiteralPath (Join-Path $Prefix "wiiuu.ico") -PathType Leaf) {
+        $lnk.IconLocation = "$Prefix\wiiuu.ico,0"
+    }
+    $lnk.Save()
+}
+Ok "WII-UU and Choccy Milk shortcuts on the Start menu and Desktop"
 
 # ---------------------------------------------------------------- GamePad screen speed
 if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
@@ -229,5 +283,5 @@ if ($isAdmin) {
     Warn "Not running as administrator: when Windows asks on first start, allow Java on Private networks."
 }
 
-Write-Host "`nDone! Start WII-UU from the Start menu or Desktop." -ForegroundColor Green
+Write-Host "`nDone! Search for WII-UU or Choccy Milk in the Windows Start menu, or use their Desktop shortcuts." -ForegroundColor Green
 Write-Host "Set your emulators' paths in Settings (F1). On the TV press + / F2 and scan the QR code with your phone.`n"
