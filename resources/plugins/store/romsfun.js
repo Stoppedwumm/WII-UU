@@ -47,6 +47,8 @@ async function get(url) {
 async function loadCatalog(query = search, number = 1) {
     search = query; page = number;
     browse.show().clear().title("ROMSFUN · " + (search || "All games") + " · " + page).status("Loading...");
+    browse.addTextField("Search games", "Enter a game title...", search,
+        value => loadCatalog(value.trim(), 1));
     const path = page > 1 ? "/browse-all-roms/page/" + page + "/" : "/browse-all-roms/";
     try {
         const html = await get(root + path + (search ? "?q=" + encodeURIComponent(search) : ""));
