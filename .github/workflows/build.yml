@@ -217,6 +217,11 @@ jobs:
           javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/DemoDeviceTest.java
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.DemoDeviceTest
 
+      - name: Test boot changelog controller input
+        run: |
+          javac --release 17 -cp build/classes -d build/tests test/wiiuu/ui/ChangelogControllerTest.java
+          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.ChangelogControllerTest
+
       - name: Test native Linux Wi-Fi list parsing
         run: |
           javac --release 17 -cp build/classes -d build/tests test/wiiuu/ui/LinuxNetworkPickerTest.java
