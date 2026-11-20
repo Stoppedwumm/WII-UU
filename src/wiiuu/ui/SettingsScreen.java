@@ -1647,8 +1647,37 @@ public final class SettingsScreen {
     private List<Changelog.Entry> releaseNotes = List.of();
     private boolean updating;
 
+    private String pluginStatus = "Install the browser runtime once; Node.js 22.12+ with npm is required.";
+    private Page pluginStorePage() {
+        return new Page("Plugin store", () -> {
+            List<Row> rows = new ArrayList<>();
+            rows.add(new Info("Bundled JavaScript apps. Activated apps appear in the bottom bar beside Settings."));
+            rows.add(new Action("Install / repair plugin runtime", "Downloads the pinned Electron browser using npm. Close plugin windows first.", () -> {
+                pluginStatus = "Installing browser runtime...";
+                wiiuu.core.PluginStore.install(config, message -> SwingUtilities.invokeLater(() -> {
+                    pluginStatus = message;
+                    reload(false);
+                }));
+                reload(false);
+            }, () -> wiiuu.core.PluginStore.installing() ? "Installing..." : wiiuu.core.PluginStore.ready(config) ? "Installed" : "Not installed", null));
+            rows.add(new Info(pluginStatus));
+            for (wiiuu.core.PluginStore.Entry entry : wiiuu.core.PluginStore.catalog()) {
+                rows.add(new Header(entry.name()));
+                rows.add(new Info(entry.description()));
+                rows.add(new Toggle("Activate " + entry.name(), "Adds this app to the bottom bar. Deactivating closes its window; saved site data is kept.",
+                        () -> wiiuu.core.PluginStore.enabled(config, entry), enabled -> {
+                            wiiuu.core.PluginStore.setEnabled(config, entry, enabled);
+                            view.reloadPluginDock();
+                        }));
+            }
+            return rows;
+        });
+    }
+
     private List<Row> systemRows() {
         List<Row> r = new ArrayList<>();
+        r.add(new Header("Apps"));
+        r.add(new Link("Plugin store", "Activate bundled JavaScript apps for the bottom bar.", null, this::pluginStorePage));
         r.add(new Header("Storage"));
         r.add(new Action("Storage and migration", "Choose a new drive or transfer WII-UU data over the local network.", () -> {
             if (view.gameRunning()) { say("Close the current game before transferring data."); return; }

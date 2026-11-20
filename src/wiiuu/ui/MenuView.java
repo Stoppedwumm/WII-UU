@@ -365,6 +365,22 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private int sel;
     private boolean inDock;
     private int dockSel;
+    private volatile List<wiiuu.core.PluginStore.Entry> dockPlugins = List.of();
+
+    /** Activation updates the dock immediately; inactive store entries never appear here. */
+    public void reloadPluginDock() {
+        dockPlugins = wiiuu.core.PluginStore.active(config);
+        dockSel = Math.min(dockSel, dockCount() - 1);
+        dockKey = null;
+        repaint();
+    }
+    private int dockCount() { return Dock.values().length + dockPlugins.size(); }
+    private int dockStart() { return dockSel / 8 * 8; }
+    private int dockEnd() { return Math.min(dockStart() + 8, dockCount()); }
+    private String dockLabel(int index) {
+        return index < Dock.values().length ? Dock.values()[index].label : dockPlugins.get(index - Dock.values().length).name();
+    }
+
 
     // animation state
     private float scrollPage;
@@ -467,6 +483,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
      */
     MenuView(Config config, boolean preview) {
         this.config = config;
+        reloadPluginDock();
         this.actions = new Actions() {
             @Override public void launch(Game game) { }
             @Override public void openSettings() { }
@@ -483,6 +500,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     public MenuView(Config config, Actions actions) {
         this.config = config;
+        reloadPluginDock();
         this.actions = actions;
         setFocusable(true);
         setFocusTraversalKeysEnabled(false);
@@ -1035,7 +1053,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         // rested on something for a moment, and it's been quiet a while: a word about it (once each)
         if (now - mascotKeyAt < 1800 || mascot.quietFor() < 20000 || mascotTalkedAbout.contains(key)) return false;
         mascotTalkedAbout.add(key);
-        String line = inDock ? dockLine(Dock.values()[dockSel]) : tileLine(tiles.get(sel));
+        String line = inDock ? (dockSel < Dock.values().length ? dockLine(Dock.values()[dockSel]) : "Open " + dockLabel(dockSel) + " from the bottom bar.") : tileLine(tiles.get(sel));
         if (line == null || random.nextInt(3) == 0) return false;          // not about everything
         mascot.say(line);
         return true;
@@ -1074,7 +1092,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         float s = L.h * 0.046f;
         float footX = Math.max(L.w * 0.03f + s * 1.4f, L.w * 0.07f), footY = L.h - L.dockH * 0.27f - s * 0.25f;
         if (hlInit) mascot.look(hl[0] + hl[2] / 2, hl[1] + hl[3] / 2);
-        float shelfX = (float) (dockRect(L, 0).getX() - dockRect(L, 0).getWidth() * 0.9f);
+        float shelfX = (float) (dockRect(L, dockStart()).getX() - dockRect(L, dockStart()).getWidth() * 0.9f);
         float bubbleW = Math.max(L.w * 0.16f, shelfX - (footX + s * 1.8f) - s * 0.5f);
         mascot.paint(g, footX, footY, s, false, bubbleW);
     }
@@ -1376,7 +1394,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             if (dy < 0 && !tiles.isEmpty()) {
                 inDock = false;
                 Sfx.move();
-            } else if (dx != 0 && dockSel + dx >= 0 && dockSel + dx < Dock.values().length) {
+            } else if (dx != 0 && dockSel + dx >= 0 && dockSel + dx < dockCount()) {
                 dockSel += dx;
                 Sfx.move();
             } else {
@@ -1463,6 +1481,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (playing != null) return;
         if (inDock) {
             Sfx.select();
+            if (dockSel >= Dock.values().length) {
+                wiiuu.core.PluginStore.Entry plugin = dockPlugins.get(dockSel - Dock.values().length);
+                wiiuu.core.PluginStore.launch(config, plugin,
+                        message -> SwingUtilities.invokeLater(() -> showToast(message)));
+                return;
+            }
             switch (Dock.values()[dockSel]) {
                 case GAMEPAD -> showPad = true;
                 case SETTINGS -> SwingUtilities.invokeLater(actions::openSettings);
@@ -1786,7 +1810,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     return;
                 }
                 Layout L = geom();
-                for (int i = 0; i < Dock.values().length; i++) {
+                for (int i = dockStart(); i < dockEnd(); i++) {
                     if (dockRect(L, i).contains(e.getPoint())) {
                         inDock = true;
                         dockSel = i;
@@ -1825,6 +1849,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 }
                 if (cinema != null && playing == null) {
                     cinema.wheel(e.getWheelRotation());
+                    repaint();
+                    return;
+                }
+                if (!modal() && guide == null && intro == null && !booting && e.getY() >= geom().dockY) {
+                    inDock = true;
+                    dockSel = Math.max(0, Math.min(dockCount() - 1, dockSel + Integer.signum(e.getWheelRotation())));
                     repaint();
                     return;
                 }
@@ -2263,8 +2293,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private Rectangle2D dockRect(Layout L, int i) {
-        int n = Dock.values().length;
-        float size = L.dockH * 0.48f;
+        int n = dockEnd() - dockStart();
+        i -= dockStart();
+        float size = Math.min(L.dockH * 0.48f, L.w * 0.86f / (n * 1.9f + 0.9f));
         float gap = size * 1.9f;
         float total = n * size + (n - 1) * (gap - size);
         float x = (L.w - total) / 2 + i * gap;
@@ -2499,7 +2530,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private String dockKeyFor(Layout L) {
-        return (int) L.w + "x" + (int) L.h + "|" + screen + "|" + inDock + "|" + dockSel;
+        return (int) L.w + "x" + (int) L.h + "|" + screen + "|" + inDock + "|" + dockSel + "|" + dockPlugins;
     }
 
     private BufferedImage renderTopBar(Layout L) {
@@ -2962,7 +2993,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private void paintDock(Graphics2D g, Layout L) {
         // translucent dock shelf
-        Rectangle2D first = dockRect(L, 0), lastDock = dockRect(L, Dock.values().length - 1);
+        Rectangle2D first = dockRect(L, dockStart()), lastDock = dockRect(L, dockEnd() - 1);
         float shelfX = (float) (first.getX() - first.getWidth() * 0.9f);
         float shelfW = (float) (lastDock.getMaxX() + first.getWidth() * 0.9f) - shelfX;
         RoundRectangle2D shelf = new RoundRectangle2D.Float(shelfX, L.dockY + L.dockH * 0.02f, shelfW,
@@ -2970,7 +3001,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.setColor(SHELF);
         g.fill(shelf);
         Dock[] items = Dock.values();
-        for (int i = 0; i < items.length; i++) {
+        for (int i = dockStart(); i < dockEnd(); i++) {
             Rectangle2D r = dockRect(L, i);
             Ellipse2D circle = new Ellipse2D.Double(r.getX(), r.getY(), r.getWidth(), r.getHeight());
             shadow(g, circle, 4);
@@ -2979,16 +3010,22 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             g.setColor(OUTLINE);
             g.draw(circle);
             Color ic = inDock && dockSel == i ? ACCENT : ICON;
-            drawDockIcon(g, items[i], r, ic);
+            if (i < items.length) drawDockIcon(g, items[i], r, ic);
+            else {
+                g.setColor(ic);
+                g.setFont(font(Font.BOLD, (float) r.getHeight() * 0.52f));
+                drawCentered(g, dockLabel(i).substring(0, 1), (float) r.getCenterX(), (float) (r.getCenterY() + r.getHeight() * 0.18f));
+            }
             g.setColor(inDock && dockSel == i ? ACCENT : TEXT_DIM);
             g.setFont(font(Font.BOLD, L.dockH * 0.12f));
-            drawCentered(g, items[i].label, (float) r.getCenterX(), (float) (r.getMaxY() + L.dockH * 0.2f));
+            drawCentered(g, ellipsize(g, dockLabel(i), (float) r.getWidth() * 1.7f), (float) r.getCenterX(), (float) (r.getMaxY() + L.dockH * 0.2f));
         }
         // hint line
         g.setFont(font(Font.PLAIN, L.dockH * 0.1f));
         g.setColor(TEXT_DIM);
         String hint = screen == Screen.HOME ? "A: Open   B: Back   L/R Page   + GamePad   \u2212 Refresh"
                 : "A: Play   B: Back   L/R Page   + GamePad   \u2212 Refresh";
+        if (dockCount() > 8) hint += "   Dock: scroll or Left/Right (" + (dockStart() / 8 + 1) + "/" + ((dockCount() + 7) / 8) + ")";
         g.drawString(hint, L.w * 0.03f, L.h - L.dockH * 0.12f);
     }
 

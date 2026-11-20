@@ -69,7 +69,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/installer-tests
-          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java engine/src/wiiuu/core/BuildInfo.java engine/src/wiiuu/core/Version.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java test/wiiuu/core/VersionTest.java test/wiiuu/core/UpdateChannelsTest.java engine/src/wiiuu/core/MiniJson.java src/wiiuu/core/ReleaseArchive.java test/wiiuu/core/ReleaseArchiveTest.java
+          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java engine/src/wiiuu/core/BuildInfo.java engine/src/wiiuu/core/Version.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java test/wiiuu/core/VersionTest.java test/wiiuu/core/UpdateChannelsTest.java engine/src/wiiuu/core/MiniJson.java src/wiiuu/core/ReleaseArchive.java test/wiiuu/core/ReleaseArchiveTest.java src/wiiuu/core/PluginStore.java test/wiiuu/core/PluginStoreTest.java
+          cp -r resources/plugins build/installer-tests/plugins
+          java -cp build/installer-tests wiiuu.core.PluginStoreTest
           java -cp build/installer-tests wiiuu.core.ActionsBuildTest
           java -cp build/installer-tests wiiuu.core.BuildInfoTest
           java -cp build/installer-tests wiiuu.core.VersionTest
@@ -124,8 +126,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Test Node archive server
-        run: node --test archive/test/*.test.mjs
+      - name: Test Node archive server and JavaScript plugins
+        run: node --test archive/test/*.test.mjs test/plugins/*.test.cjs
+
+      - name: Test real plugin browser against local fixtures
+        run: |
+          mkdir -p build/plugin-host
+          cp resources/plugins/host/package*.json build/plugin-host/
+          npm ci --prefix build/plugin-host --no-audit --no-fund --engine-strict
+          # Chromium's sandbox cannot initialize on restricted CI hosts. Only this local fixture disables it.
+          build/plugin-host/node_modules/.bin/electron test/plugins/browser-smoke.cjs --no-sandbox --ozone-platform=headless --disable-gpu
 
       - name: Build jar and release zip (also copies it into docs/download and writes docs/version.json)
         id: version
@@ -192,6 +202,11 @@ jobs:
             --snapshot "$RUNNER_TEMP/menu.png" --snapshot-view home
           test -s "$RUNNER_TEMP/menu.png"
           java -jar build/ChoccyMilk.jar --help
+
+      - name: Test activated plugin apps in the dock
+        run: |
+          javac --release 17 -cp build/classes -d build/tests test/wiiuu/ui/PluginDockTest.java
+          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.PluginDockTest
 
       - name: Test Choccy Milk dual screens and pointer input
         run: |

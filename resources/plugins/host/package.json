@@ -1,0 +1,15 @@
+{
+  "name": "wiiuu-plugin-host",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.cjs",
+  "dependencies": {
+    "electron": "45.4.1"
+  },
+  "scripts": {
+    "postinstall": "node node_modules/electron/install.js"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
