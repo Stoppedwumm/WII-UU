@@ -11,6 +11,7 @@ import java.util.concurrent.*;
 import javax.imageio.*;
 import javax.imageio.stream.ImageInputStream;
 import javax.swing.SwingUtilities;
+import javax.swing.JOptionPane;
 import wiiuu.core.Config;
 import wiiuu.core.NativePluginSession;
 import wiiuu.core.PluginStore;
@@ -59,7 +60,11 @@ final class NativePluginScreen implements AutoCloseable {
     private void rebuild() {
         hits.clear(); actions.clear();
         if (model.closeButton()) actions.add(new Action(-1, null));
-        for (int i = 0; i < model.entries().size(); i++) for (var button : model.entries().get(i).buttons()) actions.add(new Action(i, button));
+        for (int i = 0; i < model.entries().size(); i++) {
+            var entry = model.entries().get(i);
+            if (entry.textField() != null) actions.add(new Action(i, null));
+            for (var button : entry.buttons()) actions.add(new Action(i, button));
+        }
     }
     private int pages() { return Math.max(1, (model.entries().size() + perPage - 1) / perPage); }
     private int firstOnPage() {
@@ -88,8 +93,16 @@ final class NativePluginScreen implements AutoCloseable {
     void activate() {
         if (actions.isEmpty()) return;
         Action selected = actions.get(focus);
-        if (selected.button() == null) exit.run();
-        else if (!selected.button().busy() && session != null) session.activate(selected.button().id());
+        if (selected.entry() < 0) exit.run();
+        else if (selected.button() == null) {
+            var field = model.entries().get(selected.entry()).textField();
+            if (field != null) {
+                String value = (String) JOptionPane.showInputDialog(null, "Enter " + model.entries().get(selected.entry()).title(),
+                        model.entries().get(selected.entry()).title(), JOptionPane.PLAIN_MESSAGE,
+                        null, null, field.value());
+                if (value != null && value.length() <= 256 && session != null) session.submitText(field.id(), value);
+            }
+        } else if (!selected.button().busy() && session != null) session.activate(selected.button().id());
     }
     void page(int delta) {
         page = Math.max(0, Math.min(pages() - 1, page + Integer.signum(delta)));
@@ -139,6 +152,24 @@ final class NativePluginScreen implements AutoCloseable {
             }
             g.setColor(MenuView.TEXT); g.setFont(MenuView.font(Font.BOLD, 17 * unit));
             centered(g, ellipsize(g, entry.title(), cw - 24 * unit), x + cw / 2, y + imageH + 35 * unit);
+            if (entry.textField() != null) {
+                var input = entry.textField();
+                Rectangle2D fieldRect = new Rectangle2D.Float(x + 12 * unit, y + imageH + 53 * unit,
+                        cw - 24 * unit, Math.min(42 * unit, Math.max(24 * unit, ch - imageH - 65 * unit)));
+                int inputFocus = -1;
+                for (int a = 0; a < actions.size(); a++)
+                    if (actions.get(a).entry() == index && actions.get(a).button() == null) { inputFocus = a; break; }
+                g.setColor(focus == inputFocus ? MenuView.ACCENT : MenuView.TEXT_DIM);
+                g.setStroke(new BasicStroke(2 * unit));
+                g.draw(new RoundRectangle2D.Double(fieldRect.getX(), fieldRect.getY(), fieldRect.getWidth(), fieldRect.getHeight(),
+                        10 * unit, 10 * unit));
+                g.setFont(MenuView.font(Font.PLAIN, 14 * unit));
+                g.setColor(MenuView.TEXT);
+                String shown = input.value().isEmpty() ? input.placeholder() : input.value();
+                g.drawString(ellipsize(g, shown + "  [Edit]", (float) fieldRect.getWidth() - 16 * unit),
+                        (float) fieldRect.getX() + 8 * unit, (float) fieldRect.getCenterY() + 5 * unit);
+                hits.add(new Hit(fieldRect, inputFocus));
+            }
             int actionRows = (entry.buttons().size() + 1) / 2;
             float bh = Math.min(36 * unit, Math.max(14 * unit, (ch - imageH - 56 * unit) / Math.max(1, actionRows) - 5 * unit));
             for (int b = 0; b < entry.buttons().size(); b++) {
@@ -148,7 +179,7 @@ final class NativePluginScreen implements AutoCloseable {
                 Rectangle2D rect = new Rectangle2D.Float(x + 12 * unit + b % actionColumns * (bw + 6 * unit),
                         y + imageH + 48 * unit + b / actionColumns * (bh + 5 * unit), bw, bh);
                 int actionFocus = -1;
-                for (int a = 0; a < actions.size(); a++) if (actions.get(a).entry() == index && actions.get(a).button().id().equals(action.id())) { actionFocus = a; break; }
+                for (int a = 0; a < actions.size(); a++) if (actions.get(a).entry() == index && actions.get(a).button() != null && actions.get(a).button().id().equals(action.id())) { actionFocus = a; break; }
                 button(g, rect, action.busy() ? action.label() + "..." : action.label(), focus == actionFocus, action.busy(), unit);
                 hits.add(new Hit(rect, actionFocus));
             }
@@ -161,7 +192,7 @@ final class NativePluginScreen implements AutoCloseable {
         g.setFont(MenuView.font(Font.PLAIN, 14 * unit));
         g.drawString(ellipsize(g, error == null ? model.status() : error, width - margin * 2), margin, height - 38 * unit);
         g.setColor(MenuView.TEXT_DIM); g.setFont(MenuView.font(Font.PLAIN, 12 * unit));
-        g.drawString("A: Select   B: Close   Left/Right: buttons   Up/Down: panels   L/R or scroll: page " + (page + 1) + "/" + pages(), margin, height - 15 * unit);
+        g.drawString("A: Select/Edit   B: Close   Left/Right: controls   Up/Down: panels   L/R or scroll: page " + (page + 1) + "/" + pages(), margin, height - 15 * unit);
     }
     private static String ellipsize(Graphics2D g, String value, float width) { return UiText.ellipsize(value, g.getFontMetrics(), width); }
     private static void centered(Graphics2D g, String text, float x, float baseline) {
