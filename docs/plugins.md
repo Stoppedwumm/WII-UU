@@ -34,19 +34,6 @@ mode, so they do not open a browser window. Existing installations need no new r
 3. Rebuild with `./build.sh`. Resources are bundled into the app JAR. The store is local and uses
    these reviewed source files; it does not download or execute a remote plugin catalog.
 
-### ROMSFUN browser plugin
-
-Activate **ROMSFUN** in the plugin store to open its **Browse all ROMS** page.
-Search with the site's existing `q` form, open a game page, and follow the
-site's own download and variant/mirror pages. The plugin does not predict file
-links or bypass the site's normal download flow.
-
-Downloads are saved to the configured ROM base folder without execution or
-automatic extraction. Move downloaded files into their console subfolders and
-refresh the library. Only download files you have the rights to use.
-The browser limits top-level navigation to `romsfun.com`; third-party
-pages and popups are blocked. Download file redirects to CDNs remain supported.
-
 Each file declares exactly one `Plugin(name)` and calls `loadSite(url)`. Definitions execute as
 JavaScript in the Electron host when the app opens. Fluent methods return the same object:
 
@@ -64,6 +51,23 @@ URLs may redirect to a different origin (for example a file CDN). Automatic down
 filenames, reserve a new path without overwriting an existing file and remove failed partial files.
 Downloads are never executed or extracted. The window menu provides Back, Home, Reload, Fullscreen
 and Close; Escape exits fullscreen. Downloads finish independently of refreshing the library.
+
+### ROMSFUN native plugin
+
+The bundled **ROMSFUN** app uses WII-UU's native controller-friendly panels
+rather than Electron's browser window. Browse the catalog, use pagination or
+the provided quick-search terms, select a game, see its available versions and
+confirm a download. Game thumbnails and titles come from the site's HTML;
+the site may change its markup without notice. Files are downloaded using the
+fresh, site-provided HTTPS link, never a fabricated mirror URL.
+
+**Limitation:** The current native panel API does not provide a text entry
+control. The plugin therefore offers browse/pagination and quick-search
+buttons (Mario, Sonic, Zelda, Pokemon), not arbitrary typed searches.
+Downloads go to the configured ROM base folder, are not extracted or run,
+and need to be moved into console folders before refreshing the library.
+Only download content you have the right to use. This plugin does not bypass
+site authentication, rate limits or access checks.
 
 ## Native apps
 
