@@ -210,14 +210,9 @@ final class LinuxNetworkPicker {
                     if (created.exit() != 0) {
                         r = created;
                     } else {
-                        try {
-                            r = run(List.of("nmcli", "--wait", "35", "connection", "up", "id",
-                                    profile, "passwd-file", "/dev/stdin"),
-                                    "802-11-wireless-security.psk:" + secret, 42);
-                        } finally {
-                            // Do not leave profiles without a working password after a failure.
-                            // A successful activation stays saved in NetworkManager.
-                        }
+                        r = run(List.of("nmcli", "--wait", "35", "connection", "up", "id",
+                                profile, "passwd-file", "/dev/stdin"),
+                                "802-11-wireless-security.psk:" + secret, 42);
                         if (r.exit() != 0) {
                             try { run(List.of("nmcli", "connection", "delete", "id", profile), null, 10); }
                             catch (Exception ignored) { }
