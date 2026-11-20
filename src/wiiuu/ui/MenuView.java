@@ -1694,7 +1694,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyTyped(KeyEvent e) {
-                if (migration == null && settings != null && settings.wantsKeys()) {
+                if (migration == null && guide != null && guide.wantsKeys()) {
+                    guide.keyTyped(e.getKeyChar());
+                    repaint();
+                } else if (migration == null && settings != null && settings.wantsKeys()) {
                     settings.keyTyped(e.getKeyChar());
                     settings.touch();
                     repaint();
@@ -1736,6 +1739,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 }
                 if (wakeIdle()) return;
                 if (skipBoot()) return;
+                if (guide != null && guide.wantsKeys()) {
+                    guide.keyPressed(e);
+                    repaint();
+                    return;
+                }
                 if (settings != null) {
                     settings.touch();
                     repaint();
