@@ -1,4 +1,21 @@
 [
-  {"id":"wiiuu","name":"WII-UU Website","description":"News, downloads and support on the WII-UU website.","script":"wiiuu.js"},
-  {"id":"archive","name":"Build Archive","description":"Browse the WII-UU release archive in a plugin window.","script":"archive.js"}
+  {
+    "id": "wiiuu",
+    "name": "WII-UU Website",
+    "description": "News, downloads and support on the WII-UU website.",
+    "script": "wiiuu.js"
+  },
+  {
+    "id": "archive",
+    "name": "Build Archive",
+    "description": "Browse the WII-UU release archive in a plugin window.",
+    "script": "archive.js"
+  },
+  {
+    "id": "native-demo",
+    "name": "Native Demo",
+    "description": "Native WII-UU panels, JavaScript buttons and multiple views.",
+    "script": "native-demo.js",
+    "type": "native"
+  }
 ]

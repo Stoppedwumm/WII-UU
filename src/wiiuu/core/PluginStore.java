@@ -16,7 +16,9 @@ import java.util.function.Consumer;
 
 /** Source-bundled JavaScript apps. Remote websites have no Java or Node bridge. */
 public final class PluginStore {
-    public record Entry(String id, String name, String description, String script) {}
+    public record Entry(String id, String name, String description, String script, String type) {
+        public boolean nativePlugin() { return type.equals("native"); }
+    }
     private static final List<Entry> CATALOG = readCatalog();
     private static final Map<String, Process> RUNNING = new ConcurrentHashMap<>();
     private static boolean installing;
@@ -48,8 +50,10 @@ public final class PluginStore {
                 if (!id.matches("[a-z0-9][a-z0-9-]{0,47}") || !script.matches("[a-z0-9-]+\\.js")
                         || name.isBlank() || name.length() > 48 || entries.stream().anyMatch(e -> e.id().equals(id)))
                     throw new IOException("Invalid bundled plugin catalog entry");
+                String type = java.util.Objects.toString(MiniJson.string(row.get("type")), "web");
+                if (!List.of("web", "native").contains(type)) throw new IOException("Unknown bundled plugin type");
                 resource("store/" + script);
-                entries.add(new Entry(id, name, java.util.Objects.toString(MiniJson.string(row.get("description")), ""), script));
+                entries.add(new Entry(id, name, java.util.Objects.toString(MiniJson.string(row.get("description")), ""), script, type));
             }
             return List.copyOf(entries);
         } catch (Exception e) { throw new IllegalStateException("Cannot read bundled plugin catalog", e); }
@@ -87,7 +91,7 @@ public final class PluginStore {
     }
     private static synchronized void prepare(Config config) throws IOException {
         Path dir = Files.createDirectories(runtime(config));
-        for (String file : List.of("package.json", "package-lock.json", "main.cjs", "api.cjs"))
+        for (String file : List.of("package.json", "package-lock.json", "main.cjs", "api.cjs", "native-api.cjs", "native-host.cjs"))
             copy("host/" + file, dir.resolve(file));
         copy("catalog.json", dir.resolve("catalog.json"));
         Files.createDirectories(dir.resolve("store"));
@@ -154,11 +158,32 @@ public final class PluginStore {
         thread.setDaemon(true);
         thread.start();
     }
+    /** Starts the reviewed JS host in Node mode; the view is rendered by Java, not Chromium. */
+    public static synchronized Process startNative(Config config, Entry entry) throws IOException {
+        if (!CATALOG.contains(entry) || !entry.nativePlugin()) throw new IOException("Unknown native plugin");
+        if (!enabled(config, entry)) throw new IOException("Plugin is disabled");
+        if (installing || !ready(config)) throw new IOException("Install the plugin runtime in Settings > System > Plugin store");
+        Process previous = RUNNING.get(key(config, entry));
+        if (previous != null && previous.isAlive()) throw new IOException("Native plugin is already open");
+        prepare(config);
+        ProcessBuilder builder = new ProcessBuilder(executable(config).toAbsolutePath().toString(),
+                runtime(config).resolve("native-host.cjs").toAbsolutePath().toString(), entry.id(),
+                config.home().toAbsolutePath().toString(), config.romBase().toAbsolutePath().toString())
+                .redirectError(ProcessBuilder.Redirect.appendTo(log(config, "plugin-" + entry.id() + ".log").toFile()));
+        builder.environment().put("ELECTRON_RUN_AS_NODE", "1");
+        builder.environment().remove("NODE_OPTIONS");
+        Process process = builder.start();
+        RUNNING.put(key(config, entry), process);
+        process.onExit().thenAccept(p -> RUNNING.remove(key(config, entry), p));
+        return process;
+    }
+
     public static void launch(Config config, Entry entry, Consumer<String> report) {
         Thread thread = new Thread(() -> {
             try {
                 synchronized (PluginStore.class) {
                     if (!CATALOG.contains(entry)) throw new IOException("Unknown bundled plugin");
+                    if (entry.nativePlugin()) throw new IOException("Open this native plugin from the WII-UU bottom bar");
                     if (!enabled(config, entry)) throw new IOException("Plugin is disabled");
                     if (installing || !ready(config)) throw new IOException("Install the plugin runtime in Settings > System > Plugin store (Node.js/npm required)");
                     Process old = RUNNING.get(key(config, entry));

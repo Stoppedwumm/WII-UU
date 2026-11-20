@@ -938,7 +938,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private boolean canIdle() {
-        return !booting && intro == null && !introPending && guide == null && !guidePending && settings == null && boss == null
+        return !booting && intro == null && !introPending && guide == null && !guidePending && settings == null && nativePlugin == null && boss == null
                 && playing == null && !showPad && !confirmQuit && !vizFull && isShowing();
     }
 
@@ -1127,10 +1127,24 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private SettingsScreen settings;
+    private NativePluginScreen nativePlugin;
+
+    private void closeNativePlugin() {
+        if (nativePlugin == null) return;
+        nativePlugin.close(); nativePlugin = null;
+        lastInput = System.currentTimeMillis();
+        repaint();
+    }
+    private void openNativePlugin(wiiuu.core.PluginStore.Entry entry) {
+        nativePlugin = new NativePluginScreen(entry.name(), this::repaint, this::closeNativePlugin);
+        nativePlugin.start(config, entry);
+        repaint();
+    }
+
 
     /** Shows the settings on the TV (F1, the dock's Settings, or Main). */
     public void openSettings(SettingsScreen.Services services) {
-        if (settings != null || guide != null || intro != null || booting || playing != null) return;
+        if (settings != null || nativePlugin != null || guide != null || intro != null || booting || playing != null) return;
         settings = new SettingsScreen(this, services);
         repaint();
     }
@@ -1358,6 +1372,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void navigate(int dx, int dy) {
+        if (nativePlugin != null && migration == null) { nativePlugin.navigate(dx, dy); return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
@@ -1443,6 +1458,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void activate() {
+        if (nativePlugin != null && migration == null) { nativePlugin.activate(); return; }
         if (migration != null) { migration.confirm(this); return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
@@ -1483,6 +1499,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             Sfx.select();
             if (dockSel >= Dock.values().length) {
                 wiiuu.core.PluginStore.Entry plugin = dockPlugins.get(dockSel - Dock.values().length);
+                if (plugin.nativePlugin()) { openNativePlugin(plugin); return; }
                 wiiuu.core.PluginStore.launch(config, plugin,
                         message -> SwingUtilities.invokeLater(() -> showToast(message)));
                 return;
@@ -1528,6 +1545,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void back() {
+        if (nativePlugin != null && migration == null) { closeNativePlugin(); return; }
         if (migration != null) { migration.back(this); return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
@@ -1579,6 +1597,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void page(int delta) {
+        if (nativePlugin != null && migration == null) { nativePlugin.page(delta); return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
@@ -1635,6 +1654,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void toggleGamepadInfo() {
+        if (nativePlugin != null) { return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
@@ -1758,6 +1778,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     return;
                 }
                 if (boss != null) return;
+                if (nativePlugin != null) {
+                    if (e.getButton() == MouseEvent.BUTTON3) closeNativePlugin();
+                    else if (e.getButton() == MouseEvent.BUTTON1) nativePlugin.click(e.getX(), e.getY());
+                    return;
+                }
                 if (wakeIdle()) return;
                 if (skipBoot()) return;
                 if (skipIntro()) return;
@@ -1840,6 +1865,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
             @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
+                if (nativePlugin != null) { nativePlugin.page(e.getWheelRotation()); return; }
                 if (wakeIdle()) return;
                 if (settings != null) {
                     settings.wheel(e.getWheelRotation());
@@ -1885,6 +1911,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             return;
         }
         if (tickIntro()) return;
+        if (nativePlugin != null) return;
         if (cinema != null && settings == null) {           // no idle play in the cinema; its motion keeps going
             if (!cinema.tick()) {
                 cinema = null;
@@ -1994,6 +2021,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** V: the full-screen visualizer on and off. */
     public void toggleVisualizer() {
+        if (nativePlugin != null) { return; }
         if (playing != null || booting) return;
         vizFull = !vizFull;
         if (vizFull) Sfx.select();
@@ -2449,6 +2477,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
         if (migration != null) {
             migration.paint(g, getWidth(), getHeight());
+            g.dispose();
+            Toolkit.getDefaultToolkit().sync();
+            return;
+        }
+        if (nativePlugin != null) {
+            nativePlugin.paint(g, getWidth(), getHeight());
             g.dispose();
             Toolkit.getDefaultToolkit().sync();
             return;
