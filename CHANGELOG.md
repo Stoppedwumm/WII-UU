@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.2 (2026-11-20)
+- Add a cross-platform Developer UI test for the Linux-native network picker, with sample Wi-Fi networks and a working mock password flow.
+- Keep preview mode strictly offline: it never calls NetworkManager, joins a network, or changes host settings.
+- Support mouse, keyboard and gamepad navigation in the simulated picker.
+- Include the Linux native Wi-Fi picker and the USB demo backup, restore, and factory-reset actions in this stable release.
+
 ## 2.1.1 (2026-11-20)
 - Add a controller-friendly native ROMSFUN plugin with catalog browsing, game details, version selection and downloadable files.
 - Add native text fields and free-text ROMSFUN search in the general JavaScript plugin API.
