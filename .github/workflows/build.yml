@@ -223,6 +223,7 @@ jobs:
           javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/UserProfilesTest.java test/wiiuu/ui/SignOutPowerTest.java
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.UserProfilesTest
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.SignOutPowerTest
+          WIIUU_CONSOLE=1 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.SignOutPowerTest
 
       - name: Test native Linux Wi-Fi list parsing
         run: |
