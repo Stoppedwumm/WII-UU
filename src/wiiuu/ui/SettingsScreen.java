@@ -444,6 +444,12 @@ public final class SettingsScreen {
     /** a controller button row waiting for the button to be pressed on that controller */
     private PadMapRow waiting;
     private Editor editor;
+    private LinuxNetworkPicker networkPreview;
+
+    /** Keep the developer preview modal without letting input reach the settings underneath. */
+    private void dismissNetworkPreviewIfClosed() {
+        if (networkPreview != null && networkPreview.closed()) networkPreview = null;
+    }
 
     SettingsScreen(MenuView view, Services services) {
         this.view = view;
@@ -498,6 +504,9 @@ public final class SettingsScreen {
     }
 
     void close() {
+        if (networkPreview != null) {
+            networkPreview = null; // preview contains only synthetic networks
+        }
         if (closing != 0) return;
         closing = System.currentTimeMillis();
         Sfx.back();
@@ -511,6 +520,10 @@ public final class SettingsScreen {
 
     void navigate(int dx, int dy) {
         if (closing != 0) return;
+        if (networkPreview != null) {
+            networkPreview.navigate(dx, dy);
+            return;
+        }
         if (editor != null) {
             editor.navigate(dx, dy);
             return;
@@ -564,6 +577,11 @@ public final class SettingsScreen {
 
     void activate() {
         if (closing != 0) return;
+        if (networkPreview != null) {
+            networkPreview.activate();
+            dismissNetworkPreviewIfClosed();
+            return;
+        }
         if (editor != null) {
             editor.press();
             return;
@@ -580,6 +598,11 @@ public final class SettingsScreen {
 
     void back() {
         if (closing != 0) return;
+        if (networkPreview != null) {
+            networkPreview.back();
+            dismissNetworkPreviewIfClosed();
+            return;
+        }
         if (editor != null) {
             editor.backspace();
             return;
@@ -608,6 +631,10 @@ public final class SettingsScreen {
     /** L / R: the category before / after (in the editor: moves the cursor). */
     void page(int delta) {
         if (closing != 0) return;
+        if (networkPreview != null) {
+            networkPreview.navigate(0, delta);
+            return;
+        }
         if (editor != null) {
             editor.moveCaret(delta);
             return;
@@ -626,15 +653,36 @@ public final class SettingsScreen {
 
     /** + on a GamePad: finishes typing. */
     void plus() {
+        if (networkPreview != null) {
+            if (networkPreview.typing()) networkPreview.keyPressed(new KeyEvent(view,
+                    KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, KeyEvent.VK_ENTER, '\n'));
+            else networkPreview.activate();
+            dismissNetworkPreviewIfClosed();
+            return;
+        }
         if (editor != null) editor.done();
     }
 
     /** Whether the keyboard's keys should come here as they are (typing, or waiting for a key). */
     boolean wantsKeys() {
-        return editor != null || capturing != null || waiting != null;
+        return networkPreview != null || editor != null || capturing != null || waiting != null;
     }
 
     void keyPressed(KeyEvent e) {
+        if (networkPreview != null) {
+            if (networkPreview.typing()) networkPreview.keyPressed(e);
+            else switch (e.getKeyCode()) {
+                case KeyEvent.VK_ESCAPE, KeyEvent.VK_BACK_SPACE -> networkPreview.back();
+                case KeyEvent.VK_UP -> networkPreview.navigate(0, -1);
+                case KeyEvent.VK_DOWN -> networkPreview.navigate(0, 1);
+                case KeyEvent.VK_LEFT -> networkPreview.navigate(-1, 0);
+                case KeyEvent.VK_RIGHT -> networkPreview.navigate(1, 0);
+                case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE -> networkPreview.activate();
+                default -> { }
+            }
+            dismissNetworkPreviewIfClosed();
+            return;
+        }
         if (waiting != null) {
             if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {         // the controller's button is awaited, not a key
                 stopWaiting();
@@ -655,10 +703,18 @@ public final class SettingsScreen {
     }
 
     void keyTyped(char c) {
+        if (networkPreview != null) {
+            networkPreview.keyTyped(c);
+            return;
+        }
         if (editor != null) editor.typed(c);
     }
 
     void wheel(int notches) {
+        if (networkPreview != null) {
+            networkPreview.navigate(0, Integer.signum(notches));
+            return;
+        }
         if (editor != null) return;
         scrollGoal = clampScroll(scrollGoal + notches * viewHeight * 0.12f);
         wheelAt = System.currentTimeMillis();
@@ -668,6 +724,11 @@ public final class SettingsScreen {
 
     void click(double x, double y) {
         if (closing != 0) return;
+        if (networkPreview != null) {
+            networkPreview.click(x, y);
+            dismissNetworkPreviewIfClosed();
+            return;
+        }
         if (editor != null) {
             editor.click(x, y);
             return;
@@ -1920,6 +1981,10 @@ public final class SettingsScreen {
 
     private List<Row> devRows() {
         List<Row> r = new ArrayList<>();
+        r.add(new Header("UI tests"));
+        r.add(new Action("Preview Linux network picker",
+                "Show the native Wi-Fi menu with sample networks and password entry, even on Windows or macOS. No connections or settings are changed.",
+                () -> networkPreview = new LinuxNetworkPicker(view, true), null, null));
         r.add(new Header("Animations"));
         r.add(new Action("Preview migration cutscene", "Watch the one-minute mascot story without transferring files.",
                 () -> MigrationPanel.preview(view), null, null));
@@ -2692,6 +2757,7 @@ public final class SettingsScreen {
         g.drawString(hints, w - pad - g.getFontMetrics().stringWidth(hints), fy);
 
         if (editor != null) paintEditor(g, w, h, u, now);
+        if (networkPreview != null) networkPreview.paint(g, w, h);
         g.dispose();
     }
 
