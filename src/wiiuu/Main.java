@@ -265,12 +265,17 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             Config.Users.select(home, requestedUser);
         } else if (!oemSelfTest && !oemSettings && snapshot == null && !GraphicsEnvironment.isHeadless()) {
             List<Config.Users.Profile> users = Config.Users.list(home);
-            if (users.size() > 1) {
+            if (Config.Users.chooserRequired(home)) {
                 String[] names = users.stream().map(Config.Users.Profile::name).toArray(String[]::new);
                 Object choice = JOptionPane.showInputDialog(null, "Choose who is playing:",
                         "WII-UU users", JOptionPane.QUESTION_MESSAGE, null, names,
                         Config.Users.active(home).name());
-                if (choice == null) return; // Closing the chooser must not silently open another user's session.
+                if (choice == null) {
+                    // In Console Mode a cancelled sign-in must not boot the previous profile
+                    // or get stuck in the session manager's automatic restart loop.
+                    if ("1".equals(System.getenv("WIIUU_CONSOLE"))) System.exit(11);
+                    return;
+                }
                 for (Config.Users.Profile profile : users) {
                     if (profile.name().equals(choice)) {
                         Config.Users.select(home, profile.id());
@@ -821,10 +826,21 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
      */
     @Override
     public void power(String action) {
+        if ("signout".equals(action)) {
+            // Persist the next-boot chooser request before stopping anything.
+            // On a write error leave the console running rather than pretending to log out.
+            try {
+                Config.Users.requireChooserOnNextBoot(config.home());
+            } catch (IOException e) {
+                view.showToast("Could not sign out: " + e.getMessage());
+                return;
+            }
+        }
         int code = switch (action) {
             case "desktop" -> 10;
             case "shutdown" -> 11;
             case "restart" -> 12;
+            case "signout" -> "1".equals(System.getenv("WIIUU_CONSOLE")) ? 11 : 0;
             default -> 0;
         };
         launcher.stop(true);
