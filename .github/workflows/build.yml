@@ -69,13 +69,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/installer-tests
-          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java engine/src/wiiuu/core/BuildInfo.java engine/src/wiiuu/core/Version.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java test/wiiuu/core/VersionTest.java test/wiiuu/core/UpdateChannelsTest.java engine/src/wiiuu/core/MiniJson.java src/wiiuu/core/ReleaseArchive.java test/wiiuu/core/ReleaseArchiveTest.java src/wiiuu/core/PluginStore.java test/wiiuu/core/PluginStoreTest.java src/wiiuu/core/NativePluginSession.java test/wiiuu/core/NativePluginSessionTest.java
+          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java engine/src/wiiuu/core/BuildInfo.java engine/src/wiiuu/core/Version.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java test/wiiuu/core/VersionTest.java test/wiiuu/core/UpdateChannelsTest.java engine/src/wiiuu/core/MiniJson.java src/wiiuu/core/ReleaseArchive.java test/wiiuu/core/ReleaseArchiveTest.java src/wiiuu/core/PluginStore.java test/wiiuu/core/PluginStoreTest.java src/wiiuu/core/NativePluginSession.java test/wiiuu/core/NativePluginSessionTest.java test/wiiuu/core/UserProfilesTest.java
           cp -r resources/plugins build/installer-tests/plugins
           java -cp build/installer-tests wiiuu.core.NativePluginSessionTest
           java -cp build/installer-tests wiiuu.core.PluginStoreTest
           java -cp build/installer-tests wiiuu.core.ActionsBuildTest
           java -cp build/installer-tests wiiuu.core.BuildInfoTest
           java -cp build/installer-tests wiiuu.core.VersionTest
+          java -Djava.awt.headless=true -cp build/installer-tests wiiuu.core.UserProfilesTest
           java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.UpdateChannelsTest
           java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.ReleaseArchiveTest
           python3 -m unittest discover -s tools/tests -p 'test_release*.py'
@@ -216,6 +217,11 @@ jobs:
         run: |
           javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/DemoDeviceTest.java
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.DemoDeviceTest
+
+      - name: Test multi-user profile isolation
+        run: |
+          javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/UserProfilesTest.java
+          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.UserProfilesTest
 
       - name: Test native Linux Wi-Fi list parsing
         run: |
