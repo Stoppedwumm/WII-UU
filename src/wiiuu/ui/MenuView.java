@@ -419,8 +419,15 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private static List<PowerItem> powerItems() {
         return CONSOLE
                 ? List.of(new PowerItem("Desktop Mode", "desktop"), new PowerItem("Restart", "restart"),
-                        new PowerItem("Shut Down", "shutdown"), new PowerItem("Cancel", null))
-                : List.of(new PowerItem("Quit WII-UU", "quit"), new PowerItem("Cancel", null));
+                        new PowerItem("Shut Down", "shutdown"),
+                        new PowerItem("Sign Out & Shut Down", "signout"), new PowerItem("Cancel", null))
+                : List.of(new PowerItem("Quit WII-UU", "quit"),
+                        new PowerItem("Sign Out & Quit", "signout"), new PowerItem("Cancel", null));
+    }
+
+    /** Finish the active local user session and show the chooser on the next boot. */
+    public void signOut() {
+        actions.power("signout");
     }
 
     /** Opens the Power menu (the dock's Power button). */
