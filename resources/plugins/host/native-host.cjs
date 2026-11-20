@@ -26,8 +26,7 @@ let authChild = null;
 let authConfirmed = false;
 function openAuthBrowser(url) {
     const target = new URL(url);
-    if (target.protocol !== 'https:' || target.hostname !== 'romsfun.com' ||
-        target.username || target.password) throw new Error('Authentication site not permitted');
+    if (target.protocol !== 'https:' || target.username || target.password) throw new Error('Authentication site not permitted');
     if (authChild && authChild.exitCode === null) return;
     authConfirmed = false;
     const env = { ...process.env };
@@ -42,7 +41,7 @@ function openAuthBrowser(url) {
         buffer += chunk;
         if (buffer.length > 8192) buffer = '';
         let index;
-        while ((index = buffer.indexOf('\\n')) >= 0) {
+        while ((index = buffer.indexOf('\n')) >= 0) {
             const line = buffer.slice(0, index); buffer = buffer.slice(index + 1);
             try { if (JSON.parse(line).type === 'confirmed') { authConfirmed = true; log('info', 'Browser session acknowledged'); } }
             catch (_) {}
