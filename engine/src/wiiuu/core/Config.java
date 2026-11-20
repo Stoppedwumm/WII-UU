@@ -250,11 +250,32 @@ public final class Config {
             p.setProperty("user." + id, name);
             write(home, p);
         }
+        /**
+         * Force the account chooser at the next graphical boot, even for a single profile.
+         * The marker remains until a user is explicitly selected, so an aborted boot
+         * cannot silently resume the previous user's session.
+         */
+        public static synchronized void requireChooserOnNextBoot(Path home) throws IOException {
+            Properties p = read(home);
+            p.setProperty("chooseOnNextBoot", "true");
+            write(home, p);
+        }
+
+        /** More than one account always shows the chooser; sign-out forces it once. */
+        public static synchronized boolean chooserRequired(Path home) {
+            Properties p = read(home);
+            return "true".equals(p.getProperty("chooseOnNextBoot"))
+                    || p.stringPropertyNames().stream()
+                        .filter(key -> key.startsWith("user.")
+                                && validId(key.substring("user.".length()))).count() > 1;
+        }
+
         public static synchronized void select(Path home, String id) throws IOException {
             Properties p = read(home);
             if (!validId(id) || !p.containsKey("user." + id))
                 throw new IllegalArgumentException("Unknown user");
             p.setProperty("active", id);
+            p.remove("chooseOnNextBoot");
             write(home, p);
         }
         public static synchronized void remove(Path home, String id) throws IOException {
