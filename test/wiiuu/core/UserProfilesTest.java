@@ -21,10 +21,22 @@ public final class UserProfilesTest {
         Files.createDirectories(home.resolve("saves/nds"));
         Files.writeString(home.resolve("saves/nds/progress.sav"), "original save");
 
+        check(!Config.Users.chooserRequired(home), "single-profile installation starts normally");
+        Config.Users.requireChooserOnNextBoot(home);
+        check(Config.Users.chooserRequired(home), "sign-out forces picker with one user");
+        check(Config.Users.chooserRequired(home), "picker remains requested across reads");
+        check(Config.Users.activeId(home).equals("default"), "sign-out does not delete account data");
+        Config.Users.select(home, "default");
+        check(!Config.Users.chooserRequired(home), "explicit sign-in clears the next-boot flag");
+
         Config.Users.Profile alice = Config.Users.create(home, "Alice");
         Config.Users.Profile bob = Config.Users.create(home, "Bob");
         check(Config.Users.list(home).size() == 3, "three profiles including default");
         check(!alice.id().equals(bob.id()), "IDs differ");
+        check(Config.Users.chooserRequired(home), "two or more profiles always show the chooser");
+        Config.Users.requireChooserOnNextBoot(home);
+        Config.Users.select(home, "default");
+        check(Config.Users.chooserRequired(home), "ordinary multi-user boot still requires a choice");
         try { Config.Users.create(home, "alice"); throw new AssertionError("duplicate accepted"); }
         catch (IllegalArgumentException expected) {}
         try { Config.Users.create(home, "Bad\nName"); throw new AssertionError("control char accepted"); }
