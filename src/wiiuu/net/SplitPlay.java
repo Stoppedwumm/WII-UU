@@ -549,7 +549,7 @@ public final class SplitPlay {
             if (!localN64Renderer || !options.containsKey(key)) options.put(key, line.substring(eq + 1));
         }
         options.put("wiiuu.sound", "pipe");
-        Path saves = config.home().resolve("saves").resolve(system);
+        Path saves = config.userHome().resolve("saves").resolve(system);
         Files.createDirectories(saves);
         ProcessBuilder pb = new ProcessBuilder(Choccy.command(core, rom, saves, games.systemDir(), options));
         Path log = config.logDir().resolve(system + "-lent.log");
