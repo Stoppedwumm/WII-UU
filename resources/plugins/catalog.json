@@ -1,0 +1,4 @@
+[
+  {"id":"wiiuu","name":"WII-UU Website","description":"News, downloads and support on the WII-UU website.","script":"wiiuu.js"},
+  {"id":"archive","name":"Build Archive","description":"Browse the WII-UU release archive in a plugin window.","script":"archive.js"}
+]

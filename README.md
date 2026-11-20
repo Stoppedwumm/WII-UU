@@ -3,7 +3,7 @@
 A Wii U Menu–style emulator frontend written in Java, with a built-in web server that turns
 any phone into a Wii U–like GamePad. The GamePad has buttons and sticks, a live touch screen
 (Wii U GamePad view, DS/3DS bottom screen, or the whole TV), gyro, and the PC's sound. There are
-no dependencies beyond Java 17+.
+no dependencies beyond Java 17+ for the launcher; optional JavaScript apps use a separately installed browser runtime.
 
 Website: **https://wiiuu.stoppedwumm.net** (served from `docs/`). It has a one-line install for
 Linux, Raspberry Pi and macOS: `curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash`.
@@ -21,6 +21,14 @@ WII-UU is a **launcher**: it finds your games, shows them in the Wii U–style U
 the right emulator for each one. Each emulator (Mesen, Snes9x, Mupen64Plus, Dolphin, Cemu,
 Ryujinx, DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4 …) is installed separately. You also need
 your own legally dumped games and, where an emulator requires it, your own firmware or keys.
+
+## JavaScript apps
+
+Activate bundled apps in **Settings > System > Plugin store**. Their icons appear in the bottom
+bar alongside Settings. The one-time browser runtime installation needs Node.js 22.12+ with npm.
+Plugin files live in the source and use `Plugin("Name").loadSite(url)` with navigation restrictions
+and optional ROM/download folder routing. See [the plugin guide](docs/plugins.md) for the API,
+adding a store entry and runtime details.
 
 ## WII-UU UI Library
 

@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.0 (2026-11-20)
+- Add a source-bundled JavaScript plugin store in Settings > System, with persistent activation and apps in the bottom bar.
+- Add isolated Electron browser windows with fluent site, navigation restriction and download-directory APIs.
+- Install or repair the pinned browser runtime from Settings using Node.js/npm; keep per-plugin website data across launches.
+
 ## 2.0.9 (2026-11-19)
 - Browse the release archive from Settings > System > Updates, with channel filters, pagination, build details, release notes and verified installation of exact builds.
 - Allow deliberate archive downgrades/reinstalls after confirmation, and follow the selected build's update channel.
