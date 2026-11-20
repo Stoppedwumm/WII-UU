@@ -22,6 +22,7 @@ import java.util.concurrent.CompletableFuture;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
@@ -153,7 +154,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         Integer port = null;
         boolean noServer = false, setup = false, noIntro = false, appliance = false, oemSettings = false;
         boolean oemSelfTest = false;
-        String snapshot = null, snapshotView = "home";
+        String snapshot = null, snapshotView = "home", requestedUser = null;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--fullscreen" -> fullscreen = true;
@@ -161,6 +162,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                 case "--port" -> port = Integer.parseInt(args[++i]);
                 case "--no-server" -> noServer = true;
                 case "--home" -> home = Paths.get(args[++i]);
+                case "--user" -> requestedUser = args[++i];
+                case "--list-users" -> {
+                    for (Config.Users.Profile p : Config.Users.list(home))
+                        System.out.println(p.id() + "\t" + p.name());
+                    return;
+                }
                 case "--snapshot" -> snapshot = args[++i];
                 case "--snapshot-view" -> snapshotView = args[++i];
                 case "--write-icon" -> {
@@ -219,6 +226,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                               --port N                    GamePad web server port (default 8080)
                               --no-server                 do not start the phone GamePad server
                               --home DIR                  settings folder (default ~/.wiiuu)
+                              --user ID                   select a local WII-UU user without prompting
+                              --list-users                 list profile IDs and names
                               --build-info               show channel, commit and build date
                               --check-update / --upgrade  check for / install a newer version (with its notes)
                               --changelog [VERSION]       what changed (since VERSION)
@@ -252,6 +261,24 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         // Process USB demo reset/restore before opening any settings, databases or plugin files.
         wiiuu.core.DemoDevice.applyPending(home);
+        if (requestedUser != null) {
+            Config.Users.select(home, requestedUser);
+        } else if (!oemSelfTest && !oemSettings && snapshot == null && !GraphicsEnvironment.isHeadless()) {
+            List<Config.Users.Profile> users = Config.Users.list(home);
+            if (users.size() > 1) {
+                String[] names = users.stream().map(Config.Users.Profile::name).toArray(String[]::new);
+                Object choice = JOptionPane.showInputDialog(null, "Choose who is playing:",
+                        "WII-UU users", JOptionPane.QUESTION_MESSAGE, null, names,
+                        Config.Users.active(home).name());
+                if (choice == null) return; // Closing the chooser must not silently open another user's session.
+                for (Config.Users.Profile profile : users) {
+                    if (profile.name().equals(choice)) {
+                        Config.Users.select(home, profile.id());
+                        break;
+                    }
+                }
+            }
+        }
         Config config = new Config(home);
         if (oemSelfTest) {
             wiiuu.ui.OemSelfTest.show(config);
@@ -518,7 +545,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     @Override
     public void openSettings() {
         view.openSettings(new SettingsScreen.Services(config, openBased, () -> server == null ? null : server.url(),
-                () -> view.startGuide(), this::restartIntoGuide, new Updater(config, BUILD_VERSION), () -> {
+                () -> view.startGuide(), this::restartIntoGuide, this::restartForUser,
+                new Updater(config, BUILD_VERSION), () -> {
                     quitReason = "update";
                     quit();
                 }, () -> {
@@ -753,6 +781,17 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             Updater.restartAfterExit();
         } catch (IOException e) {
             System.err.println("[restart] could not start WII-UU again: " + e.getMessage());
+        }
+        quit();
+    }
+
+    /** Restart all profile-bound services (achievements, plugins, credentials, saves) before switching. */
+    private void restartForUser() {
+        quitReason = "restart";
+        try {
+            Updater.restartAfterExit();
+        } catch (IOException e) {
+            System.err.println("[users] restart failed; restart WII-UU manually: " + e.getMessage());
         }
         quit();
     }
