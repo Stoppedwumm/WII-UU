@@ -34,6 +34,19 @@ mode, so they do not open a browser window. Existing installations need no new r
 3. Rebuild with `./build.sh`. Resources are bundled into the app JAR. The store is local and uses
    these reviewed source files; it does not download or execute a remote plugin catalog.
 
+### ROMSFUN browser plugin
+
+Activate **ROMSFUN** in the plugin store to open its **Browse all ROMS** page.
+Search with the site's existing `q` form, open a game page, and follow the
+site's own download and variant/mirror pages. The plugin does not predict file
+links or bypass the site's normal download flow.
+
+Downloads are saved to the configured ROM base folder without execution or
+automatic extraction. Move downloaded files into their console subfolders and
+refresh the library. Only download files you have the rights to use.
+The browser limits top-level navigation to `romsfun.com`; third-party
+pages and popups are blocked. Download file redirects to CDNs remain supported.
+
 Each file declares exactly one `Plugin(name)` and calls `loadSite(url)`. Definitions execute as
 JavaScript in the Electron host when the app opens. Fluent methods return the same object:
 
