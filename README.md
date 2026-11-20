@@ -104,8 +104,9 @@ Switching accounts restarts WII-UU, so the current user's account sessions and
 game-save handles are closed first. On a console, select **Power → Sign Out & Shut Down**
 (or **Settings → System → User profiles → Sign out & shut down**) to end the
 current session and power off. The next boot shows the user chooser, even with
-only one configured user. On a desktop, **Sign Out & Quit** closes WII-UU
-without powering off the PC.
+only one configured user. The startup chooser also has a **Shut Down** button, so
+the console can be powered off before anyone signs in. On a desktop, **Sign Out & Quit**
+closes WII-UU without powering off the PC.
 
 The existing installation is the **Default user**; its `config.properties` and saves
 remain exactly where they were. Additional users store their personal settings and
