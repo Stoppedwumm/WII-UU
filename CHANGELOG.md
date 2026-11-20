@@ -4,6 +4,7 @@ What changed in each WII-UU release, newest first. WII-UU shows these notes afte
 in Settings > General > What's new, and before installing an update.
 
 ## 2.1.0 (2026-11-20)
+- Add JavaScript native apps with NPlugin, panel views, image entries, NButton callbacks, awaited fetch and cancellable downloads, drawn directly in the WII-UU menu.
 - Add a source-bundled JavaScript plugin store in Settings > System, with persistent activation and apps in the bottom bar.
 - Add isolated Electron browser windows with fluent site, navigation restriction and download-directory APIs.
 - Install or repair the pinned browser runtime from Settings using Node.js/npm; keep per-plugin website data across launches.

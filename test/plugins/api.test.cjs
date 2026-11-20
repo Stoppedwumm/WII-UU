@@ -26,7 +26,7 @@ test('invalid or runaway definitions fail; bundled catalog scripts all execute',
         `Plugin('X').loadSite('https://x'); Plugin('Y').loadSite('https://y')`, `while(true){}`])
         assert.throws(() => evaluate(code));
     const catalog = require('../../resources/plugins/catalog.json');
-    for (const entry of catalog) assert.ok(evaluate(fs.readFileSync(path.join(__dirname, '../../resources/plugins/store', entry.script), 'utf8')).site);
+    for (const entry of catalog.filter(item => item.type !== 'native')) assert.ok(evaluate(fs.readFileSync(path.join(__dirname, '../../resources/plugins/store', entry.script), 'utf8')).site);
 });
 test('download paths stay in selected directory, reserve collisions and protect existing files', t => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wiiuu-download-'));

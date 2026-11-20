@@ -5,7 +5,7 @@ const path = require('node:path');
 const { evaluate, attachPolicy } = require('./api.cjs');
 const [id, home, roms] = process.argv.slice(2);
 const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, 'catalog.json'), 'utf8'));
-const entry = catalog.find(plugin => plugin.id === id);
+const entry = catalog.find(plugin => plugin.id === id && plugin.type !== 'native');
 if (!entry || !home || !roms) throw new Error('Unknown plugin or missing WII-UU directories');
 app.setPath('userData', path.join(home, 'plugin-data', id));
 app.whenReady().then(async () => {

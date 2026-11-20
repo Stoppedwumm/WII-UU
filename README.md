@@ -27,7 +27,8 @@ your own legally dumped games and, where an emulator requires it, your own firmw
 Activate bundled apps in **Settings > System > Plugin store**. Their icons appear in the bottom
 bar alongside Settings. The one-time browser runtime installation needs Node.js 22.12+ with npm.
 Plugin files live in the source and use `Plugin("Name").loadSite(url)` with navigation restrictions
-and optional ROM/download folder routing. See [the plugin guide](docs/plugins.md) for the API,
+and optional ROM/download folder routing. Native apps use `NPlugin`, panel entries and JavaScript
+button callbacks rendered directly by WII-UU, including async API requests and downloads. See [the plugin guide](docs/plugins.md) for the API,
 adding a store entry and runtime details.
 
 ## WII-UU UI Library
