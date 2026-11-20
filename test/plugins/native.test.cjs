@@ -102,3 +102,27 @@ test('invalid view definitions, URL protocols and directory names are rejected',
         await assert.rejects(runtime.run(source));
     }
 });
+
+test('native text field submits typed values, updates model and rejects invalid input', async t => {
+    const { runtime, model } = await setup(t);
+    await runtime.run(`
+        const view = NPlugin('Search').newView(ViewType.PANELS);
+        view.addTextField('Game title', 'Type a game...', '', value => {
+            view.status('Searched: ' + value);
+        });
+    `);
+    await tick();
+    const field = model().entries[0].textField;
+    assert.match(field.id, /^t[0-9]+$/);
+    assert.equal(field.placeholder, 'Type a game...');
+    await runtime.submitText(field.id, 'Paper Mario');
+    await tick();
+    assert.equal(model().status, 'Searched: Paper Mario');
+    assert.equal(model().entries[0].textField.value, 'Paper Mario');
+    await runtime.submitText(field.id, 'x'.repeat(257));
+    await tick();
+    assert.equal(model().entries[0].textField.value, 'Paper Mario');
+    await runtime.submitText('t99999', 'ignored');
+    await tick();
+    assert.equal(model().status, 'Searched: Paper Mario');
+});
