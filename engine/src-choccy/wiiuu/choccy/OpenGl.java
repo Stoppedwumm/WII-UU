@@ -159,7 +159,21 @@ final class OpenGl {
     /** retro_hw_render_callback layout for the desktop 64-bit libretro ABI. */
     boolean register(MemorySegment data) {
         MemorySegment hw = data.reinterpret(64);
-        if (hw.get(JAVA_INT, 0) != CORE_CONTEXT || hw.get(JAVA_INT, 36) != 3 || hw.get(JAVA_INT, 40) > 3) return false;
+        int context = hw.get(JAVA_INT, 0);
+        int major = hw.get(JAVA_INT, 36);
+        int minor = hw.get(JAVA_INT, 40);
+        // Some libretro N64 cores request the legacy OpenGL API rather than
+        // OPENGL_CORE. Our desktop backend provides a 3.3 core context; only
+        // accept the legacy request when the core has not asked for features
+        // beyond that version.
+        if (context != 1 && context != CORE_CONTEXT) {
+            System.err.println("[choccy] unsupported hardware context: " + context);
+            return false;
+        }
+        if (major > 3 || (major == 3 && minor > 3)) {
+            System.err.println("[choccy] unsupported OpenGL version: " + major + "." + minor);
+            return false;
+        }
         MemorySegment begin = hw.get(ADDRESS, 8);
         if (begin.address() == 0) return false;
         reset = linker.downcallHandle(begin, FunctionDescriptor.ofVoid());
