@@ -32,6 +32,7 @@ public final class PluginDockTest {
                 var category = SettingsScreen.class.getDeclaredMethod("showCategory", int.class);
                 category.setAccessible(true); category.invoke(settings, 4);
                 settings.navigate(1, 0);
+                settings.navigate(0, 1); // System > User profiles comes before Plugin store
                 settings.activate(); // System > Plugin store
                 settings.navigate(0, 1); // first activation toggle, after runtime installer
                 settings.activate();
