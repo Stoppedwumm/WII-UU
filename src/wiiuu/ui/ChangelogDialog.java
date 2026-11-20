@@ -74,8 +74,8 @@ public final class ChangelogDialog {
     }
 
     private static void registerController(JDialog dialog, JButton accept, JButton cancel) {
-        JScrollPane scroll = (JScrollPane) ((JPanel) dialog.getContentPane())
-                .getComponent(1);
+        JScrollPane scroll = (JScrollPane) ((BorderLayout) dialog.getContentPane().getLayout())
+                .getLayoutComponent(BorderLayout.CENTER);
         ControllerBindings controls = new ControllerBindings(
                 accept::doClick,
                 cancel == null ? dialog::dispose : cancel::doClick,
