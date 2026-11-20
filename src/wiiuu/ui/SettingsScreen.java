@@ -53,7 +53,8 @@ public final class SettingsScreen {
 
     /** What the settings can do beyond the config file; Main fills it in. */
     public record Services(Config config, wiiuu.core.OpenBased openBased, Supplier<String> gamepadBase,
-                    Runnable showGuide, Runnable restartIntoGuide, Updater updater, Runnable exitForUpgrade,
+                    Runnable showGuide, Runnable restartIntoGuide, Runnable restartForUser,
+                    Updater updater, Runnable exitForUpgrade,
                     Runnable onClosed, wiiuu.core.Scraper scraper, Runnable findCovers,
                     wiiuu.core.Achievements achievements, Consumer<String> askPhone, BooleanSupplier phoneAsked,
                     BooleanSupplier phonesConnected, Supplier<wiiuu.net.GamepadServer> gamepad,
@@ -1789,8 +1790,81 @@ public final class SettingsScreen {
         worker.start();
     }
 
+    private Page profilesPage() {
+        return new Page("User profiles", () -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info("ROMs, emulators and device setup are shared. Each user keeps their own "
+                    + "preferences, RetroAchievements/OpenBased sign-ins and Choccy Milk saves. "
+                    + "Switching restarts WII-UU; these local profiles are not password-protected OS accounts."));
+            String active = config.userId();
+            for (wiiuu.core.Config.Users.Profile user : wiiuu.core.Config.Users.list(config.home())) {
+                boolean current = user.id().equals(active);
+                r.add(new Action((current ? "Current: " : "Switch to: ") + user.name(),
+                        current ? "This is the current user." : "Switch to this user and restart WII-UU.",
+                        () -> {
+                            if (current) { say("Already signed in as " + user.name()); return; }
+                            if (view.gameRunning()) { say("Close the running game before switching users."); return; }
+                            try {
+                                wiiuu.core.Config.Users.select(config.home(), user.id());
+                                sv.restartForUser().run();
+                            } catch (IOException | IllegalArgumentException e) {
+                                say("Unable to switch users: " + e.getMessage());
+                            }
+                        }, null, null));
+            }
+            r.add(new Action("Add user", "Create a separate local profile with empty sign-ins and saves.", () ->
+                    edit("New user name", "", false, name -> {
+                        try {
+                            wiiuu.core.Config.Users.Profile added = wiiuu.core.Config.Users.create(config.home(), name);
+                            reload(false);
+                            say("Created " + added.name() + ". Select it above to switch.");
+                        } catch (IOException | IllegalArgumentException e) {
+                            say("Unable to create user: " + e.getMessage());
+                        }
+                    }), null, null));
+            r.add(new Action("Rename current user", "The user ID and saved data stay the same.", () ->
+                    edit("User name", wiiuu.core.Config.Users.active(config.home()).name(), false, name -> {
+                        try {
+                            wiiuu.core.Config.Users.rename(config.home(), active, name);
+                            reload(false);
+                            say("User renamed.");
+                        } catch (IOException | IllegalArgumentException e) {
+                            say("Unable to rename user: " + e.getMessage());
+                        }
+                    }), null, null));
+            r.add(new Link("Remove inactive user", "Remove a profile from the chooser. Its files are retained for recovery.",
+                    null, this::removeProfilesPage));
+            return r;
+        });
+    }
+
+    private Page removeProfilesPage() {
+        return new Page("Remove user", () -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info("Removing a user hides it from the list but does not erase its saved files. "
+                    + "The default or currently active user cannot be removed."));
+            for (wiiuu.core.Config.Users.Profile user : wiiuu.core.Config.Users.list(config.home())) {
+                if (user.id().equals("default") || user.id().equals(config.userId())) continue;
+                r.add(new Action("Remove " + user.name(), "Archive this inactive user without deleting files.", () -> {
+                    try {
+                        wiiuu.core.Config.Users.remove(config.home(), user.id());
+                        reload(false);
+                        say(user.name() + " removed from the user list; data kept.");
+                    } catch (IOException | IllegalArgumentException e) {
+                        say("Unable to remove user: " + e.getMessage());
+                    }
+                }, null, "Press A again to remove the profile (files are kept)"));
+            }
+            if (r.size() == 1) r.add(new Info("No inactive user profiles to remove."));
+            return r;
+        });
+    }
+
     private List<Row> systemRows() {
         List<Row> r = new ArrayList<>();
+        r.add(new Header("Users"));
+        r.add(new Link("User profiles", "Create, rename or switch local profiles with separate settings, sign-ins and saves.",
+                () -> wiiuu.core.Config.Users.active(config.home()).name(), this::profilesPage));
         r.add(new Header("Apps"));
         r.add(new Link("Plugin store", "Activate bundled JavaScript apps for the bottom bar.", null, this::pluginStorePage));
         r.add(new Header("Storage"));
