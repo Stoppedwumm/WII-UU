@@ -158,18 +158,18 @@ test('native logger emits diagnostics and HTTP requests include browser headers'
     assert.ok(messages.some(([level, msg]) => level === 'info' && msg.includes('HTTP 403')));
 });
 
-test('browserAuth uses isolated host callbacks, validates URLs, and never exposes cookies', async t => {
+test('browserAuth opens an isolated window via host callbacks', async t => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wiiuu-browser-auth-'));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-    const opened = [];
-    let closed = 0, confirmed = false;
+    const events = [], opened = [];
+    let closed = 0;
     const runtime = createRuntime({
-        emit: () => {},
+        emit: e => events.push(e),
         directories: { ROMS: directory, DOWNLOADS: directory },
         browserAuth: {
             open: async url => { opened.push(url); },
             close: () => { closed++; },
-            isAuthenticated: () => confirmed
+            isAuthenticated: () => false
         }
     });
     t.after(() => runtime.close());
@@ -184,34 +184,10 @@ test('browserAuth uses isolated host callbacks, validates URLs, and never expose
         ]);
     `);
     await tick();
-    const model = [];
-    // A real URL is handed to the host; session state is not exposed to JS.
-    const current = events => events.filter(e => e.type === 'view').at(-1)?.view;
-    // Verify the mock host receives the URL after native activation.
-    // A second runtime with events provides the control IDs for dispatch.
-    await runtime.close();
-    const events = [];
-    const other = createRuntime({
-        emit: e => events.push(e),
-        directories: { ROMS: directory, DOWNLOADS: directory },
-        browserAuth: {
-            open: async url => { opened.push(url); },
-            close: () => { closed++; },
-            isAuthenticated: () => confirmed
-        }
-    });
-    t.after(() => other.close());
-    await other.run(`
-        const view = NPlugin('Auth').newView(ViewType.PANELS);
-        view.addEntry('Login', '', [
-            NButton('Open', async () => { await browserAuth.open('https://example.com/login'); view.status('Opened'); }),
-            NButton('Close', () => browserAuth.close())
-        ]);
-    `);
-    await tick();
-    let buttons = current(events).entries[0].buttons;
-    await other.dispatch(buttons[0].id);
+    const buttons = events.filter(e => e.type === 'view').at(-1).view.entries[0].buttons;
+    await runtime.dispatch(buttons[0].id);
     assert.deepEqual(opened, ['https://example.com/login']);
-    await other.dispatch(buttons[1].id);
+    assert.equal(events.filter(e => e.type === 'view').at(-1).view.status, 'Browser opened');
+    await runtime.dispatch(buttons[1].id);
     assert.equal(closed, 1);
 });
