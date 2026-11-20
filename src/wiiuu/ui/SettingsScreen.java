@@ -1834,6 +1834,13 @@ public final class SettingsScreen {
                     }), null, null));
             r.add(new Link("Remove inactive user", "Remove a profile from the chooser. Its files are retained for recovery.",
                     null, this::removeProfilesPage));
+            boolean console = "1".equals(System.getenv("WIIUU_CONSOLE"));
+            r.add(new Action(console ? "Sign out & shut down" : "Sign out & quit WII-UU",
+                    "End this session. The user selection dialog appears at the next boot, "
+                            + "even if only one user exists. Saved games and settings are kept.",
+                    () -> view.signOut(), null,
+                    console ? "Press A again to sign out and shut down"
+                            : "Press A again to sign out and quit WII-UU"));
             return r;
         });
     }
