@@ -1674,6 +1674,60 @@ public final class SettingsScreen {
         });
     }
 
+    private volatile boolean demoBusy;
+    private volatile String demoStatus = "No backup created this session";
+
+    private void backupDemoTo(Path folder) {
+        demoBusy = true;
+        demoStatus = "Creating and verifying USB backup...";
+        reload(false);
+        Thread worker = new Thread(() -> {
+            String status;
+            try {
+                Path zip = wiiuu.core.DemoDevice.backup(config, folder);
+                status = "Verified: " + zip.toString();
+            } catch (IOException e) { status = "Backup failed: " + e.getMessage(); }
+            final String message = status;
+            SwingUtilities.invokeLater(() -> {
+                demoBusy = false;
+                demoStatus = message;
+                say(message);
+                if (page != null) reload(false);
+            });
+        }, "wiiuu-usb-demo-backup");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void restoreDemoFrom(Path file) {
+        if (!file.getFileName().toString().equals("WII-UU-demo-backup.zip")) {
+            say("Select WII-UU-demo-backup.zip from the USB drive.");
+            return;
+        }
+        demoBusy = true;
+        demoStatus = "Verifying backup...";
+        reload(false);
+        Thread worker = new Thread(() -> {
+            String error = null;
+            try { wiiuu.core.DemoDevice.scheduleRestore(config, file); }
+            catch (IOException e) { error = e.getMessage(); }
+            String failure = error;
+            SwingUtilities.invokeLater(() -> {
+                demoBusy = false;
+                if (failure != null) {
+                    demoStatus = "Restore failed: " + failure;
+                    say(demoStatus);
+                    reload(false);
+                } else {
+                    demoStatus = "Verified. Restarting to restore...";
+                    sv.restartIntoGuide().run();
+                }
+            });
+        }, "wiiuu-usb-demo-restore");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
     private List<Row> systemRows() {
         List<Row> r = new ArrayList<>();
         r.add(new Header("Apps"));
@@ -1683,6 +1737,24 @@ public final class SettingsScreen {
             if (view.gameRunning()) { say("Close the current game before transferring data."); return; }
             MigrationPanel.open(view, config);
         }, () -> config.home().toString(), null));
+        r.add(new Header("USB backup & factory reset"));
+        r.add(new Action("Backup to USB", "Choose a USB folder and create a verified WII-UU backup. Existing backups are never overwritten.", () -> {
+            if (view.gameRunning() || demoBusy) { say("Close the game and finish any current backup first."); return; }
+            push(browser("Backup destination", Paths.get(System.getProperty("user.home")), true,
+                    folder -> backupDemoTo(folder)));
+        }, () -> demoStatus, null));
+        r.add(new Action("Load backup from USB", "Choose the WII-UU-demo-backup.zip on your USB drive, verify it and restart to restore.", () -> {
+            if (view.gameRunning() || demoBusy) { say("Close the game and finish any current backup first."); return; }
+            push(browser("Choose USB backup", Paths.get(System.getProperty("user.home")), false,
+                    file -> restoreDemoFrom(file)));
+        }, null, "Press A again to replace local WII-UU data"));
+        r.add(new Action("Factory reset WII-UU", "Erase WII-UU's local settings and managed data and restart to first-run setup. External ROM folders are not erased.", () -> {
+            if (view.gameRunning() || demoBusy) { say("Close the game and finish any current backup first."); return; }
+            try {
+                wiiuu.core.DemoDevice.scheduleReset(config);
+                sv.restartIntoGuide().run();
+            } catch (IOException e) { say("Reset was not scheduled: " + e.getMessage()); }
+        }, null, "Press A again to ERASE local WII-UU data and restart"));
         r.add(new Header("Updates"));
         r.add(new Info(wiiuu.core.BuildInfo.description() + " · built " + wiiuu.core.BuildInfo.builtAt()));
         r.add(new Choice("Update channel", "Stable: final releases only. Beta: numbered previews and final releases. "

@@ -250,6 +250,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
                 }
             }
         }
+        // Process USB demo reset/restore before opening any settings, databases or plugin files.
+        wiiuu.core.DemoDevice.applyPending(home);
         Config config = new Config(home);
         if (oemSelfTest) {
             wiiuu.ui.OemSelfTest.show(config);
