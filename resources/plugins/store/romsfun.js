@@ -38,8 +38,13 @@ function links(html, pattern) {
     return matches;
 }
 async function get(url) {
+    logger.info("ROMSFUN request", new URL(url).pathname);
     const response = await fetch(url, { headers: { Accept: "text/html" } });
-    if (!response.ok) throw new Error("HTTP " + response.status);
+    if (!response.ok) {
+        logger.warn("ROMSFUN returned HTTP", response.status, new URL(url).pathname);
+        throw new Error("HTTP " + response.status + (response.status === 403
+            ? " — access denied by ROMSFUN; open in a browser to check site access" : ""));
+    }
     if (!(response.headers.get("content-type") || "").includes("html"))
         throw new Error("Expected HTML, not a downloadable file");
     return response.text();
