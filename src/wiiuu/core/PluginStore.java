@@ -107,6 +107,17 @@ public final class PluginStore {
         return Files.createDirectories(config.logDir()).resolve(name);
     }
     public static synchronized boolean installing() { return installing; }
+    private static String npm() {
+        // Desktop launches on macOS often omit Homebrew/MacPorts from PATH.
+        String search = System.getenv().getOrDefault("PATH", "") + java.io.File.pathSeparator
+                + "/opt/homebrew/bin" + java.io.File.pathSeparator + "/usr/local/bin" + java.io.File.pathSeparator + "/opt/local/bin";
+        for (String directory : search.split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))) {
+            if (directory.isBlank()) continue;
+            Path candidate = Path.of(directory).resolve("npm");
+            if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) return candidate.toAbsolutePath().toString();
+        }
+        return "npm";
+    }
     /** Requires Node.js/npm on PATH; only the explicit Settings install action downloads a runtime. */
     public static void install(Config config, Consumer<String> done) {
         synchronized (PluginStore.class) {
@@ -120,9 +131,13 @@ public final class PluginStore {
             try {
                 prepare(config);
                 List<String> command = windows() ? List.of("cmd.exe", "/d", "/c", "npm.cmd", "ci", "--no-audit", "--no-fund", "--engine-strict")
-                        : List.of("npm", "ci", "--no-audit", "--no-fund", "--engine-strict");
+                        : List.of(npm(), "ci", "--no-audit", "--no-fund", "--engine-strict");
                 ProcessBuilder builder = new ProcessBuilder(command).directory(runtime(config).toFile())
                         .redirectErrorStream(true).redirectOutput(log(config, "plugin-runtime.log").toFile());
+                if (!windows() && Path.of(command.get(0)).isAbsolute()) {
+                    String bin = Path.of(command.get(0)).getParent().toString();
+                    builder.environment().put("PATH", bin + java.io.File.pathSeparator + builder.environment().getOrDefault("PATH", ""));
+                }
                 process = builder.start();
                 if (!process.waitFor(20, TimeUnit.MINUTES)) throw new IOException("Runtime installation timed out");
                 if (process.exitValue() != 0 || !Files.isRegularFile(executable(config)))
