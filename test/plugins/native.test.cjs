@@ -186,6 +186,7 @@ test('browserAuth opens an isolated window via host callbacks', async t => {
     await tick();
     const buttons = events.filter(e => e.type === 'view').at(-1).view.entries[0].buttons;
     await runtime.dispatch(buttons[0].id);
+    await tick(); // Native view updates are batched with setImmediate.
     assert.deepEqual(opened, ['https://example.com/login']);
     assert.equal(events.filter(e => e.type === 'view').at(-1).view.status, 'Browser opened');
     await runtime.dispatch(buttons[1].id);
