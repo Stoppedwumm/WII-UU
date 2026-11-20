@@ -95,6 +95,8 @@ final class LinuxNetworkPicker {
             selected = networks.get(focus);
             if (selected.connected()) {
                 status = "Already connected to " + selected.ssid();
+            } else if (selected.security().contains("802.1X") || selected.security().contains("WEP")) {
+                status = "This network needs advanced credentials. Use a supported WPA-Personal network.";
             } else if (selected.secured()) {
                 typing = true;
                 keyRow = 1;
@@ -113,6 +115,10 @@ final class LinuxNetworkPicker {
             case KeyEvent.VK_ESCAPE -> back();
             case KeyEvent.VK_BACK_SPACE -> erase();
             case KeyEvent.VK_ENTER -> submit();
+            case KeyEvent.VK_LEFT -> navigate(-1, 0);
+            case KeyEvent.VK_RIGHT -> navigate(1, 0);
+            case KeyEvent.VK_UP -> navigate(0, -1);
+            case KeyEvent.VK_DOWN -> navigate(0, 1);
             case KeyEvent.VK_V -> {
                 if (event.isControlDown() || event.isMetaDown()) {
                     try {
@@ -188,10 +194,36 @@ final class LinuxNetworkPicker {
         Thread task = new Thread(() -> {
             String message;
             try {
-                List<String> args = new ArrayList<>(List.of("nmcli", "--wait", "35"));
-                if (secret != null) args.add("--ask");
-                args.addAll(List.of("device", "wifi", "connect", network.ssid()));
-                Result r = run(args, secret, 42);
+                Result r;
+                if (secret == null) {
+                    r = run(List.of("nmcli", "--wait", "35", "device", "wifi", "connect", network.ssid()),
+                            null, 42);
+                } else {
+                    // Create an unsaved-secret WPA profile, then supply the PSK through the
+                    // documented passwd-file interface. Neither argv nor disk contains the PSK.
+                    String profile = "WII-UU " + java.util.UUID.randomUUID();
+                    String keyManagement = network.security().contains("WPA3")
+                            && !network.security().contains("WPA2") ? "sae" : "wpa-psk";
+                    Result created = run(List.of("nmcli", "connection", "add", "type", "wifi",
+                            "ifname", "*", "con-name", profile, "ssid", network.ssid(),
+                            "wifi-sec.key-mgmt", keyManagement), null, 15);
+                    if (created.exit() != 0) {
+                        r = created;
+                    } else {
+                        try {
+                            r = run(List.of("nmcli", "--wait", "35", "connection", "up", "id",
+                                    profile, "passwd-file", "/dev/stdin"),
+                                    "802-11-wireless-security.psk:" + secret, 42);
+                        } finally {
+                            // Do not leave profiles without a working password after a failure.
+                            // A successful activation stays saved in NetworkManager.
+                        }
+                        if (r.exit() != 0) {
+                            try { run(List.of("nmcli", "connection", "delete", "id", profile), null, 10); }
+                            catch (Exception ignored) { }
+                        }
+                    }
+                }
                 String safe = secret == null ? r.output() : r.output().replace(secret, "[hidden]");
                 message = r.exit() == 0 ? "Connected to " + network.ssid()
                         : "Could not connect: " + shortError(safe);
@@ -203,6 +235,10 @@ final class LinuxNetworkPicker {
                 if (closed) return;
                 busy = false;
                 status = done;
+                if (done.startsWith("Connected to ")) {
+                    networks = networks.stream().map(n -> new Network(n.ssid(), n.signal(),
+                            n.security(), n.ssid().equals(network.ssid()))).toList();
+                }
                 view.repaint();
             });
         }, "wiiuu-wifi-connect");
@@ -210,7 +246,7 @@ final class LinuxNetworkPicker {
         task.start();
     }
 
-    // No shell. With --ask, the password goes through stdin, not process arguments or disk.
+    // No shell. The passwd-file source is /dev/stdin, so no password enters argv or disk.
     private static Result run(List<String> args, String input, int timeout) throws IOException, InterruptedException {
         Process p = new ProcessBuilder(args).redirectErrorStream(true).start();
         CompletableFuture<String> result = CompletableFuture.supplyAsync(() -> {
