@@ -22,6 +22,10 @@ the right emulator for each one. Each emulator (Mesen, Snes9x, Mupen64Plus, Dolp
 Ryujinx, DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4 …) is installed separately. You also need
 your own legally dumped games and, where an emulator requires it, your own firmware or keys.
 
+## Contributing
+
+See [contribute.md](contribute.md) for development setup, pull requests, tests, beta builds, and the complete stable-release publishing and verification procedure.
+
 ## JavaScript apps
 
 Activate bundled apps in **Settings > System > Plugin store**. Their icons appear in the bottom
