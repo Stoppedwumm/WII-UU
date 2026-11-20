@@ -15,7 +15,13 @@ function text(value, max = 160) {
     if (typeof value !== 'string' || value.length > max) throw new Error(`Expected text of at most ${max} characters`);
     return value;
 }
-function createRuntime({ emit, directories, fetchImpl = fetch }) {
+function createRuntime({ emit, directories, fetchImpl = fetch, log = () => {} }) {
+    const logger = Object.freeze({
+        debug: (...args) => log('debug', args.map(String).join(' ')),
+        info: (...args) => log('info', args.map(String).join(' ')),
+        warn: (...args) => log('warn', args.map(String).join(' ')),
+        error: (...args) => log('error', args.map(String).join(' '))
+    });
     const callbacks = new Map(), buttons = new Map(), inputs = new Map(), controllers = new Set();
     const views = [], downloads = new Set();
     let active, definition, sequence = 0, scheduled = false, disposed = false;
@@ -95,9 +101,16 @@ function createRuntime({ emit, directories, fetchImpl = fetch }) {
         try {
             // Validate every redirect so the API cannot be redirected to file:/ or credentials URLs.
             let target = String(url), response;
-            let currentOptions = { ...options, signal, redirect: 'manual' };
+            const clientHeaders = new Headers(options.headers);
+            // Ordinary browser content negotiation. This is not an anti-bot bypass.
+            if (!clientHeaders.has('User-Agent')) clientHeaders.set('User-Agent',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+            if (!clientHeaders.has('Accept')) clientHeaders.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+            if (!clientHeaders.has('Accept-Language')) clientHeaders.set('Accept-Language', 'en-US,en;q=0.9');
+            let currentOptions = { ...options, headers: clientHeaders, signal, redirect: 'manual' };
             for (let count = 0; count < 10; count++) {
                 response = await fetchImpl(target, currentOptions);
+                logger.info('HTTP', response.status, new URL(target).origin + new URL(target).pathname);
                 if (![301, 302, 303, 307, 308].includes(response.status)) break;
                 const location = response.headers.get('location');
                 await response.body?.cancel();
@@ -171,7 +184,7 @@ function createRuntime({ emit, directories, fetchImpl = fetch }) {
     async function run(source, filename = 'native-plugin.js') {
         context = vm.createContext({ NPlugin, NButton, ViewType, Directories, downloadManager,
             fetch: request, URL, URLSearchParams, AbortController, AbortSignal,
-            console: { log: (...args) => console.error(...args), error: (...args) => console.error(...args) } });
+            logger, console: { log: logger.info, info: logger.info, warn: logger.warn, error: logger.error, debug: logger.debug } });
         // Reviewed bundled JavaScript only. A vm context is not a sandbox for untrusted code.
         await new vm.Script(`(async () => {\n${source}\n})()`, { filename }).runInContext(context, { timeout: 1000 });
         if (!definition || !views.length) throw new Error('Define an NPlugin and at least one newView');
