@@ -69,6 +69,12 @@
 02</code></pre>
   <p><strong>All data may be lost.</strong> Back up the targets before typing <code>DEPLOY</code>. The installer provisions the console and verifies SSH and sudo using the new account before deleting the old login. It keeps the old home directory. If installation stops partway and the replacement account already exists, inspect it before retrying. After a successful deployment, the console reboots into its factory self-test. Review the pass count, elapsed time, and installed game count on the console, then select <strong>Power off</strong>. Turn the console on again to open the setup guide. The guide stays scheduled until it is finished or dismissed.</p>
 
+  <h2>Connect your console to Wi-Fi</h2>
+  <p>On Linux, select <strong>Choose Wi-Fi network</strong> in the first-run setup guide to scan nearby networks,
+  choose an SSID and enter the password using the on-screen keyboard, a physical keyboard or a controller.
+  WII-UU uses NetworkManager, so <code>nmcli</code> and an authorized NetworkManager session must be available.
+  Ethernet works without this picker. Windows and macOS continue to open their system network settings.</p>
+
   <h2 id="desktop">Switch between WII-UU and the desktop</h2>
   <dl class="oem-switch">
     <div><dt>From WII-UU</dt><dd><strong>Power → Desktop Mode</strong></dd><dd>Opens your normal desktop.</dd></div>
