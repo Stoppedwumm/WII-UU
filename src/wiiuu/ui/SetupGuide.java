@@ -59,6 +59,7 @@ final class SetupGuide {
     private final MenuView view;
     private final Config config;
     private final Runnable onClose;
+    private LinuxNetworkPicker networkPicker;
     private final long opened = System.currentTimeMillis();
     private long closing;
 
@@ -137,7 +138,7 @@ final class SetupGuide {
                 out.add(new Item("Menu sounds", "switch", 1));
                 out.add(new Item("Music visualizer", "switch", 2));
             }
-            case NETWORK -> out.add(new Item("Open network settings", "action", 0));
+            case NETWORK -> out.add(new Item(LinuxNetworkPicker.supported() ? "Choose Wi-Fi network" : "Open network settings", "action", 0));
             case GAMES -> out.add(new Item("RetroArch mode", "switch", 0));
             default -> { }
         }
@@ -291,6 +292,7 @@ final class SetupGuide {
 
     void navigate(int dx, int dy) {
         if (closing != 0) return;
+        if (networkPicker != null) { networkPicker.navigate(dx, dy); return; }
         Item at = current.get(focus);
         int target = focus;
         if (dy != 0) {
@@ -320,6 +322,11 @@ final class SetupGuide {
 
     void activate() {
         if (closing != 0) return;
+        if (networkPicker != null) {
+            networkPicker.activate();
+            if (networkPicker.closed()) networkPicker = null;
+            return;
+        }
         Item it = current.get(focus);
         switch (it.label) {
             case "Start", "Next", "Let's go!" -> next();
@@ -343,7 +350,7 @@ final class SetupGuide {
                 save("ui.visualizer", !config.getBool("ui.visualizer", true));
                 view.setMusicEnabled(config.getBool("ui.music", true));     // re-reads the visualizer setting
             }
-            case "Open network settings" -> openNetworkSettings();
+            case "Open network settings", "Choose Wi-Fi network" -> openNetworkSettings();
             case "RetroArch mode" -> save("retroarch.enabled", !config.getBool("retroarch.enabled", false));
             default -> { }
         }
@@ -352,6 +359,11 @@ final class SetupGuide {
 
     void back() {
         if (closing != 0) return;
+        if (networkPicker != null) {
+            networkPicker.back();
+            if (networkPicker.closed()) networkPicker = null;
+            return;
+        }
         if (step == Step.WELCOME) {
             Sfx.bump();
             return;
@@ -361,6 +373,7 @@ final class SetupGuide {
     }
 
     void next() {
+        if (networkPicker != null) return;
         if (step == Step.DONE) {
             finish(true);
             return;
@@ -405,6 +418,7 @@ final class SetupGuide {
 
     void page(int delta) {
         if (closing != 0) return;
+        if (networkPicker != null) { networkPicker.navigate(0, delta); return; }
         if (delta < 0) back();
         else if (step != Step.DONE) next();
     }
@@ -417,6 +431,11 @@ final class SetupGuide {
     }
 
     void click(double x, double y) {
+        if (networkPicker != null) {
+            networkPicker.click(x, y);
+            if (networkPicker.closed()) networkPicker = null;
+            return;
+        }
         if (pairingHit(x, y)) { view.openPairingInBrowser(); return; }
         for (int i = 0; i < current.size(); i++) {
             Rectangle2D r = current.get(i).rect;
@@ -426,6 +445,19 @@ final class SetupGuide {
                 return;
             }
         }
+    }
+
+    boolean wantsKeys() { return networkPicker != null && networkPicker.typing(); }
+
+    void keyPressed(java.awt.event.KeyEvent event) {
+        if (networkPicker != null) {
+            networkPicker.keyPressed(event);
+            if (networkPicker.closed()) networkPicker = null;
+        }
+    }
+
+    void keyTyped(char c) {
+        if (networkPicker != null) networkPicker.keyTyped(c);
     }
 
     private void go(Step to, int dir) {
@@ -604,6 +636,7 @@ final class SetupGuide {
         lastW = w;
         lastH = h;
         paintAll(g0, w, h);
+        if (networkPicker != null) networkPicker.paint(g0, w, h);
         if (wipeFrom == null) return;
         double t = (System.currentTimeMillis() - wipeAt) / (double) WIPE_MS;
         if (t >= 1 || wipeFrom.getWidth() != w || wipeFrom.getHeight() != h) {
@@ -791,6 +824,10 @@ final class SetupGuide {
     }
 
     private void openNetworkSettings() {
+        if (LinuxNetworkPicker.supported()) {
+            networkPicker = new LinuxNetworkPicker(view);
+            return;
+        }
         String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
         List<List<String>> commands;
         if (os.contains("win")) {
@@ -824,8 +861,9 @@ final class SetupGuide {
             case LOOK -> new String[]{"Pick your look", "Light, dark, or whatever your computer uses."};
             case SOUND -> new String[]{"Sound", "Music and sounds in the menu. Games keep their own sound."};
             case NETWORK -> new String[]{"Connect to a network",
-                    "Plug in an Ethernet cable or choose your Wi-Fi network in system settings. "
-                            + "The GamePad can connect once both devices are on the same network."};
+                    LinuxNetworkPicker.supported()
+                            ? "Plug in Ethernet or choose your Wi-Fi here. The GamePad works when both devices share a network."
+                            : "Plug in Ethernet or choose your Wi-Fi in system settings. The GamePad works when both devices share a network."};
             case GAMEPAD -> new String[]{"Your phone is the GamePad",
                     "Join the same Wi-Fi as this computer, then scan the code with your phone's camera. "
                             + "It becomes a GamePad with buttons, sticks, and the TV picture."};
