@@ -2,14 +2,16 @@
 // Interactive, isolated authentication helper for native plugins.
 // It never exports cookies, page scripts or clearance tokens to the native host.
 const { app, BrowserWindow, Menu, session } = require('electron');
-const nodeURL = require('node:url');
+const fs = require('node:fs');
 const path = require('node:path');
 const [id, home, startURL] = process.argv.slice(2);
 if (!/^[a-z0-9][a-z0-9-]{0,47}$/.test(id || '') || !home) throw new Error('Invalid plugin identity');
 const target = new URL(startURL);
 if (target.protocol !== 'https:' || target.username || target.password) throw new Error('HTTPS site required');
 const origin = target.origin;
-app.setPath('userData', path.join(home, 'plugin-data', id, 'browser-auth'));
+const profile = path.join(home, 'plugin-data', id, 'browser-auth');
+fs.mkdirSync(profile, { recursive: true });
+app.setPath('userData', profile);
 function report(type) { process.stdout.write(JSON.stringify({ type }) + '\n'); }
 app.whenReady().then(async () => {
     const partition = 'persist:auth-' + id;
