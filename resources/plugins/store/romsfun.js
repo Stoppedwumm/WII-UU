@@ -84,7 +84,14 @@ async function loadCatalog(query = search, number = 1) {
         browse.status(count + " games · Page " + page + (search ? " · " + search : ""));
     } catch (error) {
         browse.status("Catalog failed: " + String(error.message).slice(0, 280));
-        browse.addEntry("Retry loading", "", [NButton("Retry", () => loadCatalog(search, page))]);
+        browse.addEntry("Website access", "", [
+            NButton("Open in browser", async () => {
+                await browserAuth.open(root + "/browse-all-roms/" +
+                    (search ? "?q=" + encodeURIComponent(search) : ""));
+                browse.status("Complete website access in the browser. Return here and retry; Node requests may still be blocked.");
+            }),
+            NButton("Retry", () => loadCatalog(search, page))
+        ]);
     }
 }
 async function loadGame(url) {
