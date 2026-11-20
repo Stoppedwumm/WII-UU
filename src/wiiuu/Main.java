@@ -267,17 +267,23 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             List<Config.Users.Profile> users = Config.Users.list(home);
             if (Config.Users.chooserRequired(home)) {
                 String[] names = users.stream().map(Config.Users.Profile::name).toArray(String[]::new);
-                Object choice = JOptionPane.showInputDialog(null, "Choose who is playing:",
-                        "WII-UU users", JOptionPane.QUESTION_MESSAGE, null, names,
-                        Config.Users.active(home).name());
-                if (choice == null) {
-                    // In Console Mode a cancelled sign-in must not boot the previous profile
-                    // or get stuck in the session manager's automatic restart loop.
+                javax.swing.JComboBox<String> choice = new javax.swing.JComboBox<>(names);
+                choice.setSelectedItem(Config.Users.active(home).name());
+                String stop = "1".equals(System.getenv("WIIUU_CONSOLE")) ? "Shut Down" : "Quit WII-UU";
+                int answer = JOptionPane.showOptionDialog(null,
+                        new Object[] {"Choose who is playing:", choice},
+                        "WII-UU users", JOptionPane.DEFAULT_OPTION,
+                        JOptionPane.QUESTION_MESSAGE, null,
+                        new String[] {"Start", stop}, "Start");
+                if (answer != 0) {
+                    // Shut Down / Cancel at the account chooser must not automatically
+                    // resume another person's session. A sign-out marker stays intact.
                     if ("1".equals(System.getenv("WIIUU_CONSOLE"))) System.exit(11);
                     return;
                 }
+                String name = (String) choice.getSelectedItem();
                 for (Config.Users.Profile profile : users) {
-                    if (profile.name().equals(choice)) {
+                    if (profile.name().equals(name)) {
                         Config.Users.select(home, profile.id());
                         break;
                     }
