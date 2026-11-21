@@ -248,7 +248,8 @@ public final class UserSelectScreen extends JPanel implements InputRouter.MenuAc
             g.setStroke(new BasicStroke(quitFocused ? 3 : 1));
             g.drawRoundRect(quitBounds.x, quitY, quitWidth, quitHeight, 18, 18);
             g.setFont(new Font("SansSerif", Font.BOLD, 16));
-            center(g, "Quit", w / 2, quitY + 29, WHITE);
+            center(g, "1".equals(System.getenv("WIIUU_CONSOLE")) ? "Shut Down" : "Quit",
+                    w / 2, quitY + 29, WHITE);
             g.setFont(new Font("SansSerif", Font.PLAIN, 14));
             center(g, "D-pad / Stick  ·  A Select  ·  B Back  ·  Mouse & keyboard",
                     w / 2, h - 17, MUTED);
