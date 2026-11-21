@@ -80,6 +80,22 @@ export function createDiagnostics({dataDir,adminUser='',adminPasswordHash=''}) {
       try{out.push(JSON.parse(await fs.readFile(path.join(devices,n),'utf8')));}catch{} }
     return out.sort((a,b)=>(b.lastSeen||b.createdAt).localeCompare(a.lastSeen||a.createdAt));
   }
+  async function expireOldLogs() {
+    const now=Date.now();
+    await fs.mkdir(uploads,{recursive:true});
+    for(const id of await fs.readdir(uploads)){
+      if(!ID.test(id))continue;
+      const dir=path.join(uploads,id);
+      let list;try{list=await fs.readdir(dir);}catch{continue;}
+      await Promise.all(list.filter(n=>n.endsWith('.json') && now-Number(n.split('-')[0])>30*86400000)
+        .map(n=>fs.rm(path.join(dir,n),{force:true})));
+    }
+  }
+  // Retention applies even if a device stops uploading. Timer never keeps the process alive.
+  const sweeper=setInterval(()=>expireOldLogs().catch(e=>console.error('Diagnostic retention:',e.message)),
+    12*60*60*1000);
+  sweeper.unref();
+  expireOldLogs().catch(e=>console.error('Diagnostic startup retention:',e.message));
   return async function handleDiagnostics(req,res,url) {
     const parts=url.pathname.split('/').filter(Boolean);
     const api=parts[0]==='api'&&parts[1]==='diagnostics';
