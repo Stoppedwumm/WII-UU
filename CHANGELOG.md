@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.4 (2026-11-21)
+- Add opt-in WII-UU diagnostics: click the welcome-guide logo ten times, enter a four-digit PIN and accept a clear disclaimer.
+- Upload redacted, size-limited log batches to the archive over HTTPS every 15 minutes only while consent remains active.
+- Add a protected archive diagnostics dashboard with a generated admin account, per-device report search by PIN and 30-day retention.
+- Allow users to stop sharing and request deletion of archived reports in Settings > System; never treat the four-digit PIN as an authentication credential.
+
 ## 2.1.3 (2026-11-20)
 - Add multiple local user profiles with a user chooser at startup and profile management under Settings > System.
 - Separate users' WII-UU preferences, RetroAchievements/OpenBased accounts, plugin browser data and Choccy Milk saves.
