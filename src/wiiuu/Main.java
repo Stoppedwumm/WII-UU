@@ -308,6 +308,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         boolean guideAsked = config.getBool("ui.setupNext", false) || setup;
 
         Main app = new Main(config);
+        if (snapshot == null && !oemSelfTest)
+            wiiuu.core.Diagnostics.start(config, BUILD_VERSION);
         if (snapshot != null) {
             app.snapshot(Paths.get(snapshot), snapshotView);
             System.exit(0);
