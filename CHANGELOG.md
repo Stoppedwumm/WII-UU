@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.5 (2026-11-21)
+- Replace the pre-launch native Swing user-choice dialog with a full-window WII-UU profile selection screen.
+- Use left/right and up/down to navigate users and Quit, A to enter, B/Home to leave, or mouse/keyboard.
+- On Linux, reuse the physical controller reader when moving from the login screen into the main menu; don't load account-bound libraries or show the intro until a user is chosen.
+- Preserve explicit CLI user selection and require a new choice after sign-out; cancelling never silently resumes the previous profile.
+
 ## 2.1.4 (2026-11-21)
 - Add opt-in WII-UU diagnostics: click the welcome-guide logo ten times, enter a four-digit PIN and accept a clear disclaimer.
 - Upload redacted, size-limited log batches to the archive over HTTPS every 15 minutes only while consent remains active.
