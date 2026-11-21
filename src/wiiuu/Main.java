@@ -63,8 +63,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
     private static final class StartupPads implements wiiuu.input.PadSink {
         private volatile wiiuu.input.PadSink target;
+        private wiiuu.input.LocalPads reader;
         StartupPads(wiiuu.input.PadSink target) { this.target = target; }
         void use(wiiuu.input.PadSink next) { target = next; }
+        void setConfirmEast(boolean confirmEast) {
+            if (reader != null) reader.setConfirmEast(confirmEast);
+        }
         @Override public void button(int player, wiiuu.input.PadButton button, boolean down) {
             wiiuu.input.PadSink current = target;
             if (current != null) current.button(player, button, down);
@@ -293,8 +297,10 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             InputRouter loginRouter = new InputRouter(new KeyMap(loginSettings), () -> false);
             preLoginPads = new StartupPads(loginRouter);
             // LocalPads works on Linux; the same reader is handed to the real menu after selection.
-            new wiiuu.input.LocalPads(preLoginPads,
-                    "east".equalsIgnoreCase(loginSettings.get("input.padConfirm", "south").trim())).start();
+            wiiuu.input.LocalPads loginPads = new wiiuu.input.LocalPads(preLoginPads,
+                    "east".equalsIgnoreCase(loginSettings.get("input.padConfirm", "south").trim()));
+            preLoginPads.reader = loginPads;
+            loginPads.start();
             boolean loginFullscreen = fullscreen != null ? fullscreen
                     : (appliance || "1".equals(System.getenv("WIIUU_CONSOLE"))
                             || loginSettings.getBool("ui.fullscreen", false));
@@ -513,6 +519,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         // real USB / Bluetooth controllers in the menu too (Linux)
         if (startupPads != null) {
             // Do not start a second Linux evdev reader. Honor the signed-in user's input setting.
+            startupPads.setConfirmEast("east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim()));
             startupPads.use(config.getBool("input.localPads", true) ? router : null);
         } else if (config.getBool("input.localPads", true)) {
             new wiiuu.input.LocalPads(router, "east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())).start();
