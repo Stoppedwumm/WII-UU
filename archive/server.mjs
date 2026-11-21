@@ -36,7 +36,9 @@ async function readJson(request, max = 65536) {
 }
 
 /** A single-process, immutable file archive. Publication is an atomic release.json rename. */
-export async function createArchive({ dataDir, token, publicUrl, maxUpload = 2 * 1024 ** 3, maxConcurrentUploads = 4 }) {
+export async function createArchive({ dataDir, token, publicUrl, maxUpload = 2 * 1024 ** 3,
+  maxConcurrentUploads = 4, adminUser = process.env.ARCHIVE_ADMIN_USER ?? '',
+  adminPasswordHash = process.env.ARCHIVE_ADMIN_PASSWORD_HASH ?? '' }) {
   if (!Number.isSafeInteger(maxUpload) || maxUpload < 1 || !Number.isSafeInteger(maxConcurrentUploads) || maxConcurrentUploads < 1)
     throw new Error('Upload limits must be positive integers');
   if (!token || token.length < 32) throw new Error('ARCHIVE_TOKEN must be at least 32 characters');
@@ -46,8 +48,7 @@ export async function createArchive({ dataDir, token, publicUrl, maxUpload = 2 *
   const publicBase = origin.origin;
   const root = path.resolve(dataDir);
   await fs.mkdir(root, { recursive: true });
-  const diagnostics = createDiagnostics({dataDir: root, adminUser: process.env.ARCHIVE_ADMIN_USER ?? '',
-    adminPasswordHash: process.env.ARCHIVE_ADMIN_PASSWORD_HASH ?? ''});
+  const diagnostics = createDiagnostics({dataDir: root, adminUser, adminPasswordHash});
   const catalog = new Map();
   for (const entry of await fs.readdir(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || !VERSION.test(entry.name)) continue;
