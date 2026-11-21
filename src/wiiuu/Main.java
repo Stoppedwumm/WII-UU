@@ -45,7 +45,7 @@ import wiiuu.ui.SettingsScreen;
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
     /** Canonical target release. Build scripts and legacy version checks read this declaration. */
-    public static final String VERSION = "2.1.3";
+    public static final String VERSION = "2.1.4";
     /** Exact installed version, including beta/run identity from the packaged metadata. */
     public static final String BUILD_VERSION = wiiuu.core.BuildInfo.version();
 
@@ -308,6 +308,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         boolean guideAsked = config.getBool("ui.setupNext", false) || setup;
 
         Main app = new Main(config);
+        if (snapshot == null && !oemSelfTest)
+            wiiuu.core.Diagnostics.start(config, BUILD_VERSION);
         if (snapshot != null) {
             app.snapshot(Paths.get(snapshot), snapshotView);
             System.exit(0);

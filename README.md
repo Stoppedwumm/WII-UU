@@ -95,6 +95,24 @@ java -jar WII-UU-Cleanup.jar --apply
 For custom paths, pass `--temp-dir DIR` or `--emu-root DIR` (the same root as
 `emulators.sh --prefix`). Build the JAR from source with `./build.sh` and find it in `build/`.
 
+## Optional diagnostic sharing
+
+Diagnostics are **disabled by default**. On the **welcome** page of the setup guide,
+click the **WII-UU logo ten times**. Enter a four-digit PIN (a searchable report
+label, **not a password**), read the disclosure, and explicitly choose **I Agree**.
+Only then does WII-UU enroll a device and attempt to upload a small, redacted
+snapshot of its recent logs to the archive over HTTPS, about every 15 minutes.
+No ROM content or game saves are intentionally uploaded.
+
+In **Settings > System > Diagnostics**, stop sharing and request deletion of
+existing diagnostic reports. If the server is offline, revocation is retried
+when it becomes reachable. The admin dashboard at
+[the WII-UU archive](https://wii-uu-archive.stoppedwumm.net/admin/diagnostics)
+requires separate administrator credentials, which the archive installer creates
+once. Reports are retained for up to 30 days and 30 batches per device.
+Automatic redaction is best-effort; don't opt in if your logs contain material
+you are unwilling to share. See [archive documentation](archive/README.md).
+
 ## Local user profiles
 
 Open **Settings > System > User profiles** to add, rename, switch or archive local users.

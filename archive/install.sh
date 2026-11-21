@@ -9,7 +9,7 @@ node_bin="$(command -v node || true)"
 id wiiuu-archive >/dev/null 2>&1 || useradd --system --home /var/lib/wiiuu-archive --shell /usr/sbin/nologin wiiuu-archive
 install -d -m 755 /opt/wiiuu-archive
 install -d -m 750 -o wiiuu-archive -g wiiuu-archive /var/lib/wiiuu-archive
-install -m 644 server.mjs client.mjs package.json /opt/wiiuu-archive/
+install -m 644 server.mjs diagnostics.mjs client.mjs package.json /opt/wiiuu-archive/
 if [ ! -f /etc/wiiuu-archive.env ]; then
   umask 077
   archive_token="$("$node_bin" -e 'console.log(require("node:crypto").randomBytes(48).toString("hex"))')"
@@ -20,6 +20,52 @@ PUBLIC_URL=https://wii-uu-archive.stoppedwumm.net
 DATA_DIR=/var/lib/wiiuu-archive
 ARCHIVE_TOKEN=$archive_token
 CONFIG
+fi
+# Bootstrap an admin login exactly once. Only a scrypt hash is stored in the service config.
+# Save the one-time password printed by this installer in your password manager.
+if ! grep -q '^ARCHIVE_ADMIN_PASSWORD_HASH=' /etc/wiiuu-archive.env; then
+  IFS=
+[Unit]
+Description=WII-UU release archive (Node.js, port 8081)
+After=network.target
+
+[Service]
+Type=simple
+User=wiiuu-archive
+Group=wiiuu-archive
+WorkingDirectory=/opt/wiiuu-archive
+EnvironmentFile=/etc/wiiuu-archive.env
+ExecStart=$node_bin /opt/wiiuu-archive/server.mjs
+Restart=on-failure
+RestartSec=3
+StateDirectory=wiiuu-archive
+StateDirectoryMode=0750
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/wiiuu-archive
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+systemctl daemon-reload
+systemctl enable wiiuu-archive
+systemctl restart wiiuu-archive
+echo 'Installed. Cloudflare Tunnel target: http://127.0.0.1:8081'
+echo 'Check: curl http://127.0.0.1:8081/healthz'
+echo 'Config: /etc/wiiuu-archive.env; persistent releases: /var/lib/wiiuu-archive'
+echo 'Token for GitHub secret: sudo sed -n "s/^ARCHIVE_TOKEN=//p" /etc/wiiuu-archive.env'
+\t' read -r admin_password admin_hash < <("$node_bin" -e '
+    const {randomBytes,scryptSync}=require("node:crypto");
+    const p=randomBytes(24).toString("base64url"), s=randomBytes(16);
+    console.log(p+"\t"+s.toString("hex")+":"+scryptSync(p,s,64).toString("hex"));')
+  printf '\nARCHIVE_ADMIN_USER=admin\nARCHIVE_ADMIN_PASSWORD_HASH=%s\n' "$admin_hash" >> /etc/wiiuu-archive.env
+  chmod 600 /etc/wiiuu-archive.env
+  printf '\nWII-UU diagnostics admin account created. Save these one-time credentials securely:\n'
+  printf 'Username: admin\nPassword: %s\nDashboard: https://wii-uu-archive.stoppedwumm.net/admin/diagnostics\n\n' "$admin_password"
+  unset admin_password admin_hash
 fi
 cat > /etc/systemd/system/wiiuu-archive.service <<SERVICE
 [Unit]

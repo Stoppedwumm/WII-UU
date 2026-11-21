@@ -1897,6 +1897,23 @@ public final class SettingsScreen {
                 sv.restartIntoGuide().run();
             } catch (IOException e) { say("Reset was not scheduled: " + e.getMessage()); }
         }, null, "Press A again to ERASE local WII-UU data and restart"));
+        r.add(new Header("Diagnostics"));
+        r.add(new Info("Optional log sharing is off by default. To enable it, open the first step "
+                + "of the setup guide and click the WII-UU logo ten times, enter a four-digit "
+                + "PIN, read the disclaimer, and accept."));
+        r.add(new Action("Diagnostic sharing", "Status of the opted-in archive log uploads.",
+                () -> say(wiiuu.core.Diagnostics.status(config)),
+                () -> wiiuu.core.Diagnostics.status(config), null));
+        r.add(new Action("Stop sharing & delete remote logs",
+                "Stop all diagnostic uploads immediately and request removal of stored logs on the archive server.",
+                () -> {
+                    try {
+                        wiiuu.core.Diagnostics.disable(config);
+                        wiiuu.core.Diagnostics.runSoon(config, wiiuu.core.BuildInfo.version());
+                        say("Sharing stopped. Remote deletion requested.");
+                    } catch (IOException e) { say("Could not stop diagnostics: " + e.getMessage()); }
+                }, () -> wiiuu.core.Diagnostics.status(config),
+                "Press A again to revoke consent and request log deletion"));
         r.add(new Header("Updates"));
         r.add(new Info(wiiuu.core.BuildInfo.description() + " · built " + wiiuu.core.BuildInfo.builtAt()));
         r.add(new Choice("Update channel", "Stable: final releases only. Beta: numbered previews and final releases. "

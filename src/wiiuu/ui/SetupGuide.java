@@ -60,6 +60,9 @@ final class SetupGuide {
     private final Config config;
     private final Runnable onClose;
     private LinuxNetworkPicker networkPicker;
+    private final DiagnosticsOverlay diagnostics;
+    private Rectangle2D logoHit;
+    private int logoClicks;
     private final long opened = System.currentTimeMillis();
     private long closing;
 
@@ -79,6 +82,7 @@ final class SetupGuide {
         this.view = view;
         this.config = config;
         this.onClose = onClose;
+        this.diagnostics = new DiagnosticsOverlay(config);
         Sfx.chime();
         voice.setEnabled(config.getBool("ui.guideVoice", true));
         sayLater = "welcome";
@@ -291,6 +295,7 @@ final class SetupGuide {
     // ---- input ----------------------------------------------------------------------------------
 
     void navigate(int dx, int dy) {
+        if (diagnostics.active()) { diagnostics.navigate(dx,dy); return; }
         if (closing != 0) return;
         if (networkPicker != null) { networkPicker.navigate(dx, dy); return; }
         Item at = current.get(focus);
@@ -321,6 +326,7 @@ final class SetupGuide {
     }
 
     void activate() {
+        if (diagnostics.active()) { diagnostics.activate(); return; }
         if (closing != 0) return;
         if (networkPicker != null) {
             networkPicker.activate();
@@ -358,6 +364,7 @@ final class SetupGuide {
     }
 
     void back() {
+        if (diagnostics.active()) { diagnostics.back(); return; }
         if (closing != 0) return;
         if (networkPicker != null) {
             networkPicker.back();
@@ -388,6 +395,7 @@ final class SetupGuide {
      * True when the guide used it up.
      */
     boolean pressed(int player, PadButton b, boolean down) {
+        if (diagnostics.active()) return diagnostics.pressed(b,down);
         if (closing != 0 || step != Step.CONTROLLERS || System.currentTimeMillis() - changed < SLIDE_MS) return false;
         long now = System.currentTimeMillis();
         if (down) {
@@ -417,6 +425,7 @@ final class SetupGuide {
     private String who;
 
     void page(int delta) {
+        if (diagnostics.active()) { diagnostics.navigate(0,delta); return; }
         if (closing != 0) return;
         if (networkPicker != null) { networkPicker.navigate(0, delta); return; }
         if (delta < 0) back();
@@ -431,6 +440,14 @@ final class SetupGuide {
     }
 
     void click(double x, double y) {
+        if (diagnostics.active()) { diagnostics.click(x,y); return; }
+        if (step == Step.WELCOME && closing == 0 && logoHit != null && logoHit.contains(x,y)) {
+            if (++logoClicks >= 10) {
+                logoClicks=0;
+                diagnostics.open();
+            }
+            return;
+        }
         if (networkPicker != null) {
             networkPicker.click(x, y);
             if (networkPicker.closed()) networkPicker = null;
@@ -447,9 +464,10 @@ final class SetupGuide {
         }
     }
 
-    boolean wantsKeys() { return networkPicker != null && networkPicker.typing(); }
+    boolean wantsKeys() { return diagnostics.wantsKeys() || networkPicker != null && networkPicker.typing(); }
 
     void keyPressed(java.awt.event.KeyEvent event) {
+        if (diagnostics.active()) { diagnostics.keyPressed(event); return; }
         if (networkPicker != null) {
             networkPicker.keyPressed(event);
             if (networkPicker.closed()) networkPicker = null;
@@ -457,6 +475,7 @@ final class SetupGuide {
     }
 
     void keyTyped(char c) {
+        if (diagnostics.active()) { diagnostics.keyTyped(c); return; }
         if (networkPicker != null) networkPicker.keyTyped(c);
     }
 
@@ -694,6 +713,7 @@ final class SetupGuide {
         paintConfetti(g, w / 2f, cy + ch * 0.32f);
         g.setTransform(at);
         g.setComposite(base);
+        diagnostics.paint(g,w,h);
         g.dispose();
     }
 
@@ -778,6 +798,8 @@ final class SetupGuide {
         float left = x + pad, top = y + h * 0.13f, inner = w - pad * 2;
         String[] head = headline(s);
         if (s == Step.WELCOME) {
+            if (live) logoHit = new Rectangle2D.Float(x + w / 2f - h * 0.45f,
+                    y + h * 0.13f, h * 0.9f, h * 0.33f);
             paintLogo(g, x + w / 2, y + h * 0.36f, h * 0.2f, now);
             g.setColor(MenuView.TEXT_DIM);
             center(g, head[1], Font.PLAIN, h * 0.042f, x + w / 2, y + h * 0.56f, inner);
