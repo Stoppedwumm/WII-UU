@@ -38,7 +38,7 @@ public final class LocalPads {
     private static final int EVENT_SIZE = System.getProperty("os.arch", "").contains("64") ? 24 : 16;
 
     private final PadSink router;
-    private final boolean confirmEast;
+    private volatile boolean confirmEast;
     /** device nodes being read now (event5, js0, ...) */
     private final Set<String> open = ConcurrentHashMap.newKeySet();
     /** players handed out per controller (by its event node), -1, -2, ... */
@@ -68,6 +68,11 @@ public final class LocalPads {
 
     public LocalPads(PadSink router, boolean confirmEast) {
         this.router = router;
+        this.confirmEast = confirmEast;
+    }
+
+    /** Keep a single live evdev reader while applying the newly signed-in user's button preference. */
+    public void setConfirmEast(boolean confirmEast) {
         this.confirmEast = confirmEast;
     }
 
