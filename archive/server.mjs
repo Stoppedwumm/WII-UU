@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { createDiagnostics } from './diagnostics.mjs';
 import { createReadStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -45,6 +46,8 @@ export async function createArchive({ dataDir, token, publicUrl, maxUpload = 2 *
   const publicBase = origin.origin;
   const root = path.resolve(dataDir);
   await fs.mkdir(root, { recursive: true });
+  const diagnostics = createDiagnostics({dataDir: root, adminUser: process.env.ARCHIVE_ADMIN_USER ?? '',
+    adminPasswordHash: process.env.ARCHIVE_ADMIN_PASSWORD_HASH ?? ''});
   const catalog = new Map();
   for (const entry of await fs.readdir(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || !VERSION.test(entry.name)) continue;
@@ -119,6 +122,9 @@ export async function createArchive({ dataDir, token, publicUrl, maxUpload = 2 *
   const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url, 'http://archive.local');
+      if (url.pathname.startsWith('/api/diagnostics/') || url.pathname.startsWith('/admin/diagnostics')) {
+        if (await diagnostics(request, response, url)) return;
+      }
       let parts; try { parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); } catch { fail(400, 'Invalid path'); }
       const reading = request.method === 'GET' || request.method === 'HEAD';
       if (reading && url.pathname === '/healthz') { json(response, 200, { status: 'ok', releases: catalog.size }); return; }
