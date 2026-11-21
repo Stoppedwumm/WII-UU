@@ -95,6 +95,15 @@ public final class Diagnostics {
         p.remove("token"); p.remove("deviceId");
         store(config,p);
     }
+    /** Start or refresh the scheduler; no network activity occurs without explicit consent. */
+    public static synchronized void runSoon(Config config, String version) {
+        start(config, version);
+        scheduler.execute(() -> {
+            try { tick(config,version); }
+            catch (Exception e) { System.err.println("[diagnostics] " + e.getMessage()); }
+        });
+    }
+
     public static synchronized void start(Config config, String version) {
         if (scheduler != null) return;
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
