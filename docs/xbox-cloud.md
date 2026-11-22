@@ -7,7 +7,7 @@ It does **not** embed OpenXCloud's renderer inside WII-UU's Java UI.
 
 ## Install and launch
 
-1. Install or build OpenXCloud on your own computer. Follow its [build instructions](https://github.com/shyim/openxcloud#-get-started)
+1. Install or build OpenXCloud on your own computer. Follow its [build instructions](https://github.com/shyim/openxcloud#get-started)
    and [platform packaging instructions](https://github.com/shyim/openxcloud/blob/main/PACKAGING.md).
    Use a build from a trusted source and verify its origin. WII-UU does not download
    arbitrary binaries, include the GPL-licensed project, or run an installer for you.
