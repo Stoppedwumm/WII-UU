@@ -70,6 +70,16 @@ and need to be moved into console folders before refreshing the library.
 Only download content you have the right to use. This plugin does not bypass
 site authentication, rate limits or access checks.
 
+## Compiled native desktop apps
+
+The built-in **Xbox Cloud Gaming** entry (type `external`) launches a separately
+installed native OpenXCloud Rust/WebRTC executable with GPU-backed playback and
+no JavaScript runtime or web view. This is intentionally *not* a general-purpose
+native binary plugin API: the bundled catalog only allows the reviewed
+`xcloud` external identifier, to avoid executing arbitrary commands. See the
+[setup guide](xbox-cloud.md) for installation, executable selection, controller
+limitations and platform requirements.
+
 ## Native apps
 
 Add `"type": "native"` to the catalog entry. Native definitions use `NPlugin` instead of `Plugin`;
