@@ -50,6 +50,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         this.entry = entry;
         this.repaint = repaint;
         this.exit = exit;
+        this.focus = 1; // Open on the primary action, not the close button.
         if (XboxCloudRuntime.ready(config)) connectBackend();
         else status = "Install the Xbox Cloud runtime to sign in and play.";
     }
@@ -248,7 +249,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         searchEditing=true;focus=0;repaint.run();
     }
     private void finishSearch() {
-        searchEditing=false;focus=1;page=0;repaint.run();
+        searchEditing=false;focus=games.isEmpty()?1:4;page=0;repaint.run();
     }
     boolean wantsKeys() { return searchEditing; }
     boolean keyPressed(KeyEvent e) {
@@ -420,7 +421,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void logout() {
         if(browser!=null&&browser.isAlive())stopGame();
         command("logout",result->{
-            signedIn=false;pairing=false;loginCode="";games.clear();page=0;focus=0;query="";
+            signedIn=false;pairing=false;loginCode="";games.clear();page=0;focus=1;query="";
             status="Signed out. Get a new Microsoft login code to continue.";
         });
     }
