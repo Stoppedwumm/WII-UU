@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.5 (2026-11-22)
+- Add Xbox Cloud Gaming to the WII-UU app store and dock as a native desktop integration.
+- Launch the OpenXCloud Rust/WebRTC client directly, without a browser or Electron runtime.
+- Auto-detect installed executables, support custom executable paths and choose low-latency presentation.
+- Keep Microsoft account sign-in and stream decoding entirely inside the native companion app.
+
 ## 2.1.4 (2026-11-21)
 - Add opt-in WII-UU diagnostics: click the welcome-guide logo ten times, enter a four-digit PIN and accept a clear disclaimer.
 - Upload redacted, size-limited log batches to the archive over HTTPS every 15 minutes only while consent remains active.
