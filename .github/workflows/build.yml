@@ -226,10 +226,11 @@ jobs:
 
       - name: Test multi-user profiles and sign-out UI
         run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/UserProfilesTest.java test/wiiuu/ui/SignOutPowerTest.java test/wiiuu/ui/UserSelectScreenTest.java
+          javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/UserProfilesTest.java test/wiiuu/ui/SignOutPowerTest.java test/wiiuu/ui/UserSelectScreenTest.java test/wiiuu/input/LocalPadsHomeTest.java
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.UserProfilesTest
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.SignOutPowerTest
           java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.UserSelectScreenTest
+          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.input.LocalPadsHomeTest
           WIIUU_CONSOLE=1 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.SignOutPowerTest
 
       - name: Test boot changelog controller input
