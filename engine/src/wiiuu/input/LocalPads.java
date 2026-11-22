@@ -31,14 +31,14 @@ import wiiuu.core.Joysticks;
 public final class LocalPads {
     private static final int EV_KEY = 1, EV_ABS = 3;
     private static final int BTN_SOUTH = 0x130, BTN_EAST = 0x131, BTN_NORTH = 0x133, BTN_WEST = 0x134, BTN_TL = 0x136, BTN_TR = 0x137;
-    private static final int BTN_TL2 = 0x138, BTN_TR2 = 0x139, BTN_SELECT = 0x13a, BTN_START = 0x13b;
+    private static final int BTN_TL2 = 0x138, BTN_TR2 = 0x139, BTN_SELECT = 0x13a, BTN_START = 0x13b, BTN_MODE = 0x13c;
     private static final int BTN_DPAD_UP = 0x220, BTN_DPAD_DOWN = 0x221, BTN_DPAD_LEFT = 0x222, BTN_DPAD_RIGHT = 0x223;
     private static final int ABS_HAT0X = 0x10, ABS_HAT0Y = 0x11;
     /** struct input_event: two longs of time, then u16 type, u16 code, s32 value */
     private static final int EVENT_SIZE = System.getProperty("os.arch", "").contains("64") ? 24 : 16;
 
     private final PadSink router;
-    private final boolean confirmEast;
+    private volatile boolean confirmEast;
     /** device nodes being read now (event5, js0, ...) */
     private final Set<String> open = ConcurrentHashMap.newKeySet();
     /** players handed out per controller (by its event node), -1, -2, ... */
@@ -68,6 +68,11 @@ public final class LocalPads {
 
     public LocalPads(PadSink router, boolean confirmEast) {
         this.router = router;
+        this.confirmEast = confirmEast;
+    }
+
+    /** Keep a single live evdev reader while applying the newly signed-in user's button preference. */
+    public void setConfirmEast(boolean confirmEast) {
         this.confirmEast = confirmEast;
     }
 
@@ -192,6 +197,7 @@ public final class LocalPads {
             case BTN_TR, BTN_TR2 -> PadButton.R;
             case BTN_START -> PadButton.PLUS;
             case BTN_SELECT -> PadButton.MINUS;
+            case BTN_MODE -> PadButton.HOME;
             case BTN_DPAD_UP -> PadButton.UP;
             case BTN_DPAD_DOWN -> PadButton.DOWN;
             case BTN_DPAD_LEFT -> PadButton.LEFT;
