@@ -92,6 +92,22 @@ async function disconnect(){
   if(sessionStarted){try{await request('stop',{});}catch{}}
   progress('Disconnected');
 }
+document.querySelector('#enable-audio').onclick=async()=>{
+  const audio=player?.getAudioElement();
+  if(!audio){
+    errors.textContent='Audio is not ready. Try again once the stream connects.';
+    return;
+  }
+  try{
+    audio.muted=false;
+    await audio.play();
+    errors.textContent='';
+    document.querySelector('#enable-audio').textContent='Audio playing';
+  }catch(error){
+    errors.textContent='Chromium blocked playback: '+(error?.message||'click Enable audio again');
+    toolbar.classList.remove('hidden');
+  }
+};
 document.querySelector('#fullscreen').onclick=()=>document.fullscreenElement
   ?document.exitFullscreen():document.documentElement.requestFullscreen();
 action.onclick=()=>{void disconnect().then(()=>window.close());};
