@@ -6,6 +6,7 @@ const os=require('node:os');
 const path=require('node:path');
 const {spawn}=require('node:child_process');
 const readline=require('node:readline');
+const http=require('node:http');
 
 test('local Xbox device-code bridge hides tokens and binds streaming API to a private session',async t=>{
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'wiiuu-xcloud-bridge-'));
@@ -69,8 +70,13 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
   const url='http://127.0.0.1:'+ready.port;
   const untrusted=await fetch(url+'/api/start',{method:'POST',body:'{}'});
   assert.equal(untrusted.status,403);
-  const spoofed=await fetch(url+'/',{headers:{Host:'not-local.example'}});
-  assert.equal(spoofed.status,403);
+  const spoofedStatus=await new Promise((resolve,reject)=>{
+    const request=http.request(url+'/',{headers:{Host:'not-local.example'}},res=>{
+      res.resume();resolve(res.statusCode);
+    });
+    request.on('error',reject);request.end();
+  });
+  assert.equal(spoofedStatus,403);
   const page=await (await fetch(url+'/')).text();
   assert.equal(page,'LOCAL_PLAYER');
   assert.ok(!page.includes('secret'));
