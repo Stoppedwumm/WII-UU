@@ -130,7 +130,7 @@ jobs:
         with:
           node-version: "22"
       - name: Test Node archive server and JavaScript plugins
-        run: node --test archive/test/*.test.mjs test/plugins/*.test.cjs
+        run: node --test archive/test/*.test.mjs test/plugins/*.test.cjs test/xcloud/*.test.cjs
 
       - name: Test real plugin browser against local fixtures
         run: |
@@ -140,6 +140,15 @@ jobs:
           # Chromium's sandbox cannot initialize on restricted CI hosts. Only this local fixture disables it.
           build/plugin-host/node_modules/.bin/electron test/plugins/browser-smoke.cjs --no-sandbox --ozone-platform=headless --disable-gpu
           ELECTRON_RUN_AS_NODE=1 build/plugin-host/node_modules/.bin/electron --test test/plugins/native.test.cjs
+
+      - name: Validate portable Xbox WebRTC player dependencies and bundle
+        run: |
+          mkdir -p build/xcloud-deps
+          cp resources/xcloud/player-entry.js build/xcloud-deps/player-entry.js
+          npm install --prefix build/xcloud-deps --no-save --no-fund --no-audit --ignore-scripts -- xal-node@1.1.6-beta2 xbox-xcloud-player@1.0.0-beta7 esbuild@0.27.7
+          node -e "const xal=require('./build/xcloud-deps/node_modules/xal-node'); if(!xal.Msal || !xal.TokenStore) throw Error('xal-node missing API')"
+          node build/xcloud-deps/node_modules/esbuild/bin/esbuild build/xcloud-deps/player-entry.js --bundle --platform=browser --format=iife --target=chrome110 --outfile=build/xcloud-deps/player.bundle.js
+          test -s build/xcloud-deps/player.bundle.js
 
       - name: Build jar and release zip (also copies it into docs/download and writes docs/version.json)
         id: version
