@@ -50,6 +50,18 @@ public final class XboxCloudNativeScreenTest {
         MenuView.applyTheme(true);
         render(screen,640,400,"xcloud-ui-install-small-dark.png");
 
+        // Simulate the installed runtime using empty local files. No network or Node
+        // process is started, since the screen was constructed before this fixture.
+        Path runtime=wiiuu.core.XboxCloudRuntime.home(config);
+        Files.createDirectories(runtime.resolve("node_modules/xal-node"));
+        Files.writeString(runtime.resolve("node_modules/xal-node/package.json"),"{}");
+        Files.writeString(runtime.resolve("player.bundle.js"),"fixture");
+        Path chrome=wiiuu.core.XboxCloudRuntime.chromium(config);
+        Files.createDirectories(chrome.getParent());
+        Files.writeString(chrome,"fixture");
+        Files.writeString(runtime.resolve("installed-version"),"native-v1");
+        ok(wiiuu.core.XboxCloudRuntime.ready(config),"Fixture must enable the catalog renderer");
+
         // Supply catalog fixture without live Xbox credentials or network requests.
         set(screen,"signedIn",true);
         Class<?> gameClass=Arrays.stream(XboxCloudNativeScreen.class.getDeclaredClasses())
@@ -85,6 +97,7 @@ public final class XboxCloudNativeScreenTest {
         ok(exits.get()==0,"Closing search must not close the application");
 
         screen.close();
+        Files.delete(runtime.resolve("installed-version")); // prevent launching the mock backend
         MenuView menu=new MenuView(config,true);
         var open=MenuView.class.getDeclaredMethod("openXboxCloud",PluginStore.Entry.class);
         open.setAccessible(true);
