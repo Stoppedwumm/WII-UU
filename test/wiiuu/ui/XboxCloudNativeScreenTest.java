@@ -66,10 +66,10 @@ public final class XboxCloudNativeScreenTest {
         set(screen,"signedIn",true);
         Class<?> gameClass=Arrays.stream(XboxCloudNativeScreen.class.getDeclaredClasses())
                 .filter(k->k.getSimpleName().equals("Game")).findFirst().orElseThrow();
-        Constructor<?> constructor=gameClass.getDeclaredConstructor(String.class,String.class);
+        Constructor<?> constructor=gameClass.getDeclaredConstructor(String.class,String.class,String.class);
         constructor.setAccessible(true);
         java.util.List games=(java.util.List)field(screen,"games");
-        for(int i=0;i<26;i++) games.add(constructor.newInstance("GAME"+i,"Sample Game "+i));
+        for(int i=0;i<26;i++) games.add(constructor.newInstance("GAME"+i,"Sample Game "+i,""));
         MenuView.applyTheme(false);
         render(screen,1280,800,"xcloud-ui-catalog-light.png");
         screen.navigate(0,1);
