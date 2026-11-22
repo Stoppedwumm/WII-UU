@@ -52,10 +52,10 @@ public final class XboxCloudInstallerTest {
                     && HASH.equals(found.sha256()) && found.size() == 3
                     && found.url().toString().equals(url), "Official asset must be selected");
             reject(() -> XboxCloudInstaller.parseRelease(
-                    manifest("https://attacker.example/release.exe", "sha256:" + HASH, platform.filename),
+                    manifest("https://attacker.example/release.exe", "sha256:" + HASH, platform.filename), platform),
                     platform + " accepted an untrusted URL");
             reject(() -> XboxCloudInstaller.parseRelease(
-                    manifest(url, "sha256:invalid", platform.filename),
+                    manifest(url, "sha256:invalid", platform.filename), platform),
                     platform + " accepted an asset without a valid digest");
             reject(() -> XboxCloudInstaller.parseRelease(
                     json.replace("\"prerelease\":false", "\"prerelease\":true"), platform),
