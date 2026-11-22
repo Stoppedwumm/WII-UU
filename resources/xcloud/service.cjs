@@ -43,7 +43,7 @@ class StoredTokens extends TokenStore {
   }
 }
 const store = new StoredTokens();
-const msal = new Msal(store);
+let msal = new Msal(store);
 
 function emit(message) { process.stdout.write(JSON.stringify(message) + '\n'); }
 function safeError(error) {
@@ -161,7 +161,7 @@ async function api(action, payload={}) {
     case 'signedIn': return {signedIn:!!store.getUserToken()};
     case 'games': return {games:await catalog()};
     case 'logout':
-      await endSession(); cloudToken=null; allowedTitles.clear(); store.clear();
+      await endSession(); cloudToken=null; allowedTitles.clear(); store.clear(); msal = new Msal(store);
       return {signedIn:false};
     case 'start': {
       const id=payload.titleId;
@@ -206,7 +206,7 @@ async function api(action, payload={}) {
     case 'icePost': {
       if (!Array.isArray(payload.candidates) || payload.candidates.length > 256)
         throw new Error('Invalid ICE candidates');
-      return xbox(sessionPath()+'/ice','POST',{candidates:payload.candidates.map(x=>JSON.stringify(x))});
+      return xbox(sessionPath()+'/ice','POST',{candidates:payload.candidates});
     }
     case 'iceGet': return xbox(sessionPath()+'/ice');
     case 'keepalive': return xbox(sessionPath()+'/keepalive','POST',{});
