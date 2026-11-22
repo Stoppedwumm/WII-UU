@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.7 (2026-11-22)
+- Replace OpenXCloud with Greenlight as the Xbox Cloud Gaming companion, keeping existing plugin dock activation.
+- Support Linux AArch64 and x86-64 via the Flathub Greenlight Flatpak, installed or updated in the user's Flatpak scope.
+- Download and verify official Greenlight universal macOS DMG and Windows x64 portable ZIP releases using SHA-256; extract without running installers.
+- Preserve controller routing, provide clear per-platform installation status, discard obsolete OpenXCloud launch flags, and retain safe download timeouts and rollback.
+- Keep prior OpenXCloud files untouched while migrating to Greenlight-specific executable settings.
+
 ## 2.1.6 (2026-11-22)
 - Download and update OpenXCloud directly from official GitHub Releases in the WII-UU plugin store.
 - Select platform-native macOS Apple Silicon, Windows x64 portable ZIP and Linux amd64 Debian packages; verify GitHub SHA-256 digests before extraction.
