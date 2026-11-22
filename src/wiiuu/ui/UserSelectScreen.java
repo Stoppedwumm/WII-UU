@@ -211,6 +211,9 @@ public final class UserSelectScreen extends JPanel implements InputRouter.MenuAc
     Rectangle pageButtonBounds(int direction) {
         return new Rectangle(direction < 0 ? previousPageBounds : nextPageBounds);
     }
+    Rectangle profileButtonBounds(int localIndex) {
+        return new Rectangle(cardBounds.get(localIndex));
+    }
 
     @Override protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
