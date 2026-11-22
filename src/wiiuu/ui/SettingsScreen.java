@@ -1713,7 +1713,7 @@ public final class SettingsScreen {
     private Page pluginStorePage() {
         return new Page("Plugin store", () -> {
             List<Row> rows = new ArrayList<>();
-            rows.add(new Info("Bundled JavaScript apps. Activated apps appear in the bottom bar beside Settings. Native apps use WII-UU panels."));
+            rows.add(new Info("Bundled apps appear in the bottom bar. Native desktop streaming runs without Electron or the JavaScript runtime."));
             rows.add(new Action("Install / repair plugin runtime", "Downloads the shared JavaScript and browser runtime using npm. Close plugin apps first.", () -> {
                 pluginStatus = "Installing browser runtime...";
                 wiiuu.core.PluginStore.install(config, message -> SwingUtilities.invokeLater(() -> {
@@ -1724,9 +1724,29 @@ public final class SettingsScreen {
             }, () -> wiiuu.core.PluginStore.installing() ? "Installing..." : wiiuu.core.PluginStore.ready(config) ? "Installed" : "Not installed", null));
             rows.add(new Info(pluginStatus));
             for (wiiuu.core.PluginStore.Entry entry : wiiuu.core.PluginStore.catalog()) {
-                rows.add(new Header(entry.name() + (entry.nativePlugin() ? " · Native" : " · Website")));
+                String kind = entry.externalPlugin() ? " · Native desktop" : entry.nativePlugin() ? " · Native" : " · Website";
+                rows.add(new Header(entry.name() + kind));
                 rows.add(new Info(entry.description()));
-                rows.add(new Toggle("Activate " + entry.name(), "Adds this app to the bottom bar. Deactivating closes the app; saved site data is kept.",
+                if (entry.externalPlugin()) {
+                    rows.add(new Info("Executable: " + wiiuu.core.XboxCloud.status(config)));
+                    rows.add(new Action("Choose OpenXCloud executable", "Select the compiled native binary (not an installer). No files are downloaded or executed during selection.", () ->
+                            push(browser("OpenXCloud executable", Paths.get(System.getProperty("user.home")), false, binary -> {
+                                config.set("xcloud.executable", binary.toAbsolutePath().toString());
+                                config.save();
+                                reload(false);
+                            })), null, null));
+                    rows.add(new Text("Executable path / macOS app bundle", "Optional absolute path. Leave empty to auto-detect OpenXCloud on PATH or in standard install locations.",
+                            () -> config.get("xcloud.executable", ""), value -> {
+                                config.set("xcloud.executable", value.trim());
+                                config.save();
+                            }, false, "Auto-detect"));
+                    rows.add(new Toggle("Low-latency video presentation", "Immediate presentation reduces GPU display latency but may tear. Disable for V-sync.",
+                            () -> config.getBool("xcloud.lowLatency", true), enabled -> {
+                                config.set("xcloud.lowLatency", Boolean.toString(enabled));
+                                config.save();
+                            }));
+                }
+                rows.add(new Toggle("Activate " + entry.name(), "Adds this app to the bottom bar. Deactivating stops its process.",
                         () -> wiiuu.core.PluginStore.enabled(config, entry), enabled -> {
                             wiiuu.core.PluginStore.setEnabled(config, entry, enabled);
                             view.reloadPluginDock();
