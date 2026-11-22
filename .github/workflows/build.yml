@@ -69,11 +69,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/installer-tests
-          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java engine/src/wiiuu/core/BuildInfo.java engine/src/wiiuu/core/Version.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java test/wiiuu/core/VersionTest.java test/wiiuu/core/UpdateChannelsTest.java engine/src/wiiuu/core/MiniJson.java src/wiiuu/core/ReleaseArchive.java test/wiiuu/core/ReleaseArchiveTest.java src/wiiuu/core/PluginStore.java src/wiiuu/core/XboxCloud.java test/wiiuu/core/PluginStoreTest.java test/wiiuu/core/XboxCloudTest.java src/wiiuu/core/NativePluginSession.java test/wiiuu/core/NativePluginSessionTest.java test/wiiuu/core/UserProfilesTest.java
+          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java engine/src/wiiuu/core/BuildInfo.java engine/src/wiiuu/core/Version.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java test/wiiuu/core/VersionTest.java test/wiiuu/core/UpdateChannelsTest.java engine/src/wiiuu/core/MiniJson.java src/wiiuu/core/ReleaseArchive.java test/wiiuu/core/ReleaseArchiveTest.java src/wiiuu/core/PluginStore.java src/wiiuu/core/XboxCloud.java src/wiiuu/core/XboxCloudInstaller.java test/wiiuu/core/PluginStoreTest.java test/wiiuu/core/XboxCloudTest.java test/wiiuu/core/XboxCloudInstallerTest.java src/wiiuu/core/NativePluginSession.java test/wiiuu/core/NativePluginSessionTest.java test/wiiuu/core/UserProfilesTest.java
           cp -r resources/plugins build/installer-tests/plugins
           java -cp build/installer-tests wiiuu.core.NativePluginSessionTest
           java -cp build/installer-tests wiiuu.core.PluginStoreTest
           java -cp build/installer-tests wiiuu.core.XboxCloudTest
+          java -cp build/installer-tests wiiuu.core.XboxCloudInstallerTest
           java -cp build/installer-tests wiiuu.core.ActionsBuildTest
           java -cp build/installer-tests wiiuu.core.BuildInfoTest
           java -cp build/installer-tests wiiuu.core.VersionTest
