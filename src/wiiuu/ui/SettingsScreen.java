@@ -1725,12 +1725,13 @@ public final class SettingsScreen {
             }, () -> wiiuu.core.PluginStore.installing() ? "Installing..." : wiiuu.core.PluginStore.ready(config) ? "Installed" : "Not installed", null));
             rows.add(new Info(pluginStatus));
             for (wiiuu.core.PluginStore.Entry entry : wiiuu.core.PluginStore.catalog()) {
-                String kind = entry.externalPlugin() ? " · Native desktop" : entry.nativePlugin() ? " · Native" : " · Website";
+                String kind = entry.externalPlugin() ? " · Xbox streaming" : entry.nativePlugin() ? " · Native" : " · Website";
                 rows.add(new Header(entry.name() + kind));
-                rows.add(                if (entry.externalPlugin()) {
+                rows.add(new Info(entry.description()));
+                if (entry.externalPlugin()) {
                     rows.add(new Info("Greenlight: " + wiiuu.core.Greenlight.status(config)));
                     rows.add(new Action("Download / update Greenlight",
-                            "Linux AArch64 and x86-64: install/update the Flathub Flatpak in your user account. "
+                            "Linux AArch64 and x86-64: install/update Flathub Flatpak in your user account. "
                             + "macOS: verified universal DMG. Windows x64: verified portable ZIP. "
                             + "No system permissions or silent installers are used.", () -> {
                                 greenlightDownloadStatus = "Checking Greenlight installation...";
@@ -1744,23 +1745,22 @@ public final class SettingsScreen {
                                     : config.get("greenlight.installedVersion", "Not installed"), null));
                     rows.add(new Info(greenlightDownloadStatus));
                     rows.add(new Action("Choose existing Greenlight executable",
-                            "Select an installed Greenlight binary (or the app's macOS bundle executable). "
-                            + "Manual selection does not download or run anything.", () ->
+                            "Select an installed Greenlight executable or macOS .app bundle. "
+                            + "Selecting a file does not download or launch anything.", () ->
                             push(browser("Greenlight executable", Paths.get(System.getProperty("user.home")), false, binary -> {
                                 config.set("greenlight.executable", binary.toAbsolutePath().toString());
                                 config.save();
                                 reload(false);
                             })), null, null));
                     rows.add(new Text("Greenlight executable path / macOS .app bundle",
-                            "Optional absolute path. Leave empty to prefer the Linux Flatpak or detect an installed desktop app.",
+                            "Optional absolute path. Leave empty to prefer the Linux Flatpak or detect a desktop installation.",
                             () -> config.get("greenlight.executable", ""), value -> {
                                 config.set("greenlight.executable", value.trim());
                                 config.save();
                             }, false, "Auto-detect / Flatpak"));
                 }
-         }));
-                }
-                rows.add(new Toggle("Activate " + entry.name(), "Adds this app to the bottom bar. Deactivating stops its process.",
+                rows.add(new Toggle("Activate " + entry.name(),
+                        "Adds this app to the bottom bar. Deactivating stops its process.",
                         () -> wiiuu.core.PluginStore.enabled(config, entry), enabled -> {
                             wiiuu.core.PluginStore.setEnabled(config, entry, enabled);
                             view.reloadPluginDock();
