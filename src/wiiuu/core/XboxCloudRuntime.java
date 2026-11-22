@@ -122,9 +122,16 @@ public final class XboxCloudRuntime {
             return;
         }
         Thread worker = new Thread(() -> {
-            try { installNow(config, notify); }
-            catch (Exception e) { notify.accept("Xbox Cloud runtime installation failed: " + e.getMessage()); }
-            finally { BUSY.set(false); }
+            String outcome;
+            try {
+                installNow(config, notify);
+                outcome = "Xbox Cloud runtime installed and ready.";
+            } catch (Exception e) {
+                outcome = "Xbox Cloud runtime installation failed: " + e.getMessage();
+            } finally {
+                BUSY.set(false);
+            }
+            notify.accept(outcome);
         }, "xcloud-runtime-install");
         worker.setDaemon(true);
         worker.start();
