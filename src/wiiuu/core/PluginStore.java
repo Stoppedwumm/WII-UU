@@ -71,6 +71,15 @@ public final class PluginStore {
         return CATALOG.stream().filter(e -> enabled(config, e)).toList();
     }
     public static boolean enabled(Config config, Entry entry) { return config.getBool("plugin." + entry.id() + ".enabled", false); }
+    /** A native cloud session is active; route phone input to its virtual Xbox pad, not the menu. */
+    public static boolean externalRunning(Config config) {
+        for (Entry entry : CATALOG) {
+            if (!entry.externalPlugin()) continue;
+            Process process = RUNNING.get(key(config, entry));
+            if (process != null && process.isAlive()) return true;
+        }
+        return false;
+    }
     private static String key(Config config, Entry entry) { return config.userHome().toAbsolutePath() + "/" + entry.id(); }
     public static synchronized void setEnabled(Config config, Entry entry, boolean enabled) {
         if (!CATALOG.contains(entry)) throw new IllegalArgumentException("Unknown plugin");
