@@ -38,7 +38,7 @@ public final class XboxCloud {
                 return null;
             }
             return Files.isRegularFile(path) && Files.isExecutable(path) ? path : null;
-        } catch (SecurityException | RuntimeException e) {
+        } catch (RuntimeException e) {
             return null;
         }
     }
