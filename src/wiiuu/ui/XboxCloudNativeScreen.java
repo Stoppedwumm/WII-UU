@@ -304,7 +304,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         int pages=Math.max(1,(filtered().size()+Math.max(1,pageSize)-1)/Math.max(1,pageSize));
         int next=Math.max(0,Math.min(pages-1,page+Integer.signum(delta)));
         if(next==page){Sfx.bump();return;}
-        page=next;focus=3;Sfx.move();repaint.run();
+        page=next;focus=4;Sfx.move();repaint.run();
     }
     void back() {
         if(searchEditing){finishSearch();return;}
@@ -413,7 +413,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                     games.add(new Game(id,name));
             }
             games.sort(Comparator.comparing(Game::name,String.CASE_INSENSITIVE_ORDER));
-            page=0;focus=3;
+            page=0;focus=4;
             status=games.size()+" playable games available.";
         });
     }
