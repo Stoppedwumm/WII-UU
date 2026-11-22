@@ -127,10 +127,13 @@ async function catalog() {
 async function deviceAuth() {
   if (authenticating) throw new Error('Device authorization is already in progress');
   authenticating = true;
-  const flow = await msal.doDeviceCodeAuth();
+  let flow;
+  try { flow = await msal.doDeviceCodeAuth(); }
+  catch (error) { authenticating = false; throw error; }
   emit({event:'code', code:flow.user_code, url:flow.verification_uri || flow.verification_url || 'https://www.microsoft.com/link',
       expiresIn:flow.expires_in || 900, message:flow.message});
   void msal.doPollForDeviceCodeAuth(flow.device_code).then(async () => {
+    store.save();
     await streamingTokens();
     authenticating = false;
     emit({event:'signedIn'});
