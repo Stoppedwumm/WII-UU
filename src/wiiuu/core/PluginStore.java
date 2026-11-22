@@ -18,6 +18,8 @@ import java.util.function.Consumer;
 public final class PluginStore {
     public record Entry(String id, String name, String description, String script, String type) {
         public boolean nativePlugin() { return type.equals("native"); }
+        /** Compiled native companion app: no JS host or Chromium runtime. */
+        public boolean externalPlugin() { return type.equals("external"); }
     }
     private static final List<Entry> CATALOG = readCatalog();
     private static final Map<String, Process> RUNNING = new ConcurrentHashMap<>();
@@ -47,12 +49,17 @@ public final class PluginStore {
                 String id = java.util.Objects.toString(MiniJson.string(row.get("id")), "");
                 String script = java.util.Objects.toString(MiniJson.string(row.get("script")), "");
                 String name = java.util.Objects.toString(MiniJson.string(row.get("name")), "");
-                if (!id.matches("[a-z0-9][a-z0-9-]{0,47}") || !script.matches("[a-z0-9-]+\\.js")
+                String type = java.util.Objects.toString(MiniJson.string(row.get("type")), "web");
+                boolean external = "external".equals(type);
+                if (!id.matches("[a-z0-9][a-z0-9-]{0,47}")
+                        || !(external ? script.isEmpty() : script.matches("[a-z0-9-]+\\.js"))
                         || name.isBlank() || name.length() > 48 || entries.stream().anyMatch(e -> e.id().equals(id)))
                     throw new IOException("Invalid bundled plugin catalog entry");
-                String type = java.util.Objects.toString(MiniJson.string(row.get("type")), "web");
-                if (!List.of("web", "native").contains(type)) throw new IOException("Unknown bundled plugin type");
-                resource("store/" + script);
+                // External apps execute native binaries, so only the explicitly reviewed
+                // Xbox integration is allowed. Never accept arbitrary catalog commands.
+                if (!List.of("web", "native", "external").contains(type) || external && !id.equals("xcloud"))
+                    throw new IOException("Unknown bundled plugin type");
+                if (!external) resource("store/" + script);
                 entries.add(new Entry(id, name, java.util.Objects.toString(MiniJson.string(row.get("description")), ""), script, type));
             }
             return List.copyOf(entries);
@@ -95,7 +102,7 @@ public final class PluginStore {
             copy("host/" + file, dir.resolve(file));
         copy("catalog.json", dir.resolve("catalog.json"));
         Files.createDirectories(dir.resolve("store"));
-        for (Entry entry : CATALOG) copy("store/" + entry.script(), dir.resolve("store").resolve(entry.script()));
+        for (Entry entry : CATALOG) if (!entry.externalPlugin()) copy("store/" + entry.script(), dir.resolve("store").resolve(entry.script()));
     }
     private static void copy(String name, Path target) throws IOException {
         byte[] content = resource(name);
@@ -183,8 +190,21 @@ public final class PluginStore {
             try {
                 synchronized (PluginStore.class) {
                     if (!CATALOG.contains(entry)) throw new IOException("Unknown bundled plugin");
-                    if (entry.nativePlugin()) throw new IOException("Open this native plugin from the WII-UU bottom bar");
                     if (!enabled(config, entry)) throw new IOException("Plugin is disabled");
+                    if (entry.externalPlugin()) {
+                        Process old = RUNNING.get(key(config, entry));
+                        if (old != null && old.isAlive()) { report.accept(entry.name() + " is already running. Switch to its window."); return; }
+                        Process process = XboxCloud.start(config);
+                        RUNNING.put(key(config, entry), process);
+                        process.onExit().thenAccept(p -> {
+                            RUNNING.remove(key(config, entry), p);
+                            if (p.exitValue() != 0 && enabled(config, entry))
+                                report.accept("OpenXCloud exited (" + p.exitValue() + "). Check OpenXCloud's own diagnostic log.");
+                        });
+                        report.accept("OpenXCloud launched with native WebRTC and GPU rendering.");
+                        return;
+                    }
+                    if (entry.nativePlugin()) throw new IOException("Open this native plugin from the WII-UU bottom bar");
                     if (installing || !ready(config)) throw new IOException("Install the plugin runtime in Settings > System > Plugin store (Node.js/npm required)");
                     Process old = RUNNING.get(key(config, entry));
                     if (old != null && old.isAlive()) { report.accept(entry.name() + " is already open. Switch to its window."); return; }
