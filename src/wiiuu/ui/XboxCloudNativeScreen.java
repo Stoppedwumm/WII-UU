@@ -250,6 +250,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void finishSearch() {
         searchEditing=false;focus=1;page=0;repaint.run();
     }
+    boolean wantsKeys() { return searchEditing; }
     boolean keyPressed(KeyEvent e) {
         if(!searchEditing)return false;
         switch(e.getKeyCode()){
