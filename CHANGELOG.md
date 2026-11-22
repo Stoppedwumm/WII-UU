@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.6 (2026-11-22)
+- Download and update OpenXCloud directly from official GitHub Releases in the WII-UU plugin store.
+- Select platform-native macOS Apple Silicon, Windows x64 portable ZIP and Linux amd64 Debian packages; verify GitHub SHA-256 digests before extraction.
+- Keep native dependencies together, reject ZIP path traversal and archive size overruns, and install under the WII-UU data directory with rollback on failure.
+- Preserve the custom executable chooser, low-latency settings and native launch; Linux extracts the Debian package without privilege escalation or running package scripts.
+
 ## 2.1.5 (2026-11-22)
 - Add Xbox Cloud Gaming to the WII-UU app store and dock as a native desktop integration.
 - Launch the OpenXCloud Rust/WebRTC client directly, without a browser or Electron runtime.

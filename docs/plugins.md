@@ -72,9 +72,10 @@ site authentication, rate limits or access checks.
 
 ## Compiled native desktop apps
 
-The built-in **Xbox Cloud Gaming** entry (type `external`) launches a separately
-installed native OpenXCloud Rust/WebRTC executable with GPU-backed playback and
-no JavaScript runtime or web view. This is intentionally *not* a general-purpose
+The built-in **Xbox Cloud Gaming** entry (type `external`) launches a native
+OpenXCloud Rust/WebRTC executable with GPU-backed playback and no JavaScript
+runtime or web view. WII-UU can download the official checksum-verified native
+release into its own data directory, or launch an existing manual installation. This is intentionally *not* a general-purpose
 native binary plugin API: the bundled catalog only allows the reviewed
 `xcloud` external identifier, to avoid executing arbitrary commands. See the
 [setup guide](xbox-cloud.md) for installation, executable selection, controller

@@ -1710,6 +1710,7 @@ public final class SettingsScreen {
     private boolean updating;
 
     private String pluginStatus = "Install the plugin runtime once; Node.js 22.12+ with npm is required.";
+    private volatile String xcloudDownloadStatus = "Download verified native OpenXCloud releases from GitHub.";
     private Page pluginStorePage() {
         return new Page("Plugin store", () -> {
             List<Row> rows = new ArrayList<>();
@@ -1729,6 +1730,19 @@ public final class SettingsScreen {
                 rows.add(new Info(entry.description()));
                 if (entry.externalPlugin()) {
                     rows.add(new Info("Executable: " + wiiuu.core.XboxCloud.status(config)));
+                    rows.add(new Action("Download / update OpenXCloud",
+                            "Fetch the latest official GitHub Release, verify SHA-256, and extract the native app without running an installer. "
+                            + "macOS Apple Silicon, Windows x64, and Debian/Ubuntu x64 only.", () -> {
+                                xcloudDownloadStatus = "Checking OpenXCloud release...";
+                                reload(false);
+                                wiiuu.core.XboxCloudInstaller.install(config, status ->
+                                        SwingUtilities.invokeLater(() -> {
+                                            xcloudDownloadStatus = status;
+                                            reload(false);
+                                        }));
+                            }, () -> wiiuu.core.XboxCloudInstaller.installing() ? "Downloading / installing..."
+                                    : config.get("xcloud.installedVersion", "Not installed"), null));
+                    rows.add(new Info(xcloudDownloadStatus));
                     rows.add(new Action("Choose OpenXCloud executable", "Select the compiled native binary (not an installer). No files are downloaded or executed during selection.", () ->
                             push(browser("OpenXCloud executable", Paths.get(System.getProperty("user.home")), false, binary -> {
                                 config.set("xcloud.executable", binary.toAbsolutePath().toString());

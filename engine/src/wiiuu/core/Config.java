@@ -132,6 +132,28 @@ public final class Config {
         }
     }
 
+    /**
+     * Atomically save device-wide settings without touching a user's private settings.
+     * A native-app installation must not fail halfway through because another user's
+     * profile directory is unwritable or its configuration cannot be serialized.
+     */
+    synchronized void saveSharedChecked() throws IOException {
+        Files.createDirectories(home);
+        Path pending = Files.createTempFile(home, ".config-", ".tmp");
+        try {
+            try (OutputStream out = Files.newOutputStream(pending)) {
+                props.store(out, "WII-UU shared device settings. {rom} is replaced by the game path.");
+            }
+            try {
+                Files.move(pending, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(pending, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(pending);
+        }
+    }
+
     public synchronized String get(String key, String def) {
         Properties source = userFile != null && personal(key) ? userProps : props;
         String v = source.getProperty(key);
