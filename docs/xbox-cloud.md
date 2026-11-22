@@ -1,109 +1,110 @@
-# Xbox Cloud Gaming through Greenlight
+# Xbox Cloud Gaming: native WII-UU login and portable WebRTC player
 
-WII-UU's **Xbox Cloud Gaming** dock app now launches
-[Greenlight](https://github.com/unknownskl/greenlight), an open-source desktop
-client for Xbox Cloud Gaming and home-console streaming. The streaming
-window belongs to Greenlight, not to WII-UU's Java interface.
-Greenlight uses Electron/Chromium and therefore needs more memory than
-the previously used native Rust OpenXCloud client. The trade-off is the
-availability of official Linux **AArch64** and x86-64 packages through Flathub.
+WII-UU 2.1.8 replaces the Greenlight desktop companion with a **native
+Java interface** for Microsoft device-code sign-in and game selection. A
+separate portable Chrome for Testing process performs WebRTC media playback
+and controller capture. Greenlight is no longer needed.
 
-## Install or update from WII-UU
+## Start
 
-1. Go to **Settings > System > Plugin store > Xbox Cloud Gaming**.
-2. Select **Download / update Greenlight**.
-3. WII-UU chooses the supported distribution for the host:
-   - **Linux AArch64 or x86-64:** installs Greenlight's verified Flathub
-     application `io.github.unknownskl.greenlight` to the current user's
-     Flatpak installation; already user-installed copies are updated.
-     Flatpak itself must already be installed. WII-UU adds the official
-     per-user Flathub remote when necessary; it does not require `sudo`.
-   - **macOS Intel or Apple Silicon:** downloads the official universal
-     Greenlight DMG from GitHub Releases, checks its SHA-256 digest and
-     copies `Greenlight.app` with `ditto` into WII-UU's data directory.
-   - **Windows x64:** downloads the official Greenlight portable ZIP,
-     checks SHA-256 and extracts the entire Electron app without running
-     a Windows installer. Windows ARM64 is not automatically supported.
-4. Activate **Xbox Cloud Gaming** in the plugin store. Launch it from the
-   bottom dock. Sign in within Greenlight. WII-UU does not see or store
-   Microsoft account tokens.
+1. In WII-UU open **Settings > System > Plugin store**.
+2. Select **Install / update Xbox Cloud runtime**. This explicitly installs
+   the pinned \`xal-node\` and \`xbox-xcloud-player\` dependencies and
+   a small \`esbuild\` bundler; it also downloads the **official stable
+   portable Chrome for Testing** package for this OS and CPU.
+3. Activate **Xbox Cloud Gaming** to keep it in the bottom dock.
+4. Open the Xbox Cloud Gaming dock item. The device-code login and game
+   list appear in a separate native Java/Swing window.
+5. Select **Get Microsoft login code**. On your phone or another PC,
+   visit the verification URL shown in the native window and enter the
+   displayed code. Complete the sign-in on Microsoft's website, not in
+   an unofficial password dialog.
+6. After authorization, WII-UU requests the playable game catalog.
+   Search for a title, then select **Play selected game**. A separate
+   portable Chromium window performs the WebRTC streaming session.
 
-On Linux, Greenlight is launched with:
+The username and password are entered **only on Microsoft's site**.
+The Xbox streaming service decides availability, entitlement, queue
+time and supported geographic regions.
 
-```sh
-flatpak run io.github.unknownskl.greenlight
-```
+## Architecture
 
-The install action uses the equivalent of:
+- \`src/wiiuu/ui/XboxCloudNativeScreen.java\`: native account code display,
+  game list, search, and launch/stop controls. The player window is separate.
+- \`src/wiiuu/core/XboxCloudRuntime.java\`: explicit installer and platform
+  selection. Uses the Chrome for Testing official release index, restricts
+  download URLs to Google's release bucket, limits archive size and verifies
+  ZIP paths. GitHub does not supply an asset SHA-256 in that index, so this
+  browser download currently has **HTTPS origin validation, not a
+  published SHA-256 check**.
+- \`resources/xcloud/service.cjs\`: a localhost-only helper using
+  \`xal-node\` for device-code authorization and streaming grants.
+  It sends structured messages to Java via stdin/stdout; Xbox tokens
+  are never sent to Chromium or included in WII-UU's logs.
+- \`resources/xcloud/player-entry.js\`: uses the third-party
+  \`xbox-xcloud-player\` WebRTC engine to exchange SDP/ICE and render
+  video/audio directly in the separate browser process.
+- \`resources/xcloud/mapping-core.js\`, \`page-hook.js\`: the
+  \`20d6:a713\` controller mapping supplied for WII-UU. These scripts
+  run inside the *local player page*, before its WebRTC code. They do
+  not modify global browser installations or unrelated websites.
 
-```sh
-flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-flatpak install --user --noninteractive -y flathub io.github.unknownskl.greenlight
-```
+The backend binds exclusively to **127.0.0.1** and requires an unpredictable
+session key in the local player request headers. The key is provided in
+a URL fragment and is not a Microsoft token. The browser uses an isolated
+WII-UU user profile. Credential grants are stored only in the WII-UU
+user data folder, in a file restricted to the current user on Unix.
 
-Linux Flatpak applications are installed under Flatpak's normal user
-installation, **not** the WII-UU native app directory. Updates are provided
-by Flathub. A system-wide Flatpak installation can also be launched; an
-explicit install through WII-UU creates a user-managed copy.
+Native browsing controls are separate from the WebRTC player; this does
+**not** include a native Java WebRTC decoder. The media plane runs in
+Chromium to use its hardware decode, WebRTC stack and Gamepad API.
 
-On macOS and Windows, verified packages are extracted into
-`<WII-UU data directory>/native/greenlight/current`. Upgrades temporarily
-preserve the previous copy and roll back the executable settings and
-files if an installation fails. The downloader checks exact asset
-filenames, official GitHub release URLs, advertised sizes and SHA-256,
-and stops stalled transfers. Downloading never launches the app.
-Installation on macOS/Windows does not execute downloaded installer
-scripts or require administrator rights.
+## Supported desktop packages
 
-Greenlight's releases are not necessarily notarized or code-signed.
-OS security warnings may occur. A real streaming session requires
-compatible graphics drivers, a desktop session, and appropriate Xbox
-Cloud Gaming access.
+| Platform | Portable Google browser |
+| --- | --- |
+| Linux ARM64 / AArch64 | \`linux-arm64\` |
+| Linux x86-64 | \`linux64\` |
+| macOS Apple Silicon | \`mac-arm64\` |
+| macOS Intel | \`mac-x64\` |
+| Windows x64 | \`win64\` |
 
-## Existing installations and migration
+Windows ARM64 and 32-bit Linux are not automatically supported.
+The installer does not run as root and does not disable Chromium's
+sandbox. Linux must have a graphical session, working video drivers,
+\`node\` and \`npm\` on PATH. On a system with broken unprivileged user
+namespaces Chromium may fail to start; WII-UU intentionally avoids
+automatically adding unsafe \`--no-sandbox\` flags.
 
-The built-in catalog ID stays `xcloud` so your dock activation preference
-is preserved. However, the **old OpenXCloud executable path and low-latency
-`--present` settings are intentionally ignored**. Those flags do not apply
-to Greenlight.
+## Controller routing
 
-For a custom Greenlight install, use **Choose existing Greenlight executable**
-or specify an absolute path / macOS `.app` bundle in the plugin store.
-Custom paths take priority over Flatpak; click the install action to
-return to the managed build.
+Existing Linux phone GamePads and WII-UU-managed physical controllers
+still flow through \`/dev/uinput\`. During the cloud stream, the
+Chromium player process is tracked as a running external game so
+those inputs do not activate the WII-UU home menu. The game's player
+uses the W3C Gamepad API; the bundled Switch mapper remaps the
+specific measured \`20d6:a713\` device to an Xbox-style layout.
+Other controllers retain their standard mapping.
 
-The prior OpenXCloud files, if installed, remain on disk and are not
-launched by the new integration. WII-UU does not delete third-party
-files or Microsoft credentials as part of migration.
+Press Escape in Chromium to show/hide player controls. Closing the
+native window or clicking **End stream** stops the browser and its
+Xbox session.
 
-## Controllers and performance
+## Compatibility caveats
 
-- While Greenlight is launched from WII-UU, the existing cloud-input
-  guard keeps phone GamePad input from operating the WII-UU home menu.
-  On Linux, WII-UU's virtual Xbox controller can provide game input.
-  **Flatpak sandbox access to the controller depends on the host's
-  device permissions and Greenlight's sandbox permissions**; validate
-  controller input on your own machine.
-- WII-UU can grab physical controllers in console mode. If Greenlight
-  cannot see a controller, disable WII-UU's controller takeover and
-  restart before using it.
-- Greenlight renders in its own Electron window; it is not embedded in
-  WII-UU's TV/GamePad output. Hardware acceleration depends on the
-  installed GPU drivers, media stack and Flatpak runtime.
-- Greenlight already provides Xbox streaming functionality. This
-  integration does not emulate Microsoft's cloud backend, bypass any
-  subscription or region restrictions, or expose sign-in tokens to WII-UU.
+The Xbox authentication and WebRTC service endpoints are unofficial
+third-party implementations, modeled after the MIT-licensed Greenlight
+and xbox-xcloud-player libraries. Microsoft may change these APIs,
+deny a client registration's streaming grants, or require additional
+network/codec configuration.
 
-## Development
+**Automated tests can verify architecture, package metadata, ZIP
+boundaries, service responses and build compatibility, but they cannot
+prove a successful Microsoft grant, entitlement or playable Xbox cloud
+stream.** Device-code approval and actual cloud gameplay must be
+tested manually with an eligible Microsoft account and real hardware.
 
-`src/wiiuu/core/Greenlight.java` owns launch and discovery.
-`src/wiiuu/core/GreenlightInstaller.java` owns Flathub and native
-package installation. The plugin catalog still allows only the reviewed
-`xcloud` external identifier rather than arbitrary executables.
-
-GitHub Actions runs `GreenlightTest` and `GreenlightInstallerTest`
-across Linux, macOS and Windows. Tests check architecture routing,
-release URL/digest validation, ZIP traversal protection and installation
-layout without downloading third-party apps. A manual ARM64 Linux
-device test must still verify Flatpak download, launch, Xbox login,
-controller passthrough and a playable stream.
+The browser downloads are large, and the first-time dependency
+installation downloads npm packages; subsequent launches reuse
+the local installation. Existing Greenlight files and tokens are not
+deleted automatically.
