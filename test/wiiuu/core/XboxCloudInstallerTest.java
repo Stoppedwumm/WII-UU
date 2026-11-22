@@ -112,10 +112,9 @@ public final class XboxCloudInstallerTest {
         Path profilesRoot = Files.createTempDirectory("xcloud-profile-config-");
         Config.Users.Profile profile = Config.Users.create(profilesRoot, "Downloader tester");
         Config.Users.select(profilesRoot, profile.id());
-        Path blocked = Config.Users.dataHome(profilesRoot, profile.id())
-                .resolve("config.properties");
-        Files.createDirectories(blocked);
         Config profileConfig = new Config(profilesRoot);
+        Path blocked = profileConfig.userHome().resolve("config.properties");
+        Files.createDirectories(blocked);
         profileConfig.set("xcloud.executable", "/test/openxcloud");
         profileConfig.set("xcloud.installedVersion", "v0.1.2");
         profileConfig.saveSharedChecked();
