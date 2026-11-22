@@ -28,7 +28,7 @@
   {
     "id": "xcloud",
     "name": "Xbox Cloud Gaming",
-    "description": "Stream Xbox Cloud Gaming with Greenlight. Linux ARM64/x86-64 via Flathub, macOS and Windows desktop builds.",
+    "description": "Xbox Cloud Gaming with native Microsoft device-code login and game catalog, streamed through an isolated portable Chromium player.",
     "type": "external"
   }
 ]
