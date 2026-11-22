@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>WII-UU Xbox Cloud Player</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080b15;color:#f6f6fa;font:15px system-ui,sans-serif}
+#player{position:absolute;inset:0}#player video{width:100%;height:100%;object-fit:contain}
+#top{position:absolute;z-index:30;left:0;right:0;top:0;display:flex;align-items:center;gap:16px;padding:12px 18px;background:rgba(0,0,0,.85)}
+#top.hidden{opacity:0}#top:hover{opacity:1}#status{flex:1}
+button{padding:9px 16px;background:#107c10;color:white;border:0;border-radius:7px;cursor:pointer}
+button:hover{background:#199919}#fail{position:absolute;top:45%;left:10%;right:10%;text-align:center;font-size:20px}
+</style></head><body>
+<div id="player"></div>
+<div id="top"><strong>WII-UU Xbox Cloud Gaming</strong><span id="status">Preparing player…</span>
+<button id="fullscreen">Fullscreen</button><button id="disconnect">Disconnect</button></div>
+<div id="fail" role="alert"></div>
+<script src="/mapping-core.js"></script>
+<script src="/page-hook.js"></script>
+<script src="/player.js"></script>
+</body></html>
