@@ -24,5 +24,11 @@
     "description": "Controller-friendly native ROM catalog, game details, variants and explicit downloads.",
     "script": "romsfun.js",
     "type": "native"
+  },
+  {
+    "id": "xcloud",
+    "name": "Xbox Cloud Gaming",
+    "description": "Stream Xbox Cloud Gaming using the native OpenXCloud WebRTC client, without Chromium or Node.js.",
+    "type": "external"
   }
 ]
