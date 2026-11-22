@@ -70,16 +70,21 @@ and need to be moved into console folders before refreshing the library.
 Only download content you have the right to use. This plugin does not bypass
 site authentication, rate limits or access checks.
 
-## Compiled native desktop apps
+## Xbox Cloud Gaming desktop app
 
-The built-in **Xbox Cloud Gaming** entry (type `external`) launches a native
-OpenXCloud Rust/WebRTC executable with GPU-backed playback and no JavaScript
-runtime or web view. WII-UU can download the official checksum-verified native
-release into its own data directory, or launch an existing manual installation. This is intentionally *not* a general-purpose
-native binary plugin API: the bundled catalog only allows the reviewed
-`xcloud` external identifier, to avoid executing arbitrary commands. See the
-[setup guide](xbox-cloud.md) for installation, executable selection, controller
-limitations and platform requirements.
+The built-in **Xbox Cloud Gaming** entry (catalog ID `xcloud`, type
+`external`) launches [Greenlight](https://github.com/unknownskl/greenlight)
+in its own Electron window, with no WII-UU JavaScript plugin runtime.
+WII-UU installs the Flathub release on **Linux AArch64 or x86-64**, or
+downloads official checksum-verified portable desktop packages on
+Windows x64 and universal macOS. A separately installed Greenlight can
+also be selected as an executable.
+
+The `xcloud` identifier remains for existing dock preferences. The
+external launcher is deliberately **not** a general native command
+execution API: only this reviewed bundled app identifier is accepted.
+See the [Xbox Cloud Gaming setup guide](xbox-cloud.md) for download,
+installation, sandboxed controllers, and platform limitations.
 
 ## Native apps
 

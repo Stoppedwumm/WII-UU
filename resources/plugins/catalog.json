@@ -28,7 +28,7 @@
   {
     "id": "xcloud",
     "name": "Xbox Cloud Gaming",
-    "description": "Stream Xbox Cloud Gaming using the native OpenXCloud WebRTC client, without Chromium or Node.js.",
+    "description": "Stream Xbox Cloud Gaming with Greenlight. Linux ARM64/x86-64 via Flathub, macOS and Windows desktop builds.",
     "type": "external"
   }
 ]

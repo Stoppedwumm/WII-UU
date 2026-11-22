@@ -1,102 +1,109 @@
-# Xbox Cloud Gaming (native desktop integration)
+# Xbox Cloud Gaming through Greenlight
 
-WII-UU can start [OpenXCloud](https://github.com/shyim/openxcloud), a GPL-3.0-only
-Rust/WebRTC Xbox Cloud Gaming desktop client, from its own bottom dock. This is a
-**native companion integration**, not a web view or a copy of Microsoft's servers.
-It does **not** embed OpenXCloud's renderer inside WII-UU's Java UI.
+WII-UU's **Xbox Cloud Gaming** dock app now launches
+[Greenlight](https://github.com/unknownskl/greenlight), an open-source desktop
+client for Xbox Cloud Gaming and home-console streaming. The streaming
+window belongs to Greenlight, not to WII-UU's Java interface.
+Greenlight uses Electron/Chromium and therefore needs more memory than
+the previously used native Rust OpenXCloud client. The trade-off is the
+availability of official Linux **AArch64** and x86-64 packages through Flathub.
 
-## Download, install and launch
+## Install or update from WII-UU
 
-1. Open **WII-UU > Settings > System > Plugin store**, find **Xbox Cloud Gaming**
-   and select **Download / update OpenXCloud**. WII-UU queries the latest stable
-   release of [shyim/openxcloud](https://github.com/shyim/openxcloud/releases)
-   and selects the native package for your operating system and CPU.
-2. WII-UU downloads over HTTPS and verifies the exact file size and SHA-256 digest
-   published in the official GitHub Release metadata. A missing digest or unknown
-   download URL is rejected. Installation is performed off the UI thread, with
-   progress and error messages in the plugin settings.
-3. The verified package is extracted into **`<WII-UU home>/native/openxcloud/current`**.
-   The previous managed installation is retained until the new one is committed,
-   and is restored if installation fails. The executable path is then configured
-   automatically. Clicking the action again checks for a newer release and
-   reinstalls the official package; it never silently updates in the background.
-4. Activate **Xbox Cloud Gaming** to add it to the bottom dock and launch it.
-   OpenXCloud starts in a separate GPU-rendered window. Complete OpenXCloud's
-   Microsoft account sign-in and select a game. WII-UU never sees Xbox credentials.
+1. Go to **Settings > System > Plugin store > Xbox Cloud Gaming**.
+2. Select **Download / update Greenlight**.
+3. WII-UU chooses the supported distribution for the host:
+   - **Linux AArch64 or x86-64:** installs Greenlight's verified Flathub
+     application `io.github.unknownskl.greenlight` to the current user's
+     Flatpak installation; already user-installed copies are updated.
+     Flatpak itself must already be installed. WII-UU adds the official
+     per-user Flathub remote when necessary; it does not require `sudo`.
+   - **macOS Intel or Apple Silicon:** downloads the official universal
+     Greenlight DMG from GitHub Releases, checks its SHA-256 digest and
+     copies `Greenlight.app` with `ditto` into WII-UU's data directory.
+   - **Windows x64:** downloads the official Greenlight portable ZIP,
+     checks SHA-256 and extracts the entire Electron app without running
+     a Windows installer. Windows ARM64 is not automatically supported.
+4. Activate **Xbox Cloud Gaming** in the plugin store. Launch it from the
+   bottom dock. Sign in within Greenlight. WII-UU does not see or store
+   Microsoft account tokens.
 
-### Platforms and manual installs
+On Linux, Greenlight is launched with:
 
-| Platform | Package | Installation |
-| --- | --- | --- |
-| macOS Apple Silicon | `OpenXCloud-macos-arm64.zip` | Extract the `OpenXCloud.app` bundle using macOS `ditto`, retaining bundle metadata |
-| Windows x64 | `OpenXCloud-windows-x64.zip` | Extract the complete portable app, including FFmpeg DLLs, without running an installer |
-| Debian/Ubuntu x64 | `OpenXCloud-linux-amd64.deb` | Use `dpkg-deb --extract` within WII-UU's data directory; **no root access or package scripts** |
+```sh
+flatpak run io.github.unknownskl.greenlight
+```
 
-macOS Intel and Linux ARM64 have no matching upstream packages in this installer.
-The macOS release is not notarized; Windows releases are not code-signed. macOS
-and Windows may show security warnings. Downloaded programs are not launched
-until you select the dock entry.
+The install action uses the equivalent of:
 
-On Linux, extracting a Debian package does **not** install missing system
-dependencies. OpenXCloud's Linux package is built on Ubuntu 24.04. If your
-distribution lacks the FFmpeg or GPU runtime libraries it requires, the app
-might not start. The verified `.deb` is also saved under the managed
-`native/openxcloud` directory for optional system installation with
-`sudo apt install ./OpenXCloud-linux-amd64.deb` from that directory.
+```sh
+flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user --noninteractive -y flathub io.github.unknownskl.greenlight
+```
 
-You can also [build OpenXCloud from source](https://github.com/shyim/openxcloud#get-started)
-or manually install it using the
-[upstream packaging instructions](https://github.com/shyim/openxcloud/blob/main/PACKAGING.md).
-**Choose OpenXCloud executable** accepts a native binary or macOS `.app` path.
-The custom path is preserved until you explicitly install or update from the
-WII-UU download action.
+Linux Flatpak applications are installed under Flatpak's normal user
+installation, **not** the WII-UU native app directory. Updates are provided
+by Flathub. A system-wide Flatpak installation can also be launched; an
+explicit install through WII-UU creates a user-managed copy.
 
-The **Low-latency video presentation** toggle starts OpenXCloud with
-`--present immediate` (default) or `--present fifo` (V-sync). Immediate display
-can reduce rendering latency but may tear. Video and audio decoding, frame
-presentation, WebRTC transport and gamepad handling belong to OpenXCloud.
+On macOS and Windows, verified packages are extracted into
+`<WII-UU data directory>/native/greenlight/current`. Upgrades temporarily
+preserve the previous copy and roll back the executable settings and
+files if an installation fails. The downloader checks exact asset
+filenames, official GitHub release URLs, advertised sizes and SHA-256,
+and stops stalled transfers. Downloading never launches the app.
+Installation on macOS/Windows does not execute downloaded installer
+scripts or require administrator rights.
 
-The Java UI does not send frames between processes and does not add a browser
-renderer. If OpenXCloud is already running from the dock, selecting the entry
-again will not start a second copy. Deactivating the entry terminates the
-process WII-UU launched; independently started OpenXCloud instances are unaffected.
+Greenlight's releases are not necessarily notarized or code-signed.
+OS security warnings may occur. A real streaming session requires
+compatible graphics drivers, a desktop session, and appropriate Xbox
+Cloud Gaming access.
 
-## Compatibility and limits
+## Existing installations and migration
 
-- OpenXCloud requires a Microsoft account entitled to Xbox Cloud Gaming, a
-  compatible game, a supported region, a working graphical session and its native
-  FFmpeg/GPU dependencies. Check OpenXCloud's own platform support documentation.
-- **Phone GamePad input on Linux:** While OpenXCloud is running, WII-UU forwards
-  its paired phone GamePad buttons and analog sticks to the existing virtual Xbox
-  360 controller via uinput. WII-UU's background menu will not react to those
-  inputs. The virtual pad is released when the stream process exits.
-- In Linux console mode, WII-UU may exclusively grab a physical controller for
-  its menu. The existing helper can map captured controller input to a virtual
-  pad, but if that setup is unavailable, disable WII-UU's controller takeover
-  and restart WII-UU so OpenXCloud can read the physical controller directly.
-  macOS/Windows use OpenXCloud's native controller input; phone-to-virtual-pad
-  forwarding remains Linux-only.
-- The separate OpenXCloud window is not currently embedded in the TV/GamePad
-  display. WII-UU's phone GamePad virtual controller can be used on Linux when
-  created through its existing uinput helper; other platforms rely on the
-  controllers supported by OpenXCloud.
-- There is no browser fallback. Errors about missing executables are shown
-  in WII-UU; errors inside the streaming client belong to OpenXCloud's logs.
-- The OpenXCloud service protocol is unofficial and can change. WII-UU does
-  not circumvent account eligibility, region restrictions or Microsoft security.
+The built-in catalog ID stays `xcloud` so your dock activation preference
+is preserved. However, the **old OpenXCloud executable path and low-latency
+`--present` settings are intentionally ignored**. Those flags do not apply
+to Greenlight.
 
-## Development / test
+For a custom Greenlight install, use **Choose existing Greenlight executable**
+or specify an absolute path / macOS `.app` bundle in the plugin store.
+Custom paths take priority over Flatpak; click the install action to
+return to the managed build.
 
-The Java launcher is in `src/wiiuu/core/XboxCloud.java`. The source-bundled
-`resources/plugins/catalog.json` declares the only reviewed external native
-entry. `PluginStore` only accepts the fixed `xcloud` external identifier and
-starts the executable without a shell or command interpolation. No Electron
-installation is needed for this entry.
+The prior OpenXCloud files, if installed, remain on disk and are not
+launched by the new integration. WII-UU does not delete third-party
+files or Microsoft credentials as part of migration.
 
-Run `./build.sh` for WII-UU. The CI suite exercises `XboxCloudTest` and
-`XboxCloudInstallerTest` across Linux, macOS and Windows using offline release
-metadata and archive fixtures. The downloader is implemented in
-`src/wiiuu/core/XboxCloudInstaller.java`.
-For end-to-end tests, install OpenXCloud and check sign-in, an actual stream,
-controller input, immediate/FIFO presentation and process cleanup on Linux,
-macOS and Windows.
+## Controllers and performance
+
+- While Greenlight is launched from WII-UU, the existing cloud-input
+  guard keeps phone GamePad input from operating the WII-UU home menu.
+  On Linux, WII-UU's virtual Xbox controller can provide game input.
+  **Flatpak sandbox access to the controller depends on the host's
+  device permissions and Greenlight's sandbox permissions**; validate
+  controller input on your own machine.
+- WII-UU can grab physical controllers in console mode. If Greenlight
+  cannot see a controller, disable WII-UU's controller takeover and
+  restart before using it.
+- Greenlight renders in its own Electron window; it is not embedded in
+  WII-UU's TV/GamePad output. Hardware acceleration depends on the
+  installed GPU drivers, media stack and Flatpak runtime.
+- Greenlight already provides Xbox streaming functionality. This
+  integration does not emulate Microsoft's cloud backend, bypass any
+  subscription or region restrictions, or expose sign-in tokens to WII-UU.
+
+## Development
+
+`src/wiiuu/core/Greenlight.java` owns launch and discovery.
+`src/wiiuu/core/GreenlightInstaller.java` owns Flathub and native
+package installation. The plugin catalog still allows only the reviewed
+`xcloud` external identifier rather than arbitrary executables.
+
+GitHub Actions runs `GreenlightTest` and `GreenlightInstallerTest`
+across Linux, macOS and Windows. Tests check architecture routing,
+release URL/digest validation, ZIP traversal protection and installation
+layout without downloading third-party apps. A manual ARM64 Linux
+device test must still verify Flatpak download, launch, Xbox login,
+controller passthrough and a playable stream.

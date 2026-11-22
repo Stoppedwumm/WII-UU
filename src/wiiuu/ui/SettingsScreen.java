@@ -1710,11 +1710,11 @@ public final class SettingsScreen {
     private boolean updating;
 
     private String pluginStatus = "Install the plugin runtime once; Node.js 22.12+ with npm is required.";
-    private volatile String xcloudDownloadStatus = "Download verified native OpenXCloud releases from GitHub.";
+    private volatile String greenlightDownloadStatus = "Linux ARM64/x86-64: install from Flathub. macOS/Windows: verified official downloads.";
     private Page pluginStorePage() {
         return new Page("Plugin store", () -> {
             List<Row> rows = new ArrayList<>();
-            rows.add(new Info("Bundled apps appear in the bottom bar. Native desktop streaming runs without Electron or the JavaScript runtime."));
+            rows.add(new Info("Bundled apps appear in the bottom bar. Greenlight uses its own Electron runtime and does not need the WII-UU plugin runtime."));
             rows.add(new Action("Install / repair plugin runtime", "Downloads the shared JavaScript and browser runtime using npm. Close plugin apps first.", () -> {
                 pluginStatus = "Installing browser runtime...";
                 wiiuu.core.PluginStore.install(config, message -> SwingUtilities.invokeLater(() -> {
@@ -1725,42 +1725,42 @@ public final class SettingsScreen {
             }, () -> wiiuu.core.PluginStore.installing() ? "Installing..." : wiiuu.core.PluginStore.ready(config) ? "Installed" : "Not installed", null));
             rows.add(new Info(pluginStatus));
             for (wiiuu.core.PluginStore.Entry entry : wiiuu.core.PluginStore.catalog()) {
-                String kind = entry.externalPlugin() ? " · Native desktop" : entry.nativePlugin() ? " · Native" : " · Website";
+                String kind = entry.externalPlugin() ? " · Xbox streaming" : entry.nativePlugin() ? " · Native" : " · Website";
                 rows.add(new Header(entry.name() + kind));
                 rows.add(new Info(entry.description()));
                 if (entry.externalPlugin()) {
-                    rows.add(new Info("Executable: " + wiiuu.core.XboxCloud.status(config)));
-                    rows.add(new Action("Download / update OpenXCloud",
-                            "Fetch the latest official GitHub Release, verify SHA-256, and extract the native app without running an installer. "
-                            + "macOS Apple Silicon, Windows x64, and Debian/Ubuntu x64 only.", () -> {
-                                xcloudDownloadStatus = "Checking OpenXCloud release...";
+                    rows.add(new Info("Greenlight: " + wiiuu.core.Greenlight.status(config)));
+                    rows.add(new Action("Download / update Greenlight",
+                            "Linux AArch64 and x86-64: install/update Flathub Flatpak in your user account. "
+                            + "macOS: verified universal DMG. Windows x64: verified portable ZIP. "
+                            + "No system permissions or silent installers are used.", () -> {
+                                greenlightDownloadStatus = "Checking Greenlight installation...";
                                 reload(false);
-                                wiiuu.core.XboxCloudInstaller.install(config, status ->
+                                wiiuu.core.GreenlightInstaller.install(config, status ->
                                         SwingUtilities.invokeLater(() -> {
-                                            xcloudDownloadStatus = status;
+                                            greenlightDownloadStatus = status;
                                             reload(false);
                                         }));
-                            }, () -> wiiuu.core.XboxCloudInstaller.installing() ? "Downloading / installing..."
-                                    : config.get("xcloud.installedVersion", "Not installed"), null));
-                    rows.add(new Info(xcloudDownloadStatus));
-                    rows.add(new Action("Choose OpenXCloud executable", "Select the compiled native binary (not an installer). No files are downloaded or executed during selection.", () ->
-                            push(browser("OpenXCloud executable", Paths.get(System.getProperty("user.home")), false, binary -> {
-                                config.set("xcloud.executable", binary.toAbsolutePath().toString());
+                            }, () -> wiiuu.core.GreenlightInstaller.installing() ? "Installing..."
+                                    : config.get("greenlight.installedVersion", "Not installed"), null));
+                    rows.add(new Info(greenlightDownloadStatus));
+                    rows.add(new Action("Choose existing Greenlight executable",
+                            "Select an installed Greenlight executable or macOS .app bundle. "
+                            + "Selecting a file does not download or launch anything.", () ->
+                            push(browser("Greenlight executable", Paths.get(System.getProperty("user.home")), false, binary -> {
+                                config.set("greenlight.executable", binary.toAbsolutePath().toString());
                                 config.save();
                                 reload(false);
                             })), null, null));
-                    rows.add(new Text("Executable path / macOS app bundle", "Optional absolute path. Leave empty to auto-detect OpenXCloud on PATH or in standard install locations.",
-                            () -> config.get("xcloud.executable", ""), value -> {
-                                config.set("xcloud.executable", value.trim());
+                    rows.add(new Text("Greenlight executable path / macOS .app bundle",
+                            "Optional absolute path. Leave empty to prefer the Linux Flatpak or detect a desktop installation.",
+                            () -> config.get("greenlight.executable", ""), value -> {
+                                config.set("greenlight.executable", value.trim());
                                 config.save();
-                            }, false, "Auto-detect"));
-                    rows.add(new Toggle("Low-latency video presentation", "Immediate presentation reduces GPU display latency but may tear. Disable for V-sync.",
-                            () -> config.getBool("xcloud.lowLatency", true), enabled -> {
-                                config.set("xcloud.lowLatency", Boolean.toString(enabled));
-                                config.save();
-                            }));
+                            }, false, "Auto-detect / Flatpak"));
                 }
-                rows.add(new Toggle("Activate " + entry.name(), "Adds this app to the bottom bar. Deactivating stops its process.",
+                rows.add(new Toggle("Activate " + entry.name(),
+                        "Adds this app to the bottom bar. Deactivating stops its process.",
                         () -> wiiuu.core.PluginStore.enabled(config, entry), enabled -> {
                             wiiuu.core.PluginStore.setEnabled(config, entry, enabled);
                             view.reloadPluginDock();
