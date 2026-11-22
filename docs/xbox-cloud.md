@@ -13,8 +13,7 @@ and controller capture. Greenlight is no longer needed.
    a small \`esbuild\` bundler; it also downloads the **official stable
    portable Chrome for Testing** package for this OS and CPU.
 3. Activate **Xbox Cloud Gaming** to keep it in the bottom dock.
-4. Open the Xbox Cloud Gaming dock item. The device-code login and game
-   list appear in a separate native Java/Swing window.
+4. Open the Xbox Cloud Gaming dock item. The device-code login and game list open **inside the main WII-UU TV/GamePad interface**, using the active WII-UU theme.
 5. Select **Get Microsoft login code**. On your phone or another PC,
    visit the verification URL shown in the native window and enter the
    displayed code. Complete the sign-in on Microsoft's website, not in
@@ -55,7 +54,7 @@ a URL fragment and is not a Microsoft token. The browser uses an isolated
 WII-UU user profile. Credential grants are stored only in the WII-UU
 user data folder, in a file restricted to the current user on Unix.
 
-Native browsing controls are separate from the WebRTC player; this does
+Native browsing controls are integrated into the WII-UU menu; this does
 **not** include a native Java WebRTC decoder. The media plane runs in
 Chromium to use its hardware decode, WebRTC stack and Gamepad API.
 
@@ -86,9 +85,7 @@ uses the W3C Gamepad API; the bundled Switch mapper remaps the
 specific measured \`20d6:a713\` device to an Xbox-style layout.
 Other controllers retain their standard mapping.
 
-Press Escape in Chromium to show/hide player controls. Closing the
-native window or clicking **End stream** stops the browser and its
-Xbox session.
+Press Escape in Chromium to show/hide player controls. Leaving the Xbox Cloud Gaming screen ends its streaming process. The separate Chromium window also provides Disconnect.
 
 ## Compatibility caveats
 
@@ -108,3 +105,17 @@ The browser downloads are large, and the first-time dependency
 installation downloads npm packages; subsequent launches reuse
 the local installation. Existing Greenlight files and tokens are not
 deleted automatically.
+
+## WII-UU interface
+
+The Xbox Cloud Gaming dock entry opens a full-screen WII-UU view instead of
+creating a second Swing window. It uses the same menu theme colors, typefaces,
+rounded tiles and selection highlighting. Use D-pad or left stick to navigate,
+A to select, B/HOME to return, L/R to change catalog pages, and click/tap for
+pointer selection. The **Search** tile opens an on-screen character keyboard
+which can be operated with a gamepad, or typed into using a physical keyboard.
+
+Pairing uses a large device-code card with copy and reload actions. Games are
+shown as responsive multi-column tiles. The last action in the screen opens
+the separate Chromium WebRTC media player; authentication and catalog remain
+in WII-UU's native rendering engine.
