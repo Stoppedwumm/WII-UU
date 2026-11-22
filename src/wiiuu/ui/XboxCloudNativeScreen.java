@@ -8,6 +8,14 @@ import wiiuu.core.XboxCloudRuntime;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
+import java.awt.image.BufferedImage;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import java.awt.geom.*;
 import java.io.*;
 import java.net.URLEncoder;
@@ -28,7 +36,7 @@ import javax.swing.SwingUtilities;
  * entirely separate. Only playing a stream opens the isolated Chromium app.
  */
 final class XboxCloudNativeScreen implements AutoCloseable {
-    private record Game(String id, String name) {}
+    private record Game(String id, String name, String cover) {}
     private record Hit(Rectangle2D area, Runnable action, boolean card) {}
 
     private final Config config;
@@ -36,6 +44,13 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private final Runnable repaint, exit;
     private final List<Hit> hits = new ArrayList<>();
     private final List<Game> games = new ArrayList<>();
+    private final Map<String,BufferedImage> coverImages = new LinkedHashMap<>();
+    private final Set<String> requestedCovers = new HashSet<>();
+    private final ExecutorService coverLoader = Executors.newFixedThreadPool(2, task -> {
+        Thread thread = new Thread(task, "xcloud-cover-image");
+        thread.setDaemon(true);
+        return thread;
+    });
     private Backend backend;
     private volatile Process browser;
     private boolean closed, startingBackend, installing, signedIn, pairing, searchEditing;
@@ -91,10 +106,19 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         rounded(g, x, y, w, h, 20*u, MenuView.CARD);
         rounded(g, x+12*u,y+12*u,w-24*u,Math.max(40*u,h*0.47f),14*u,
                 selected ? MenuView.ACCENT : MenuView.dark ? new Color(47, 61, 80) : new Color(215,228,240));
-        g.setColor(selected ? Color.WHITE : MenuView.TEXT);
-        g.setFont(MenuView.font(Font.BOLD, 32*u));
-        String initials = game.name().isBlank() ? "?" : game.name().trim().substring(0,1).toUpperCase(Locale.ROOT);
-        center(g, initials, x+w/2f, y+Math.max(40*u,h*0.47f)*0.65f + 12*u);
+        BufferedImage cover = cover(game.cover());
+        if (cover != null) {
+            float availableW=w-34*u, availableH=Math.max(32*u,h*0.47f-14*u);
+            float scale=Math.min(availableW/cover.getWidth(),availableH/cover.getHeight());
+            int imageW=Math.max(1,Math.round(cover.getWidth()*scale));
+            int imageH=Math.max(1,Math.round(cover.getHeight()*scale));
+            g.drawImage(cover,Math.round(x+(w-imageW)/2f),Math.round(y+12*u+(availableH-imageH)/2f),imageW,imageH,null);
+        } else {
+            g.setColor(selected ? Color.WHITE : MenuView.TEXT);
+            g.setFont(MenuView.font(Font.BOLD, 32*u));
+            String initials = game.name().isBlank() ? "?" : game.name().trim().substring(0,1).toUpperCase(Locale.ROOT);
+            center(g, initials, x+w/2f, y+Math.max(40*u,h*0.47f)*0.65f + 12*u);
+        }
         g.setFont(MenuView.font(Font.BOLD, 17*u)); g.setColor(MenuView.TEXT);
         center(g, shortened(g, game.name(),w-24*u), x+w/2f, y+Math.max(40*u,h*0.47f)+43*u);
         g.setFont(MenuView.font(Font.PLAIN, 12*u));g.setColor(MenuView.TEXT_DIM);
@@ -239,6 +263,70 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         action(g,x+29*u+half,bottom,half,43*u,"Clear",()->{query="";page=0;repaint.run();},u,false);
         action(g,x+34*u+2*half,bottom,half,43*u,"Done",this::finishSearch,u,true);
     }
+    /** Only trusted Microsoft Store assets; load bounded-size cover images off the paint thread. */
+    private BufferedImage cover(String url) {
+        if(url==null || url.isEmpty())return null;
+        BufferedImage cached=coverImages.get(url);
+        if(cached!=null)return cached;
+        if(closed || !requestedCovers.add(url))return null;
+        coverLoader.execute(()->{
+            BufferedImage result=null;
+            try { result=loadCover(URI.create(url)); } catch(Exception ignored) { }
+            BufferedImage image=result;
+            SwingUtilities.invokeLater(()->{
+                if(closed)return;
+                if(image!=null) {
+                    if(coverImages.size()>=96) {
+                        String old=coverImages.keySet().iterator().next();
+                        coverImages.remove(old);
+                        requestedCovers.remove(old);
+                    }
+                    coverImages.put(url,image);
+                }
+                repaint.run();
+            });
+        });
+        return null;
+    }
+    private static BufferedImage loadCover(URI uri) throws IOException {
+        if(!"https".equals(uri.getScheme()) ||
+                !"store-images.s-microsoft.com".equals(uri.getHost()) ||
+                uri.getRawUserInfo()!=null || uri.getPort()!=-1)
+            throw new IOException("Untrusted Xbox cover image origin");
+        HttpURLConnection connection=(HttpURLConnection)uri.toURL().openConnection();
+        connection.setInstanceFollowRedirects(false);
+        connection.setConnectTimeout(4500);connection.setReadTimeout(4500);
+        connection.setRequestProperty("User-Agent","WII-UU-Xbox-Catalog");
+        try {
+            if(connection.getResponseCode()!=200 ||
+                    connection.getContentLengthLong()>2*1024*1024)
+                return null;
+            try(InputStream input=connection.getInputStream();
+                ByteArrayOutputStream output=new ByteArrayOutputStream()){
+                byte[] buffer=new byte[8192];int n;
+                while((n=input.read(buffer))!=-1){
+                    if(output.size()+n>2*1024*1024)return null;
+                    output.write(buffer,0,n);
+                }
+                try(ImageInputStream imageInput=ImageIO.createImageInputStream(
+                        new ByteArrayInputStream(output.toByteArray()))) {
+                    var readers=ImageIO.getImageReaders(imageInput);
+                    if(!readers.hasNext())return null;
+                    ImageReader reader=readers.next();
+                    try {
+                        reader.setInput(imageInput);
+                        int w=reader.getWidth(0),h=reader.getHeight(0);
+                        if(w<1||h<1||w>8192||h>8192)return null;
+                        var params=reader.getDefaultReadParam();
+                        int subsample=Math.max(1,Math.max(w/420,h/250));
+                        params.setSourceSubsampling(subsample,subsample,0,0);
+                        return reader.read(0,params);
+                    } finally {reader.dispose();}
+                }
+            }
+        } finally {connection.disconnect();}
+    }
+
     private void typeLetter(char c) {
         if(query.length()<72){query+=c;page=0;repaint.run();}
     }
@@ -410,8 +498,9 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             for(Object item:MiniJson.array(result.get("games"))){
                 Map<String,Object> row=MiniJson.object(item);
                 String id=MiniJson.string(row.get("id")),name=MiniJson.string(row.get("name"));
+                String cover=MiniJson.string(row.get("cover"));
                 if(id!=null&&!id.isBlank()&&name!=null&&!name.isBlank())
-                    games.add(new Game(id,name));
+                    games.add(new Game(id,name,cover==null?"":cover));
             }
             games.sort(Comparator.comparing(Game::name,String.CASE_INSENSITIVE_ORDER));
             page=0;focus=4;
@@ -467,6 +556,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         browser=null;
         if(backend!=null)backend.close();
         hits.clear();games.clear();
+        coverLoader.shutdownNow();coverImages.clear();requestedCovers.clear();
     }
 
     private static final class Backend implements AutoCloseable {
