@@ -120,6 +120,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         router.setPadSink(new InputRouter.PadSink() {
             @Override
             public boolean button(int player, wiiuu.input.PadButton b, boolean down) {
+                if (wiiuu.ui.XboxCloudNativeScreen.controllerButton(b, down)) return true;
                 // HOME also ends a video (mpv, VLC...), the only way out with just a controller
                 Game g = launcher.current();
                 boolean video = g != null && (wiiuu.core.OpenBased.handles(g) || wiiuu.core.Reactions.handles(g));
@@ -133,6 +134,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
             @Override
             public boolean stick(int player, int stick, float x, float y) {
+                if (wiiuu.ui.XboxCloudNativeScreen.controllerStick(stick, x, y)) return true;
                 return launcher.inChoccy() && launcher.choccyStick(player, stick, x, y);
             }
         });
