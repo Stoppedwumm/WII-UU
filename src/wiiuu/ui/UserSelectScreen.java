@@ -46,6 +46,8 @@ public final class UserSelectScreen extends JPanel implements InputRouter.MenuAc
     private final Runnable onQuit;
     private final List<Rectangle> cardBounds = new ArrayList<>();
     private Rectangle quitBounds = new Rectangle();
+    private Rectangle previousPageBounds = new Rectangle();
+    private Rectangle nextPageBounds = new Rectangle();
     private int selected;
     private boolean quitFocused;
     private boolean completed;
@@ -70,6 +72,14 @@ public final class UserSelectScreen extends JPanel implements InputRouter.MenuAc
         addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent event) {
                 if (completed) return;
+                if (previousPageBounds.contains(event.getPoint())) {
+                    changePage(-1);
+                    return;
+                }
+                if (nextPageBounds.contains(event.getPoint())) {
+                    changePage(1);
+                    return;
+                }
                 if (quitBounds.contains(event.getPoint())) {
                     quitFocused = true;
                     activate();
@@ -85,6 +95,10 @@ public final class UserSelectScreen extends JPanel implements InputRouter.MenuAc
                     }
                 }
             }
+        });
+        // Mouse and touchpad scrolling must reach users beyond the first four.
+        addMouseWheelListener(event -> {
+            if (event.getWheelRotation() != 0) changePage(event.getWheelRotation() > 0 ? 1 : -1);
         });
     }
 
@@ -167,7 +181,20 @@ public final class UserSelectScreen extends JPanel implements InputRouter.MenuAc
         onQuit.run();
     }
 
-    @Override public void page(int delta) { navigate(delta, 0); }
+    /** Move one full page; keep menu/controller navigation's per-user behavior unchanged. */
+    private void changePage(int direction) {
+        if (completed || direction == 0) return;
+        int current = selected / CARDS_PER_PAGE;
+        int target = Math.max(0, Math.min((users.size() - 1) / CARDS_PER_PAGE,
+                current + Integer.signum(direction)));
+        if (target != current) {
+            selected = target * CARDS_PER_PAGE;
+            quitFocused = false;
+            repaint();
+        }
+    }
+
+    @Override public void page(int delta) { changePage(delta); }
     @Override public void toggleGamepadInfo() { }
     @Override public void refresh() { }
     @Override public boolean pressed(int player, wiiuu.input.PadButton button, boolean down) {
@@ -180,6 +207,10 @@ public final class UserSelectScreen extends JPanel implements InputRouter.MenuAc
 
     int selectedIndex() { return selected; }
     boolean quitFocused() { return quitFocused; }
+    // Bounds reflect actual painted controls so headless UI tests exercise mouse hit-testing.
+    Rectangle pageButtonBounds(int direction) {
+        return new Rectangle(direction < 0 ? previousPageBounds : nextPageBounds);
+    }
 
     @Override protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
@@ -199,13 +230,13 @@ public final class UserSelectScreen extends JPanel implements InputRouter.MenuAc
             g.setFont(new Font("SansSerif", Font.PLAIN, 16));
             center(g, "Select a user to start WII-UU", w / 2, h / 7 + 120, MUTED);
 
-            int count = Math.min(CARDS_PER_PAGE, users.size());
+            int start = (selected / CARDS_PER_PAGE) * CARDS_PER_PAGE;
+            int count = Math.min(CARDS_PER_PAGE, users.size() - start);
             int spacing = 18;
             int cardWidth = Math.max(126, Math.min(228, (w - 112 - spacing * (count - 1)) / count));
             int cardHeight = Math.max(160, Math.min(228, h / 3));
             int startX = (w - count * cardWidth - (count - 1) * spacing) / 2;
             int top = Math.max(h / 2 - 44, h / 7 + 145);
-            int start = (selected / CARDS_PER_PAGE) * CARDS_PER_PAGE;
             cardBounds.clear();
             for (int i = 0; i < count && start + i < users.size(); i++) {
                 Config.Users.Profile user = users.get(start + i);
@@ -235,10 +266,20 @@ public final class UserSelectScreen extends JPanel implements InputRouter.MenuAc
                 }
             }
 
+            previousPageBounds = new Rectangle();
+            nextPageBounds = new Rectangle();
             if (users.size() > CARDS_PER_PAGE) {
+                int page = selected / CARDS_PER_PAGE;
+                int lastPage = (users.size() - 1) / CARDS_PER_PAGE;
+                int pageY = top + cardHeight + 9;
+                int navWidth = 120, navHeight = 40;
+                previousPageBounds = new Rectangle(w / 2 - 245, pageY, navWidth, navHeight);
+                nextPageBounds = new Rectangle(w / 2 + 125, pageY, navWidth, navHeight);
+                paintPageButton(g, previousPageBounds, "Previous", page > 0);
+                paintPageButton(g, nextPageBounds, "Next", page < lastPage);
                 g.setFont(new Font("SansSerif", Font.PLAIN, 14));
-                center(g, (selected + 1) + " / " + users.size() + "  ·  Left / Right for more users",
-                        w / 2, top + cardHeight + 25, MUTED);
+                center(g, "Page " + (page + 1) + " / " + (lastPage + 1),
+                        w / 2, pageY + 25, MUTED);
             }
             int quitWidth = 172, quitHeight = 45, quitY = h - 82;
             quitBounds = new Rectangle(w / 2 - quitWidth / 2, quitY, quitWidth, quitHeight);
@@ -256,6 +297,17 @@ public final class UserSelectScreen extends JPanel implements InputRouter.MenuAc
         } finally {
             g.dispose();
         }
+    }
+
+    private static void paintPageButton(Graphics2D g, Rectangle bounds, String label, boolean enabled) {
+        g.setColor(enabled ? new Color(42, 82, 112) : new Color(27, 39, 57));
+        g.fillRoundRect(bounds.x, bounds.y, bounds.width, bounds.height, 15, 15);
+        g.setStroke(new BasicStroke(1.5f));
+        g.setColor(enabled ? ACCENT : new Color(64, 78, 99));
+        g.drawRoundRect(bounds.x, bounds.y, bounds.width, bounds.height, 15, 15);
+        g.setFont(new Font("SansSerif", Font.BOLD, 15));
+        center(g, label, bounds.x + bounds.width / 2, bounds.y + 26,
+                enabled ? WHITE : MUTED);
     }
 
     private static void center(Graphics2D g, String text, int x, int baseline, Color color) {
