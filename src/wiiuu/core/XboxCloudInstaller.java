@@ -20,6 +20,9 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -195,10 +198,12 @@ public final class XboxCloudInstaller {
                 promoted = true;
                 config.set("xcloud.executable", installed.toAbsolutePath().toString());
                 config.set("xcloud.installedVersion", release.tag());
-                config.saveChecked();
+                config.saveSharedChecked();
             } catch (IOException | RuntimeException e) {
                 config.set("xcloud.executable", oldPath);
                 config.set("xcloud.installedVersion", oldVersion);
+                try { config.saveSharedChecked(); }
+                catch (IOException restoreError) { e.addSuppressed(restoreError); }
                 if (promoted) removeTree(current);
                 if (backedUp) Files.move(previous, current);
                 throw e;
@@ -210,7 +215,10 @@ public final class XboxCloudInstaller {
             if (platform == Platform.LINUX_AMD64) {
                 // Optional system installation to resolve distro-specific dependencies.
                 Path savedDeb = root.resolve(release.platform().filename);
-                Files.copy(archive, savedDeb, StandardCopyOption.REPLACE_EXISTING);
+                try { Files.copy(archive, savedDeb, StandardCopyOption.REPLACE_EXISTING); }
+                catch (IOException e) {
+                    System.err.println("[xcloud] optional .deb copy failed: " + e.getMessage());
+                }
             }
             report.accept("OpenXCloud " + release.tag()
                     + " installed. Enable Xbox Cloud Gaming and start it from the dock.");
@@ -221,36 +229,57 @@ public final class XboxCloudInstaller {
         }
     }
 
+    /**
+     * Fetch the entire body asynchronously. The request timeout alone does not
+     * cover reads from BodyHandlers.ofInputStream, so enforce both total-transfer
+     * and no-progress deadlines, cancelling the HTTP request on timeout.
+     */
     private static void download(HttpClient client, Release release, Path archive, Consumer<String> report)
             throws IOException, InterruptedException {
-        HttpResponse<InputStream> response = client.send(HttpRequest.newBuilder(release.url())
-                .timeout(Duration.ofMinutes(12))
-                .header("User-Agent", "WII-UU-OpenXCloud-Installer").build(),
-                HttpResponse.BodyHandlers.ofInputStream());
-        if (response.statusCode() != 200 || !"https".equalsIgnoreCase(response.uri().getScheme()))
-            throw new IOException("OpenXCloud download failed: HTTP " + response.statusCode());
-        MessageDigest digest;
-        try { digest = MessageDigest.getInstance("SHA-256"); }
-        catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
-        long total = 0;
-        int lastPercent = -5;
-        try (InputStream input = response.body(); var output = Files.newOutputStream(archive)) {
-            byte[] buffer = new byte[64 * 1024];
-            for (int count; (count = input.read(buffer)) != -1;) {
-                total += count;
-                if (total > MAX_DOWNLOAD || total > release.size())
-                    throw new IOException("OpenXCloud download exceeded declared size");
-                output.write(buffer, 0, count);
-                digest.update(buffer, 0, count);
-                int percent = (int) (100 * total / release.size());
-                if (percent >= lastPercent + 5) {
-                    lastPercent = percent;
-                    report.accept("Downloading OpenXCloud " + release.tag() + ": " + percent + "%");
+        report.accept("Downloading OpenXCloud " + release.tag() + ": 0%");
+        CompletableFuture<HttpResponse<Path>> transfer = client.sendAsync(
+                HttpRequest.newBuilder(release.url())
+                        .timeout(Duration.ofMinutes(12))
+                        .header("User-Agent", "WII-UU-OpenXCloud-Installer")
+                        .build(), HttpResponse.BodyHandlers.ofFile(archive));
+        long started = System.nanoTime();
+        long lastProgress = started;
+        long lastSize = 0;
+        int lastPercent = 0;
+        try {
+            while (true) {
+                try {
+                    HttpResponse<Path> response = transfer.get(1, TimeUnit.SECONDS);
+                    if (response.statusCode() != 200
+                            || !"https".equalsIgnoreCase(response.uri().getScheme()))
+                        throw new IOException("OpenXCloud download failed: HTTP " + response.statusCode());
+                    break;
+                } catch (TimeoutException ignored) {
+                    // The response is still downloading. Check progress and the deadline.
+                } catch (ExecutionException e) {
+                    throw new IOException("OpenXCloud download failed", e.getCause());
                 }
+                long now = System.nanoTime();
+                long bytes = Files.size(archive);
+                if (bytes > release.size() || bytes > MAX_DOWNLOAD)
+                    throw new IOException("OpenXCloud download exceeded declared size");
+                if (bytes != lastSize) {
+                    lastSize = bytes;
+                    lastProgress = now;
+                    int percent = (int) (100 * bytes / release.size());
+                    if (percent >= lastPercent + 5) {
+                        lastPercent = percent;
+                        report.accept("Downloading OpenXCloud " + release.tag() + ": " + percent + "%");
+                    }
+                }
+                if (now - started > TimeUnit.MINUTES.toNanos(12)
+                        || now - lastProgress > TimeUnit.SECONDS.toNanos(45))
+                    throw new IOException("OpenXCloud download timed out (connection stalled)");
             }
+        } finally {
+            if (!transfer.isDone()) transfer.cancel(true);
         }
-        if (total != release.size()
-                || !HexFormat.of().formatHex(digest.digest()).equals(release.sha256()))
+        if (Files.size(archive) != release.size() || !sha256(archive).equals(release.sha256()))
             throw new IOException("OpenXCloud download failed SHA-256 / size verification");
     }
 
