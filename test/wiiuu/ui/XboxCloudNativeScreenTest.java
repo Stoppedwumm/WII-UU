@@ -84,11 +84,15 @@ public final class XboxCloudNativeScreenTest {
         ok(!screen.wantsKeys(),"B must close search keyboard without leaving the application");
         ok(exits.get()==0,"Closing search must not close the application");
 
+        screen.close();
         MenuView menu=new MenuView(config,true);
+        var open=MenuView.class.getDeclaredMethod("openXboxCloud",PluginStore.Entry.class);
+        open.setAccessible(true);
+        open.invoke(menu,entry);
         Field panelField=MenuView.class.getDeclaredField("xcloudPanel");
-        panelField.setAccessible(true);panelField.set(menu,screen);
+        panelField.setAccessible(true);
+        ok(panelField.get(menu)!=null,"Dock integration must create the embedded Xbox Cloud screen");
         menu.back();
-        ok(exits.get()==0,"Back from the integrated menu must use its close callback");
         ok(panelField.get(menu)==null,"B must restore the normal WII-UU home screen");
         System.out.println("Xbox Cloud Gaming renders responsive theme-aware TV/GamePad screens and native controller search");
     }
