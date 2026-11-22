@@ -119,10 +119,18 @@ async function catalog() {
       for (const game of titles) {
         const item = data[game.productId];
         if (item?.ProductTitle) game.name = String(item.ProductTitle).slice(0, 120);
+        const cover = item?.Image_Tile?.URL || item?.Image_Poster?.URL;
+        if (typeof cover === 'string') {
+          try {
+            const address = new URL(cover, 'https://store-images.s-microsoft.com');
+            if (address.protocol === 'https:' && address.hostname === 'store-images.s-microsoft.com'
+                && !address.username && !address.password) game.cover = address.href;
+          } catch { /* Optional art may be absent. */ }
+        }
       }
     } catch { /* Metadata is optional */ }
   }
-  return titles.sort((a,b) => a.name.localeCompare(b.name)).map(({id,name})=>({id,name}));
+  return titles.sort((a,b) => a.name.localeCompare(b.name)).map(({id,name,cover})=>({id,name,cover:cover||''}));
 }
 async function deviceAuth() {
   if (authenticating) throw new Error('Device authorization is already in progress');
