@@ -45,7 +45,7 @@ import wiiuu.ui.SettingsScreen;
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
     /** Canonical target release. Build scripts and legacy version checks read this declaration. */
-    public static final String VERSION = "2.1.4";
+    public static final String VERSION = "2.1.5";
     /** Exact installed version, including beta/run identity from the packaged metadata. */
     public static final String BUILD_VERSION = wiiuu.core.BuildInfo.version();
 
