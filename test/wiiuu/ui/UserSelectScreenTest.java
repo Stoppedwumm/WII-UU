@@ -1,7 +1,9 @@
 package wiiuu.ui;
 
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.util.List;
@@ -21,6 +23,9 @@ public final class UserSelectScreenTest {
         Config.Users.select(home, alice.id());
         Config.Users.requireChooserOnNextBoot(home);
         String original = Config.Users.activeId(home);
+        // More than two pages: check profiles that used to be unreachable by mouse.
+        List<Config.Users.Profile> many = new java.util.ArrayList<>(profiles);
+        for (int i = 1; i <= 7; i++) many.add(Config.Users.create(home, "Extra " + i));
 
         SwingUtilities.invokeAndWait(() -> {
             AtomicReference<String> selected = new AtomicReference<>();
@@ -67,11 +72,53 @@ public final class UserSelectScreenTest {
             mouse.dispatchEvent(new MouseEvent(mouse, MouseEvent.MOUSE_CLICKED,
                     System.currentTimeMillis(), 0, 394, 430, 1, false));
             check(profiles.get(0).id().equals(selected.get()), "Mouse selects a profile without a dialog");
+
+            UserSelectScreen paged = new UserSelectScreen(many, selected::set, exits::incrementAndGet);
+            paged.setSize(1280, 720);
+            paint(paged, buffer);
+            click(paged, paged.pageButtonBounds(-1));
+            check(paged.selectedIndex() == 0, "Previous is disabled on the first page");
+            click(paged, paged.pageButtonBounds(1));
+            check(paged.selectedIndex() == 4, "Mouse Next reaches the second page");
+            paint(paged, buffer);
+            click(paged, paged.pageButtonBounds(1));
+            check(paged.selectedIndex() == 8, "Mouse Next reaches the final page");
+            paint(paged, buffer);
+            click(paged, paged.pageButtonBounds(1));
+            check(paged.selectedIndex() == 8, "Next is disabled on the last page");
+            click(paged, paged.pageButtonBounds(-1));
+            check(paged.selectedIndex() == 4, "Mouse Previous returns to the preceding page");
+            paged.dispatchEvent(new MouseWheelEvent(paged, MouseEvent.MOUSE_WHEEL,
+                    System.currentTimeMillis(), 0, 640, 569, 0, false,
+                    MouseWheelEvent.WHEEL_UNIT_SCROLL, 1, -1));
+            check(paged.selectedIndex() == 0, "Mouse wheel scrolls to the previous page");
+            paged.dispatchEvent(new MouseWheelEvent(paged, MouseEvent.MOUSE_WHEEL,
+                    System.currentTimeMillis(), 0, 640, 569, 0, false,
+                    MouseWheelEvent.WHEEL_UNIT_SCROLL, 1, 1));
+            check(paged.selectedIndex() == 4, "Mouse wheel scrolls to the next page");
+            paint(paged, buffer);
+            click(paged, paged.pageButtonBounds(1));
+            paint(paged, buffer);
+            click(paged, paged.profileButtonBounds(1));
+            check(many.get(9).id().equals(selected.get()),
+                    "Mouse can activate a user on the final page");
         });
         check(Config.Users.activeId(home).equals(original),
                 "UI does not switch the global active account until Main commits selection");
         check(Config.Users.chooserRequired(home), "Sign-out marker is not cleared by rendering the login screen");
         System.out.println("UserSelectScreenTest passed");
+    }
+
+    private static void paint(UserSelectScreen screen, BufferedImage buffer) {
+        Graphics2D g = buffer.createGraphics();
+        screen.paint(g);
+        g.dispose();
+    }
+
+    private static void click(UserSelectScreen screen, Rectangle bounds) {
+        screen.dispatchEvent(new MouseEvent(screen, MouseEvent.MOUSE_CLICKED,
+                System.currentTimeMillis(), 0, (int) bounds.getCenterX(),
+                (int) bounds.getCenterY(), 1, false));
     }
 
     private static void check(boolean ok, String message) {
