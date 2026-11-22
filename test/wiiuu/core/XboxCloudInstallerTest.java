@@ -107,6 +107,25 @@ public final class XboxCloudInstallerTest {
                 "ZIP extraction must block path traversal");
         check(!Files.exists(root.resolve("escape.txt")), "ZIP escaped its extraction directory");
 
+        // Installing a global native app must not rewrite or depend on private
+        // profile settings. A profile file represented by a directory cannot be saved.
+        Path profilesRoot = Files.createTempDirectory("xcloud-profile-config-");
+        Config.Users.Profile profile = Config.Users.create(profilesRoot, "Downloader tester");
+        Config.Users.select(profilesRoot, profile.id());
+        Path blocked = Config.Users.dataHome(profilesRoot, profile.id())
+                .resolve("config.properties");
+        Files.createDirectories(blocked);
+        Config profileConfig = new Config(profilesRoot);
+        profileConfig.set("xcloud.executable", "/test/openxcloud");
+        profileConfig.set("xcloud.installedVersion", "v0.1.2");
+        profileConfig.saveSharedChecked();
+        Config reloaded = new Config(profilesRoot);
+        check("/test/openxcloud".equals(reloaded.get("xcloud.executable", "")),
+                "Global native executable setting must persist without writing user file");
+        check("v0.1.2".equals(reloaded.get("xcloud.installedVersion", "")),
+                "Global native version setting must persist without writing user file");
+        check(Files.isDirectory(blocked), "Profile configuration must remain untouched");
+
         System.out.println("OpenXCloud downloader, release metadata, and archive tests passed");
     }
 }
