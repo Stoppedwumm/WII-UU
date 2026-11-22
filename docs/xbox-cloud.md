@@ -5,22 +5,51 @@ Rust/WebRTC Xbox Cloud Gaming desktop client, from its own bottom dock. This is 
 **native companion integration**, not a web view or a copy of Microsoft's servers.
 It does **not** embed OpenXCloud's renderer inside WII-UU's Java UI.
 
-## Install and launch
+## Download, install and launch
 
-1. Install or build OpenXCloud on your own computer. Follow its [build instructions](https://github.com/shyim/openxcloud#get-started)
-   and [platform packaging instructions](https://github.com/shyim/openxcloud/blob/main/PACKAGING.md).
-   Use a build from a trusted source and verify its origin. WII-UU does not download
-   arbitrary binaries, include the GPL-licensed project, or run an installer for you.
-2. In **WII-UU > Settings > System > Plugin store**, find **Xbox Cloud Gaming**.
-   Enable it. It appears in the bottom dock like other apps.
-3. WII-UU searches `PATH`, standard installation paths, `~/.cargo/bin`, and
-   `/Applications/OpenXCloud.app` on macOS. If it says **Not installed / not detected**,
-   use **Choose OpenXCloud executable** to select the binary, or enter an absolute
-   path in **Executable path / macOS app bundle**. The latter also accepts a macOS
-   `.app` bundle path.
-4. Launch Xbox Cloud Gaming from the dock. OpenXCloud starts in a separate native
-   GPU-rendered window. Sign in using OpenXCloud's Microsoft device-code flow;
-   WII-UU does not request or store Xbox tokens. Choose a game in OpenXCloud.
+1. Open **WII-UU > Settings > System > Plugin store**, find **Xbox Cloud Gaming**
+   and select **Download / update OpenXCloud**. WII-UU queries the latest stable
+   release of [shyim/openxcloud](https://github.com/shyim/openxcloud/releases)
+   and selects the native package for your operating system and CPU.
+2. WII-UU downloads over HTTPS and verifies the exact file size and SHA-256 digest
+   published in the official GitHub Release metadata. A missing digest or unknown
+   download URL is rejected. Installation is performed off the UI thread, with
+   progress and error messages in the plugin settings.
+3. The verified package is extracted into **`<WII-UU home>/native/openxcloud/current`**.
+   The previous managed installation is retained until the new one is committed,
+   and is restored if installation fails. The executable path is then configured
+   automatically. Clicking the action again checks for a newer release and
+   reinstalls the official package; it never silently updates in the background.
+4. Activate **Xbox Cloud Gaming** to add it to the bottom dock and launch it.
+   OpenXCloud starts in a separate GPU-rendered window. Complete OpenXCloud's
+   Microsoft account sign-in and select a game. WII-UU never sees Xbox credentials.
+
+### Platforms and manual installs
+
+| Platform | Package | Installation |
+| --- | --- | --- |
+| macOS Apple Silicon | `OpenXCloud-macos-arm64.zip` | Extract the `OpenXCloud.app` bundle using macOS `ditto`, retaining bundle metadata |
+| Windows x64 | `OpenXCloud-windows-x64.zip` | Extract the complete portable app, including FFmpeg DLLs, without running an installer |
+| Debian/Ubuntu x64 | `OpenXCloud-linux-amd64.deb` | Use `dpkg-deb --extract` within WII-UU's data directory; **no root access or package scripts** |
+
+macOS Intel and Linux ARM64 have no matching upstream packages in this installer.
+The macOS release is not notarized; Windows releases are not code-signed. macOS
+and Windows may show security warnings. Downloaded programs are not launched
+until you select the dock entry.
+
+On Linux, extracting a Debian package does **not** install missing system
+dependencies. OpenXCloud's Linux package is built on Ubuntu 24.04. If your
+distribution lacks the FFmpeg or GPU runtime libraries it requires, the app
+might not start. The verified `.deb` is also saved under the managed
+`native/openxcloud` directory for optional system installation with
+`sudo apt install ./OpenXCloud-linux-amd64.deb` from that directory.
+
+You can also [build OpenXCloud from source](https://github.com/shyim/openxcloud#get-started)
+or manually install it using the
+[upstream packaging instructions](https://github.com/shyim/openxcloud/blob/main/PACKAGING.md).
+**Choose OpenXCloud executable** accepts a native binary or macOS `.app` path.
+The custom path is preserved until you explicitly install or update from the
+WII-UU download action.
 
 The **Low-latency video presentation** toggle starts OpenXCloud with
 `--present immediate` (default) or `--present fifo` (V-sync). Immediate display
@@ -64,8 +93,10 @@ entry. `PluginStore` only accepts the fixed `xcloud` external identifier and
 starts the executable without a shell or command interpolation. No Electron
 installation is needed for this entry.
 
-Run `./build.sh` for WII-UU and `java -cp build/classes wiiuu.core.XboxCloudTest`
-after compiling `test/wiiuu/core/XboxCloudTest.java` against `build/classes`.
+Run `./build.sh` for WII-UU. The CI suite exercises `XboxCloudTest` and
+`XboxCloudInstallerTest` across Linux, macOS and Windows using offline release
+metadata and archive fixtures. The downloader is implemented in
+`src/wiiuu/core/XboxCloudInstaller.java`.
 For end-to-end tests, install OpenXCloud and check sign-in, an actual stream,
 controller input, immediate/FIFO presentation and process cleanup on Linux,
 macOS and Windows.
