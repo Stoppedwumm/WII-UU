@@ -1515,6 +1515,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             if (dockSel >= Dock.values().length) {
                 wiiuu.core.PluginStore.Entry plugin = dockPlugins.get(dockSel - Dock.values().length);
                 if (plugin.nativePlugin()) { openNativePlugin(plugin); return; }
+                if (plugin.externalPlugin() && plugin.id().equals("xcloud")) {
+                    XboxCloudNativeScreen.open(config, plugin);
+                    return;
+                }
                 wiiuu.core.PluginStore.launch(config, plugin,
                         message -> SwingUtilities.invokeLater(() -> showToast(message)));
                 return;
