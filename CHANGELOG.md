@@ -3,7 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
-## 2.1.5 (2026-11-21)
+## 2.1.5 (2026-11-22)
+- Add Xbox Cloud Gaming to the WII-UU app store and dock as a native desktop integration.
+- Launch the OpenXCloud Rust/WebRTC client directly, without a browser or Electron runtime.
+- Auto-detect installed executables, support custom executable paths and choose low-latency presentation.
+- Keep Microsoft account sign-in and stream decoding entirely inside the native companion app.
 - Replace the pre-launch native Swing user-choice dialog with a full-window WII-UU profile selection screen.
 - Use left/right and up/down to navigate users and Quit, A to enter, B/Home to leave, or mouse/keyboard.
 - On Linux, reuse the physical controller reader when moving from the login screen into the main menu; don't load account-bound libraries or show the intro until a user is chosen.

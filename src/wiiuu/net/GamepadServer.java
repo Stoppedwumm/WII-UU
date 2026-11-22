@@ -43,6 +43,7 @@ import wiiuu.core.Config;
 import wiiuu.core.Game;
 import wiiuu.core.GameSystem;
 import wiiuu.core.Launcher;
+import wiiuu.core.PluginStore;
 import wiiuu.core.Library;
 import wiiuu.input.InputRouter;
 import wiiuu.input.KeyMap;
@@ -1023,7 +1024,15 @@ public final class GamepadServer {
         return "Phone";
     }
 
+    /** Remember cloud transitions so a closed stream never leaves virtual buttons stuck. */
+    private boolean cloudActiveLastReap;
+
     private void reap() {
+        boolean cloud = PluginStore.externalRunning(config);
+        if (cloudActiveLastReap && !cloud && pads != null && !launcher.isRunning()) {
+            for (Client c : clients.values()) if (c.player > 0) pads.release(c.player);
+        }
+        cloudActiveLastReap = cloud;
         long now = System.currentTimeMillis();
         boolean changed = false;
         for (Client c : clients.values()) {
@@ -1053,11 +1062,14 @@ public final class GamepadServer {
 
     private void input(Client c, String body) {
         if (c.player <= 0) return;
-        // a controller plugged into a Mac: an emulator WII-UU started reads it itself (only Choccy Milk and the
-        // video players, which only know keys, need it passed on)
-        if (c.controller && c.id.startsWith("pad:mac") && launcher.isRunning() && !launcher.inChoccy() && !videoPlaying()) return;
-        // a controller in the menu: its bottom button confirms, as on most controllers (input.padConfirm=east: the right one)
-        boolean swap = c.controller && !launcher.isRunning() && !"east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())
+        // External native streaming also counts as game mode: local controllers go
+        // straight to OpenXCloud; phone pads are forwarded through Linux uinput.
+        boolean cloud = PluginStore.externalRunning(config);
+        boolean gameInput = launcher.isRunning() || cloud;
+        // On macOS, OpenXCloud reads the actual controller through GameController.
+        if (c.controller && c.id.startsWith("pad:mac") && gameInput && !launcher.inChoccy() && !videoPlaying()) return;
+        // Do not apply menu-confirm swapping to an active native game.
+        boolean swap = c.controller && !gameInput && !"east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())
                 && !remapsAOrB(c.label);
         for (String line : body.split("\n")) {
             String[] p = line.trim().split(" ");
@@ -1068,14 +1080,14 @@ public final class GamepadServer {
                         PadButton menu = !swap ? b : b == PadButton.A ? PadButton.B : b == PadButton.B ? PadButton.A : b;
                         router.button(c.player, menu, p[2].equals("1"));
                         if (dsu != null) dsu.button(c.player, b, p[2].equals("1"));
-                        if (pads != null && launcher.isRunning()) pads.button(c.player, b, p[2].equals("1"));
+                        if (pads != null && gameInput) pads.button(c.player, b, p[2].equals("1"));
                     }
                 } else if (p.length == 4 && p[0].equals("s")) {
                     int stick = Integer.parseInt(p[1]);
                     float x = clamp(Float.parseFloat(p[2])), y = clamp(Float.parseFloat(p[3]));
                     router.stick(c.player, stick, x, y);
                     if (dsu != null) dsu.stick(c.player, stick, x, y);
-                    if (pads != null && launcher.isRunning()) pads.stick(c.player, stick, x, y);
+                    if (pads != null && gameInput) pads.stick(c.player, stick, x, y);
                 } else if (p.length == 5 && p[0].equals("t")) {
                     // touch on the GamePad screen: "t <mode> <x> <y> <1 down | 2 move | 0 up>", x/y in 0..1
                     float x = Float.parseFloat(p[2]), y = Float.parseFloat(p[3]);

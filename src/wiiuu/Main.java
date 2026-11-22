@@ -105,7 +105,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         launcher.setReactions(reactions);
         launcher.addListener(reactions);
         launcher.addListener(openBased);
-        this.router = new InputRouter(new KeyMap(config), launcher::isRunning);
+        this.router = new InputRouter(new KeyMap(config),
+                () -> launcher.isRunning() || wiiuu.core.PluginStore.externalRunning(config));
         // type each emulator's own default keys (Dolphin, PPSSPP, mGBA, melonDS, ...), so nothing needs mapping
         router.setKeyProfile(() -> {
             Game g = launcher.current();
@@ -114,7 +115,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         });
         // Typing keys into emulators is the fallback for when real virtual controllers aren't available:
         // input.keys = auto (default: only without virtual pads) | on | off; system.<id>.keys overrides.
-        router.setKeysEnabled(() -> typesKeysFor(launcher.current()));
+        router.setKeysEnabled(() -> !wiiuu.core.PluginStore.externalRunning(config) && typesKeysFor(launcher.current()));
         // Choccy Milk plays inside WII-UU: the pads go straight to it (HOME: back to the menu)
         router.setPadSink(new InputRouter.PadSink() {
             @Override
