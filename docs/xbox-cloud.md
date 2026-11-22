@@ -37,10 +37,16 @@ process WII-UU launched; independently started OpenXCloud instances are unaffect
 - OpenXCloud requires a Microsoft account entitled to Xbox Cloud Gaming, a
   compatible game, a supported region, a working graphical session and its native
   FFmpeg/GPU dependencies. Check OpenXCloud's own platform support documentation.
+- **Phone GamePad input on Linux:** While OpenXCloud is running, WII-UU forwards
+  its paired phone GamePad buttons and analog sticks to the existing virtual Xbox
+  360 controller via uinput. WII-UU's background menu will not react to those
+  inputs. The virtual pad is released when the stream process exits.
 - In Linux console mode, WII-UU may exclusively grab a physical controller for
-  its menu. If OpenXCloud cannot see it, disable WII-UU's controller takeover
-  and restart WII-UU, or use a virtual Xbox pad provided by the GamePad server.
-  Direct controller handoff between the two processes is not implemented.
+  its menu. The existing helper can map captured controller input to a virtual
+  pad, but if that setup is unavailable, disable WII-UU's controller takeover
+  and restart WII-UU so OpenXCloud can read the physical controller directly.
+  macOS/Windows use OpenXCloud's native controller input; phone-to-virtual-pad
+  forwarding remains Linux-only.
 - The separate OpenXCloud window is not currently embedded in the TV/GamePad
   display. WII-UU's phone GamePad virtual controller can be used on Linux when
   created through its existing uinput helper; other platforms rely on the
