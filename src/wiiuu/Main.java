@@ -22,7 +22,6 @@ import java.util.concurrent.CompletableFuture;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
-import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
@@ -41,6 +40,7 @@ import wiiuu.screen.AudioStreamer;
 import wiiuu.screen.ScreenStreamer;
 import wiiuu.ui.MenuView;
 import wiiuu.ui.SettingsScreen;
+import wiiuu.ui.UserSelectScreen;
 
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
@@ -58,6 +58,30 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     /** reasons for no split screens already shown this session (each once) */
     private final java.util.Set<String> shownSplitProblem = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final InputRouter router;
+    /** A single reader of the physical controllers survives the pre-login to menu transition. */
+    private StartupPads startupPads;
+
+    private static final class StartupPads implements wiiuu.input.PadSink {
+        private volatile wiiuu.input.PadSink target;
+        private wiiuu.input.LocalPads reader;
+        StartupPads(wiiuu.input.PadSink target) { this.target = target; }
+        void use(wiiuu.input.PadSink next) { target = next; }
+        void setConfirmEast(boolean confirmEast) {
+            if (reader != null) reader.setConfirmEast(confirmEast);
+        }
+        @Override public void button(int player, wiiuu.input.PadButton button, boolean down) {
+            wiiuu.input.PadSink current = target;
+            if (current != null) current.button(player, button, down);
+        }
+        @Override public void stick(int player, int stick, float x, float y) {
+            wiiuu.input.PadSink current = target;
+            if (current != null) current.stick(player, stick, x, y);
+        }
+        @Override public void releaseAll(int player) {
+            wiiuu.input.PadSink current = target;
+            if (current != null) current.releaseAll(player);
+        }
+    }
     private GamepadServer server;
     private DsuServer dsuServer;
     private volatile VirtualPads vpads;
@@ -262,35 +286,33 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
         // Process USB demo reset/restore before opening any settings, databases or plugin files.
         wiiuu.core.DemoDevice.applyPending(home);
+        StartupPads preLoginPads = null;
         if (requestedUser != null) {
+            // Explicit CLI selection remains useful for automated launchers and unattended tests.
             Config.Users.select(home, requestedUser);
-        } else if (!oemSelfTest && !oemSettings && snapshot == null && !GraphicsEnvironment.isHeadless()) {
-            List<Config.Users.Profile> users = Config.Users.list(home);
-            if (Config.Users.chooserRequired(home)) {
-                String[] names = users.stream().map(Config.Users.Profile::name).toArray(String[]::new);
-                javax.swing.JComboBox<String> choice = new javax.swing.JComboBox<>(names);
-                choice.setSelectedItem(Config.Users.active(home).name());
-                String stop = "1".equals(System.getenv("WIIUU_CONSOLE")) ? "Shut Down" : "Quit WII-UU";
-                int answer = JOptionPane.showOptionDialog(null,
-                        new Object[] {"Choose who is playing:", choice},
-                        "WII-UU users", JOptionPane.DEFAULT_OPTION,
-                        JOptionPane.QUESTION_MESSAGE, null,
-                        new String[] {"Start", stop}, "Start");
-                if (answer != 0) {
-                    // Keep the chooser for the next startup even if only one user
-                    // remains. A cancelled sign-in must never resume the last profile.
-                    Config.Users.requireChooserOnNextBoot(home);
-                    if ("1".equals(System.getenv("WIIUU_CONSOLE"))) System.exit(11);
-                    return;
-                }
-                String name = (String) choice.getSelectedItem();
-                for (Config.Users.Profile profile : users) {
-                    if (profile.name().equals(name)) {
-                        Config.Users.select(home, profile.id());
-                        break;
-                    }
-                }
+        } else if (!oemSelfTest && !oemSettings && snapshot == null && !GraphicsEnvironment.isHeadless()
+                && Config.Users.chooserRequired(home)) {
+            // Gate the launch BEFORE constructing Main, scanning games or starting user-bound services.
+            // The previous JOptionPane did not accept gamepad input and sat outside the WII-UU UI.
+            Config loginSettings = new Config(home);
+            InputRouter loginRouter = new InputRouter(new KeyMap(loginSettings), () -> false);
+            preLoginPads = new StartupPads(loginRouter);
+            // LocalPads works on Linux; the same reader is handed to the real menu after selection.
+            wiiuu.input.LocalPads loginPads = new wiiuu.input.LocalPads(preLoginPads,
+                    "east".equalsIgnoreCase(loginSettings.get("input.padConfirm", "south").trim()));
+            preLoginPads.reader = loginPads;
+            loginPads.start();
+            boolean loginFullscreen = fullscreen != null ? fullscreen
+                    : (appliance || "1".equals(System.getenv("WIIUU_CONSOLE"))
+                            || loginSettings.getBool("ui.fullscreen", false));
+            String picked = UserSelectScreen.choose(home, loginRouter, loginFullscreen);
+            if (picked == null) {
+                // A cancelled login must never start the previously active profile.
+                Config.Users.requireChooserOnNextBoot(home);
+                if ("1".equals(System.getenv("WIIUU_CONSOLE"))) System.exit(11);
+                return;
             }
+            Config.Users.select(home, picked);
         }
         Config config = new Config(home);
         if (oemSelfTest) {
@@ -309,6 +331,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         boolean guideAsked = config.getBool("ui.setupNext", false) || setup;
 
         Main app = new Main(config);
+        app.startupPads = preLoginPads;
         if (snapshot == null && !oemSelfTest)
             wiiuu.core.Diagnostics.start(config, BUILD_VERSION);
         if (snapshot != null) {
@@ -495,7 +518,11 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         achievements.addListener(() -> SwingUtilities.invokeLater(view::repaint));
         router.setMenu(view);
         // real USB / Bluetooth controllers in the menu too (Linux)
-        if (config.getBool("input.localPads", true)) {
+        if (startupPads != null) {
+            // Do not start a second Linux evdev reader. Honor the signed-in user's input setting.
+            startupPads.setConfirmEast("east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim()));
+            startupPads.use(config.getBool("input.localPads", true) ? router : null);
+        } else if (config.getBool("input.localPads", true)) {
             new wiiuu.input.LocalPads(router, "east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())).start();
         }
         frame = new JFrame(config.get("oem.model", "WII-UU"));

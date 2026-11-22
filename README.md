@@ -116,13 +116,13 @@ you are unwilling to share. See [archive documentation](archive/README.md).
 ## Local user profiles
 
 Open **Settings > System > User profiles** to add, rename, switch or archive local users.
-With two or more users, WII-UU asks who is playing at startup. Use **--list-users** to
+With two or more users, WII-UU opens a dedicated profile-selection screen **before the intro and main menu**. The screen works with mouse or keyboard (arrow keys and Enter) and, on Linux, a connected controller (D-pad/left stick to navigate, A to select, B to quit). Use **--list-users** to
 see profile IDs, or **--user ID** to launch a particular profile without the chooser.
 Switching accounts restarts WII-UU, so the current user's account sessions and
 game-save handles are closed first. On a console, select **Power → Sign Out & Shut Down**
 (or **Settings → System → User profiles → Sign out & shut down**) to end the
 current session and power off. The next boot shows the user chooser, even with
-only one configured user. The startup chooser also has a **Shut Down** button, so
+only one configured user. The startup screen also has a **Shut Down** button, so
 the console can be powered off before anyone signs in. On a desktop, **Sign Out & Quit**
 closes WII-UU without powering off the PC.
 
