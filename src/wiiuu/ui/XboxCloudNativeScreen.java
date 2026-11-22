@@ -53,7 +53,7 @@ import java.util.function.Consumer;
  * Microsoft/Xbox grants stay inside the local Node sidecar, not the browser.
  */
 public final class XboxCloudNativeScreen extends JFrame {
-    private static XboxCloudNativeScreen instance;
+    private static volatile XboxCloudNativeScreen instance;
 
     public static synchronized void open(Config config, PluginStore.Entry entry) {
         SwingUtilities.invokeLater(() -> {
@@ -65,6 +65,51 @@ public final class XboxCloudNativeScreen extends JFrame {
                 instance.setVisible(true);
             }
         });
+    }
+
+    /**
+     * Give connected WII-UU controllers a native focus path while the catalog is
+     * visible. Once the browser stream starts, input goes to virtual Xbox pads.
+     */
+    public static boolean controllerButton(wiiuu.input.PadButton button, boolean down) {
+        XboxCloudNativeScreen screen = instance;
+        if (screen == null || !screen.isDisplayable() || screen.browser != null) return false;
+        if (!down) return true;
+        SwingUtilities.invokeLater(() -> {
+            if (screen.closing) return;
+            int index = screen.list.getSelectedIndex(), count = screen.visibleGames.getSize();
+            switch (button) {
+                case DOWN, LS_DOWN -> {
+                    if (count > 0) screen.list.setSelectedIndex(Math.min(count - 1, index + 1));
+                }
+                case UP, LS_UP -> {
+                    if (count > 0) screen.list.setSelectedIndex(Math.max(0, index < 0 ? 0 : index - 1));
+                }
+                case A -> screen.startGame();
+                case B, HOME -> screen.close();
+                case PLUS -> screen.startLogin();
+                case R, ZR -> screen.loadGames();
+                default -> { }
+            }
+            if (screen.list.getSelectedIndex() >= 0)
+                screen.list.ensureIndexIsVisible(screen.list.getSelectedIndex());
+        });
+        return true;
+    }
+
+    private static volatile long lastAxisInput;
+
+    public static boolean controllerStick(int stick, float x, float y) {
+        XboxCloudNativeScreen screen = instance;
+        if (screen == null || !screen.isDisplayable() || screen.browser != null) return false;
+        if (stick == 0 && Math.abs(y) > 0.6f) {
+            long now = System.nanoTime();
+            if (now - lastAxisInput > TimeUnit.MILLISECONDS.toNanos(150)) {
+                lastAxisInput = now;
+                controllerButton(y > 0 ? wiiuu.input.PadButton.DOWN : wiiuu.input.PadButton.UP, true);
+            }
+        }
+        return true;
     }
 
     private final Config config;
