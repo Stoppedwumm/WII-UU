@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 public final class PluginStore {
     public record Entry(String id, String name, String description, String script, String type) {
         public boolean nativePlugin() { return type.equals("native"); }
-        /** Compiled native companion app: no JS host or Chromium runtime. */
+        /** Reviewed external desktop companion; no WII-UU plugin runtime required. */
         public boolean externalPlugin() { return type.equals("external"); }
     }
     private static final List<Entry> CATALOG = readCatalog();
@@ -203,14 +203,14 @@ public final class PluginStore {
                     if (entry.externalPlugin()) {
                         Process old = RUNNING.get(key(config, entry));
                         if (old != null && old.isAlive()) { report.accept(entry.name() + " is already running. Switch to its window."); return; }
-                        Process process = XboxCloud.start(config);
+                        Process process = Greenlight.start(config);
                         RUNNING.put(key(config, entry), process);
                         process.onExit().thenAccept(p -> {
                             RUNNING.remove(key(config, entry), p);
                             if (p.exitValue() != 0 && enabled(config, entry))
-                                report.accept("OpenXCloud exited (" + p.exitValue() + "). Check OpenXCloud's own diagnostic log.");
+                                report.accept("Greenlight exited (" + p.exitValue() + "). Check Greenlight or Flatpak logs.");
                         });
-                        report.accept("OpenXCloud launched with native WebRTC and GPU rendering.");
+                        report.accept("Greenlight launched for Xbox Cloud Gaming.");
                         return;
                     }
                     if (entry.nativePlugin()) throw new IOException("Open this native plugin from the WII-UU bottom bar");
