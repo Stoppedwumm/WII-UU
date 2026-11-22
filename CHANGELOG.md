@@ -3,6 +3,12 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.9 (2026-11-22)
+- Replace the floating Xbox Cloud Swing window with a full-screen WII-UU-native, theme-aware TV/GamePad view.
+- Present Microsoft device-code authorization, a searchable catalog and cloud-game tiles with WII-UU's existing rounded-card palette, fonts and controller sounds.
+- Add D-pad/stick and A/B navigation, L/R pagination, controller-operated on-screen search keyboard, pointer/touch selection and keyboard search.
+- Retain the isolated Chromium/WebRTC player and local Xbox authentication backend; no credentials are exposed to the UI renderer.
+
 ## 2.1.8 (2026-11-22)
 - Replace Greenlight with a native WII-UU Xbox Cloud Gaming login and game-selection screen.
 - Use Microsoft device-code authentication (microsoft.com/link) through an isolated localhost-only Xbox protocol helper; do not expose Microsoft grants to the browser.
