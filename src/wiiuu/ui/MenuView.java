@@ -950,7 +950,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private boolean canIdle() {
-        return !booting && intro == null && !introPending && guide == null && !guidePending && settings == null && nativePlugin == null && boss == null
+        return !booting && intro == null && !introPending && guide == null && !guidePending && settings == null && nativePlugin == null && xcloudPanel == null && boss == null
                 && playing == null && !showPad && !confirmQuit && !vizFull && isShowing();
     }
 
@@ -1140,6 +1140,23 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private SettingsScreen settings;
     private NativePluginScreen nativePlugin;
+    private XboxCloudNativeScreen xcloudPanel;
+
+    private void closeXboxCloud() {
+        if (xcloudPanel == null) return;
+        xcloudPanel.close();
+        xcloudPanel = null;
+        lastInput = System.currentTimeMillis();
+        requestFocusInWindow();
+        repaint();
+    }
+
+    private void openXboxCloud(wiiuu.core.PluginStore.Entry entry) {
+        if (xcloudPanel != null) return;
+        xcloudPanel = new XboxCloudNativeScreen(config, entry, this::repaint, this::closeXboxCloud);
+        Sfx.select();
+        repaint();
+    }
 
     private void closeNativePlugin() {
         if (nativePlugin == null) return;
@@ -1156,7 +1173,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** Shows the settings on the TV (F1, the dock's Settings, or Main). */
     public void openSettings(SettingsScreen.Services services) {
-        if (settings != null || nativePlugin != null || guide != null || intro != null || booting || playing != null) return;
+        if (settings != null || nativePlugin != null || xcloudPanel != null || guide != null || intro != null || booting || playing != null) return;
         settings = new SettingsScreen(this, services);
         repaint();
     }
@@ -1387,6 +1404,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         // The changelog is a separate Swing window, not an in-menu overlay.
         // Its controller focus must take precedence over menu navigation.
         if (ChangelogDialog.controllerNavigate(dx, dy)) return;
+        if (xcloudPanel != null && migration == null) { xcloudPanel.navigate(dx, dy); return; }
         if (nativePlugin != null && migration == null) { nativePlugin.navigate(dx, dy); return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
@@ -1473,6 +1491,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void activate() {
+        if (xcloudPanel != null && migration == null) { xcloudPanel.activate(); return; }
         if (nativePlugin != null && migration == null) { nativePlugin.activate(); return; }
         if (migration != null) { migration.confirm(this); return; }
         if (wakeIdle()) return;
@@ -1516,7 +1535,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                 wiiuu.core.PluginStore.Entry plugin = dockPlugins.get(dockSel - Dock.values().length);
                 if (plugin.nativePlugin()) { openNativePlugin(plugin); return; }
                 if (plugin.externalPlugin() && plugin.id().equals("xcloud")) {
-                    XboxCloudNativeScreen.open(config, plugin);
+                    openXboxCloud(plugin);
                     return;
                 }
                 wiiuu.core.PluginStore.launch(config, plugin,
@@ -1564,6 +1583,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void back() {
+        if (xcloudPanel != null && migration == null) { xcloudPanel.back(); return; }
         if (nativePlugin != null && migration == null) { closeNativePlugin(); return; }
         if (migration != null) { migration.back(this); return; }
         if (wakeIdle()) return;
@@ -1616,6 +1636,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void page(int delta) {
+        if (xcloudPanel != null && migration == null) { xcloudPanel.page(delta); return; }
         if (nativePlugin != null && migration == null) { nativePlugin.page(delta); return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
@@ -1654,6 +1675,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public boolean pressed(int player, wiiuu.input.PadButton b, boolean down) {
         if (down) lastInput = System.currentTimeMillis();
         if (ChangelogDialog.controllerButton(b, down)) return true;
+        if (xcloudPanel != null && migration == null && b == wiiuu.input.PadButton.HOME) {
+            if (down) closeXboxCloud();
+            return true;
+        }
         if (migration != null) {
             if (down) {
                 if (b == wiiuu.input.PadButton.A || b == wiiuu.input.PadButton.PLUS) migration.confirm(this);
@@ -1674,7 +1699,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void toggleGamepadInfo() {
-        if (nativePlugin != null) { return; }
+        if (xcloudPanel != null || nativePlugin != null) { return; }
         if (wakeIdle()) return;
         if (skipBoot()) return;
         if (skipIntro()) return;
@@ -1714,7 +1739,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyTyped(KeyEvent e) {
-                if (migration == null && guide != null && guide.wantsKeys()) {
+                if (xcloudPanel != null && xcloudPanel.keyTyped(e.getKeyChar())) {
+                    repaint();
+                } else if (migration == null && guide != null && guide.wantsKeys()) {
                     guide.keyTyped(e.getKeyChar());
                     repaint();
                 } else if (migration == null && settings != null && settings.wantsKeys()) {
@@ -1732,6 +1759,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
             @Override
             public void keyPressed(KeyEvent e) {
+                if (xcloudPanel != null && (xcloudPanel.keyPressed(e) || xcloudPanel.wantsKeys())) {
+                    repaint();
+                    return;
+                }
                 if (migration != null) {
                     switch (e.getKeyCode()) {
                         case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE -> activate();
@@ -1806,6 +1837,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     return;
                 }
                 if (boss != null) return;
+                if (xcloudPanel != null) {
+                    if (e.getButton() == MouseEvent.BUTTON3) closeXboxCloud();
+                    else if (e.getButton() == MouseEvent.BUTTON1) xcloudPanel.click(e.getX(), e.getY());
+                    return;
+                }
                 if (nativePlugin != null) {
                     if (e.getButton() == MouseEvent.BUTTON3) closeNativePlugin();
                     else if (e.getButton() == MouseEvent.BUTTON1) nativePlugin.click(e.getX(), e.getY());
@@ -1893,6 +1929,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
             @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
+                if (xcloudPanel != null) { xcloudPanel.page(e.getWheelRotation()); return; }
                 if (nativePlugin != null) { nativePlugin.page(e.getWheelRotation()); return; }
                 if (wakeIdle()) return;
                 if (settings != null) {
@@ -1939,7 +1976,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             return;
         }
         if (tickIntro()) return;
-        if (nativePlugin != null) return;
+        if (nativePlugin != null || xcloudPanel != null) return;
         if (cinema != null && settings == null) {           // no idle play in the cinema; its motion keeps going
             if (!cinema.tick()) {
                 cinema = null;
@@ -2505,6 +2542,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
         if (migration != null) {
             migration.paint(g, getWidth(), getHeight());
+            g.dispose();
+            Toolkit.getDefaultToolkit().sync();
+            return;
+        }
+        if (xcloudPanel != null) {
+            xcloudPanel.paint(g, getWidth(), getHeight());
             g.dispose();
             Toolkit.getDefaultToolkit().sync();
             return;
