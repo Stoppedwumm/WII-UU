@@ -1024,7 +1024,15 @@ public final class GamepadServer {
         return "Phone";
     }
 
+    /** Remember cloud transitions so a closed stream never leaves virtual buttons stuck. */
+    private boolean cloudActiveLastReap;
+
     private void reap() {
+        boolean cloud = PluginStore.externalRunning(config);
+        if (cloudActiveLastReap && !cloud && pads != null && !launcher.isRunning()) {
+            for (Client c : clients.values()) if (c.player > 0) pads.release(c.player);
+        }
+        cloudActiveLastReap = cloud;
         long now = System.currentTimeMillis();
         boolean changed = false;
         for (Client c : clients.values()) {
