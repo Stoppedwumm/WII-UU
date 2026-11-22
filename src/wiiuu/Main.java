@@ -45,7 +45,7 @@ import wiiuu.ui.UserSelectScreen;
 /** WII-UU: a Wii U styled emulator launcher with a phone-as-GamePad web server. */
 public final class Main implements MenuView.Actions, GamepadServer.Host, Launcher.Listener {
     /** Canonical target release. Build scripts and legacy version checks read this declaration. */
-    public static final String VERSION = "2.1.7";
+    public static final String VERSION = "2.1.8";
     /** Exact installed version, including beta/run identity from the packaged metadata. */
     public static final String BUILD_VERSION = wiiuu.core.BuildInfo.version();
 
@@ -120,6 +120,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         router.setPadSink(new InputRouter.PadSink() {
             @Override
             public boolean button(int player, wiiuu.input.PadButton b, boolean down) {
+                if (wiiuu.ui.XboxCloudNativeScreen.controllerButton(b, down)) return true;
                 // HOME also ends a video (mpv, VLC...), the only way out with just a controller
                 Game g = launcher.current();
                 boolean video = g != null && (wiiuu.core.OpenBased.handles(g) || wiiuu.core.Reactions.handles(g));
@@ -133,6 +134,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
             @Override
             public boolean stick(int player, int stick, float x, float y) {
+                if (wiiuu.ui.XboxCloudNativeScreen.controllerStick(stick, x, y)) return true;
                 return launcher.inChoccy() && launcher.choccyStick(player, stick, x, y);
             }
         });

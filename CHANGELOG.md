@@ -3,6 +3,14 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.8 (2026-11-22)
+- Replace Greenlight with a native WII-UU Xbox Cloud Gaming login and game-selection screen.
+- Use Microsoft device-code authentication (microsoft.com/link) through an isolated localhost-only Xbox protocol helper; do not expose Microsoft grants to the browser.
+- Offer native searchable Xbox Cloud Gaming titles, with an on-demand portable Chrome for Testing WebRTC player and bundled Switch controller mapping.
+- Support official Linux AArch64/x86-64, macOS Apple Silicon/Intel and Windows x64 Chrome packages.
+- Download player dependencies only on explicit installation, isolate browser profiles, and maintain local WebRTC signaling with testable offline components.
+- Streaming depends on upstream Xbox service grants and has not been validated against a live Microsoft account.
+
 ## 2.1.7 (2026-11-22)
 - Replace OpenXCloud with Greenlight as the Xbox Cloud Gaming companion, keeping existing plugin dock activation.
 - Support Linux AArch64 and x86-64 via the Flathub Greenlight Flatpak, installed or updated in the user's Flatpak scope.

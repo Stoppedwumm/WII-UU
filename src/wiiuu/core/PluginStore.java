@@ -81,6 +81,15 @@ public final class PluginStore {
         return false;
     }
     private static String key(Config config, Entry entry) { return config.userHome().toAbsolutePath() + "/" + entry.id(); }
+    /** Only the reviewed xCloud dock app may register its isolated Chromium process. */
+    public static synchronized void trackExternal(Config config, Entry entry, Process process) {
+        if (!CATALOG.contains(entry) || !entry.externalPlugin() || !"xcloud".equals(entry.id()))
+            throw new IllegalArgumentException("Invalid external streaming app");
+        Process prior = RUNNING.put(key(config, entry), process);
+        if (prior != null && prior.isAlive() && prior != process) prior.destroy();
+        process.onExit().thenRun(() -> RUNNING.remove(key(config, entry), process));
+    }
+
     public static synchronized void setEnabled(Config config, Entry entry, boolean enabled) {
         if (!CATALOG.contains(entry)) throw new IllegalArgumentException("Unknown plugin");
         config.set("plugin." + entry.id() + ".enabled", Boolean.toString(enabled));
@@ -203,14 +212,7 @@ public final class PluginStore {
                     if (entry.externalPlugin()) {
                         Process old = RUNNING.get(key(config, entry));
                         if (old != null && old.isAlive()) { report.accept(entry.name() + " is already running. Switch to its window."); return; }
-                        Process process = Greenlight.start(config);
-                        RUNNING.put(key(config, entry), process);
-                        process.onExit().thenAccept(p -> {
-                            RUNNING.remove(key(config, entry), p);
-                            if (p.exitValue() != 0 && enabled(config, entry))
-                                report.accept("Greenlight exited (" + p.exitValue() + "). Check Greenlight or Flatpak logs.");
-                        });
-                        report.accept("Greenlight launched for Xbox Cloud Gaming.");
+                        report.accept("Open Xbox Cloud Gaming from the WII-UU dock to use its native login and catalog.");
                         return;
                     }
                     if (entry.nativePlugin()) throw new IOException("Open this native plugin from the WII-UU bottom bar");

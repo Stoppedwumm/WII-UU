@@ -1710,11 +1710,11 @@ public final class SettingsScreen {
     private boolean updating;
 
     private String pluginStatus = "Install the plugin runtime once; Node.js 22.12+ with npm is required.";
-    private volatile String greenlightDownloadStatus = "Linux ARM64/x86-64: install from Flathub. macOS/Windows: verified official downloads.";
+    private volatile String xcloudRuntimeStatus = "Native game catalog and Microsoft device-code login; portable Chrome for WebRTC.";
     private Page pluginStorePage() {
         return new Page("Plugin store", () -> {
             List<Row> rows = new ArrayList<>();
-            rows.add(new Info("Bundled apps appear in the bottom bar. Greenlight uses its own Electron runtime and does not need the WII-UU plugin runtime."));
+            rows.add(new Info("Bundled apps appear in the bottom bar. Xbox Cloud Gaming has a native login/catalog and an isolated portable Chromium player."));
             rows.add(new Action("Install / repair plugin runtime", "Downloads the shared JavaScript and browser runtime using npm. Close plugin apps first.", () -> {
                 pluginStatus = "Installing browser runtime...";
                 wiiuu.core.PluginStore.install(config, message -> SwingUtilities.invokeLater(() -> {
@@ -1729,35 +1729,25 @@ public final class SettingsScreen {
                 rows.add(new Header(entry.name() + kind));
                 rows.add(new Info(entry.description()));
                 if (entry.externalPlugin()) {
-                    rows.add(new Info("Greenlight: " + wiiuu.core.Greenlight.status(config)));
-                    rows.add(new Action("Download / update Greenlight",
-                            "Linux AArch64 and x86-64: install/update Flathub Flatpak in your user account. "
-                            + "macOS: verified universal DMG. Windows x64: verified portable ZIP. "
-                            + "No system permissions or silent installers are used.", () -> {
-                                greenlightDownloadStatus = "Checking Greenlight installation...";
+                    rows.add(new Info("Xbox Cloud Gaming: " + (wiiuu.core.XboxCloudRuntime.ready(config)
+                            ? "Portable Chromium and Xbox backend ready" : "Streaming runtime not installed")));
+                    rows.add(new Action("Install / update Xbox Cloud runtime",
+                            "Download official portable Chrome for Testing for Linux ARM64/x86-64, "
+                            + "macOS or Windows x64; install local Xbox login and WebRTC packages. "
+                            + "A working Node.js + npm installation is required.", () -> {
+                                xcloudRuntimeStatus = "Preparing the xCloud streaming runtime...";
                                 reload(false);
-                                wiiuu.core.GreenlightInstaller.install(config, status ->
+                                wiiuu.core.XboxCloudRuntime.install(config, status ->
                                         SwingUtilities.invokeLater(() -> {
-                                            greenlightDownloadStatus = status;
+                                            xcloudRuntimeStatus = status;
                                             reload(false);
                                         }));
-                            }, () -> wiiuu.core.GreenlightInstaller.installing() ? "Installing..."
-                                    : config.get("greenlight.installedVersion", "Not installed"), null));
-                    rows.add(new Info(greenlightDownloadStatus));
-                    rows.add(new Action("Choose existing Greenlight executable",
-                            "Select an installed Greenlight executable or macOS .app bundle. "
-                            + "Selecting a file does not download or launch anything.", () ->
-                            push(browser("Greenlight executable", Paths.get(System.getProperty("user.home")), false, binary -> {
-                                config.set("greenlight.executable", binary.toAbsolutePath().toString());
-                                config.save();
-                                reload(false);
-                            })), null, null));
-                    rows.add(new Text("Greenlight executable path / macOS .app bundle",
-                            "Optional absolute path. Leave empty to prefer the Linux Flatpak or detect a desktop installation.",
-                            () -> config.get("greenlight.executable", ""), value -> {
-                                config.set("greenlight.executable", value.trim());
-                                config.save();
-                            }, false, "Auto-detect / Flatpak"));
+                            }, () -> wiiuu.core.XboxCloudRuntime.installing()
+                                    ? "Installing..." : wiiuu.core.XboxCloudRuntime.ready(config)
+                                    ? "Installed" : "Not installed", null));
+                    rows.add(new Info(xcloudRuntimeStatus));
+                    rows.add(new Info("Launch Xbox Cloud Gaming from the dock for a native Microsoft code login "
+                            + "and a searchable game list. The Chromium window is used only while playing."));
                 }
                 rows.add(new Toggle("Activate " + entry.name(),
                         "Adds this app to the bottom bar. Deactivating stops its process.",
