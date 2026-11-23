@@ -405,6 +405,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         this.screen = screen;
         if (screen != null) {
             screen.setRetroArch(launcher::inRetroArch);
+            screen.setExternalXbox(() -> wiiuu.core.PluginStore.externalRunning(config));
             screen.setChoccy(launcher::inChoccy, launcher::choccyTouch);
             screen.setDualScreen(dual);
         }
