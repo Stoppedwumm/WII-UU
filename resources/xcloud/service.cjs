@@ -72,8 +72,15 @@ function deviceInfo() {
 }
 async function streamingTokens() {
   if (!store.getUserToken()) throw new Error('Sign in first');
-  const tokens = await msal.getStreamingTokens();
-  cloudToken = tokens.xCloudToken;
+  // xCloud should not depend on xHome authentication. getStreamingTokens()
+  // also requests an xHome grant which may fail even with a valid xCloud account.
+  const gssv = await msal.getGssvToken();
+  if (!gssv?.data?.Token) throw new Error('Xbox GSSV authorization was unavailable');
+  try {
+    cloudToken = await msal.getStreamToken(gssv.data.Token, 'xgpuweb');
+  } catch (paidOfferingError) {
+    cloudToken = await msal.getStreamToken(gssv.data.Token, 'xgpuwebf2p');
+  }
   if (!cloudToken?.data?.gsToken) throw new Error('Xbox Cloud Gaming access is unavailable for this account');
   return cloudToken;
 }
@@ -140,9 +147,13 @@ async function deviceAuth() {
   catch (error) { authenticating = false; throw error; }
   emit({event:'code', code:flow.user_code, url:flow.verification_uri || flow.verification_url || 'https://www.microsoft.com/link',
       expiresIn:flow.expires_in || 900, message:flow.message});
-  void msal.doPollForDeviceCodeAuth(flow.device_code).then(async () => {
+  // Microsoft's approval and Xbox cloud entitlement are separate milestones.
+  // Notify Java as soon as the device-code exchange has produced a user token.
+  // Do not block the sign-in UI on xHome/xCloud provisioning or catalog access.
+  void msal.doPollForDeviceCodeAuth(flow.device_code,
+    Math.max(1, Number(flow.expires_in) || 900) * 1000).then(() => {
+    if (!store.getUserToken()) throw new Error('Microsoft approved the device but no user token was returned');
     store.save();
-    await streamingTokens();
     authenticating = false;
     emit({event:'signedIn'});
   }).catch(error => {
