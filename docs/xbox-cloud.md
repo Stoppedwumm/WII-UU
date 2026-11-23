@@ -75,6 +75,23 @@ sandbox. Linux must have a graphical session, working video drivers,
 namespaces Chromium may fail to start; WII-UU intentionally avoids
 automatically adding unsafe \`--no-sandbox\` flags.
 
+## GamePad display during Xbox Cloud streams
+
+The phone GamePad treats the isolated Chromium Xbox player as a running game,
+even though it was not launched through the normal emulator launcher.
+Opening a stream therefore automatically switches the GamePad's center LCD
+to its TV mirror if screen capture is enabled. The existing TV button remains
+available for switching manually, and closing the player returns the phone
+to Home. Without screen capture, the phone shows Now Playing rather than
+the library while the game runs.
+
+The screen streamer locates the window titled `WII-UU Xbox Cloud Player`
+and captures that rectangle, not the WII-UU menu or the entire desktop. The
+same screen-capture permissions and performance limitations as other streamed
+WII-UU game windows apply. Xbox media stays in Chromium; the phone's
+picture uses the existing MJPEG GamePad screen channel and does not start a
+second Xbox Cloud session.
+
 ## WII-UU controller-manager integration
 
 Xbox Cloud Gaming now uses the same live controller-manager output as WII-UU games:
