@@ -37,6 +37,13 @@ class StoredTokens extends TokenStore {
     fs.renameSync(tmp, tokenFile);
     if (process.platform !== 'win32') fs.chmodSync(tokenFile, 0o600);
   }
+  // xal-node calls removeAll() after successful device-code exchange,
+  // before setUserToken() and save(). Its default implementation writes to
+  // _filepath, which this store deliberately does not use. Clear only the
+  // in-memory state here: save() atomically replaces the persisted token later.
+  removeAll() {
+    this._userToken = undefined; this._sisuToken = undefined; this._jwtKeys = undefined;
+  }
   clear() {
     this._userToken = undefined; this._sisuToken = undefined; this._jwtKeys = undefined;
     try { fs.unlinkSync(tokenFile); } catch (error) { if (error.code !== 'ENOENT') throw error; }
