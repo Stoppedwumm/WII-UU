@@ -342,9 +342,9 @@ test('Xbox player has controller-free audio startup and release-banner flags',()
   const player=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
   assert.match(native,/--disable-infobars/);
   assert.match(native,/--autoplay-policy=no-user-gesture-required/);
-  assert.match(native,/xcloud\\.audioAutoplay/);
-  assert.match(player,/getAudioElement\\(\\)/);
+  assert.match(native,/xcloud\.audioAutoplay/);
+  assert.match(player,/getAudioElement\(\)/);
   assert.match(player,/audioTimer=setInterval/);
-  assert.match(player,/async function sessionEnded\\(\\)/);
-  assert.match(player,/await disconnect\\(\\)/);
+  assert.match(player,/async function sessionEnded\(\)/);
+  assert.match(player,/await disconnect\(\)/);
 });
