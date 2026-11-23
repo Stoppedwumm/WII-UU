@@ -21,6 +21,32 @@ let cloudToken = null;
 let allowedTitles = new Map();
 let authenticating = false;
 let port = 0;
+let managedPads = [];
+let managedAt = 0;
+const FRAME_BUTTONS = ['A','B','X','Y','LeftShoulder','RightShoulder','LeftTrigger',
+  'RightTrigger','View','Menu','LeftThumb','RightThumb','DPadUp','DPadDown','DPadLeft',
+  'DPadRight','Nexus'];
+const FRAME_AXES = ['LeftThumbXAxis','LeftThumbYAxis','RightThumbXAxis','RightThumbYAxis'];
+function receiveManagedPads(pads) {
+  if (!Array.isArray(pads) || pads.length > 4) return;
+  const clean = new Map();
+  for (const input of pads) {
+    const slot = input?.GamepadIndex;
+    if (!Number.isInteger(slot) || slot < 0 || slot > 3 || clean.has(slot)) return;
+    const frame = {GamepadIndex:slot};
+    for (const key of FRAME_BUTTONS.concat(FRAME_AXES)) {
+      const value = input[key];
+      if (typeof value !== 'number' || !Number.isFinite(value)) return;
+      frame[key] = Math.max(key.includes('Axis') ? -1 : 0, Math.min(1,value));
+    }
+    clean.set(slot,frame);
+  }
+  managedPads = [...clean.values()].sort((a,b)=>a.GamepadIndex-b.GamepadIndex);
+  managedAt = Date.now();
+}
+function currentManagedPads() {
+  return Date.now() - managedAt <= 700 ? managedPads : [];
+}
 
 class StoredTokens extends TokenStore {
   constructor() {
@@ -256,6 +282,7 @@ async function endSession() {
 }
 async function api(action, payload={}) {
   switch (action) {
+    case 'controllers': return {pads:currentManagedPads()};
     case 'auth': return deviceAuth();
     case 'signedIn': {
       const signedIn = !!store.getUserToken();
@@ -368,7 +395,7 @@ const server=http.createServer(async (req,res)=>{
       data=JSON.parse(body||'{}');
     }
     const action=url.pathname.slice(5);
-    if (!['start','state','connect','sdpPost','sdpGet','icePost','iceGet','keepalive','stop'].includes(action))
+    if (!['start','state','connect','sdpPost','sdpGet','icePost','iceGet','controllers','keepalive','stop'].includes(action))
       return reply(404,{error:'Unknown route'});
     reply(200,await api(action,data));
   } catch(error) {reply(502,{error:safeError(error)});}
@@ -377,6 +404,10 @@ const reader=readline.createInterface({input:process.stdin});
 reader.on('line',async line=>{
   let command;
   try {command=JSON.parse(line);} catch {return;}
+  if (command?.event === 'managedPads') {
+    receiveManagedPads(command.pads);
+    return;
+  }
   if (!Number.isSafeInteger(command.id)) return;
   try {emit({id:command.id,ok:true,result:await api(command.cmd,command.data)});}
   catch(error){emit({id:command.id,ok:false,error:safeError(error)});}
