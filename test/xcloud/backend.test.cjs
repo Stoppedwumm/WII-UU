@@ -75,6 +75,35 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
   const url='http://127.0.0.1:'+ready.port;
   const untrusted=await fetch(url+'/api/start',{method:'POST',body:'{}'});
   assert.equal(untrusted.status,403);
+  const managedRoute=async()=>fetch(url+'/api/controllers',{headers:{
+    'X-Wiiuu-Session':ready.secret
+  }}).then(r=>r.json());
+  assert.deepEqual((await managedRoute()).pads,[]);
+  const managedButtons=['A','B','X','Y','LeftShoulder','RightShoulder',
+    'LeftTrigger','RightTrigger','View','Menu','LeftThumb','RightThumb',
+    'DPadUp','DPadDown','DPadLeft','DPadRight','Nexus'];
+  const managedAxes=['LeftThumbXAxis','LeftThumbYAxis','RightThumbXAxis','RightThumbYAxis'];
+  const managedPad={GamepadIndex:2};
+  for(const key of managedButtons.concat(managedAxes))managedPad[key]=0;
+  managedPad.A=1;managedPad.RightThumbYAxis=-0.3;
+  child.stdin.write(JSON.stringify({event:'managedPads',pads:[managedPad]})+'\n');
+  let observed;
+  for(let attempt=0;attempt<30;attempt++){
+    observed=await managedRoute();
+    if(observed.pads.length)break;
+    await new Promise(r=>setTimeout(r,20));
+  }
+  assert.equal(observed.pads.length,1,'WII-UU controller IPC reaches the player session');
+  assert.equal(observed.pads[0].GamepadIndex,2);
+  assert.equal(observed.pads[0].A,1);
+  assert.equal(observed.pads[0].RightThumbYAxis,-0.3);
+  child.stdin.write(JSON.stringify({event:'managedPads',pads:[]})+'\n');
+  for(let attempt=0;attempt<30;attempt++){
+    if((await managedRoute()).pads.length===0)break;
+    await new Promise(r=>setTimeout(r,20));
+  }
+  assert.deepEqual((await managedRoute()).pads,[],'Leaving managed mode clears slots');
+
   const spoofedStatus=await new Promise((resolve,reject)=>{
     const request=http.request(url+'/',{headers:{Host:'not-local.example'}},res=>{
       res.resume();resolve(res.statusCode);
@@ -158,14 +187,15 @@ test('player filters null and malformed remote ICE records before invoking xclou
   assert.ok(service.includes('iceCandidates:payload.candidates'));
 });
 
-test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',()=>{
+test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',async()=>{
   const vm=require('node:vm');
   const source=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
   const from=source.indexOf('const GAMEPAD_FIELDS=');
   const to=source.indexOf('\nasync function connect(){',from);
   assert.ok(from>=0&&to>from,'Gamepad bridge should be part of the bundled player');
   let pads=[null];
-  let tick;
+  let tick,managerTick;
+  let injectedManagedPads=[];
   const calls=[],changes=[];
   class FakeGamepad {
     constructor(index){this._index=index;this._isFocused=true;}
@@ -182,8 +212,9 @@ test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',
     navigator:{getGamepads:()=>pads},
     stop:false,
     console:{info:()=>{},warn:()=>{}},
-    setInterval:callback=>{tick=callback;return 1;},
-    clearInterval:()=>{tick=null;}
+    setInterval:(callback,ms)=>{if(ms===500){tick=callback;return 1;}managerTick=callback;return 2;},
+    clearInterval:id=>{if(id===1)tick=null;},
+    request:async()=>({pads:injectedManagedPads})
   };
   const {gamepadFrame,controllerBridge}=vm.runInNewContext(
     source.slice(from,to)+'\n({gamepadFrame,controllerBridge})',ctx);
@@ -242,6 +273,18 @@ test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',
   tick();
   assert.equal(Object.keys(handlers).length,1);
   assert.equal(handlers[1].getGamepadState().GamepadIndex,1);
+  await new Promise(r=>setImmediate(r));
+  injectedManagedPads=[{...gamepadFrame(standard,0),A:0,B:1}];
+  managerTick();
+  await new Promise(r=>setImmediate(r));
+  assert.equal(Object.keys(handlers).length,1,'WII-UU-managed input replaces raw browser gamepad');
+  assert.equal(handlers[0].getGamepadState().B,1,'Xbox receives the pre-remapped WII-UU frame');
+  assert.equal(handlers[0].getGamepadState().A,0);
+  injectedManagedPads=[];
+  managerTick();
+  await new Promise(r=>setImmediate(r));
+  assert.equal(Object.keys(handlers).length,1,'Browser gamepad restored after manager deactivates');
+  assert.equal(handlers[0].getPhysicalGamepadId(),2);
   dispose();
   assert.equal(Object.keys(handlers).length,0);
   assert.equal(tick,null);

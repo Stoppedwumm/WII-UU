@@ -42,6 +42,13 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private final Config config;
     private final PluginStore.Entry entry;
     private final Runnable repaint, exit;
+    private final java.util.function.Supplier<List<Map<String, Object>>> controllerFrames;
+    private final ScheduledExecutorService controllerSender = Executors.newSingleThreadScheduledExecutor(task -> {
+        Thread thread = new Thread(task, "xcloud-controller-forwarder");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private ScheduledFuture<?> controllerTask;
     private final List<Hit> hits = new ArrayList<>();
     private final List<Game> games = new ArrayList<>();
     private final Map<String,BufferedImage> coverImages = new LinkedHashMap<>();
@@ -63,6 +70,12 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private int focus, page, columns = 3, rows = 2, pageSize = 6;
 
     XboxCloudNativeScreen(Config config, PluginStore.Entry entry, Runnable repaint, Runnable exit) {
+        this(config, entry, repaint, exit, List::of);
+    }
+
+    XboxCloudNativeScreen(Config config, PluginStore.Entry entry, Runnable repaint, Runnable exit,
+                         java.util.function.Supplier<List<Map<String, Object>>> controllerFrames) {
+        this.controllerFrames = controllerFrames;
         this.config = config;
         this.entry = entry;
         this.repaint = repaint;
@@ -575,9 +588,10 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             Process process=builder.start();
             browser=process;
             PluginStore.trackExternal(config,entry,process);
+            startControllerForwarding();
             status="Streaming "+chosen.name()+" in Chromium. Return here to select another game.";
             process.onExit().thenRun(()->SwingUtilities.invokeLater(()->{
-                if(browser==process){browser=null;if(!closed) {
+                if(browser==process){browser=null;stopControllerForwarding();if(!closed) {
                     status="Stream closed. Choose another game.";
                     command("stop",result->repaint.run());
                     repaint.run();
@@ -586,7 +600,27 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         }catch(Exception error){status="Could not start Chromium: "+error.getMessage();}
         repaint.run();
     }
+    private void startControllerForwarding() {
+        if (controllerTask != null) controllerTask.cancel(false);
+        controllerTask = controllerSender.scheduleAtFixedRate(() -> {
+            try {
+                Backend target = backend;
+                Process running = browser;
+                if (closed || target == null || running == null || !running.isAlive()) return;
+                target.sendControllers(controllerFrames.get());
+            } catch (RuntimeException | IOException error) {
+                // Player shutdown and controller disconnects must not stop streaming.
+            }
+        }, 0, 33, TimeUnit.MILLISECONDS);
+    }
+
+    private void stopControllerForwarding() {
+        if (controllerTask != null) controllerTask.cancel(false);
+        controllerTask = null;
+    }
+
     private void stopGame() {
+        stopControllerForwarding();
         Process p=browser;
         if(p!=null&&p.isAlive()){p.descendants().forEach(ProcessHandle::destroy);p.destroy();}
         browser=null;
@@ -596,6 +630,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         if(closed)return;
         closed=true;
         pairingStatusTimer.stop();
+        stopControllerForwarding();
+        controllerSender.shutdownNow();
         Process p=browser;
         if(p!=null&&p.isAlive()){p.descendants().forEach(ProcessHandle::destroy);p.destroy();}
         browser=null;
@@ -684,6 +720,13 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                 response.completeExceptionally(error);
             }
             return response.orTimeout(75, TimeUnit.SECONDS);
+        }
+
+        /** One-way private IPC update; controller frames contain no user identity. */
+        synchronized void sendControllers(List<Map<String, Object>> frames) throws IOException {
+            writer.write("{\"event\":\"managedPads\",\"pads\":" +
+                    wiiuu.net.XboxCloudPadBridge.json(frames) + "}\n");
+            writer.flush();
         }
 
         @Override public void close() {

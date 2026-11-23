@@ -52,6 +52,13 @@ public final class ScreenStreamer {
 
     private final Config config;
     private final Supplier<Game> currentGame;
+    /** WII-UU's external Xbox streaming session uses its own Chromium window. */
+    private volatile java.util.function.BooleanSupplier externalXbox = () -> false;
+
+    public void setExternalXbox(java.util.function.BooleanSupplier running) {
+        externalXbox = running == null ? () -> false : running;
+    }
+
     private final WindowLocator windows = new WindowLocator();
     private final Robot robot;
     private final String ffmpeg;
@@ -354,6 +361,18 @@ public final class ScreenStreamer {
                 return null;
             }
             return clip(p.locate(win));
+        }
+        // External Xbox Cloud Gaming is not a Launcher game. Follow only its
+        // isolated Chromium player window, rather than exposing the WII-UU
+        // desktop or any unrelated application to the phone's TV mirror.
+        if (externalXbox.getAsBoolean()) {
+            Rectangle player = windows.find("WII-UU Xbox Cloud Player");
+            if (player != null && player.width >= 200 && player.height >= 150) {
+                Rectangle captured = clip(player);
+                if (captured != null) return captured;
+            }
+            why[0] = "Waiting for the Xbox Cloud Gaming window";
+            return null;
         }
         // TV while a game runs: just the emulator's window (much less to capture than a whole Retina
         // desktop, and no other apps around it); otherwise the whole screen

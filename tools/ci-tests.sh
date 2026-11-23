@@ -159,6 +159,8 @@ test -s build/xcloud-ui-search-keyboard-small.png
 java -cp build/classes:build/tests wiiuu.core.NativePluginBridgeTest build/plugin-host/node_modules/electron/dist
 javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/XboxCloudInputTest.java
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.XboxCloudInputTest
+javac --release 17 -cp build/classes -d build/tests test/wiiuu/net/XboxCloudPadBridgeTest.java
+java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.net.XboxCloudPadBridgeTest
 WIIUU_CI_COMMAND_11
     run_check "Test USB backup, factory reset and restore" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_12'
 javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/DemoDeviceTest.java
@@ -205,6 +207,7 @@ WIIUU_CI_COMMAND_20
     run_check "Test GamePad screen and controller layouts" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_21'
 node test/web/screen-choices.cjs
 node test/web/controller-layouts.cjs
+node test/web/xcloud-screen.cjs
 WIIUU_CI_COMMAND_21
     run_check "Check shell scripts" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_22'
 bash -n install.sh emulators.sh build.sh package.sh docs/get.sh
