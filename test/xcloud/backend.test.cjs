@@ -337,6 +337,74 @@ test('Xbox server terminal state closes its native Chrome session exactly once',
   assert.ok(ctx.currentSession(),'Non-terminal server errors preserve the active session');
 });
 
+
+test('stale Xbox state and keepalive responses cannot close a replacement stream',async()=>{
+  const vm=require('node:vm');
+  const source=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/service.cjs'),'utf8');
+  const start=source.indexOf('function sessionPath() {');
+  const end=source.indexOf('\nconst httpTypes =',start);
+  assert.ok(start>=0&&end>start,'Xbox session and API helpers are available');
+  const pending=new Map(),calls=[],events=[];
+  const ctx={
+    validSessionId:id=>id==='OLD'||id==='NEW',
+    xbox:(route,method)=>{
+      calls.push({route,method});
+      if(method==='DELETE')return Promise.resolve({});
+      return new Promise((resolve,reject)=>{pending.set(route,{resolve,reject});});
+    },
+    emit:value=>events.push(value)
+  };
+  vm.runInNewContext("let activeSession={id:'OLD'};\n"+source.slice(start,end)+`
+    this.readState=currentStreamState;
+    this.keepalive=()=>api('keepalive');
+    this.replaceSession=id=>{activeSession={id};};
+    this.activeId=()=>activeSession?.id;
+  `,ctx);
+  const checkSafe=()=>{
+    assert.equal(ctx.activeId(),'NEW','stale result must preserve the replacement session');
+    assert.equal(events.length,0,'stale result must not notify native Chrome to close');
+    assert.equal(calls.filter(x=>x.method==='DELETE').length,0,
+      'stale result must not send DELETE for the replacement session');
+  };
+
+  let request=ctx.readState();
+  assert.ok(pending.has('/v5/sessions/cloud/OLD/state'));
+  ctx.replaceSession('NEW');
+  pending.get('/v5/sessions/cloud/OLD/state').resolve({state:'Closed'});
+  assert.equal((await request).state,'Closed');
+  checkSafe();
+
+  ctx.replaceSession('OLD');
+  request=ctx.readState();
+  ctx.replaceSession('NEW');
+  pending.get('/v5/sessions/cloud/OLD/state').reject(Error('Xbox service returned HTTP 410'));
+  await assert.rejects(request,/HTTP 410/);
+  checkSafe();
+
+  ctx.replaceSession('OLD');
+  request=ctx.keepalive();
+  ctx.replaceSession('NEW');
+  pending.get('/v5/sessions/cloud/OLD/keepalive').resolve({state:'Terminated'});
+  assert.equal((await request).state,'Terminated');
+  checkSafe();
+
+  ctx.replaceSession('OLD');
+  request=ctx.keepalive();
+  ctx.replaceSession('NEW');
+  pending.get('/v5/sessions/cloud/OLD/keepalive').reject(Error('Xbox service returned HTTP 404'));
+  await assert.rejects(request,/HTTP 404/);
+  checkSafe();
+
+  // A response belonging to the CURRENT stream must still terminate it.
+  request=ctx.readState();
+  pending.get('/v5/sessions/cloud/NEW/state').resolve({state:'Closed'});
+  await request;
+  assert.equal(ctx.activeId(),undefined);
+  assert.deepEqual(events.map(x=>x.event),['streamEnded']);
+  assert.deepEqual(calls.filter(x=>x.method==='DELETE').map(x=>x.route),
+    ['/v5/sessions/cloud/NEW']);
+});
+
 test('Xbox player has controller-free audio startup and release-banner flags',()=>{
   const native=fs.readFileSync(path.join(__dirname,'../../src/wiiuu/ui/XboxCloudNativeScreen.java'),'utf8');
   const player=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
