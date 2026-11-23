@@ -43,6 +43,9 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
   t.after(()=>{
     child.stdin.end();child.kill('SIGKILL');fs.rmSync(root,{recursive:true,force:true});
   });
+  let diagnostics='';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data',chunk=>{diagnostics+=chunk;});
   const queue=[],waiters=[];
   const lines=readline.createInterface({input:child.stdout});
   lines.on('line',line=>{
@@ -114,4 +117,13 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
   assert.equal(fs.existsSync(path.join(user,'xcloud-tokens.json')),false);
   send(4,'signedIn');
   assert.equal((await receive(m=>m.id===4)).result.signedIn,false);
+  // stderr is the only diagnostic stream; stdout stays machine-readable.
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.match(diagnostics,/device-flow-issued/);
+  assert.match(diagnostics,/device-poll-resolved/);
+  assert.match(diagnostics,/user-token-saved/);
+  assert.match(diagnostics,/signed-in-event-sent/);
+  assert.match(diagnostics,/native-status-check/);
+  assert.match(diagnostics,/catalog-error/);
+  assert.doesNotMatch(diagnostics,/private-device-code|ABCD-EFGH|secret-access|secret-refresh/);
 });
