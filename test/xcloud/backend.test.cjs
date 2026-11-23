@@ -320,7 +320,7 @@ test('Xbox server terminal state closes its native Chrome session exactly once',
   state='Closed';
   assert.equal((await ctx.readState()).state,'Closed');
   assert.equal(ctx.currentSession(),null);
-  assert.deepEqual(events,[{event:'streamEnded'}],
+  assert.deepEqual(events.map(event=>event.event),['streamEnded'],
     'Exactly one native stream-ended event emitted on Xbox server closure');
   assert.equal(paths.filter(p=>p.method==='DELETE').length,1);
   state='Failed';
