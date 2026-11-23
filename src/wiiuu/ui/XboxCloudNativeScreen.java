@@ -439,7 +439,10 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                             // Always reload it even if the UI was already marked signed in.
                             if(signedIn)loadGames();
                             else completeLogin();
-                        } else if(!pairing)status="Ready. Sign in with Microsoft to continue.";
+                        } else if(!pairing) {
+                            signedIn=false; // A new helper may no longer have valid account tokens.
+                            status="Ready. Sign in with Microsoft to continue.";
+                        }
                         repaint.run();
                     });
                     repaint.run();
@@ -473,6 +476,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         }else if("ended".equals(type)){
             pairingStatusTimer.stop();
             backend=null;
+            pairing=false;
+            loginCode=""; // A pairing code belongs to the exited helper and cannot be polled.
             games.clear(); // The previous helper's playable-title IDs are no longer valid.
             status="The local Xbox service stopped. Select Reload to reconnect.";
         }
