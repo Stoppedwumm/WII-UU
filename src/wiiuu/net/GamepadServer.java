@@ -1131,11 +1131,13 @@ public final class GamepadServer {
 
     private Json status(Client c, boolean relayed) throws IOException {
         Game g = launcher.current();
+        boolean xboxCloud = g == null && PluginStore.externalRunning(config);
         Json j = new Json().obj()
                 .kv("padBuild", page().build())
                 .kv("layoutVersion", GamepadLayouts.json(config).hashCode())
                 .kv("closing", closing)
-                .kv("mode", g == null ? "menu" : "game")
+                .kv("mode", g == null && !xboxCloud ? "menu" : "game")
+                .kv("xboxCloud", xboxCloud)
                 .kv("player", c.player)
                 .kv("pads", connectedPads())
                 .kv("library", library.snapshot().version())
@@ -1168,7 +1170,9 @@ public final class GamepadServer {
         if (second == null) j.val((String) null);
         else j.val(second.label());
         j.key("game");
-        if (g == null) j.val((String) null);
+        if (g == null && xboxCloud)
+            j.obj().kv("name", "Xbox Cloud Gaming").kv("system", "Xbox Cloud").kv("color", "#107C10").endObj();
+        else if (g == null) j.val((String) null);
         else j.obj().kv("name", g.name()).kv("system", g.system().name()).kv("color", g.system().hexColor()).endObj();
         // OpenBased: set up or not (never the token), how many videos, what's wrong
         wiiuu.core.OpenBased ob = host.openBased();
