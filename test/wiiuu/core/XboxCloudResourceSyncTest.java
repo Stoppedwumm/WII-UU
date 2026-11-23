@@ -21,6 +21,18 @@ public final class XboxCloudResourceSyncTest {
         byte[] existing = "test-token-persistence".getBytes(StandardCharsets.UTF_8);
         Files.write(tokens, existing);
         Files.writeString(script, "old-service-version");
+        Path source = root.resolve("player-entry.js");
+        Path bundle = root.resolve("player.bundle.js");
+        Files.writeString(source, "old-player-source");
+        Files.writeString(bundle, "old-player-bundle");
+        Path esbuild = root.resolve("node_modules/esbuild/bin/esbuild");
+        Files.createDirectories(esbuild.getParent());
+        // Offline stand-in for esbuild: verifies the upgrade invokes the
+        // installed bundler without an npm or Chromium reinstall.
+        Files.writeString(esbuild, "const fs=require('fs');"
+                + "const a=process.argv.slice(2);"
+                + "const out=a.find(x=>x.startsWith('--outfile=')).slice(10);"
+                + "fs.writeFileSync(out,'built:'+fs.readFileSync(a[0],'utf8'));");
         XboxCloudRuntime.syncBundledService(config);
         byte[] expected;
         try (var input = XboxCloudRuntime.class.getResourceAsStream("/xcloud/service.cjs")) {
@@ -29,8 +41,18 @@ public final class XboxCloudResourceSyncTest {
         }
         ok(Arrays.equals(expected, Files.readAllBytes(script)), "Old Node backend should be replaced");
         ok(Arrays.equals(existing, Files.readAllBytes(tokens)), "User tokens must remain untouched");
+        byte[] expectedPlayer;
+        try (var input = XboxCloudRuntime.class.getResourceAsStream("/xcloud/player-entry.js")) {
+            ok(input != null, "Bundled Xbox player must be present");
+            expectedPlayer = input.readAllBytes();
+        }
+        ok(Arrays.equals(expectedPlayer, Files.readAllBytes(source)), "Player source must update");
+        ok(Files.readString(bundle).equals("built:" + new String(expectedPlayer, StandardCharsets.UTF_8)),
+                "Old browser bundle must be rebuilt");
+        byte[] updatedBundle = Files.readAllBytes(bundle);
         XboxCloudRuntime.syncBundledService(config);
         ok(Arrays.equals(expected, Files.readAllBytes(script)), "Repeated refresh must be safe");
+        ok(Arrays.equals(updatedBundle, Files.readAllBytes(bundle)), "Unchanged bundle must not rebuild");
         ok(Files.isDirectory(browser), "Portable Chromium installation must not be removed");
         System.out.println("Xbox backend auto-upgrade preserves credentials and Chromium without a reinstall");
     }
