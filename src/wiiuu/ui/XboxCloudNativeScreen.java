@@ -601,6 +601,12 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             status="Signed out. Get a new Microsoft login code to continue.";
         });
     }
+    /** Only the isolated macOS Xbox Chromium session skips system Keychain. */
+    static void configureMacKeychain(List<String> chromeCommand, String osName) {
+        if (osName != null && osName.toLowerCase(Locale.ROOT).startsWith("mac"))
+            chromeCommand.add("--use-mock-keychain");
+    }
+
     private void startGame(Game chosen) {
         if(closed||backend==null||!signedIn)return;
         Process old=browser;
@@ -614,7 +620,13 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                     XboxCloudRuntime.chromium(config).toString(),
                     "--user-data-dir="+profile.toAbsolutePath(),
                     "--app="+url,"--no-first-run","--disable-sync","--disable-background-networking",
-                    "--disable-infobars"); 
+                    "--disable-infobars");
+            // macOS Chrome for Testing otherwise asks for access to "Chrome Safe
+            // Storage" in Keychain. The isolated Xbox player does not store
+            // Microsoft sign-in credentials in Chromium, so use its test-only
+            // keychain instead of presenting a native, controller-inaccessible
+            // macOS permission dialog.
+            configureMacKeychain(builder.command(), System.getProperty("os.name", ""));
             // This isolated browser only serves the local player. Permit
             // playback without a mouse gesture when the user opts in.
             if(autoAudio())builder.command().add("--autoplay-policy=no-user-gesture-required");
