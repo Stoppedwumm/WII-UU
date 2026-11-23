@@ -3,6 +3,14 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.11 (2026-11-23)
+- Fix Xbox Cloud Gaming search so controller navigation uses the on-screen keyboard without moving the game selection behind it.
+- Close the portable Chrome for Testing player automatically when Xbox ends a cloud gaming session.
+- Prevent delayed terminal responses from an older Xbox session from closing a newly started game.
+- Hide Chrome for Testing's development infobar in the isolated Xbox player.
+- Enable Xbox game-stream audio automatically by default, with a controller-selectable Audio autoplay toggle in the native game catalog.
+- Include the existing WII-UU controller-manager mappings and player assignments, native Xbox GamePad TV display, and WebRTC connection fixes from the development branch.
+
 ## 2.1.10 (2026-11-23)
 - Fix Xbox Cloud Gaming remaining on the Microsoft pairing-code screen after successful device authorization.
 - Complete Microsoft sign-in immediately upon receiving the user token, without waiting for unrelated Xbox Cloud Gaming entitlement or xHome token requests.
