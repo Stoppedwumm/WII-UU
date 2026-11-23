@@ -46,6 +46,21 @@ const store = new StoredTokens();
 let msal = new Msal(store);
 
 function emit(message) { process.stdout.write(JSON.stringify(message) + '\n'); }
+// Diagnostic events are written to stderr (backend.log), never to the JSON
+// protocol on stdout. Keep OAuth codes, secrets, tokens and raw responses out.
+const diagnosticStart = Date.now();
+function debug(stage, detail = '') {
+  const elapsed = Math.floor((Date.now() - diagnosticStart) / 1000);
+  const suffix = detail ? ' ' + detail : '';
+  process.stderr.write('[xcloud-auth] +' + elapsed + 's ' + stage + suffix + '\n');
+}
+function errorKind(error) {
+  const kind = error?.name;
+  return typeof kind === 'string' && /^[A-Za-z]{1,40}$/.test(kind) ? kind : 'Error';
+}
+debug('backend-start', 'savedUserToken=' + Boolean(store.getUserToken()));
+let lastTokenState = Boolean(store.getUserToken());
+let lastStatusLog = 0;
 function safeError(error) {
   // Do not accidentally log access tokens included in upstream HTTP responses.
   const msg = typeof error?.message === 'string' ? error.message : String(error);
@@ -142,22 +157,38 @@ async function catalog() {
 async function deviceAuth() {
   if (authenticating) throw new Error('Device authorization is already in progress');
   authenticating = true;
+  debug('device-flow-request');
   let flow;
   try { flow = await msal.doDeviceCodeAuth(); }
-  catch (error) { authenticating = false; throw error; }
+  catch (error) { authenticating = false; debug('device-flow-error', 'type=' + errorKind(error)); throw error; }
+  debug('device-flow-issued', 'expiresSeconds=' + (Number(flow.expires_in) || 900));
   emit({event:'code', code:flow.user_code, url:flow.verification_uri || flow.verification_url || 'https://www.microsoft.com/link',
       expiresIn:flow.expires_in || 900, message:flow.message});
   // Microsoft's approval and Xbox cloud entitlement are separate milestones.
   // Notify Java as soon as the device-code exchange has produced a user token.
   // Do not block the sign-in UI on xHome/xCloud provisioning or catalog access.
-  void msal.doPollForDeviceCodeAuth(flow.device_code,
-    Math.max(1, Number(flow.expires_in) || 900) * 1000).then(() => {
+  debug('device-poll-start');
+  const pollStarted = Date.now();
+  const pollHeartbeat = setInterval(() => {
+    debug('device-poll-waiting', 'elapsedSeconds=' + Math.floor((Date.now() - pollStarted) / 1000)
+      + ' userTokenPresent=' + Boolean(store.getUserToken()));
+  }, 30000);
+  pollHeartbeat.unref?.();
+  void Promise.resolve().then(() => msal.doPollForDeviceCodeAuth(flow.device_code,
+    Math.max(1, Number(flow.expires_in) || 900) * 1000)).then(() => {
+    clearInterval(pollHeartbeat);
+    debug('device-poll-resolved', 'userTokenPresent=' + Boolean(store.getUserToken()));
     if (!store.getUserToken()) throw new Error('Microsoft approved the device but no user token was returned');
     store.save();
+    debug('user-token-saved');
     authenticating = false;
+    lastTokenState = true;
     emit({event:'signedIn'});
+    debug('signed-in-event-sent');
   }).catch(error => {
+    clearInterval(pollHeartbeat);
     authenticating = false;
+    debug('device-poll-error', 'type=' + errorKind(error) + ' userTokenPresent=' + Boolean(store.getUserToken()));
     emit({event:'authError', message:safeError(error)});
   });
   return {pending:true};
@@ -177,10 +208,32 @@ async function endSession() {
 async function api(action, payload={}) {
   switch (action) {
     case 'auth': return deviceAuth();
-    case 'signedIn': return {signedIn:!!store.getUserToken()};
-    case 'games': return {games:await catalog()};
+    case 'signedIn': {
+      const signedIn = !!store.getUserToken();
+      // The native screen checks every 3 seconds. Only log a change or
+      // an occasional heartbeat so the backend log stays readable.
+      if (signedIn !== lastTokenState || Date.now() - lastStatusLog > 30000) {
+        debug('native-status-check', 'signedIn=' + signedIn + ' pollActive=' + authenticating);
+        lastStatusLog = Date.now();
+        lastTokenState = signedIn;
+      }
+      return {signedIn};
+    }
+    case 'games': {
+      debug('catalog-request');
+      try {
+        const games = await catalog();
+        debug('catalog-ready', 'count=' + games.length);
+        return {games};
+      } catch (error) {
+        debug('catalog-error', 'type=' + errorKind(error));
+        throw error;
+      }
+    }
     case 'logout':
       await endSession(); cloudToken=null; allowedTitles.clear(); store.clear(); msal = new Msal(store);
+      lastTokenState = false;
+      debug('signed-out');
       return {signedIn:false};
     case 'start': {
       const id=payload.titleId;
@@ -283,4 +336,5 @@ reader.on('close',()=>{void endSession().finally(()=>{server.close();process.exi
 server.listen(0,'127.0.0.1',()=>{
   port=server.address().port;
   emit({event:'ready',port,secret,signedIn:!!store.getUserToken()});
+  debug('backend-ready', 'signedIn=' + Boolean(store.getUserToken()));
 });
