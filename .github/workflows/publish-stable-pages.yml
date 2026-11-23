@@ -1,0 +1,57 @@
+name: Publish Stable Website after Release
+
+# Deployment environments in this repository only permit the default branch.
+# workflow_run executes this workflow from the default branch even when the
+# successful release Build was started by release/<version>.
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  pages:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push'
+          && startsWith(github.event.workflow_run.head_branch, 'release/')
+          && github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Stage website from published GitHub releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases" > build/published-releases.json
+          python3 tools/stage-release-site.py build/published-releases.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          stable = json.loads(Path("docs/version.json").read_text())
+          beta = json.loads(Path("docs/beta/version.json").read_text())
+          if stable.get("channel") != "stable" or "-beta" in stable.get("version", ""):
+              raise SystemExit("Refusing to publish a beta version as stable")
+          print("Stable version staged:", stable["version"])
+          print("Beta version staged:", beta["version"])
+          PY
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deploy
+        uses: actions/deploy-pages@v4
