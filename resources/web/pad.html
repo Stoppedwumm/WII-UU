@@ -746,8 +746,11 @@ async function poll() {
         $("playName").textContent = j.game.name;
         $("playSys").textContent = j.game.system;
         $("playBand").style.background = j.game.color;
-        // The player chooses the lower screen from Now playing, including after returning from it.
-        if (started || (S.view === "screen" && S.streamMode === "second" && !S.second)) show("play");
+        // Xbox Cloud Gaming runs outside the emulator launcher. Open its live
+        // TV mirror automatically, rather than leaving the GamePad on Home.
+        // A user may still switch views manually while the stream is active.
+        if (j.xboxCloud && started && S.tv) openScreen("tv");
+        else if (started || (S.view === "screen" && S.streamMode === "second" && !S.second)) show("play");
       } else {
         $("homeSheet").classList.add("hidden");
         if (!(S.view === "screen" && S.streamMode === "tv")) show("lib");
