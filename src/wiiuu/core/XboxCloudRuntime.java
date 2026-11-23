@@ -10,6 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.util.Arrays;
 import java.nio.file.FileVisitResult;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -114,6 +116,35 @@ public final class XboxCloudRuntime {
             return false;
         }
     }
+    /**
+     * Refresh the small bundled backend on WII-UU updates without reinstalling
+     * npm packages or downloading a several-hundred-megabyte Chromium build.
+     * Called before starting Node, never while it is serving a stream.
+     */
+    public static void syncBundledService(Config config) throws IOException {
+        Path root = home(config);
+        Path script = root.resolve("service.cjs");
+        byte[] bundled;
+        try (InputStream input = XboxCloudRuntime.class.getResourceAsStream("/xcloud/service.cjs")) {
+            if (input == null) throw new IOException("Missing bundled Xbox backend script");
+            bundled = input.readAllBytes();
+        }
+        if (Files.isRegularFile(script) && Arrays.equals(Files.readAllBytes(script), bundled)) return;
+        Files.createDirectories(root);
+        Path staging = Files.createTempFile(root, ".service-", ".cjs");
+        try {
+            Files.write(staging, bundled);
+            try {
+                Files.move(staging, script, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(staging, script, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(staging);
+        }
+    }
+
     public static boolean installing() { return BUSY.get(); }
 
     public static void install(Config config, Consumer<String> notify) {
