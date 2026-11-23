@@ -292,7 +292,7 @@ async function terminateIfEnded(result) {
 async function currentStreamState() {
   try { return await terminateIfEnded(await xbox(sessionPath()+'/state')); }
   catch (error) {
-    if (/\\bHTTP (404|410)\\b/.test(String(error?.message||''))) await endSession(true);
+    if (/\bHTTP (404|410)\b/.test(String(error?.message||''))) await endSession(true);
     throw error;
   }
 }
@@ -377,7 +377,7 @@ async function api(action, payload={}) {
       try {
         return await terminateIfEnded(await xbox(sessionPath()+'/keepalive','POST',{}));
       } catch (error) {
-        if (/\\bHTTP (404|410)\\b/.test(String(error?.message||''))) await endSession(true);
+        if (/\bHTTP (404|410)\b/.test(String(error?.message||''))) await endSession(true);
         throw error;
       }
     }
