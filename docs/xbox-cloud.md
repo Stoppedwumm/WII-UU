@@ -119,3 +119,23 @@ Pairing uses a large device-code card with copy and reload actions. Games are
 shown as responsive multi-column tiles. The last action in the screen opens
 the separate Chromium WebRTC media player; authentication and catalog remain
 in WII-UU's native rendering engine.
+
+## Microsoft pairing versus Xbox game access
+
+When you finish the code at `microsoft.com/link`, WII-UU recognizes
+Microsoft authorization separately from subsequent Xbox cloud streaming access.
+The pairing card changes to the game catalog after the Microsoft user token
+is returned, even if Xbox entitlement or game discovery later fails. While the
+code is displayed, WII-UU periodically checks the **local** authentication
+helper; **I've signed in** performs an immediate local recheck. The message
+\"Sign in first\" should not appear simply because you tried loading games
+while the pairing code was still pending.
+
+The local Node helper is refreshed from the installed WII-UU resources when
+Xbox Cloud Gaming next opens. **You do not need to re-download Chromium**, and
+existing Microsoft account tokens are left untouched. Restart WII-UU after
+installing the updated version to use the updated authorization helper.
+
+An accepted Microsoft device code does not itself guarantee Xbox Cloud Gaming
+entitlement or a successful stream; any subsequent failure should be presented
+as a separate Xbox access or catalog error, not as a sign-in failure.
