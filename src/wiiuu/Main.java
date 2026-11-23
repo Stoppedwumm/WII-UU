@@ -83,6 +83,12 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
     }
     private GamepadServer server;
+    /** Xbox uses WII-UU's live player assignments and post-remap button states. */
+    @Override public List<java.util.Map<String, Object>> xboxControllerFrames() {
+        GamepadServer current = server;
+        return current == null ? List.of() : current.cloudControllerFrames();
+    }
+
     private DsuServer dsuServer;
     private volatile VirtualPads vpads;
     private volatile ScreenStreamer screen;
