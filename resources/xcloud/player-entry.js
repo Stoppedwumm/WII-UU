@@ -143,16 +143,28 @@ function controllerBridge(activePlayer){
   const input=activePlayer._channels.input;
   const physical=new Map();
   let scanTimer=null;
+  let firstFrameReported=false;
   const queue=input.queueGamepadFrames.bind(input);
   // xbox-xcloud-player's InputQueue does not flush gamepad-only frames by
   // default. Force a send so movement works even without video metadata.
-  input.queueGamepadFrames=(frames)=>queue(frames,true);
+  input.queueGamepadFrames=(frames)=>{
+    if(!frames?.length)return;
+    if(!firstFrameReported && input._dataChannel?.readyState==='open'){
+      console.info('[xcloud-gamepad] forwarding input frames to Xbox');
+      firstFrameReported=true;
+    }
+    queue(frames,true);
+  };
   const previousLoop=input.gamepadStateLoop.bind(input);
   input.gamepadStateLoop=()=>{
     if(stop||activePlayer._peerConnection.connectionState==='closed')return;
     previousLoop();
   };
   const sync=()=>{
+    // Attaching before both WebRTC channels open causes Xbox to miss the
+    // gamepadChanged message permanently. Retry on the next scan instead.
+    if(activePlayer._channels.control._dataChannel?.readyState!=='open'
+        ||input._dataChannel?.readyState!=='open')return;
     let pads=[];
     try{pads=Array.from(navigator.getGamepads?.()||[]).filter(Boolean);}
     catch(error){console.warn('[xcloud-gamepad] Gamepad API unavailable',error?.name);return;}
