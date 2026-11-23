@@ -222,10 +222,12 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void paintLibrary(Graphics2D g,int w,int h,float u) {
         float pad=32*u, top=140*u,gap=15*u;
         int ctl=hits.size();
-        float bw=Math.min(230*u,(w-2*pad-30*u)/3);
+        float bw=Math.min(230*u,(w-2*pad-3*gap)/4);
         action(g,pad,top,bw,45*u,"Search: "+(query.isBlank()?"All games":query),this::openSearch,u,false);
         action(g,pad+bw+gap,top,bw,45*u,"Reload",this::loadGames,u,false);
         action(g,pad+2*(bw+gap),top,bw,45*u,"Sign out",this::logout,u,false);
+        action(g,pad+3*(bw+gap),top,bw,45*u,
+                "Auto audio: "+(autoAudio()?"On":"Off"),this::toggleAutoAudio,u,false);
         float gridY=208*u, footer=75*u;
         columns=w>=1230?4:w>=760?3:2;
         rows=h>=730?2:1;
@@ -348,11 +350,21 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void erase() {
         if(!query.isEmpty()){query=query.substring(0,query.length()-1);page=0;repaint.run();}
     }
+    private boolean autoAudio() { return config.getBool("xcloud.audioAutoplay", true); }
+    private void toggleAutoAudio() {
+        config.set("xcloud.audioAutoplay", Boolean.toString(!autoAudio()));
+        config.save();
+        status="Xbox audio autoplay "+(autoAudio()?"enabled":"disabled")+
+                ". Applies to the next stream.";
+        repaint.run();
+    }
     private void openSearch() {
-        searchEditing=true;focus=0;repaint.run();
+        // Immediately invalidate the library's hit areas. InputRouter can
+        // deliver queued stick repeat events before the overlay is repainted.
+        searchEditing=true;hits.clear();focus=0;repaint.run();
     }
     private void finishSearch() {
-        searchEditing=false;focus=games.isEmpty()?1:4;page=0;repaint.run();
+        searchEditing=false;hits.clear();focus=games.isEmpty()?1:5;page=0;repaint.run();
     }
     boolean wantsKeys() { return searchEditing; }
     boolean keyPressed(KeyEvent e) {
@@ -391,7 +403,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             if(score<best){best=score;chosen=n;}
         }
         if(chosen<0) {
-            if(dy!=0&&!searchEditing&&signedIn&&dy<0&&focus>3)page(-1);
+            if(dy!=0&&!searchEditing&&signedIn&&dy<0&&focus>4)page(-1);
             else if(dy!=0&&!searchEditing&&signedIn&&dy>0)page(1);
             else Sfx.bump();
             return;
@@ -408,7 +420,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         int pages=Math.max(1,(filtered().size()+Math.max(1,pageSize)-1)/Math.max(1,pageSize));
         int next=Math.max(0,Math.min(pages-1,page+Integer.signum(delta)));
         if(next==page){Sfx.bump();return;}
-        page=next;focus=4;Sfx.move();repaint.run();
+        page=next;focus=5;Sfx.move();repaint.run();
     }
     void back() {
         if(searchEditing){finishSearch();return;}
@@ -486,6 +498,10 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         }else if("authError".equals(type)){
             pairing=false;pairingStatusTimer.stop();
             status="Microsoft sign-in failed: "+MiniJson.string(message.get("message"));
+        }else if("streamEnded".equals(type)){
+            // An Xbox-side disconnect cannot rely on window.close(), because
+            // Chrome app windows launched by Java are not script-opened.
+            if(browser!=null){stopGame();status="Xbox ended the stream. Choose another game.";}
         }else if("ended".equals(type)){
             pairingStatusTimer.stop();
             backend=null;
@@ -559,7 +575,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                     games.add(new Game(id,name,cover==null?"":cover));
             }
             games.sort(Comparator.comparing(Game::name,String.CASE_INSENSITIVE_ORDER));
-            page=0;focus=4;
+            page=0;focus=5;
             status=games.size()+" playable games available.";
         });
     }
@@ -577,12 +593,17 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         if(old!=null&&old.isAlive()){status="A cloud stream is already running.";repaint.run();return;}
         try {
             String url="http://127.0.0.1:"+backend.port+
-                    "/?title="+URLEncoder.encode(chosen.id(),StandardCharsets.UTF_8)+"#"+backend.secret;
+                    "/?title="+URLEncoder.encode(chosen.id(),StandardCharsets.UTF_8)+
+                    "&autoAudio="+(autoAudio()?"1":"0")+"#"+backend.secret;
             Path profile=Files.createDirectories(config.userHome().resolve("xcloud/chrome-profile"));
             ProcessBuilder builder=new ProcessBuilder(
                     XboxCloudRuntime.chromium(config).toString(),
                     "--user-data-dir="+profile.toAbsolutePath(),
-                    "--app="+url,"--no-first-run","--disable-sync","--disable-background-networking");
+                    "--app="+url,"--no-first-run","--disable-sync","--disable-background-networking",
+                    "--disable-infobars"); 
+            // This isolated browser only serves the local player. Permit
+            // playback without a mouse gesture when the user opts in.
+            if(autoAudio())builder.command().add("--autoplay-policy=no-user-gesture-required");
             builder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .redirectError(ProcessBuilder.Redirect.DISCARD);
             Process process=builder.start();
