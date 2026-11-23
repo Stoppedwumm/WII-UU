@@ -129,3 +129,21 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
   assert.match(diagnostics,/catalog-error/);
   assert.doesNotMatch(diagnostics,/private-device-code|ABCD-EFGH|secret-access|secret-refresh/);
 });
+
+test('player filters null and malformed remote ICE records before invoking xcloud-player',()=>{
+  const vm=require('node:vm');
+  const source=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
+  const begin=source.indexOf('function validRemoteIce(data){');
+  const end=source.indexOf('\nasync function connect(){',begin);
+  assert.ok(begin>=0&&end>begin,'ICE sanitizer must be present');
+  const sanitize=vm.runInNewContext('('+source.slice(begin,end).trim()+')');
+  const filtered=sanitize({iceCandidates:[
+    null,undefined,{},'bad',{candidate:null},{candidate:'a=end-of-candidates'},
+    {candidate:'candidate:1 1 UDP 1 192.0.2.1 1234 typ host',sdpMid:'0',sdpMLineIndex:0}
+  ]});
+  assert.equal(filtered.length,1);
+  assert.equal(filtered[0].sdpMid,'0');
+  assert.equal(filtered[0].sdpMLineIndex,0);
+  assert.equal(sanitize({candidates:[null]}).length,0);
+  assert.equal(sanitize(null).length,0);
+});
