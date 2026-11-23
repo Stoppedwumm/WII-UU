@@ -68,15 +68,17 @@ Chromium to use its hardware decode, WebRTC stack and Gamepad API.
 | macOS Intel | \`mac-x64\` |
 | Windows x64 | \`win64\` |
 
-On **macOS**, WII-UU starts this *isolated* Chrome for Testing profile with
-`--use-mock-keychain`. This prevents the native "Chrome Safe Storage"
-Keychain authorization popup, which cannot be dismissed using a GamePad.
-It is a Chromium testing option: cookies or browser secrets inside this
-profile do **not** receive the normal macOS Keychain-backed protection.
-Use this Chrome instance only for WII-UU's localhost Xbox streaming player,
-not general web browsing or password storage. Microsoft device-code
-credentials are handled separately by WII-UU's Node backend; they are
-not stored in Chrome's Keychain.
+On **Linux (including Raspberry Pi OS and Debian)**, WII-UU launches
+only the *isolated Xbox Chrome for Testing player* with
+`--password-store=basic`. This prevents the GNOME Keyring, KWallet or
+Secret Service password-storage prompt that cannot be dismissed using a
+GamePad. Chromium's basic password store does **not** provide system
+keyring-backed encryption, so the isolated browser profile must not be used
+to save passwords or for general browsing. The Xbox player only opens
+WII-UU's authenticated localhost streaming page; Microsoft device-code
+credentials are stored separately in WII-UU's Node backend, not in Chrome.
+No changes are made to the system keyring, regular Chromium installation,
+or macOS/Windows browser behavior.
 
 Windows ARM64 and 32-bit Linux are not automatically supported.
 The installer does not run as root and does not disable Chromium's
