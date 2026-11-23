@@ -157,3 +157,86 @@ test('player filters null and malformed remote ICE records before invoking xclou
   const service=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/service.cjs'),'utf8');
   assert.ok(service.includes('iceCandidates:payload.candidates'));
 });
+
+test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',()=>{
+  const vm=require('node:vm');
+  const source=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
+  const from=source.indexOf('const GAMEPAD_FIELDS=');
+  const to=source.indexOf('\nasync function connect(){',from);
+  assert.ok(from>=0&&to>from,'Gamepad bridge should be part of the bundled player');
+  let pads=[null];
+  let tick;
+  const calls=[],changes=[];
+  class FakeGamepad {
+    constructor(index){this._index=index;this._isFocused=true;}
+    attach(player){
+      this._player=player;
+      player._channels.control.sendGamepadState(this._index,true,this);
+      this.detectActiveGamepad();
+    }
+    detach(){this._player._channels.control.sendGamepadState(this._index,false);}
+  }
+  const ctx={
+    Gamepad:FakeGamepad,
+    navigator:{getGamepads:()=>pads},
+    stop:false,
+    console:{info:()=>{},warn:()=>{}},
+    setInterval:callback=>{tick=callback;return 1;},
+    clearInterval:()=>{tick=null;}
+  };
+  const {gamepadFrame,controllerBridge}=vm.runInNewContext(
+    source.slice(from,to)+'\n({gamepadFrame,controllerBridge})',ctx);
+  const standard={
+    index:0,mapping:'standard',
+    buttons:Array.from({length:16},()=>({value:0})),
+    axes:[0.5,-0.5,0.25,-0.25]
+  };
+  standard.buttons[0]={value:1}; // A
+  standard.buttons[7]={value:0.4}; // right trigger analog
+  standard.buttons[12]={value:1}; // dpad up
+  const frame=gamepadFrame(standard,2);
+  assert.equal(frame.GamepadIndex,2);
+  assert.equal(frame.A,1);
+  assert.equal(frame.Nexus,0,'missing button 16 is allowed');
+  assert.equal(frame.RightTrigger,0.4);
+  assert.equal(frame.DPadUp,1);
+  assert.ok(frame.LeftThumbXAxis>0 && frame.LeftThumbXAxis<1);
+  assert.ok(frame.LeftThumbYAxis<0 && frame.RightThumbYAxis<0);
+  assert.equal(gamepadFrame({buttons:[],axes:[NaN,Infinity]},0).LeftThumbXAxis,0);
+  const combo={buttons:Array.from({length:17},()=>({value:0})),axes:[]};
+  combo.buttons[8]={value:1};combo.buttons[9]={value:1};
+  const special=gamepadFrame(combo,0);
+  assert.equal(special.Nexus,1);
+  assert.equal(special.View,0);
+  assert.equal(special.Menu,0);
+  const handlers={};
+  const input={
+    start:()=>{},
+    queueGamepadFrames:(frames,force)=>calls.push({frames,force}),
+    gamepadStateLoop:()=>{}
+  };
+  const player={_peerConnection:{connectionState:'connected'},_channels:{
+    input,control:{sendGamepadState:(slot,added,handler)=>{
+      changes.push({slot,added});if(added)handlers[slot]=handler;else delete handlers[slot];
+    }}
+  }};
+  const dispose=controllerBridge(player);
+  input.start();
+  assert.equal(typeof tick,'function');
+  assert.equal(Object.keys(handlers).length,0);
+  pads=[standard,{...standard,index:2}];
+  tick();
+  assert.equal(Object.keys(handlers).length,2);
+  assert.equal(handlers[0].getPhysicalGamepadId(),0);
+  assert.equal(handlers[1].getPhysicalGamepadId(),2);
+  assert.equal(handlers[0].getGamepadState().A,1);
+  input.queueGamepadFrames([handlers[0].getGamepadState()]);
+  assert.equal(calls[0].force,true,'gamepad frames must be sent without metadata');
+  pads=[null,{...standard,index:2}];
+  tick();
+  assert.equal(Object.keys(handlers).length,1);
+  assert.equal(handlers[1].getGamepadState().GamepadIndex,1);
+  dispose();
+  assert.equal(Object.keys(handlers).length,0);
+  assert.equal(tick,null);
+});
