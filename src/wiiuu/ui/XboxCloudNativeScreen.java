@@ -724,8 +724,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
 
         /** One-way private IPC update; controller frames contain no user identity. */
         synchronized void sendControllers(List<Map<String, Object>> frames) throws IOException {
-            writer.write("{\\"event\\":\\"managedPads\\",\\"pads\\":" +
-                    wiiuu.net.XboxCloudPadBridge.json(frames) + "}\\n");
+            writer.write("{\"event\":\"managedPads\",\"pads\":" +
+                    wiiuu.net.XboxCloudPadBridge.json(frames) + "}\n");
             writer.flush();
         }
 
