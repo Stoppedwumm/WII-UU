@@ -86,7 +86,7 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
   const managedPad={GamepadIndex:2};
   for(const key of managedButtons.concat(managedAxes))managedPad[key]=0;
   managedPad.A=1;managedPad.RightThumbYAxis=-0.3;
-  child.stdin.write(JSON.stringify({event:'managedPads',pads:[managedPad]})+'\\n');
+  child.stdin.write(JSON.stringify({event:'managedPads',pads:[managedPad]})+'\n');
   let observed;
   for(let attempt=0;attempt<30;attempt++){
     observed=await managedRoute();
@@ -97,7 +97,7 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
   assert.equal(observed.pads[0].GamepadIndex,2);
   assert.equal(observed.pads[0].A,1);
   assert.equal(observed.pads[0].RightThumbYAxis,-0.3);
-  child.stdin.write(JSON.stringify({event:'managedPads',pads:[]})+'\\n');
+  child.stdin.write(JSON.stringify({event:'managedPads',pads:[]})+'\n');
   for(let attempt=0;attempt<30;attempt++){
     if((await managedRoute()).pads.length===0)break;
     await new Promise(r=>setTimeout(r,20));
