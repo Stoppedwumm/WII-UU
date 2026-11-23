@@ -85,6 +85,23 @@ uses the W3C Gamepad API; the bundled Switch mapper remaps the
 specific measured \`20d6:a713\` device to an Xbox-style layout.
 Other controllers retain their standard mapping.
 
+The player automatically forwards up to four standard Gamepad API controllers to
+Xbox input slots 0–3. Existing WII-UU Linux `/dev/uinput` virtual controllers
+are supported if Chromium can see them through `navigator.getGamepads()`.
+The `20d6:a713` mapper converts its nonstandard button/axis layout into
+standard gamepad positions. Face buttons, shoulders, analog triggers,
+stick-clicks, both analog sticks, D-pad, View/Menu and Home/Nexus are
+handled. When Home is absent, pressing View + Menu together sends Nexus.
+
+Controllers can be connected and disconnected during a stream without
+restarting it. Input frames are flushed at the WebRTC input tick instead of
+waiting for unrelated video metadata. The Chromium console prints
+`[xcloud-gamepad]` messages after the input handshake and on each
+controller attach/detach. If nothing appears, focus the Chromium stream
+window and check that the controller is exposed to the browser Gamepad API.
+Some device drivers expose fewer than 17 buttons; missing buttons remain
+released rather than causing a stream error.
+
 Press Escape in Chromium to show/hide player controls. Leaving the Xbox Cloud Gaming screen ends its streaming process. The separate Chromium window also provides Disconnect.
 
 ## Compatibility caveats
