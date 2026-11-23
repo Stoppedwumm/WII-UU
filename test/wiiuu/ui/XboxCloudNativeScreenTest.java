@@ -112,6 +112,22 @@ public final class XboxCloudNativeScreenTest {
         for(int i=0;i<26;i++) games.add(constructor.newInstance("GAME"+i,"Sample Game "+i,""));
         MenuView.applyTheme(false);
         render(screen,1280,800,"xcloud-ui-catalog-light.png");
+        // Controller X toggles favorites, and the quick-launch shelf is part
+        // of the same input navigation surface as the standard Xbox catalog.
+        set(screen,"focus",5); // First game after Close + the four catalog controls.
+        screen.toggleFocusedFavorite();
+        XboxCloudFavorites savedFavorites=new XboxCloudFavorites(config.userHome());
+        ok(savedFavorites.all().size()==1 && savedFavorites.contains("GAME0"),
+                "Controller X favorites the selected catalog game and persists it");
+        render(screen,1280,800,"xcloud-ui-catalog-favorites.png");
+        int quick=(int)field(screen,"quickLaunchStart");
+        ok(quick>=0 && (int)field(screen,"quickLaunchEnd")>quick+1,
+                "Favorites shelf offers controller-accessible quick launches");
+        set(screen,"focus",quick+1); // First quick-launch card, after previous-page arrow.
+        screen.toggleFocusedFavorite();
+        ok(new XboxCloudFavorites(config.userHome()).all().isEmpty(),
+                "X removes a favorite directly from the quick-launch shelf");
+        render(screen,1280,800,"xcloud-ui-catalog-light.png");
         ok(config.getBool("xcloud.audioAutoplay",true),"Xbox audio should default to autoplay");
         screen.click(840,165); // The controller-selectable Auto audio toggle
         ok(!config.getBool("xcloud.audioAutoplay",true),"Native audio setting can disable autoplay");
