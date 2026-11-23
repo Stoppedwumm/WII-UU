@@ -67,7 +67,11 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private String loginCode = "";
     private String verificationUrl = "https://www.microsoft.com/link";
     private String query = "";
-    private int focus, page, columns = 3, rows = 2, pageSize = 6;
+    private int focus, searchFocus, page, columns = 3, rows = 2, pageSize = 6;
+    private boolean paintingSearch;
+
+    /** Search uses its own focus; never highlight catalog buttons behind the modal. */
+    private int selectedFocus() { return paintingSearch ? searchFocus : searchEditing ? -1 : focus; }
 
     XboxCloudNativeScreen(Config config, PluginStore.Entry entry, Runnable repaint, Runnable exit) {
         this(config, entry, repaint, exit, List::of);
@@ -103,7 +107,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void action(Graphics2D g, float x, float y, float w, float h,
                         String title, Runnable onClick, float u, boolean primary) {
         int index = hits.size();
-        boolean selected = focus == index;
+        boolean selected = selectedFocus() == index;
         Color bg = primary ? MenuView.ACCENT : MenuView.CARD;
         rounded(g, x, y, w, h, 16*u, bg);
         if (selected) {
@@ -117,7 +121,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         hits.add(new Hit(new Rectangle2D.Float(x, y, w, h), onClick, false));
     }
     private void card(Graphics2D g, float x, float y, float w, float h, Game game, float u, int index) {
-        boolean selected = hits.size() == focus;
+        boolean selected = hits.size() == selectedFocus();
         rounded(g, x, y, w, h, 20*u, MenuView.CARD);
         rounded(g, x+12*u,y+12*u,w-24*u,Math.max(40*u,h*0.47f),14*u,
                 selected ? MenuView.ACCENT : MenuView.dark ? new Color(47, 61, 80) : new Color(215,228,240));
@@ -170,8 +174,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             paintLibrary(g,width,height,u);
         }
         if(searchEditing) paintSearch(g,width,height,u);
-        if(hits.isEmpty()) focus=0;
-        else focus=Math.max(0,Math.min(focus,hits.size()-1));
+        if(searchEditing) searchFocus=hits.isEmpty()?0:Math.max(0,Math.min(searchFocus,hits.size()-1));
+        else focus=hits.isEmpty()?0:Math.max(0,Math.min(focus,hits.size()-1));
         label(g,status,pad,height-40*u,Font.PLAIN,15*u,MenuView.TEXT_DIM,width-pad*2);
         label(g,searchEditing ? "D-pad: Keys   A: Type   B: Done" :
                 "A: Select   B: Back   L/R: Page   HOME: Return",
@@ -253,6 +257,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     }
     private void paintSearch(Graphics2D g,int w,int h,float u) {
         // One single UI surface; no JOptionPane or separate desktop window.
+        paintingSearch=true;
         g.setColor(new Color(0,0,0,MenuView.dark?190:145));
         g.fillRect(0,0,w,h);
         hits.clear();
@@ -279,6 +284,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         action(g,x+24*u,bottom,half,43*u,"Delete",this::erase,u,false);
         action(g,x+29*u+half,bottom,half,43*u,"Clear",()->{query="";page=0;repaint.run();},u,false);
         action(g,x+34*u+2*half,bottom,half,43*u,"Done",this::finishSearch,u,true);
+        paintingSearch=false;
     }
     /** Only trusted Microsoft Store assets; load bounded-size cover images off the paint thread. */
     private BufferedImage cover(String url) {
@@ -361,7 +367,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void openSearch() {
         // Immediately invalidate the library's hit areas. InputRouter can
         // deliver queued stick repeat events before the overlay is repainted.
-        searchEditing=true;hits.clear();focus=0;repaint.run();
+        searchEditing=true;hits.clear();searchFocus=0;repaint.run();
     }
     private void finishSearch() {
         searchEditing=false;hits.clear();focus=games.isEmpty()?1:5;page=0;repaint.run();
@@ -387,12 +393,13 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     }
     void navigate(int dx,int dy) {
         if(hits.isEmpty())return;
-        focus=Math.max(0,Math.min(focus,hits.size()-1));
-        Rectangle2D current=hits.get(focus).area();
+        int selection=searchEditing?searchFocus:focus;
+        selection=Math.max(0,Math.min(selection,hits.size()-1));
+        Rectangle2D current=hits.get(selection).area();
         double cx=current.getCenterX(),cy=current.getCenterY();
         double best=Double.MAX_VALUE;int chosen=-1;
         for(int n=0;n<hits.size();n++){
-            if(n==focus)continue;
+            if(n==selection)continue;
             Rectangle2D next=hits.get(n).area();
             double xx=next.getCenterX()-cx, yy=next.getCenterY()-cy;
             if(dx!=0 && xx*dx<=1)continue;
@@ -408,12 +415,15 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             else Sfx.bump();
             return;
         }
-        focus=chosen;Sfx.move();repaint.run();
+        if(searchEditing)searchFocus=chosen;
+        else focus=chosen;
+        Sfx.move();repaint.run();
     }
     void activate() {
-        if(hits.isEmpty()||focus<0||focus>=hits.size())return;
+        int selection=searchEditing?searchFocus:focus;
+        if(hits.isEmpty()||selection<0||selection>=hits.size())return;
         Sfx.select();
-        hits.get(focus).action().run();
+        hits.get(selection).action().run();
     }
     void page(int delta) {
         if(!signedIn||searchEditing)return;
@@ -428,7 +438,11 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     }
     void click(int x,int y) {
         for(int n=0;n<hits.size();n++)
-            if(hits.get(n).area().contains(x,y)){focus=n;activate();return;}
+            if(hits.get(n).area().contains(x,y)){
+                if(searchEditing)searchFocus=n;
+                else focus=n;
+                activate();return;
+            }
     }
 
     private void installRuntime() {
