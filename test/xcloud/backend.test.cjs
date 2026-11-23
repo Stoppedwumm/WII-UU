@@ -22,6 +22,7 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
     '  constructor() { this._userToken=undefined;this._sisuToken=undefined;this._jwtKeys=undefined; }',
     '  loadJson(s) { const d=JSON.parse(s);if(d.userToken)this._userToken={data:d.userToken};return true; }',
     '  getUserToken() { return this._userToken; }',
+    '  removeAll() { throw new Error("Inherited removeAll must not run: missing _filepath"); }',
     '}',
     'class Msal {',
     '  constructor(store) { this.store=store; }',
@@ -29,12 +30,13 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
     '    verification_uri:"https://www.microsoft.com/link",expires_in:900}; }',
     '  async doPollForDeviceCodeAuth(code) {',
     '    if(code!=="private-device-code")throw new Error("Invalid pairing code");',
+    '    this.store.removeAll();',
     '    this.store._userToken={data:{access_token:"secret-access", refresh_token:"secret-refresh",',
     '      token_type:"Bearer",scope:"XboxLive.signin"}};',
     '    return this.store.getUserToken();',
     '  }',
-    '  async getStreamingTokens() { return {xCloudToken:{data:{gsToken:"secret-xbox-grant",',
-    '    regions:[{baseUri:"https://weu.core.gssv-play-prod.xboxlive.com"}]}}}; }',
+    '  async getStreamingTokens() { throw new Error("Should not ask for xHome token"); }',
+    '  async getGssvToken() { throw new Error("Xbox cloud entitlement unavailable in fixture"); }',
     '}',
     'module.exports={Msal,TokenStore};'
   ].join('\n');
@@ -43,6 +45,9 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
   t.after(()=>{
     child.stdin.end();child.kill('SIGKILL');fs.rmSync(root,{recursive:true,force:true});
   });
+  let diagnostics='';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data',chunk=>{diagnostics+=chunk;});
   const queue=[],waiters=[];
   const lines=readline.createInterface({input:child.stdout});
   lines.on('line',line=>{
@@ -94,6 +99,16 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
   send(2,'signedIn');
   assert.equal((await receive(m=>m.id===2)).result.signedIn,true);
 
+  // Microsoft approval must move the UI past pairing even when Xbox entitlement
+  // has not yet been fetched, is unavailable, or the Xbox service is offline.
+  send(5,'games');
+  const catalogueFailure=await receive(m=>m.id===5);
+  assert.equal(catalogueFailure.ok,false);
+  assert.match(catalogueFailure.error,/Xbox cloud entitlement unavailable/);
+  send(6,'signedIn');
+  assert.equal((await receive(m=>m.id===6)).result.signedIn,true);
+
+
   const invalid=await fetch(url+'/api/start',{method:'POST',headers:{
     'X-Wiiuu-Session':ready.secret,'Content-Type':'application/json'
   },body:JSON.stringify({titleId:'NOT-IN-CATALOG'})});
@@ -104,4 +119,130 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
   assert.equal(fs.existsSync(path.join(user,'xcloud-tokens.json')),false);
   send(4,'signedIn');
   assert.equal((await receive(m=>m.id===4)).result.signedIn,false);
+  // stderr is the only diagnostic stream; stdout stays machine-readable.
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.match(diagnostics,/device-flow-issued/);
+  assert.match(diagnostics,/device-poll-resolved/);
+  assert.match(diagnostics,/user-token-saved/);
+  assert.match(diagnostics,/signed-in-event-sent/);
+  assert.match(diagnostics,/native-status-check/);
+  assert.match(diagnostics,/catalog-error/);
+  assert.doesNotMatch(diagnostics,/private-device-code|ABCD-EFGH|secret-access|secret-refresh/);
+});
+
+test('player filters null and malformed remote ICE records before invoking xcloud-player',()=>{
+  const vm=require('node:vm');
+  const source=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
+  const begin=source.indexOf('function validRemoteIce(data){');
+  const end=source.indexOf('\nasync function fetchRemoteIce(){',begin);
+  assert.ok(begin>=0&&end>begin,'ICE sanitizer must be present');
+  const sanitize=vm.runInNewContext('('+source.slice(begin,end).trim()+')');
+  const filtered=sanitize({iceCandidates:[
+    null,undefined,{},'bad',{candidate:null},{candidate:'a=end-of-candidates'},
+    {candidate:'candidate:1 1 UDP 1 192.0.2.1 1234 typ host',sdpMid:'0',sdpMLineIndex:0}
+  ]});
+  assert.equal(filtered.length,1);
+  assert.equal(filtered[0].sdpMid,'0');
+  assert.equal(filtered[0].sdpMLineIndex,0);
+  assert.equal(sanitize({candidates:[null]}).length,0);
+  assert.equal(sanitize(null).length,0);
+  const wrapped=sanitize({exchangeResponse:JSON.stringify([
+    {candidate:'a=candidate:2 1 UDP 100 192.0.2.55 9002 typ host',sdpMid:'0',sdpMLineIndex:'0'},
+    {candidate:'a=end-of-candidates',sdpMid:'0',sdpMLineIndex:'0'},
+    null
+  ])});
+  assert.equal(wrapped.length,1);
+  assert.equal(wrapped[0].candidate,'candidate:2 1 UDP 100 192.0.2.55 9002 typ host');
+  assert.equal(wrapped[0].sdpMLineIndex,0);
+  const service=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/service.cjs'),'utf8');
+  assert.ok(service.includes('iceCandidates:payload.candidates'));
+});
+
+test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',()=>{
+  const vm=require('node:vm');
+  const source=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
+  const from=source.indexOf('const GAMEPAD_FIELDS=');
+  const to=source.indexOf('\nasync function connect(){',from);
+  assert.ok(from>=0&&to>from,'Gamepad bridge should be part of the bundled player');
+  let pads=[null];
+  let tick;
+  const calls=[],changes=[];
+  class FakeGamepad {
+    constructor(index){this._index=index;this._isFocused=true;}
+    attach(player){
+      this._player=player;
+      player._channels.control.sendGamepadState(this._index,true,this);
+      this.detectActiveGamepad();
+    }
+    detach(){this._player._channels.control.sendGamepadState(this._index,false);}
+    getPhysicalGamepadId(){return this._physicalGamepadId;}
+  }
+  const ctx={
+    Gamepad:FakeGamepad,
+    navigator:{getGamepads:()=>pads},
+    stop:false,
+    console:{info:()=>{},warn:()=>{}},
+    setInterval:callback=>{tick=callback;return 1;},
+    clearInterval:()=>{tick=null;}
+  };
+  const {gamepadFrame,controllerBridge}=vm.runInNewContext(
+    source.slice(from,to)+'\n({gamepadFrame,controllerBridge})',ctx);
+  const standard={
+    index:0,mapping:'standard',
+    buttons:Array.from({length:16},()=>({value:0})),
+    axes:[0.5,-0.5,0.25,-0.25]
+  };
+  standard.buttons[0]={value:1}; // A
+  standard.buttons[7]={value:0.4}; // right trigger analog
+  standard.buttons[12]={value:1}; // dpad up
+  const frame=gamepadFrame(standard,2);
+  assert.equal(frame.GamepadIndex,2);
+  assert.equal(frame.A,1);
+  assert.equal(frame.Nexus,0,'missing button 16 is allowed');
+  assert.equal(frame.RightTrigger,0.4);
+  assert.equal(frame.DPadUp,1);
+  assert.ok(frame.LeftThumbXAxis>0 && frame.LeftThumbXAxis<1);
+  assert.ok(frame.LeftThumbYAxis<0 && frame.RightThumbYAxis<0);
+  assert.equal(gamepadFrame({buttons:[],axes:[NaN,Infinity]},0).LeftThumbXAxis,0);
+  const combo={buttons:Array.from({length:17},()=>({value:0})),axes:[]};
+  combo.buttons[8]={value:1};combo.buttons[9]={value:1};
+  const special=gamepadFrame(combo,0);
+  assert.equal(special.Nexus,1);
+  assert.equal(special.View,0);
+  assert.equal(special.Menu,0);
+  const handlers={};
+  const input={
+    _dataChannel:{readyState:'connecting'},
+    start:()=>{},
+    queueGamepadFrames:(frames,force)=>calls.push({frames,force}),
+    gamepadStateLoop:()=>{}
+  };
+  const player={_peerConnection:{connectionState:'connected'},_channels:{
+    input,control:{_dataChannel:{readyState:'connecting'},sendGamepadState:(slot,added,handler)=>{
+      changes.push({slot,added});if(added)handlers[slot]=handler;else delete handlers[slot];
+    }}
+  }};
+  const dispose=controllerBridge(player);
+  input.start();
+  assert.equal(typeof tick,'function');
+  assert.equal(Object.keys(handlers).length,0);
+  pads=[standard,null,{...standard,index:2}];
+  tick();
+  assert.equal(Object.keys(handlers).length,0,'do not announce controllers before channels open');
+  input._dataChannel.readyState='open';
+  player._channels.control._dataChannel.readyState='open';
+  tick();
+  assert.equal(Object.keys(handlers).length,2);
+  assert.equal(handlers[0].getPhysicalGamepadId(),0);
+  assert.equal(handlers[1].getPhysicalGamepadId(),2);
+  assert.equal(handlers[0].getGamepadState().A,1);
+  input.queueGamepadFrames([handlers[0].getGamepadState()]);
+  assert.equal(calls[0].force,true,'gamepad frames must be sent without metadata');
+  pads=[null,null,{...standard,index:2}];
+  tick();
+  assert.equal(Object.keys(handlers).length,1);
+  assert.equal(handlers[1].getGamepadState().GamepadIndex,1);
+  dispose();
+  assert.equal(Object.keys(handlers).length,0);
+  assert.equal(tick,null);
 });

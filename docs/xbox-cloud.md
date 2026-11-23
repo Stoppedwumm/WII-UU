@@ -85,6 +85,23 @@ uses the W3C Gamepad API; the bundled Switch mapper remaps the
 specific measured \`20d6:a713\` device to an Xbox-style layout.
 Other controllers retain their standard mapping.
 
+The player automatically forwards up to four standard Gamepad API controllers to
+Xbox input slots 0–3. Existing WII-UU Linux `/dev/uinput` virtual controllers
+are supported if Chromium can see them through `navigator.getGamepads()`.
+The `20d6:a713` mapper converts its nonstandard button/axis layout into
+standard gamepad positions. Face buttons, shoulders, analog triggers,
+stick-clicks, both analog sticks, D-pad, View/Menu and Home/Nexus are
+handled. When Home is absent, pressing View + Menu together sends Nexus.
+
+Controllers can be connected and disconnected during a stream without
+restarting it. Input frames are flushed at the WebRTC input tick instead of
+waiting for unrelated video metadata. The Chromium console prints
+`[xcloud-gamepad]` messages after the input handshake and on each
+controller attach/detach. If nothing appears, focus the Chromium stream
+window and check that the controller is exposed to the browser Gamepad API.
+Some device drivers expose fewer than 17 buttons; missing buttons remain
+released rather than causing a stream error.
+
 Press Escape in Chromium to show/hide player controls. Leaving the Xbox Cloud Gaming screen ends its streaming process. The separate Chromium window also provides Disconnect.
 
 ## Compatibility caveats
@@ -119,3 +136,43 @@ Pairing uses a large device-code card with copy and reload actions. Games are
 shown as responsive multi-column tiles. The last action in the screen opens
 the separate Chromium WebRTC media player; authentication and catalog remain
 in WII-UU's native rendering engine.
+
+## Microsoft pairing versus Xbox game access
+
+When you finish the code at `microsoft.com/link`, WII-UU recognizes
+Microsoft authorization separately from subsequent Xbox cloud streaming access.
+The pairing card changes to the game catalog after the Microsoft user token
+is returned, even if Xbox entitlement or game discovery later fails. While the
+code is displayed, WII-UU periodically checks the **local** authentication
+helper; **I've signed in** performs an immediate local recheck. The message
+\"Sign in first\" should not appear simply because you tried loading games
+while the pairing code was still pending.
+
+The local Node helper is refreshed from the installed WII-UU resources when
+Xbox Cloud Gaming next opens. **You do not need to re-download Chromium**, and
+existing Microsoft account tokens are left untouched. Restart WII-UU after
+installing the updated version to use the updated authorization helper.
+
+An accepted Microsoft device code does not itself guarantee Xbox Cloud Gaming
+entitlement or a successful stream; any subsequent failure should be presented
+as a separate Xbox access or catalog error, not as a sign-in failure.
+
+## Troubleshooting Microsoft device-code approval
+
+The local Node helper writes privacy-limited authentication diagnostics to
+`backend.log` in WII-UU's Xbox runtime directory (next to `service.cjs`).
+This log includes `[xcloud-auth]` milestones: `device-flow-issued`,
+`device-poll-start`, periodic `device-poll-waiting`, `device-poll-resolved`,
+`user-token-saved`, `signed-in-event-sent`, and `native-status-check`.
+It also records catalog attempts separately from Microsoft sign-in.
+
+If Microsoft shows that `Xbox Web` is signed in but WII-UU stays on the
+pairing screen, reopen the Xbox Cloud Gaming view and inspect the latest
+`[xcloud-auth]` entries. `device-poll-waiting` after Microsoft approval
+indicates the helper has not received a completed device-code exchange.
+`device-poll-resolved` without `user-token-saved` indicates a token-store
+problem. `signed-in-event-sent` with `native-status-check signedIn=true`
+indicates the Java UI should advance; if it does not, investigate the UI
+callback/bridge. Logging is deliberately limited to stages and booleans:
+never paste OAuth credentials, device codes, or `xcloud-tokens.json` in bug
+reports.

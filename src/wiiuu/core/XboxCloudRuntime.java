@@ -10,6 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.util.Arrays;
 import java.nio.file.FileVisitResult;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -114,6 +116,82 @@ public final class XboxCloudRuntime {
             return false;
         }
     }
+    /**
+     * Refresh the small bundled backend on WII-UU updates without reinstalling
+     * npm packages or downloading a several-hundred-megabyte Chromium build.
+     * Called before starting Node, never while it is serving a stream.
+     */
+    public static void syncBundledService(Config config) throws IOException {
+        Path root = home(config);
+        Path script = root.resolve("service.cjs");
+        byte[] bundled;
+        try (InputStream input = XboxCloudRuntime.class.getResourceAsStream("/xcloud/service.cjs")) {
+            if (input == null) throw new IOException("Missing bundled Xbox backend script");
+            bundled = input.readAllBytes();
+        }
+        if (Files.isRegularFile(script) && Arrays.equals(Files.readAllBytes(script), bundled)) {
+            syncBundledPlayer(config);
+            return;
+        }
+        Files.createDirectories(root);
+        Path staging = Files.createTempFile(root, ".service-", ".cjs");
+        try {
+            Files.write(staging, bundled);
+            try {
+                Files.move(staging, script, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(staging, script, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(staging);
+        }
+        syncBundledPlayer(config);
+    }
+
+    /**
+     * Rebuild the browser bundle when WII-UU ships new player code.
+     * A full runtime reinstall (Chromium + npm downloads) is not required.
+     * Keep the previous bundle on failure and let the caller report the error.
+     */
+    private static void syncBundledPlayer(Config config) throws IOException {
+        Path root = home(config);
+        Path source = root.resolve("player-entry.js");
+        Path bundle = root.resolve("player.bundle.js");
+        byte[] bundled;
+        try (InputStream input = XboxCloudRuntime.class.getResourceAsStream("/xcloud/player-entry.js")) {
+            if (input == null) throw new IOException("Missing bundled Xbox player source");
+            bundled = input.readAllBytes();
+        }
+        if (Files.isRegularFile(source) && Files.isRegularFile(bundle)
+                && Arrays.equals(Files.readAllBytes(source), bundled)) return;
+        Path esbuild = root.resolve("node_modules/esbuild/bin/esbuild");
+        if (!Files.isRegularFile(esbuild))
+            throw new IOException("Xbox player builder missing; repair the Xbox Cloud runtime");
+        Files.createDirectories(root);
+        Path stagedSource = Files.createTempFile(root, ".player-source-", ".js");
+        Path stagedBundle = Files.createTempFile(root, ".player-bundle-", ".js");
+        try {
+            Files.write(stagedSource, bundled);
+            try {
+                run(List.of("node", esbuild.toString(), stagedSource.toString(),
+                        "--bundle", "--platform=browser", "--format=iife", "--target=chrome110",
+                        "--outfile=" + stagedBundle), 120, root.resolve("bundle-update.log"));
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Xbox player update interrupted", error);
+            }
+            if (Files.size(stagedBundle) == 0)
+                throw new IOException("Xbox player update produced an empty bundle");
+            // Publish the playable bundle before its version marker (source).
+            Files.move(stagedBundle, bundle, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(stagedSource, source, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(stagedSource);
+            Files.deleteIfExists(stagedBundle);
+        }
+    }
+
     public static boolean installing() { return BUSY.get(); }
 
     public static void install(Config config, Consumer<String> notify) {

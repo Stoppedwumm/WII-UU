@@ -37,6 +37,13 @@ class StoredTokens extends TokenStore {
     fs.renameSync(tmp, tokenFile);
     if (process.platform !== 'win32') fs.chmodSync(tokenFile, 0o600);
   }
+  // xal-node calls removeAll() after successful device-code exchange,
+  // before setUserToken() and save(). Its default implementation writes to
+  // _filepath, which this store deliberately does not use. Clear only the
+  // in-memory state here: save() atomically replaces the persisted token later.
+  removeAll() {
+    this._userToken = undefined; this._sisuToken = undefined; this._jwtKeys = undefined;
+  }
   clear() {
     this._userToken = undefined; this._sisuToken = undefined; this._jwtKeys = undefined;
     try { fs.unlinkSync(tokenFile); } catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -46,6 +53,63 @@ const store = new StoredTokens();
 let msal = new Msal(store);
 
 function emit(message) { process.stdout.write(JSON.stringify(message) + '\n'); }
+// Diagnostic events are written to stderr (backend.log), never to the JSON
+// protocol on stdout. Keep OAuth codes, secrets, tokens and raw responses out.
+const diagnosticStart = Date.now();
+function debug(stage, detail = '') {
+  const elapsed = Math.floor((Date.now() - diagnosticStart) / 1000);
+  const suffix = detail ? ' ' + detail : '';
+  process.stderr.write('[xcloud-auth] +' + elapsed + 's ' + stage + suffix + '\n');
+}
+function errorKind(error) {
+  const kind = error?.name;
+  return typeof kind === 'string' && /^[A-Za-z]{1,40}$/.test(kind) ? kind : 'Error';
+}
+// xal-node retries all device-code token HTTP failures without exposing their
+// type. Instrument only that endpoint to distinguish OAuth pending, terminal
+// responses and transport errors without ever printing response bodies.
+function monitorMicrosoftPolling(instance) {
+  const client = instance?._httpClient;
+  if (!client || typeof client.postRequest !== 'function') {
+    debug('device-http-monitor-unavailable');
+    return;
+  }
+  const original = client.postRequest.bind(client);
+  let lastStatus = '';
+  let lastReportAt = 0;
+  client.postRequest = function(host, pathname, headers, body) {
+    if (host !== 'login.microsoftonline.com' || pathname !== '/consumers/oauth2/v2.0/token'
+        || typeof body !== 'string' || !body.includes('urn:ietf:params:oauth:grant-type:device_code'))
+      return original(host, pathname, headers, body);
+    return Promise.resolve().then(() => original(host, pathname, headers, body))
+      .then(response => {
+        debug('device-http-token-success');
+        return response;
+      }, error => {
+        // xal-node embeds the HTTP status and OAuth error code in a JSON
+        // string inside Error.message. Extract only explicitly allowlisted
+        // status/error labels. Never print the original message or body.
+        const message = typeof error?.message === 'string' ? error.message : '';
+        const status = /"statuscode"\s*:\s*(\d{3})/.exec(message)?.[1] || 'unknown';
+        const code = /\\"error\\"\s*:\s*\\"([a-z_]+)\\"/.exec(message)?.[1] || 'unknown';
+        const allowed = new Set(['authorization_pending','slow_down','authorization_declined',
+          'expired_token','bad_verification_code','invalid_grant','invalid_client','unauthorized_client']);
+        const oauth = allowed.has(code) ? code : 'unknown';
+        const label = status + '/' + oauth;
+        if (label !== lastStatus || Date.now() - lastReportAt > 30000) {
+          debug('device-http-retry', 'http=' + status + ' oauth=' + oauth
+            + ' errorType=' + errorKind(error));
+          lastStatus = label;
+          lastReportAt = Date.now();
+        }
+        throw error;
+      });
+  };
+}
+monitorMicrosoftPolling(msal);
+debug('backend-start', 'savedUserToken=' + Boolean(store.getUserToken()));
+let lastTokenState = Boolean(store.getUserToken());
+let lastStatusLog = 0;
 function safeError(error) {
   // Do not accidentally log access tokens included in upstream HTTP responses.
   const msg = typeof error?.message === 'string' ? error.message : String(error);
@@ -72,8 +136,15 @@ function deviceInfo() {
 }
 async function streamingTokens() {
   if (!store.getUserToken()) throw new Error('Sign in first');
-  const tokens = await msal.getStreamingTokens();
-  cloudToken = tokens.xCloudToken;
+  // xCloud should not depend on xHome authentication. getStreamingTokens()
+  // also requests an xHome grant which may fail even with a valid xCloud account.
+  const gssv = await msal.getGssvToken();
+  if (!gssv?.data?.Token) throw new Error('Xbox GSSV authorization was unavailable');
+  try {
+    cloudToken = await msal.getStreamToken(gssv.data.Token, 'xgpuweb');
+  } catch (paidOfferingError) {
+    cloudToken = await msal.getStreamToken(gssv.data.Token, 'xgpuwebf2p');
+  }
   if (!cloudToken?.data?.gsToken) throw new Error('Xbox Cloud Gaming access is unavailable for this account');
   return cloudToken;
 }
@@ -135,18 +206,38 @@ async function catalog() {
 async function deviceAuth() {
   if (authenticating) throw new Error('Device authorization is already in progress');
   authenticating = true;
+  debug('device-flow-request');
   let flow;
   try { flow = await msal.doDeviceCodeAuth(); }
-  catch (error) { authenticating = false; throw error; }
+  catch (error) { authenticating = false; debug('device-flow-error', 'type=' + errorKind(error)); throw error; }
+  debug('device-flow-issued', 'expiresSeconds=' + (Number(flow.expires_in) || 900));
   emit({event:'code', code:flow.user_code, url:flow.verification_uri || flow.verification_url || 'https://www.microsoft.com/link',
       expiresIn:flow.expires_in || 900, message:flow.message});
-  void msal.doPollForDeviceCodeAuth(flow.device_code).then(async () => {
+  // Microsoft's approval and Xbox cloud entitlement are separate milestones.
+  // Notify Java as soon as the device-code exchange has produced a user token.
+  // Do not block the sign-in UI on xHome/xCloud provisioning or catalog access.
+  debug('device-poll-start');
+  const pollStarted = Date.now();
+  const pollHeartbeat = setInterval(() => {
+    debug('device-poll-waiting', 'elapsedSeconds=' + Math.floor((Date.now() - pollStarted) / 1000)
+      + ' userTokenPresent=' + Boolean(store.getUserToken()));
+  }, 30000);
+  pollHeartbeat.unref?.();
+  void Promise.resolve().then(() => msal.doPollForDeviceCodeAuth(flow.device_code,
+    Math.max(1, Number(flow.expires_in) || 900) * 1000)).then(() => {
+    clearInterval(pollHeartbeat);
+    debug('device-poll-resolved', 'userTokenPresent=' + Boolean(store.getUserToken()));
+    if (!store.getUserToken()) throw new Error('Microsoft approved the device but no user token was returned');
     store.save();
-    await streamingTokens();
+    debug('user-token-saved');
     authenticating = false;
+    lastTokenState = true;
     emit({event:'signedIn'});
+    debug('signed-in-event-sent');
   }).catch(error => {
+    clearInterval(pollHeartbeat);
     authenticating = false;
+    debug('device-poll-error', 'type=' + errorKind(error) + ' userTokenPresent=' + Boolean(store.getUserToken()));
     emit({event:'authError', message:safeError(error)});
   });
   return {pending:true};
@@ -166,10 +257,32 @@ async function endSession() {
 async function api(action, payload={}) {
   switch (action) {
     case 'auth': return deviceAuth();
-    case 'signedIn': return {signedIn:!!store.getUserToken()};
-    case 'games': return {games:await catalog()};
+    case 'signedIn': {
+      const signedIn = !!store.getUserToken();
+      // The native screen checks every 3 seconds. Only log a change or
+      // an occasional heartbeat so the backend log stays readable.
+      if (signedIn !== lastTokenState || Date.now() - lastStatusLog > 30000) {
+        debug('native-status-check', 'signedIn=' + signedIn + ' pollActive=' + authenticating);
+        lastStatusLog = Date.now();
+        lastTokenState = signedIn;
+      }
+      return {signedIn};
+    }
+    case 'games': {
+      debug('catalog-request');
+      try {
+        const games = await catalog();
+        debug('catalog-ready', 'count=' + games.length);
+        return {games};
+      } catch (error) {
+        debug('catalog-error', 'type=' + errorKind(error));
+        throw error;
+      }
+    }
     case 'logout':
-      await endSession(); cloudToken=null; allowedTitles.clear(); store.clear(); msal = new Msal(store);
+      await endSession(); cloudToken=null; allowedTitles.clear(); store.clear(); msal = new Msal(store); monitorMicrosoftPolling(msal);
+      lastTokenState = false;
+      debug('signed-out');
       return {signedIn:false};
     case 'start': {
       const id=payload.titleId;
@@ -214,7 +327,7 @@ async function api(action, payload={}) {
     case 'icePost': {
       if (!Array.isArray(payload.candidates) || payload.candidates.length > 256)
         throw new Error('Invalid ICE candidates');
-      return xbox(sessionPath()+'/ice','POST',{candidates:payload.candidates});
+      return xbox(sessionPath()+'/ice','POST',{iceCandidates:payload.candidates});
     }
     case 'iceGet': return xbox(sessionPath()+'/ice');
     case 'keepalive': return xbox(sessionPath()+'/keepalive','POST',{});
@@ -272,4 +385,5 @@ reader.on('close',()=>{void endSession().finally(()=>{server.close();process.exi
 server.listen(0,'127.0.0.1',()=>{
   port=server.address().port;
   emit({event:'ready',port,secret,signedIn:!!store.getUserToken()});
+  debug('backend-ready', 'signedIn=' + Boolean(store.getUserToken()));
 });

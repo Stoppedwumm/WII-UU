@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.10 (2026-11-23)
+- Fix Xbox Cloud Gaming remaining on the Microsoft pairing-code screen after successful device authorization.
+- Complete Microsoft sign-in immediately upon receiving the user token, without waiting for unrelated Xbox Cloud Gaming entitlement or xHome token requests.
+- Avoid requiring an Xbox Home streaming grant to access cloud titles; request xCloud grants directly with paid-to-free offering fallback.
+- Replace the misleading pre-login "Refresh games" action with "I've signed in" and check authentication progress automatically every few seconds.
+- Refresh the bundled authentication service when WII-UU is updated without reinstalling Chromium or erasing user authentication tokens.
+
 ## 2.1.9 (2026-11-22)
 - Replace the floating Xbox Cloud Swing window with a full-screen WII-UU-native, theme-aware TV/GamePad view.
 - Present Microsoft device-code authorization, a searchable catalog and cloud-game tiles with WII-UU's existing rounded-card palette, fonts and controller sounds.

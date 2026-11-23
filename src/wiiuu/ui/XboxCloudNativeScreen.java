@@ -54,6 +54,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private Backend backend;
     private volatile Process browser;
     private boolean closed, startingBackend, installing, signedIn, pairing, searchEditing;
+    // Query only the local helper to recover if an asynchronous auth notification is delayed.
+    private final javax.swing.Timer pairingStatusTimer = new javax.swing.Timer(3000, event -> checkLogin(false));
     private String status = "Checking the Xbox Cloud Gaming runtime...";
     private String loginCode = "";
     private String verificationUrl = "https://www.microsoft.com/link";
@@ -189,7 +191,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             label(g,"Visit "+verificationUrl,x+30*u,y+222*u,Font.BOLD,16*u,MenuView.TEXT,cardW-60*u);
             action(g,x+30*u,y+242*u,(cardW-70*u)/2f,46*u,"Copy code",this::copyCode,u,true);
             action(g,x+40*u+(cardW-70*u)/2f,y+242*u,(cardW-70*u)/2f,46*u,
-                    "Refresh games",this::loadGames,u,false);
+                    "I've signed in",()->checkLogin(true),u,false);
         } else {
             label(g,"Use microsoft.com/link on your phone or another computer.",
                     x+30*u,y+85*u,Font.PLAIN,16*u,MenuView.TEXT_DIM,cardW-60*u);
@@ -423,6 +425,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         CompletableFuture.runAsync(()->{
             try {
                 Path root=XboxCloudRuntime.home(config);
+                // Refresh the bundled backend on upgrades without redownloading Chromium.
+                XboxCloudRuntime.syncBundledService(config);
                 Path user=Files.createDirectories(config.userHome().resolve("xcloud"));
                 Backend next=new Backend(root,user,message->SwingUtilities.invokeLater(()->onMessage(message)));
                 SwingUtilities.invokeLater(()->{
@@ -430,8 +434,15 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                     if(closed){next.close();return;}
                     backend=next;status="Ready. Sign in with Microsoft to continue.";
                     command("signedIn",result->{
-                        signedIn=Boolean.TRUE.equals(result.get("signedIn"));
-                        if(signedIn)loadGames();
+                        if(Boolean.TRUE.equals(result.get("signedIn"))) {
+                            // The replacement helper has a fresh entitlement/catalog map.
+                            // Always reload it even if the UI was already marked signed in.
+                            if(signedIn)loadGames();
+                            else completeLogin();
+                        } else if(!pairing) {
+                            signedIn=false; // A new helper may no longer have valid account tokens.
+                            status="Ready. Sign in with Microsoft to continue.";
+                        }
                         repaint.run();
                     });
                     repaint.run();
@@ -455,18 +466,50 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             if(url!=null&&(url.equals("https://www.microsoft.com/link")||url.equals("https://microsoft.com/link")))
                 verificationUrl=url;
             pairing=true;status="Waiting for your approval at "+verificationUrl;
+            pairingStatusTimer.start();
             focus=1;
         }else if("signedIn".equals(type)){
-            signedIn=true;pairing=false;loginCode="";focus=0;
-            status="Signed in. Loading your games...";
-            loadGames();
+            completeLogin();
         }else if("authError".equals(type)){
-            pairing=false;status="Microsoft sign-in failed: "+MiniJson.string(message.get("message"));
+            pairing=false;pairingStatusTimer.stop();
+            status="Microsoft sign-in failed: "+MiniJson.string(message.get("message"));
         }else if("ended".equals(type)){
-            backend=null;status="The local Xbox service stopped.";
+            pairingStatusTimer.stop();
+            backend=null;
+            pairing=false;
+            loginCode=""; // A pairing code belongs to the exited helper and cannot be polled.
+            games.clear(); // The previous helper's playable-title IDs are no longer valid.
+            status="The local Xbox service stopped. Select Reload to reconnect.";
         }
         repaint.run();
     }
+    /** Microsoft authentication is completed before any Xbox Cloud entitlement check. */
+    private void completeLogin() {
+        if(signedIn)return;
+        signedIn=true;
+        pairing=false;
+        pairingStatusTimer.stop();
+        loginCode="";
+        focus=0;
+        status="Microsoft sign-in complete. Loading Xbox games...";
+        loadGames();
+    }
+
+    private void checkLogin(boolean showPending) {
+        if(closed || !pairing || backend==null)return;
+        backend.call("signedIn").whenComplete((response,error)->SwingUtilities.invokeLater(()->{
+            if(closed || !pairing)return;
+            if(error!=null){
+                if(showPending)status="Couldn't check Microsoft sign-in: "+error.getMessage();
+            }else if(Boolean.TRUE.equals(response.get("signedIn"))){
+                completeLogin();
+            }else if(showPending){
+                status="Microsoft has not finished authorizing this device yet. Waiting for approval...";
+            }
+            repaint.run();
+        }));
+    }
+
     private void command(String cmd,Consumer<Map<String,Object>> done) {
         if(backend==null){status="Xbox service is not running.";repaint.run();return;}
         backend.call(cmd).whenComplete((result,error)->SwingUtilities.invokeLater(()->{
@@ -510,7 +553,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void logout() {
         if(browser!=null&&browser.isAlive())stopGame();
         command("logout",result->{
-            signedIn=false;pairing=false;loginCode="";games.clear();page=0;focus=1;query="";
+            signedIn=false;pairing=false;pairingStatusTimer.stop();
+            loginCode="";games.clear();page=0;focus=1;query="";
             status="Signed out. Get a new Microsoft login code to continue.";
         });
     }
@@ -551,6 +595,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     @Override public void close() {
         if(closed)return;
         closed=true;
+        pairingStatusTimer.stop();
         Process p=browser;
         if(p!=null&&p.isAlive()){p.descendants().forEach(ProcessHandle::destroy);p.destroy();}
         browser=null;
