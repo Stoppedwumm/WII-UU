@@ -225,7 +225,7 @@ test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',
   input.start();
   assert.equal(typeof tick,'function');
   assert.equal(Object.keys(handlers).length,0);
-  pads=[standard,{...standard,index:2}];
+  pads=[standard,null,{...standard,index:2}];
   tick();
   assert.equal(Object.keys(handlers).length,2);
   assert.equal(handlers[0].getPhysicalGamepadId(),0);
@@ -233,7 +233,7 @@ test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',
   assert.equal(handlers[0].getGamepadState().A,1);
   input.queueGamepadFrames([handlers[0].getGamepadState()]);
   assert.equal(calls[0].force,true,'gamepad frames must be sent without metadata');
-  pads=[null,{...standard,index:2}];
+  pads=[null,null,{...standard,index:2}];
   tick();
   assert.equal(Object.keys(handlers).length,1);
   assert.equal(handlers[1].getGamepadState().GamepadIndex,1);
