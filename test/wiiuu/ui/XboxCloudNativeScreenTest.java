@@ -60,6 +60,11 @@ public final class XboxCloudNativeScreenTest {
         ok((boolean)field(screen,"signedIn"),"Microsoft approval should mark account signed in");
         ok(!(boolean)field(screen,"pairing"),"Microsoft approval should leave the pairing screen");
         ok(((String)field(screen,"loginCode")).isEmpty(),"Do not keep showing the old code");
+        // When the helper dies, its pending code and cached game IDs must be dropped.
+        onMessage.invoke(screen,java.util.Map.of("event","code","code","STALE","url","https://www.microsoft.com/link"));
+        onMessage.invoke(screen,java.util.Map.of("event","ended"));
+        ok(!(boolean)field(screen,"pairing"),"An exited backend must not leave a dead pairing code");
+        ok(((String)field(screen,"loginCode")).isEmpty(),"The exited backend code must be cleared");
         // Return to the signed-out state for the screenshot fixtures.
         set(screen,"signedIn",false);
         set(screen,"pairing",false);
