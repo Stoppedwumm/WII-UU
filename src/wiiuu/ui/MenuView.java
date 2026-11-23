@@ -80,6 +80,9 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         void refresh();
 
         void closeGame();
+        /** Active WII-UU-managed GamePads in their assigned player slots. */
+        default List<Map<String, Object>> xboxControllerFrames() { return List.of(); }
+
 
         /** OpenBased, for its cinema screen (null: none). */
         default wiiuu.core.OpenBased openBased() {
@@ -1153,7 +1156,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private void openXboxCloud(wiiuu.core.PluginStore.Entry entry) {
         if (xcloudPanel != null) return;
-        xcloudPanel = new XboxCloudNativeScreen(config, entry, this::repaint, this::closeXboxCloud);
+        xcloudPanel = new XboxCloudNativeScreen(config, entry, this::repaint, this::closeXboxCloud, actions::xboxControllerFrames);
         Sfx.select();
         repaint();
     }
