@@ -711,10 +711,15 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             status="Signed out. Get a new Microsoft login code to continue.";
         });
     }
-    /** Only the isolated macOS Xbox Chromium session skips system Keychain. */
-    static void configureMacKeychain(List<String> chromeCommand, String osName) {
-        if (osName != null && osName.toLowerCase(Locale.ROOT).startsWith("mac"))
-            chromeCommand.add("--use-mock-keychain");
+    /**
+     * The isolated Xbox player must not open an OS-keyring password dialog.
+     * On Raspberry Pi OS and Debian, Chromium otherwise asks to unlock GNOME
+     * Keyring / KWallet, which is inaccessible using only a controller.
+     * Do not change the user's normal browser or the system keyring.
+     */
+    static void configureBrowserPasswordStore(List<String> chromeCommand, String osName) {
+        if (osName != null && osName.toLowerCase(Locale.ROOT).contains("linux"))
+            chromeCommand.add("--password-store=basic");
     }
 
     private void startGame(Game chosen) {
@@ -739,12 +744,10 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                     "--user-data-dir="+profile.toAbsolutePath(),
                     "--app="+url,"--no-first-run","--disable-sync","--disable-background-networking",
                     "--disable-infobars");
-            // macOS Chrome for Testing otherwise asks for access to "Chrome Safe
-            // Storage" in Keychain. The isolated Xbox player does not store
-            // Microsoft sign-in credentials in Chromium, so use its test-only
-            // keychain instead of presenting a native, controller-inaccessible
-            // macOS permission dialog.
-            configureMacKeychain(builder.command(), System.getProperty("os.name", ""));
+            // In Linux desktop sessions, Chromium may prompt for the system
+            // password keyring. Use the basic local store ONLY for this isolated
+            // Xbox WebRTC player; Microsoft credentials live in the Node helper.
+            configureBrowserPasswordStore(builder.command(), System.getProperty("os.name", ""));
             // This isolated browser only serves the local player. Permit
             // playback without a mouse gesture when the user opts in.
             if(autoAudio())builder.command().add("--autoplay-policy=no-user-gesture-required");
