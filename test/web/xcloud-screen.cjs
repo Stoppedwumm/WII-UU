@@ -45,4 +45,8 @@ assert.deepEqual(transition({mode:'game',game:xbox,view:'screen',tv:true},
 assert.deepEqual(transition({mode:'menu',game:null,view:'lib',tv:true},
   {mode:'game',game:{name:'NES',system:'NES',color:'#000'},xboxCloud:false}).calls,
   ['show:play'],'Regular emulators keep their existing Now Playing behavior');
+assert.deepEqual(transition({mode:'game',
+    game:{name:'NES',system:'NES',color:'#000'},view:'screen',tv:true},
+  {mode:'menu',game:null,xboxCloud:false}).calls,[],
+  'Closing a regular emulator must keep a manually selected TV mirror');
 console.log('Xbox GamePad screen switching tests passed');
