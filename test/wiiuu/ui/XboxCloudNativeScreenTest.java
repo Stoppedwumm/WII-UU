@@ -113,6 +113,7 @@ public final class XboxCloudNativeScreenTest {
         render(screen,1280,800,"xcloud-ui-catalog-before-search.png");
         screen.click(50,160); // Search action at the top of the native catalog
         ok(screen.wantsKeys(),"Search must open the integrated on-screen keyboard");
+        int underlyingFocus=(int)field(screen,"focus");
         ok(((java.util.List<?>)field(screen,"hits")).isEmpty(),
                 "Opening the search overlay immediately invalidates library controls");
         screen.navigate(1,0);screen.activate(); // Before the overlay's next repaint
@@ -126,6 +127,10 @@ public final class XboxCloudNativeScreenTest {
         render(screen,1280,800,"xcloud-ui-search-keyboard.png");
         render(screen,640,400,"xcloud-ui-search-keyboard-small.png");
         screen.navigate(1,0);screen.activate(); // On-screen controller key types a character
+        ok((int)field(screen,"focus")==underlyingFocus,
+                "Navigating the search keyboard must not change background catalog focus");
+        ok((int)field(screen,"searchFocus")!=0,
+                "Search keyboard must have its own controller selection");
         ok(((String)field(screen,"query")).length()>2,"Controller activation must type using the on-screen keyboard");
         screen.back();
         ok(((java.util.List<?>)field(screen,"hits")).isEmpty(),
