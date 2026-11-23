@@ -54,7 +54,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private final Map<String,BufferedImage> coverImages = new LinkedHashMap<>();
     private final XboxCloudFavorites favorites;
     private final Map<Integer,Game> favoriteTargets = new HashMap<>();
-    private int favoritePage, quickLaunchStart = -1, quickLaunchEnd = -1;
+    private int favoritePage, quickCapacity = 4, quickLaunchStart = -1, quickLaunchEnd = -1;
     private final Set<String> requestedCovers = new HashSet<>();
     private final ExecutorService coverLoader = Executors.newFixedThreadPool(2, task -> {
         Thread thread = new Thread(task, "xcloud-cover-image");
@@ -278,6 +278,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         List<XboxCloudFavorites.Favorite> all=favorites.all();
         if(all.isEmpty())return;
         int capacity=w>=1000?4:w>=650?3:2;
+        quickCapacity=capacity;
         int pages=Math.max(1,(all.size()+capacity-1)/capacity);
         favoritePage=Math.max(0,Math.min(favoritePage,pages-1));
         label(g,"Favorites  •  A: Quick play   X: Remove",pad,211*u,Font.BOLD,16*u,
@@ -324,7 +325,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
 
     private void quickPage(int direction) {
         if(favorites.all().isEmpty())return;
-        int capacity=columns>=4?4:columns>=3?3:2;
+        int capacity=quickCapacity;
         int pages=Math.max(1,(favorites.all().size()+capacity-1)/capacity);
         int next=Math.max(0,Math.min(pages-1,favoritePage+Integer.signum(direction)));
         if(next==favoritePage){Sfx.bump();return;}
@@ -531,6 +532,10 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     }
     void page(int delta) {
         if(!signedIn||searchEditing)return;
+        if(quickLaunchStart>=0 && focus>=quickLaunchStart && focus<quickLaunchEnd) {
+            quickPage(delta);
+            return;
+        }
         int pages=Math.max(1,(filtered().size()+Math.max(1,pageSize)-1)/Math.max(1,pageSize));
         int next=Math.max(0,Math.min(pages-1,page+Integer.signum(delta)));
         if(next==page){Sfx.bump();return;}
@@ -693,6 +698,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                     games.add(new Game(id,name,cover==null?"":cover));
             }
             games.sort(Comparator.comparing(Game::name,String.CASE_INSENSITIVE_ORDER));
+            for(Game game:games)favorites.update(game.id(),game.name(),game.cover());
             page=0;focus=5;
             status=games.size()+" playable games available.";
         });
@@ -713,6 +719,13 @@ final class XboxCloudNativeScreen implements AutoCloseable {
 
     private void startGame(Game chosen) {
         if(closed||backend==null||!signedIn)return;
+        Game available=games.stream().filter(game->game.id().equals(chosen.id())).findFirst().orElse(null);
+        if(available==null) {
+            status="This favorite is not currently playable. Reload the Xbox catalog.";
+            repaint.run();
+            return;
+        }
+        chosen=available;
         Process old=browser;
         if(old!=null&&old.isAlive()){status="A cloud stream is already running.";repaint.run();return;}
         try {
@@ -789,6 +802,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         if(backend!=null)backend.close();
         hits.clear();games.clear();
         coverLoader.shutdownNow();coverImages.clear();requestedCovers.clear();
+        favoriteTargets.clear();
     }
 
     private static final class Backend implements AutoCloseable {
