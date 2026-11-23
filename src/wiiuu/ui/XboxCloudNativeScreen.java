@@ -52,6 +52,9 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private final List<Hit> hits = new ArrayList<>();
     private final List<Game> games = new ArrayList<>();
     private final Map<String,BufferedImage> coverImages = new LinkedHashMap<>();
+    private final XboxCloudFavorites favorites;
+    private final Map<Integer,Game> favoriteTargets = new HashMap<>();
+    private int favoritePage, quickLaunchStart = -1, quickLaunchEnd = -1;
     private final Set<String> requestedCovers = new HashSet<>();
     private final ExecutorService coverLoader = Executors.newFixedThreadPool(2, task -> {
         Thread thread = new Thread(task, "xcloud-cover-image");
@@ -81,6 +84,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                          java.util.function.Supplier<List<Map<String, Object>>> controllerFrames) {
         this.controllerFrames = controllerFrames;
         this.config = config;
+        this.favorites = new XboxCloudFavorites(config.userHome());
         this.entry = entry;
         this.repaint = repaint;
         this.exit = exit;
@@ -125,7 +129,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         rounded(g, x, y, w, h, 20*u, MenuView.CARD);
         rounded(g, x+12*u,y+12*u,w-24*u,Math.max(40*u,h*0.47f),14*u,
                 selected ? MenuView.ACCENT : MenuView.dark ? new Color(47, 61, 80) : new Color(215,228,240));
-        BufferedImage cover = cover(game.cover());
+        BufferedImage cover = cover(game);
         if (cover != null) {
             float availableW=w-34*u, availableH=Math.max(32*u,h*0.47f-14*u);
             float scale=Math.min(availableW/cover.getWidth(),availableH/cover.getHeight());
@@ -141,12 +145,22 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         g.setFont(MenuView.font(Font.BOLD, 17*u)); g.setColor(MenuView.TEXT);
         center(g, shortened(g, game.name(),w-24*u), x+w/2f, y+Math.max(40*u,h*0.47f)+43*u);
         g.setFont(MenuView.font(Font.PLAIN, 12*u));g.setColor(MenuView.TEXT_DIM);
-        center(g, "A  Play", x+w/2f, y+h-16*u);
+        center(g, "A  Play   X  Favorite", x+w/2f, y+h-16*u);
         if (selected) {
             g.setStroke(new BasicStroke(3*u));g.setColor(MenuView.ACCENT);
             g.draw(new RoundRectangle2D.Float(x-3*u,y-3*u,w+6*u,h+6*u,22*u,22*u));
         }
+        favoriteTargets.put(hits.size(),game);
         hits.add(new Hit(new Rectangle2D.Float(x, y, w, h), () -> startGame(game), true));
+        // The star is also pointer/touch accessible. Draw and register it
+        // after the card, so the smaller hit target wins on mouse clicks.
+        float star=30*u, sx=x+w-star-10*u, sy=y+10*u;
+        rounded(g,sx,sy,star,star,star/2,MenuView.CARD);
+        g.setColor(favorites.contains(game.id()) ? MenuView.ACCENT : MenuView.TEXT_DIM);
+        g.setFont(MenuView.font(Font.BOLD,20*u));
+        center(g,favorites.contains(game.id()) ? "★" : "☆",sx+star/2,sy+star*0.74f);
+        favoriteTargets.put(hits.size(),game);
+        hits.add(new Hit(new Rectangle2D.Float(sx,sy,star,star),()->toggleFavorite(game),false));
     }
 
     void paint(Graphics2D g, int width, int height) {
@@ -160,6 +174,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         for(int n=0;n<6;n++)g.fill(new RoundRectangle2D.Float(width*0.52f+n*45*u,
                 height*0.70f+n*24*u,300*u,160*u,90*u,90*u));
         hits.clear();
+        favoriteTargets.clear();
+        quickLaunchStart = quickLaunchEnd = -1;
         label(g,"Xbox Cloud Gaming",pad,titleY,Font.BOLD,34*u,MenuView.TEXT,width-pad*2-180*u);
         label(g,"WII-UU  /  APPS",pad,96*u,Font.BOLD,13*u,MenuView.TEXT_DIM,width-pad*2);
         action(g,width-pad-117*u,26*u,117*u,48*u,"Close",exit,u,false);
@@ -232,7 +248,9 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         action(g,pad+2*(bw+gap),top,bw,45*u,"Sign out",this::logout,u,false);
         action(g,pad+3*(bw+gap),top,bw,45*u,
                 "Auto audio: "+(autoAudio()?"On":"Off"),this::toggleAutoAudio,u,false);
-        float gridY=208*u, footer=75*u;
+        boolean showQuick = !favorites.all().isEmpty() && query.isBlank();
+        if(showQuick) paintQuickLaunch(g,w,u,pad);
+        float gridY=(showQuick?342:208)*u, footer=75*u;
         columns=w>=1230?4:w>=760?3:2;
         rows=h>=730?2:1;
         pageSize=columns*rows;
@@ -437,7 +455,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         Sfx.back();exit.run();
     }
     void click(int x,int y) {
-        for(int n=0;n<hits.size();n++)
+        for(int n=hits.size()-1;n>=0;n--)
             if(hits.get(n).area().contains(x,y)){
                 if(searchEditing)searchFocus=n;
                 else focus=n;
