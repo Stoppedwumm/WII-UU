@@ -36,24 +36,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "27"
-      - name: Test actual native DS frame path on Java 27
+      - name: Run native startup test suite
         shell: bash
-        run: |
-          mkdir -p build/native-startup
-          find engine/src -name '*.java' > build/native-engine.txt
-          javac --release 17 -d build/native-startup @build/native-engine.txt
-          find engine/src-choccy -name '*.java' > build/native-helper.txt
-          javac --release 22 -cp build/native-startup -d build/native-startup @build/native-helper.txt
-          javac --release 17 -cp build/native-startup -d build/native-startup test/wiiuu/core/NativeStartupTest.java
-          if [[ "$RUNNER_OS" == macOS ]]; then
-            core=build/native-startup/melondsds_libretro.dylib
-            clang -dynamiclib -o "$core" test/native/ds_startup_fixture.c
-          else
-            core=build/native-startup/melondsds_libretro.so
-            gcc -shared -fPIC -o "$core" test/native/ds_startup_fixture.c
-          fi
-          java --enable-native-access=ALL-UNNAMED -Djava.awt.headless=true -cp build/native-startup wiiuu.core.NativeStartupTest "$core"
-
+        run: bash tools/ci-tests.sh native-startup
   actions-installer-test:
     strategy:
       matrix:
@@ -65,52 +50,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "25"
-      - name: Test build ZIP import
+      - name: Run installer test suite
         shell: bash
-        run: |
-          mkdir -p build/installer-tests
-          javac --release 17 -d build/installer-tests engine/src/wiiuu/core/Config.java engine/src/wiiuu/core/GameSystem.java src/wiiuu/core/Changelog.java src/wiiuu/core/Updater.java engine/src/wiiuu/core/BuildInfo.java engine/src/wiiuu/core/Version.java test/wiiuu/core/ActionsBuildTest.java test/wiiuu/core/BuildInfoTest.java test/wiiuu/core/VersionTest.java test/wiiuu/core/UpdateChannelsTest.java engine/src/wiiuu/core/MiniJson.java src/wiiuu/core/ReleaseArchive.java test/wiiuu/core/ReleaseArchiveTest.java src/wiiuu/core/PluginStore.java src/wiiuu/core/XboxCloudRuntime.java test/wiiuu/core/PluginStoreTest.java test/wiiuu/core/XboxCloudRuntimeTest.java src/wiiuu/core/NativePluginSession.java test/wiiuu/core/NativePluginSessionTest.java test/wiiuu/core/UserProfilesTest.java
-          cp -r resources/plugins build/installer-tests/plugins
-          java -cp build/installer-tests wiiuu.core.NativePluginSessionTest
-          java -cp build/installer-tests wiiuu.core.PluginStoreTest
-          java -cp build/installer-tests wiiuu.core.XboxCloudRuntimeTest
-          java -cp build/installer-tests wiiuu.core.ActionsBuildTest
-          java -cp build/installer-tests wiiuu.core.BuildInfoTest
-          java -cp build/installer-tests wiiuu.core.VersionTest
-          java -Djava.awt.headless=true -cp build/installer-tests wiiuu.core.UserProfilesTest
-          java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.UpdateChannelsTest
-          java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.ReleaseArchiveTest
-          python3 -m unittest discover -s tools/tests -p 'test_release*.py'
-      - name: Check Windows installer syntax
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path install.ps1).Path, [ref]$tokens, [ref]$errors) | Out-Null
-          if ($errors) { $errors | Out-String | Write-Error }
-
-      - name: Test shared core manager
-        shell: bash
-        run: |
-          find engine/src -name '*.java' > build/core-manager-sources.txt
-          javac --release 17 -d build/installer-tests @build/core-manager-sources.txt test/wiiuu/core/CoreManagerTest.java
-          java -Djava.awt.headless=true -cp build/installer-tests wiiuu.core.CoreManagerTest
-
-      - name: Test native cloudflared bundle and relay boundary
-        shell: bash
-        run: |
-          case "$RUNNER_OS/$RUNNER_ARCH" in
-            Windows/*) platform=windows-amd64; binary=cloudflared.exe ;;
-            macOS/ARM64) platform=darwin-arm64; binary=cloudflared ;;
-            macOS/*) platform=darwin-amd64; binary=cloudflared ;;
-            Linux/*) platform=linux-amd64; binary=cloudflared ;;
-          esac
-          python3 tools/package-cloudflared.py "$platform"
-          "build/cloudflared/$platform/$binary" --version
-          javac --release 17 -d build/installer-tests src/wiiuu/net/CloudflaredRelay.java src/wiiuu/net/RelayGateway.java src/wiiuu/net/QrCode.java test/wiiuu/net/RelayTest.java
-          java -Djava.awt.headless=true -cp build/installer-tests wiiuu.net.RelayTest
-
+        run: bash tools/ci-tests.sh installer
   build:
     concurrency:
       group: wiiuu-packaging-${{ github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/'))) && 'publish' || github.ref }}
@@ -129,27 +71,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Test Node archive server and JavaScript plugins
-        run: node --test archive/test/*.test.mjs test/plugins/*.test.cjs test/xcloud/*.test.cjs
-
-      - name: Test real plugin browser against local fixtures
-        run: |
-          mkdir -p build/plugin-host
-          cp resources/plugins/host/package*.json build/plugin-host/
-          npm ci --prefix build/plugin-host --no-audit --no-fund --engine-strict
-          # Chromium's sandbox cannot initialize on restricted CI hosts. Only this local fixture disables it.
-          build/plugin-host/node_modules/.bin/electron test/plugins/browser-smoke.cjs --no-sandbox --ozone-platform=headless --disable-gpu
-          ELECTRON_RUN_AS_NODE=1 build/plugin-host/node_modules/.bin/electron --test test/plugins/native.test.cjs
-
-      - name: Validate portable Xbox WebRTC player dependencies and bundle
-        run: |
-          mkdir -p build/xcloud-deps
-          cp resources/xcloud/player-entry.js build/xcloud-deps/player-entry.js
-          npm install --prefix build/xcloud-deps --no-save --no-fund --no-audit --ignore-scripts -- xal-node@1.1.6-beta2 xbox-xcloud-player@1.0.0-beta7 esbuild@0.27.7
-          node -e "const xal=require('./build/xcloud-deps/node_modules/xal-node'); if(!xal.Msal || !xal.TokenStore) throw Error('xal-node missing API')"
-          node build/xcloud-deps/node_modules/esbuild/bin/esbuild build/xcloud-deps/player-entry.js --bundle --platform=browser --format=iife --target=chrome110 --outfile=build/xcloud-deps/player.bundle.js
-          test -s build/xcloud-deps/player.bundle.js
-
       - name: Build jar and release zip (also copies it into docs/download and writes docs/version.json)
         id: version
         env:
@@ -173,62 +94,9 @@ jobs:
           echo "VERSION=$v" >> "$GITHUB_ENV"
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
-      - name: Build and test the standalone UI library
-        run: |
-          ./ui-library/build.sh
-          ui_version="$(cat ui-library/VERSION)"
-          echo "UI_VERSION=$ui_version" >> "$GITHUB_ENV"
-          ui_jar="build/ui-library/WII-UU-UI-$ui_version.jar"
-          mkdir -p build/ui-example
-          javac --release 17 -cp "$ui_jar" -d build/ui-example docs/support/ui-library/UiDemo.java docs/support/ui-library/ThemeDemo.java docs/support/ui-library/MenuDemo.java docs/support/ui-library/AnimatedDemo.java test/wiiuu/ui/UiLibraryTest.java test/wiiuu/ui/AnimatedUiTest.java test/wiiuu/ui/UiControlsTest.java docs/support/ui-library/ControlsDemo.java
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" UiDemo --snapshot build/ui-example/demo.png
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" ThemeDemo --snapshot build/ui-example/themes.png
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" wiiuu.ui.UiLibraryTest
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" MenuDemo --snapshot build/ui-example/menu-light.png
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" MenuDemo --snapshot build/ui-example/menu-dark.png --dark
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" wiiuu.ui.AnimatedUiTest
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" AnimatedDemo --snapshot build/ui-example/mascot.png
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" AnimatedDemo --snapshot build/ui-example/visualizer.png --visualizer
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" wiiuu.ui.UiControlsTest
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" ControlsDemo --snapshot build/ui-example/controls-light.png
-          java -Djava.awt.headless=true -cp "$ui_jar:build/ui-example" ControlsDemo --snapshot build/ui-example/controls-dark.png --dark
-          test -s build/ui-example/controls-light.png
-          test -s build/ui-example/controls-dark.png
-          test -f build/ui-library/api/wiiuu/ui/Ui.html
-          test -f build/ui-library/api/wiiuu/ui/UiButton.html
-          test -s build/ui-example/mascot.png
-          test -s build/ui-example/visualizer.png
-          test -f build/ui-library/api/wiiuu/ui/AnimatedMascot.html
-          test -f build/ui-library/api/wiiuu/ui/AudioVisualizer.html
-          test -s build/ui-example/menu-light.png
-          test -s build/ui-example/menu-dark.png
-          test -f build/ui-library/api/wiiuu/ui/MenuPainter.html
-          test -s build/ui-example/themes.png
-          test -f build/ui-library/api/wiiuu/ui/ThemeScript.html
-          test -s build/ui-example/demo.png
-          test -f build/ui-library/api/wiiuu/engine/GameScreen.html
-          cp -R build/ui-library/api docs/support/ui-library/
-
-      - name: Smoke test (render the menu headless)
-        run: |
-          java -Djava.awt.headless=true -jar build/wiiuu.jar --home "$RUNNER_TEMP/wiiuu" \
-            --snapshot "$RUNNER_TEMP/menu.png" --snapshot-view home
-          test -s "$RUNNER_TEMP/menu.png"
-          java -jar build/ChoccyMilk.jar --help
-
-      - name: Test activated plugin apps in the dock
-        run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/ui/PluginDockTest.java test/wiiuu/ui/NativePluginScreenTest.java test/wiiuu/ui/XboxCloudNativeScreenTest.java test/wiiuu/core/NativePluginBridgeTest.java test/wiiuu/core/XboxCloudResourceSyncTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.PluginDockTest
-          java --add-modules jdk.httpserver -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.NativePluginScreenTest
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.XboxCloudNativeScreenTest
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.XboxCloudResourceSyncTest
-          test -s build/xcloud-ui-catalog-light.png
-          test -s build/xcloud-ui-search-keyboard-small.png
-          java -cp build/classes:build/tests wiiuu.core.NativePluginBridgeTest build/plugin-host/node_modules/electron/dist
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/XboxCloudInputTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.XboxCloudInputTest
-
+      - name: Run unified test suite
+        shell: bash
+        run: bash tools/ci-tests.sh build
       - name: Upload Xbox Cloud UI screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -237,65 +105,6 @@ jobs:
           path: build/xcloud-ui-*.png
           if-no-files-found: ignore
           retention-days: 14
-
-      - name: Test USB backup, factory reset and restore
-        run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/DemoDeviceTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.DemoDeviceTest
-
-      - name: Test opt-in diagnostic consent and UI
-        run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/DiagnosticsTest.java test/wiiuu/ui/DiagnosticsOverlayTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.DiagnosticsTest
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.DiagnosticsOverlayTest
-
-      - name: Test multi-user profiles and sign-out UI
-        run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/UserProfilesTest.java test/wiiuu/ui/SignOutPowerTest.java test/wiiuu/ui/UserSelectScreenTest.java test/wiiuu/input/LocalPadsHomeTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.UserProfilesTest
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.SignOutPowerTest
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.UserSelectScreenTest
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.input.LocalPadsHomeTest
-          WIIUU_CONSOLE=1 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.SignOutPowerTest
-
-      - name: Test boot changelog controller input
-        run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/ui/ChangelogControllerTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.ChangelogControllerTest
-
-      - name: Test native Linux Wi-Fi list parsing
-        run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/ui/LinuxNetworkPickerTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.LinuxNetworkPickerTest
-
-      - name: Test Choccy Milk dual screens and pointer input
-        run: |
-          javac --release 22 -cp build/classes -d build/tests test/wiiuu/screen/ChoccyDualScreenTest.java
-          java --enable-native-access=ALL-UNNAMED -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.screen.ChoccyDualScreenTest
-
-      - name: Test storage relocation and LAN migration
-        run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/net/MigrationTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.net.MigrationTest
-
-      - name: Test relay boundary and downloaded Linux helper
-        run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/net/RelayTest.java test/wiiuu/net/RelayBundleTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.net.RelayTest
-          java -Djava.awt.headless=true -cp build/wiiuu.jar:build/tests wiiuu.net.RelayBundleTest
-
-      - name: Test standalone bindings and shared DS online options
-        run: |
-          javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/ChoccySettingsTest.java
-          java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.ChoccySettingsTest
-
-      - name: Test GamePad screen and controller layouts
-        run: |
-          node test/web/screen-choices.cjs
-          node test/web/controller-layouts.cjs
-
-      - name: Check shell scripts
-        run: bash -n install.sh emulators.sh build.sh package.sh docs/get.sh
 
       - name: Prepare easy-install artifact
         run: |
