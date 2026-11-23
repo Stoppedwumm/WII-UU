@@ -289,3 +289,62 @@ test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',
   assert.equal(Object.keys(handlers).length,0);
   assert.equal(tick,null);
 });
+
+test('Xbox server terminal state closes its native Chrome session exactly once',async()=>{
+  const vm=require('node:vm');
+  const service=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/service.cjs'),'utf8');
+  const start=service.indexOf('function sessionPath() {');
+  const end=service.indexOf('\nasync function api(action, payload={})',start);
+  assert.ok(start>=0&&end>start,'Xbox remote session cleanup helpers exist');
+  let state='Provisioned',failCode=0;
+  const events=[],paths=[];
+  const ctx={
+    validSessionId:id=>id==='TESTID',
+    xbox:async (endpoint,method)=>{
+      paths.push({endpoint,method});
+      if(method==='DELETE')return {};
+      if(failCode)throw Error('Xbox service returned HTTP '+failCode);
+      return {state};
+    },
+    emit:event=>events.push(event),
+    encodeURIComponent,
+  };
+  const testCode=`let activeSession={id:'TESTID'};\n`+service.slice(start,end)+`
+  this.readState=currentStreamState;
+  this.terminate=terminateIfEnded;
+  this.newSession=id=>{activeSession={id}};
+  this.currentSession=()=>activeSession;`;
+  vm.runInNewContext(testCode,ctx);
+  assert.equal((await ctx.readState()).state,'Provisioned');
+  assert.equal(events.length,0,'Normal session states must not close Chrome');
+  state='Closed';
+  assert.equal((await ctx.readState()).state,'Closed');
+  assert.equal(ctx.currentSession(),null);
+  assert.deepEqual(events,[{event:'streamEnded'}],
+    'Exactly one native stream-ended event emitted on Xbox server closure');
+  assert.equal(paths.filter(p=>p.method==='DELETE').length,1);
+  state='Failed';
+  assert.equal((await ctx.terminate({state})).state,'Failed');
+  assert.equal(events.length,1,'Subsequent termination must not notify twice');
+  ctx.newSession('TESTID');
+  failCode=404;
+  await assert.rejects(ctx.readState(),/HTTP 404/);
+  assert.equal(events.length,2,'Expired Xbox sessions must close Chrome');
+  ctx.newSession('TESTID');
+  failCode=502;
+  await assert.rejects(ctx.readState(),/HTTP 502/);
+  assert.equal(events.length,2,'Temporary backend failures must not kill the stream');
+  assert.ok(ctx.currentSession(),'Non-terminal server errors preserve the active session');
+});
+
+test('Xbox player has controller-free audio startup and release-banner flags',()=>{
+  const native=fs.readFileSync(path.join(__dirname,'../../src/wiiuu/ui/XboxCloudNativeScreen.java'),'utf8');
+  const player=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
+  assert.match(native,/--disable-infobars/);
+  assert.match(native,/--autoplay-policy=no-user-gesture-required/);
+  assert.match(native,/xcloud\\.audioAutoplay/);
+  assert.match(player,/getAudioElement\\(\\)/);
+  assert.match(player,/audioTimer=setInterval/);
+  assert.match(player,/async function sessionEnded\\(\\)/);
+  assert.match(player,/await disconnect\\(\\)/);
+});
