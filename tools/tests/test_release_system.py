@@ -74,19 +74,33 @@ class ReleaseSystemTests(unittest.TestCase):
             malformed = {**stable, 'tag_name': 'wiiuu-ui-v99.0.0'}
             self.assertIsNone(site.select([malformed], False))
 
-    def test_stable_release_branch_deploys_pages_after_release_publish(self):
-        """A release/* build must also deploy Pages or clients keep the previous stable feed."""
+    def test_stable_release_pages_deploy_from_default_branch(self):
+        """GitHub Pages must deploy from its permitted default branch, not release/*."""
         workflow = (ROOT / '.github/workflows/build.yml').read_text()
         pages = workflow.split('\n  pages:\n', 1)[1]
         self.assertIn('needs: build', pages)
-        self.assertIn("startsWith(github.ref, 'refs/heads/release/')", pages)
         self.assertIn("github.ref_name == github.event.repository.default_branch", pages)
         self.assertIn("github.event_name != 'pull_request'", pages)
+        self.assertNotIn("startsWith(github.ref, 'refs/heads/release/')", pages)
+
         release_stage = workflow.index('name: Publish versioned application release')
         feed_stage = workflow.index('name: Assemble stable and beta website channels')
         package_site = workflow.index('name: Package the website')
         self.assertLess(release_stage, feed_stage)
         self.assertLess(feed_stage, package_site)
+
+        followup = (ROOT / '.github/workflows/publish-stable-pages.yml').read_text()
+        self.assertIn('workflow_run:', followup)
+        self.assertIn('workflows: ["Build"]', followup)
+        self.assertIn('types: [completed]', followup)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", followup)
+        self.assertIn("github.event.workflow_run.event == 'push'", followup)
+        self.assertIn("startsWith(github.event.workflow_run.head_branch, 'release/')", followup)
+        self.assertIn("github.event.workflow_run.head_repository.full_name == github.repository", followup)
+        self.assertIn('ref: ${{ github.event.repository.default_branch }}', followup)
+        self.assertIn('name: github-pages', followup)
+        self.assertIn('tools/stage-release-site.py build/published-releases.json', followup)
+        self.assertIn('uses: actions/deploy-pages@v4', followup)
 
     def test_first_deployment_preserves_live_stable_instead_of_old_checkout(self):
         with tempfile.TemporaryDirectory() as directory:
