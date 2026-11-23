@@ -1678,9 +1678,15 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public boolean pressed(int player, wiiuu.input.PadButton b, boolean down) {
         if (down) lastInput = System.currentTimeMillis();
         if (ChangelogDialog.controllerButton(b, down)) return true;
-        if (xcloudPanel != null && migration == null && b == wiiuu.input.PadButton.HOME) {
-            if (down) closeXboxCloud();
-            return true;
+        if (xcloudPanel != null && migration == null) {
+            if (b == wiiuu.input.PadButton.HOME) {
+                if (down) closeXboxCloud();
+                return true;
+            }
+            if (b == wiiuu.input.PadButton.X) {
+                if (down) xcloudPanel.toggleFocusedFavorite();
+                return true;
+            }
         }
         if (migration != null) {
             if (down) {

@@ -68,12 +68,46 @@ Chromium to use its hardware decode, WebRTC stack and Gamepad API.
 | macOS Intel | \`mac-x64\` |
 | Windows x64 | \`win64\` |
 
+On **Linux (including Raspberry Pi OS and Debian)**, WII-UU launches
+only the *isolated Xbox Chrome for Testing player* with
+`--password-store=basic`. This prevents the GNOME Keyring, KWallet or
+Secret Service password-storage prompt that cannot be dismissed using a
+GamePad. Chromium's basic password store does **not** provide system
+keyring-backed encryption, so the isolated browser profile must not be used
+to save passwords or for general browsing. The Xbox player only opens
+WII-UU's authenticated localhost streaming page; Microsoft device-code
+credentials are stored separately in WII-UU's Node backend, not in Chrome.
+No changes are made to the system keyring, regular Chromium installation,
+or macOS/Windows browser behavior.
+
 Windows ARM64 and 32-bit Linux are not automatically supported.
 The installer does not run as root and does not disable Chromium's
 sandbox. Linux must have a graphical session, working video drivers,
 \`node\` and \`npm\` on PATH. On a system with broken unprivileged user
 namespaces Chromium may fail to start; WII-UU intentionally avoids
 automatically adding unsafe \`--no-sandbox\` flags.
+
+## Favorite games and quick launch
+
+In the native Xbox game catalog, highlight a game with the controller and
+press **X** to add/remove it from Favorites. Mouse and touch users can select
+the star on a game tile. Favorites appear in a **quick-launch shelf** above
+the catalog; choose a favorite with **A** to immediately start that title
+without searching again. The shelf has left/right page buttons (or use L/R
+when focused on the shelf) to reach additional favorites, up to 64.
+
+Favorites are saved per WII-UU user under
+`<user-home>/xcloud/favorites.json`. Their trusted Microsoft Store cover
+images are cached as bounded PNG files in `xcloud/favorite-covers/`, so
+artwork stays visible between restarts even when cover downloads are
+unavailable. These favorites do not sync with your Microsoft account and do
+not store Xbox login credentials. Removing a favorite also deletes its cached
+cover. Existing WII-UU per-user backup/restore covers these files when the
+user home is included.
+
+Quick launch only starts titles present in the current live Xbox catalog;
+games that no longer appear there are marked Unavailable rather than trying
+to start using a stale entitlement. Reload the catalog to refresh availability.
 
 ## GamePad display during Xbox Cloud streams
 

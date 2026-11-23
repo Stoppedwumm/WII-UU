@@ -149,10 +149,11 @@ test -s "$RUNNER_TEMP/menu.png"
 java -jar build/ChoccyMilk.jar --help
 WIIUU_CI_COMMAND_10
     run_check "Test activated plugin apps in the dock" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_11'
-javac --release 17 -cp build/classes -d build/tests test/wiiuu/ui/PluginDockTest.java test/wiiuu/ui/NativePluginScreenTest.java test/wiiuu/ui/XboxCloudNativeScreenTest.java test/wiiuu/core/NativePluginBridgeTest.java test/wiiuu/core/XboxCloudResourceSyncTest.java
+javac --release 17 -cp build/classes -d build/tests test/wiiuu/ui/PluginDockTest.java test/wiiuu/ui/NativePluginScreenTest.java test/wiiuu/ui/XboxCloudNativeScreenTest.java test/wiiuu/ui/XboxCloudFavoritesTest.java test/wiiuu/core/NativePluginBridgeTest.java test/wiiuu/core/XboxCloudResourceSyncTest.java
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.PluginDockTest
 java --add-modules jdk.httpserver -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.NativePluginScreenTest
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.XboxCloudNativeScreenTest
+java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.XboxCloudFavoritesTest
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.XboxCloudResourceSyncTest
 test -s build/xcloud-ui-catalog-light.png
 test -s build/xcloud-ui-search-keyboard-small.png
