@@ -184,10 +184,10 @@ jobs:
 
   pages:
     needs: build
-    # A release/* build publishes the stable GitHub release in the build job.
-    # Deploy its freshly staged stable feed AFTER that release exists.
-    # Otherwise the default-branch deploy can win the race and leave /version.json one version behind.
-    if: github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/heads/release/'))
+    # GitHub Pages' environment allows only the default branch. Release branches
+    # publish their GitHub Release, then the dedicated workflow_run job stages
+    # that release's assets and deploys from the default branch.
+    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     concurrency:
       group: pages
