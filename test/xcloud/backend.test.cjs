@@ -134,7 +134,7 @@ test('player filters null and malformed remote ICE records before invoking xclou
   const vm=require('node:vm');
   const source=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
   const begin=source.indexOf('function validRemoteIce(data){');
-  const end=source.indexOf('\nasync function connect(){',begin);
+  const end=source.indexOf('\nasync function fetchRemoteIce(){',begin);
   assert.ok(begin>=0&&end>begin,'ICE sanitizer must be present');
   const sanitize=vm.runInNewContext('('+source.slice(begin,end).trim()+')');
   const filtered=sanitize({iceCandidates:[
