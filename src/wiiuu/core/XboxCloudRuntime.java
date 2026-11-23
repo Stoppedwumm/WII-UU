@@ -129,7 +129,10 @@ public final class XboxCloudRuntime {
             if (input == null) throw new IOException("Missing bundled Xbox backend script");
             bundled = input.readAllBytes();
         }
-        if (Files.isRegularFile(script) && Arrays.equals(Files.readAllBytes(script), bundled)) return;
+        if (Files.isRegularFile(script) && Arrays.equals(Files.readAllBytes(script), bundled)) {
+            syncBundledPlayer(config);
+            return;
+        }
         Files.createDirectories(root);
         Path staging = Files.createTempFile(root, ".service-", ".cjs");
         try {
@@ -142,6 +145,50 @@ public final class XboxCloudRuntime {
             }
         } finally {
             Files.deleteIfExists(staging);
+        }
+        syncBundledPlayer(config);
+    }
+
+    /**
+     * Rebuild the browser bundle when WII-UU ships new player code.
+     * A full runtime reinstall (Chromium + npm downloads) is not required.
+     * Keep the previous bundle on failure and let the caller report the error.
+     */
+    private static void syncBundledPlayer(Config config) throws IOException {
+        Path root = home(config);
+        Path source = root.resolve("player-entry.js");
+        Path bundle = root.resolve("player.bundle.js");
+        byte[] bundled;
+        try (InputStream input = XboxCloudRuntime.class.getResourceAsStream("/xcloud/player-entry.js")) {
+            if (input == null) throw new IOException("Missing bundled Xbox player source");
+            bundled = input.readAllBytes();
+        }
+        if (Files.isRegularFile(source) && Files.isRegularFile(bundle)
+                && Arrays.equals(Files.readAllBytes(source), bundled)) return;
+        Path esbuild = root.resolve("node_modules/esbuild/bin/esbuild");
+        if (!Files.isRegularFile(esbuild))
+            throw new IOException("Xbox player builder missing; repair the Xbox Cloud runtime");
+        Files.createDirectories(root);
+        Path stagedSource = Files.createTempFile(root, ".player-source-", ".js");
+        Path stagedBundle = Files.createTempFile(root, ".player-bundle-", ".js");
+        try {
+            Files.write(stagedSource, bundled);
+            try {
+                run(List.of("node", esbuild.toString(), stagedSource.toString(),
+                        "--bundle", "--platform=browser", "--format=iife", "--target=chrome110",
+                        "--outfile=" + stagedBundle), 120, root.resolve("bundle-update.log"));
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Xbox player update interrupted", error);
+            }
+            if (Files.size(stagedBundle) == 0)
+                throw new IOException("Xbox player update produced an empty bundle");
+            // Publish the playable bundle before its version marker (source).
+            Files.move(stagedBundle, bundle, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(stagedSource, source, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(stagedSource);
+            Files.deleteIfExists(stagedBundle);
         }
     }
 
