@@ -175,6 +175,7 @@ test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',
       this.detectActiveGamepad();
     }
     detach(){this._player._channels.control.sendGamepadState(this._index,false);}
+    getPhysicalGamepadId(){return this._physicalGamepadId;}
   }
   const ctx={
     Gamepad:FakeGamepad,
