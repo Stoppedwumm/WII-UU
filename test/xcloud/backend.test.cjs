@@ -33,8 +33,8 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
     '      token_type:"Bearer",scope:"XboxLive.signin"}};',
     '    return this.store.getUserToken();',
     '  }',
-    '  async getStreamingTokens() { return {xCloudToken:{data:{gsToken:"secret-xbox-grant",',
-    '    regions:[{baseUri:"https://weu.core.gssv-play-prod.xboxlive.com"}]}}}; }',
+    '  async getStreamingTokens() { throw new Error("Should not ask for xHome token"); }',
+    '  async getGssvToken() { throw new Error("Xbox cloud entitlement unavailable in fixture"); }',
     '}',
     'module.exports={Msal,TokenStore};'
   ].join('\n');
@@ -93,6 +93,16 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
     assert.equal(fs.statSync(path.join(user,'xcloud-tokens.json')).mode & 0o777,0o600);
   send(2,'signedIn');
   assert.equal((await receive(m=>m.id===2)).result.signedIn,true);
+
+  // Microsoft approval must move the UI past pairing even when Xbox entitlement
+  // has not yet been fetched, is unavailable, or the Xbox service is offline.
+  send(5,'games');
+  const catalogueFailure=await receive(m=>m.id===5);
+  assert.equal(catalogueFailure.ok,false);
+  assert.match(catalogueFailure.error,/Xbox cloud entitlement unavailable/);
+  send(6,'signedIn');
+  assert.equal((await receive(m=>m.id===6)).result.signedIn,true);
+
 
   const invalid=await fetch(url+'/api/start',{method:'POST',headers:{
     'X-Wiiuu-Session':ready.secret,'Content-Type':'application/json'
