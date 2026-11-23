@@ -58,6 +58,48 @@ function errorKind(error) {
   const kind = error?.name;
   return typeof kind === 'string' && /^[A-Za-z]{1,40}$/.test(kind) ? kind : 'Error';
 }
+// xal-node retries all device-code token HTTP failures without exposing their
+// type. Instrument only that endpoint to distinguish OAuth pending, terminal
+// responses and transport errors without ever printing response bodies.
+function monitorMicrosoftPolling(instance) {
+  const client = instance?._httpClient;
+  if (!client || typeof client.postRequest !== 'function') {
+    debug('device-http-monitor-unavailable');
+    return;
+  }
+  const original = client.postRequest.bind(client);
+  let lastStatus = '';
+  let lastReportAt = 0;
+  client.postRequest = function(host, pathname, headers, body) {
+    if (host !== 'login.microsoftonline.com' || pathname !== '/consumers/oauth2/v2.0/token'
+        || typeof body !== 'string' || !body.includes('urn:ietf:params:oauth:grant-type:device_code'))
+      return original(host, pathname, headers, body);
+    return Promise.resolve().then(() => original(host, pathname, headers, body))
+      .then(response => {
+        debug('device-http-token-success');
+        return response;
+      }, error => {
+        // xal-node embeds the HTTP status and OAuth error code in a JSON
+        // string inside Error.message. Extract only explicitly allowlisted
+        // status/error labels. Never print the original message or body.
+        const message = typeof error?.message === 'string' ? error.message : '';
+        const status = /"statuscode"\\s*:\\s*(\\d{3})/.exec(message)?.[1] || 'unknown';
+        const code = /\\"error\\"\\s*:\\s*\\"([a-z_]+)\\"/.exec(message)?.[1] || 'unknown';
+        const allowed = new Set(['authorization_pending','slow_down','authorization_declined',
+          'expired_token','bad_verification_code','invalid_grant','invalid_client','unauthorized_client']);
+        const oauth = allowed.has(code) ? code : 'unknown';
+        const label = status + '/' + oauth;
+        if (label !== lastStatus || Date.now() - lastReportAt > 30000) {
+          debug('device-http-retry', 'http=' + status + ' oauth=' + oauth
+            + ' errorType=' + errorKind(error));
+          lastStatus = label;
+          lastReportAt = Date.now();
+        }
+        throw error;
+      });
+  };
+}
+monitorMicrosoftPolling(msal);
 debug('backend-start', 'savedUserToken=' + Boolean(store.getUserToken()));
 let lastTokenState = Boolean(store.getUserToken());
 let lastStatusLog = 0;
@@ -231,7 +273,7 @@ async function api(action, payload={}) {
       }
     }
     case 'logout':
-      await endSession(); cloudToken=null; allowedTitles.clear(); store.clear(); msal = new Msal(store);
+      await endSession(); cloudToken=null; allowedTitles.clear(); store.clear(); msal = new Msal(store); monitorMicrosoftPolling(msal);
       lastTokenState = false;
       debug('signed-out');
       return {signedIn:false};
