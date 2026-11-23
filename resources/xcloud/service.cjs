@@ -83,8 +83,8 @@ function monitorMicrosoftPolling(instance) {
         // string inside Error.message. Extract only explicitly allowlisted
         // status/error labels. Never print the original message or body.
         const message = typeof error?.message === 'string' ? error.message : '';
-        const status = /"statuscode"\\s*:\\s*(\\d{3})/.exec(message)?.[1] || 'unknown';
-        const code = /\\"error\\"\\s*:\\s*\\"([a-z_]+)\\"/.exec(message)?.[1] || 'unknown';
+        const status = /"statuscode"\s*:\s*(\d{3})/.exec(message)?.[1] || 'unknown';
+        const code = /\\"error\\"\s*:\s*\\"([a-z_]+)\\"/.exec(message)?.[1] || 'unknown';
         const allowed = new Set(['authorization_pending','slow_down','authorization_declined',
           'expired_token','bad_verification_code','invalid_grant','invalid_client','unauthorized_client']);
         const oauth = allowed.has(code) ? code : 'unknown';
