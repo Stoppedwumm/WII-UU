@@ -33,6 +33,23 @@ async function exchange(endpoint){
   }
   throw new Error('Xbox signaling timed out');
 }
+// Some Xbox ICE exchange responses contain null entries or a nested
+// iceCandidates list. xbox-xcloud-player assumes every array slot is an
+// object and dereferences .candidate without checking.
+function validRemoteIce(data){
+  const entries=Array.isArray(data)?data
+    :Array.isArray(data?.iceCandidates)?data.iceCandidates
+    :Array.isArray(data?.candidates)?data.candidates:[];
+  return entries.filter(item=>item&&typeof item==='object'
+      &&typeof item.candidate==='string'
+      &&item.candidate.trim()!==''&&item.candidate!=='a=end-of-candidates'
+      &&(typeof item.sdpMid==='string'||Number.isInteger(item.sdpMLineIndex)))
+    .map(item=>({
+      candidate:item.candidate,
+      sdpMid:typeof item.sdpMid==='string'?item.sdpMid:null,
+      sdpMLineIndex:Number.isInteger(item.sdpMLineIndex)?item.sdpMLineIndex:null
+    }));
+}
 async function connect(){
   if(!/^[a-f0-9]{64}$/i.test(secret)||!title)throw new Error('Invalid stream launcher URL');
   if(typeof RTCPeerConnection==='undefined')throw new Error('This Chromium build does not support WebRTC');
@@ -79,11 +96,22 @@ async function connect(){
   await player.setRemoteOffer(answer.sdp);
   const deadline=Date.now()+8000;
   while(player._peerConnection.iceGatheringState!=='complete'&&Date.now()<deadline)await sleep(100);
-  const candidates=player.getIceCandidates().map(item=>item.toJSON());
+  const candidates=player.getIceCandidates().filter(Boolean)
+    .map(item=>typeof item.toJSON==='function'?item.toJSON():item)
+    .filter(item=>item&&typeof item.candidate==='string'&&item.candidate.trim()!=='');
   if(!candidates.length)throw new Error('Chromium could not gather ICE candidates');
   await request('icePost',{candidates});
   const remote=await exchange('iceGet');
-  await player.setRemoteIceCandidates(remote.candidates||remote);
+  const remoteCandidates=validRemoteIce(remote);
+  console.info('[xcloud-webrtc] ICE candidates:', {
+    local:candidates.length,
+    remote:remoteCandidates.length,
+    skipped:(Array.isArray(remote)?remote:Array.isArray(remote?.iceCandidates)?remote.iceCandidates
+      :Array.isArray(remote?.candidates)?remote.candidates:[]).length-remoteCandidates.length
+  });
+  if(!remoteCandidates.length)
+    throw new Error('Xbox returned no usable remote ICE candidates');
+  player.setRemoteIceCandidates(remoteCandidates);
   timer=setInterval(()=>{void request('keepalive',{}).catch(fail)},30000);
 }
 async function disconnect(){
