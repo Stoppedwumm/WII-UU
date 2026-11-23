@@ -212,12 +212,13 @@ test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',
   assert.equal(special.Menu,0);
   const handlers={};
   const input={
+    _dataChannel:{readyState:'connecting'},
     start:()=>{},
     queueGamepadFrames:(frames,force)=>calls.push({frames,force}),
     gamepadStateLoop:()=>{}
   };
   const player={_peerConnection:{connectionState:'connected'},_channels:{
-    input,control:{sendGamepadState:(slot,added,handler)=>{
+    input,control:{_dataChannel:{readyState:'connecting'},sendGamepadState:(slot,added,handler)=>{
       changes.push({slot,added});if(added)handlers[slot]=handler;else delete handlers[slot];
     }}
   }};
@@ -226,6 +227,10 @@ test('xCloud gamepad bridge maps buttons, flushes frames, and supports hotplug',
   assert.equal(typeof tick,'function');
   assert.equal(Object.keys(handlers).length,0);
   pads=[standard,null,{...standard,index:2}];
+  tick();
+  assert.equal(Object.keys(handlers).length,0,'do not announce controllers before channels open');
+  input._dataChannel.readyState='open';
+  player._channels.control._dataChannel.readyState='open';
   tick();
   assert.equal(Object.keys(handlers).length,2);
   assert.equal(handlers[0].getPhysicalGamepadId(),0);
