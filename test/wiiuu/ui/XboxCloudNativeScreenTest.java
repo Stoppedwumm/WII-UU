@@ -45,21 +45,27 @@ public final class XboxCloudNativeScreenTest {
         ok(!javax.swing.JFrame.class.isAssignableFrom(XboxCloudNativeScreen.class),
                 "xCloud must be embedded in WII-UU, not a separate JFrame");
 
-        // macOS presents an OS Keychain password dialog inaccessible to a
-        // GamePad. Only the isolated Xbox Chromium launch uses mock storage.
-        java.util.List<String> macCommand=new java.util.ArrayList<>(java.util.List.of("chrome","--app=http://127.0.0.1"));
-        XboxCloudNativeScreen.configureMacKeychain(macCommand,"Mac OS X");
-        ok(java.util.Collections.frequency(macCommand,"--use-mock-keychain")==1,
-                "Mac Chrome for Testing must not request OS Keychain authorization");
-        for(String os : java.util.List.of("Linux","Windows 11","FreeBSD","")) {
-            java.util.List<String> argsChrome=new java.util.ArrayList<>(java.util.List.of("chrome"));
-            XboxCloudNativeScreen.configureMacKeychain(argsChrome,os);
+        // Debian and Raspberry Pi OS can request a GNOME Keyring / KWallet
+        // password when Chromium starts. Avoid unclosable native dialogs only
+        // for the isolated Xbox browser; preserve other platforms' defaults.
+        for(String os : java.util.List.of("Linux","linux","GNU/Linux")) {
+            java.util.List<String> argsChrome=new java.util.ArrayList<>(java.util.List.of("chrome","--app=http://127.0.0.1"));
+            XboxCloudNativeScreen.configureBrowserPasswordStore(argsChrome,os);
+            ok(java.util.Collections.frequency(argsChrome,"--password-store=basic")==1,
+                    "Linux Xbox Chromium must bypass the system keyring: "+os);
             ok(!argsChrome.contains("--use-mock-keychain"),
-                    "Do not weaken browser credential protection on "+os);
+                    "macOS-only mock keychain switch is not the Linux fix");
+        }
+        for(String os : java.util.List.of("Mac OS X","Windows 11","FreeBSD","")) {
+            java.util.List<String> argsChrome=new java.util.ArrayList<>(java.util.List.of("chrome"));
+            XboxCloudNativeScreen.configureBrowserPasswordStore(argsChrome,os);
+            ok(!argsChrome.contains("--password-store=basic") &&
+                    !argsChrome.contains("--use-mock-keychain"),
+                    "Non-Linux Xbox Chromium must retain default password-store behavior: "+os);
         }
         java.util.List<String> nilOsCommand=new java.util.ArrayList<>(java.util.List.of("chrome"));
-        XboxCloudNativeScreen.configureMacKeychain(nilOsCommand,null);
-        ok(!nilOsCommand.contains("--use-mock-keychain"),"Null OS name must be safe");
+        XboxCloudNativeScreen.configureBrowserPasswordStore(nilOsCommand,null);
+        ok(!nilOsCommand.contains("--password-store=basic"),"Null OS name must be safe");
 
         MenuView.applyTheme(false);
         render(screen,1280,800,"xcloud-ui-install-light.png");
