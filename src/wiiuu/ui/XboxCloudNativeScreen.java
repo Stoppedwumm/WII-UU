@@ -719,7 +719,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
 
     private void startGame(Game chosen) {
         if(closed||backend==null||!signedIn)return;
-        Game available=games.stream().filter(game->game.id().equals(chosen.id())).findFirst().orElse(null);
+        String desiredTitleId=chosen.id();
+        Game available=games.stream().filter(game->game.id().equals(desiredTitleId)).findFirst().orElse(null);
         if(available==null) {
             status="This favorite is not currently playable. Reload the Xbox catalog.";
             repaint.run();
