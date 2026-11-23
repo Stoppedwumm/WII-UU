@@ -139,10 +139,25 @@ class WIIUUGamepad extends Gamepad {
     })).catch(()=>{});
   }
 }
+class WIIUUManagedGamepad extends Gamepad {
+  constructor(slot,frames){
+    super(slot,{enable_keyboard:false,enable_gamepad:false,enable_vibration:false});
+    this.frames=frames;
+  }
+  detectActiveGamepad(){}
+  getGamepadState(){
+    if(this._isFocused===false)return undefined;
+    return this.frames.get(this._index);
+  }
+  handleVibration(){}
+}
 function controllerBridge(activePlayer){
   const input=activePlayer._channels.input;
   const physical=new Map();
-  let scanTimer=null;
+  const managed=new Map();
+  const managerFrames=new Map();
+  let scanTimer=null, managerTimer=null, managerBusy=false;
+  let activeMode='browser';
   let firstFrameReported=false;
   const queue=input.queueGamepadFrames.bind(input);
   // xbox-xcloud-player's InputQueue does not flush gamepad-only frames by
@@ -160,11 +175,18 @@ function controllerBridge(activePlayer){
     if(stop||activePlayer._peerConnection.connectionState==='closed')return;
     previousLoop();
   };
+  const channelsReady=()=>activePlayer._channels.control._dataChannel?.readyState==='open'
+    &&input._dataChannel?.readyState==='open';
+  const detach=registry=>{
+    for(const [key,entry] of registry){
+      entry.handler.detach();
+      registry.delete(key);
+    }
+  };
   const sync=()=>{
     // Attaching before both WebRTC channels open causes Xbox to miss the
     // gamepadChanged message permanently. Retry on the next scan instead.
-    if(activePlayer._channels.control._dataChannel?.readyState!=='open'
-        ||input._dataChannel?.readyState!=='open')return;
+    if(!channelsReady()||managerFrames.size)return;
     let pads=[];
     try{pads=Array.from(navigator.getGamepads?.()||[]).filter(Boolean);}
     catch(error){console.warn('[xcloud-gamepad] Gamepad API unavailable',error?.name);return;}
@@ -188,6 +210,52 @@ function controllerBridge(activePlayer){
         ' mapping='+(pad.mapping||'unknown'));
     }
   };
+  const syncManaged=()=>{
+    if(!channelsReady())return;
+    if(managerFrames.size) {
+      if(activeMode!=='managed'){
+        detach(physical);
+        activeMode='managed';
+        console.info('[xcloud-gamepad] WII-UU controller manager active');
+      }
+      for(const [slot,entry] of managed){
+        if(!managerFrames.has(slot)){
+          entry.handler.detach();
+          managed.delete(slot);
+        }
+      }
+      for(const slot of managerFrames.keys()){
+        if(managed.has(slot))continue;
+        const handler=new WIIUUManagedGamepad(slot,managerFrames);
+        handler.attach(activePlayer);
+        managed.set(slot,{slot,handler});
+        console.info('[xcloud-gamepad] WII-UU player '+(slot+1)+' attached to Xbox slot '+slot);
+      }
+    }else if(activeMode==='managed'){
+      detach(managed);
+      activeMode='browser';
+      console.info('[xcloud-gamepad] WII-UU controller manager idle, using browser gamepads');
+      sync();
+    }
+  };
+  const refreshManager=async()=>{
+    if(managerBusy||stop)return;
+    managerBusy=true;
+    try{
+      const result=await request('controllers');
+      const next=new Map();
+      for(const frame of Array.isArray(result?.pads)?result.pads:[]){
+        const slot=frame?.GamepadIndex;
+        if(Number.isInteger(slot)&&slot>=0&&slot<4)next.set(slot,frame);
+      }
+      managerFrames.clear();
+      for(const [slot,frame] of next)managerFrames.set(slot,frame);
+      syncManaged();
+    }catch(error){
+      // On a temporary backend failure preserve the last good frames until
+      // a successful poll returns. The connection itself remains alive.
+    }finally{managerBusy=false;}
+  };
   const start=input.start.bind(input);
   input.start=()=>{
     start();
@@ -195,12 +263,16 @@ function controllerBridge(activePlayer){
     console.info('[xcloud-gamepad] input handshake complete, controller bridge started');
     sync();
     scanTimer=setInterval(sync,500);
+    managerTimer=setInterval(()=>{void refreshManager();},50);
+    void refreshManager();
   };
   return ()=>{
     if(scanTimer!==null)clearInterval(scanTimer);
-    scanTimer=null;
-    for(const {handler} of physical.values())handler.detach();
-    physical.clear();
+    if(managerTimer!==null)clearInterval(managerTimer);
+    scanTimer=null;managerTimer=null;
+    detach(physical);
+    detach(managed);
+    managerFrames.clear();
   };
 }
 
