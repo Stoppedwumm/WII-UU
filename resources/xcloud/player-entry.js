@@ -7,7 +7,7 @@ const label=document.querySelector('#status');
 const errors=document.querySelector('#fail');
 const toolbar=document.querySelector('#top');
 const action=document.querySelector('#disconnect');
-let player, timer, stop=false, sessionStarted=false;
+let player, timer, stop=false, sessionStarted=false, stopControllers=null;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function progress(s){label.textContent=s;}
 function fail(error){const message=error instanceof Error?error.message:String(error);
@@ -79,6 +79,119 @@ async function fetchRemoteIce(){
   throw new Error('Xbox returned no usable remote ICE candidates after polling');
 }
 
+// Chromium exposes physical controllers and WII-UU's Linux uinput gamepads
+// through the W3C Gamepad API. The earlier mapper normalizes 20d6:a713
+// devices to the standard Xbox button/axis layout.
+const GAMEPAD_FIELDS=Object.freeze({
+  A:0,B:1,X:2,Y:3,LeftShoulder:4,RightShoulder:5,
+  LeftTrigger:6,RightTrigger:7,View:8,Menu:9,
+  LeftThumb:10,RightThumb:11,DPadUp:12,DPadDown:13,
+  DPadLeft:14,DPadRight:15,Nexus:16
+});
+function gamepadFrame(pad,slot,deadzone=0.08){
+  const pressed=index=>{
+    const b=pad?.buttons?.[index];
+    const v=typeof b==='number'?b:b?.value;
+    const n=Number(v);
+    if(Number.isFinite(n))return Math.max(0,Math.min(1,n));
+    return b?.pressed?1:0;
+  };
+  const axis=index=>{
+    const v=Number(pad?.axes?.[index]);
+    if(!Number.isFinite(v))return 0;
+    const n=Math.max(-1,Math.min(1,v));
+    return Math.abs(n)<deadzone?0:(n-Math.sign(n)*deadzone)/(1-deadzone);
+  };
+  const frame={
+    GamepadIndex:slot,
+    LeftThumbXAxis:axis(0),LeftThumbYAxis:axis(1),
+    RightThumbXAxis:axis(2),RightThumbYAxis:axis(3)
+  };
+  for(const [key,index] of Object.entries(GAMEPAD_FIELDS))frame[key]=pressed(index);
+  // Supports controllers that don't expose a dedicated Xbox/Home button.
+  if(frame.Menu>0&&frame.View>0){frame.Menu=0;frame.View=0;frame.Nexus=1;}
+  return frame;
+}
+class WIIUUGamepad extends Gamepad {
+  constructor(slot,physicalIndex){
+    super(slot,{enable_keyboard:false,enable_vibration:true,
+      gamepad_deadzone:0.08,gamepad_force_capture:false});
+    this._physicalGamepadId=physicalIndex;
+  }
+  // The upstream autodetection selects the LAST connected controller and
+  // steals other players' devices. We assign stable slots ourselves.
+  detectActiveGamepad(){}
+  onGamepadConnected(){}
+  onGamepadDisconnected(){}
+  getGamepadState(){
+    const pad=navigator.getGamepads?.()?.[this._physicalGamepadId];
+    if(!pad||this._isFocused===false)return undefined;
+    return gamepadFrame(pad,this._index);
+  }
+  handleVibration(report){
+    const pad=navigator.getGamepads?.()?.[this._physicalGamepadId];
+    const actuator=pad?.vibrationActuator;
+    if(!actuator||typeof actuator.playEffect!=='function')return;
+    void Promise.resolve(actuator.playEffect('dual-rumble',{
+      startDelay:0,duration:Math.max(0,report.durationMs||0),
+      weakMagnitude:Math.max(0,Math.min(1,report.rightMotorPercent||0)),
+      strongMagnitude:Math.max(0,Math.min(1,report.leftMotorPercent||0))
+    })).catch(()=>{});
+  }
+}
+function controllerBridge(activePlayer){
+  const input=activePlayer._channels.input;
+  const physical=new Map();
+  let scanTimer=null;
+  const queue=input.queueGamepadFrames.bind(input);
+  // xbox-xcloud-player's InputQueue does not flush gamepad-only frames by
+  // default. Force a send so movement works even without video metadata.
+  input.queueGamepadFrames=(frames)=>queue(frames,true);
+  const previousLoop=input.gamepadStateLoop.bind(input);
+  input.gamepadStateLoop=()=>{
+    if(stop||activePlayer._peerConnection.connectionState==='closed')return;
+    previousLoop();
+  };
+  const sync=()=>{
+    let pads=[];
+    try{pads=Array.from(navigator.getGamepads?.()||[]).filter(Boolean);}
+    catch(error){console.warn('[xcloud-gamepad] Gamepad API unavailable',error?.name);return;}
+    const connected=new Set(pads.map(p=>p.index));
+    for(const [index,entry] of physical){
+      if(!connected.has(index)){
+        entry.handler.detach();
+        physical.delete(index);
+        console.info('[xcloud-gamepad] disconnected physical='+index+' slot='+entry.slot);
+      }
+    }
+    for(const pad of pads){
+      if(physical.has(pad.index))continue;
+      const occupied=new Set(Array.from(physical.values(),v=>v.slot));
+      const slot=[0,1,2,3].find(i=>!occupied.has(i));
+      if(slot===undefined)break;
+      const handler=new WIIUUGamepad(slot,pad.index);
+      handler.attach(activePlayer);
+      physical.set(pad.index,{slot,handler});
+      console.info('[xcloud-gamepad] connected physical='+pad.index+' slot='+slot+
+        ' mapping='+(pad.mapping||'unknown'));
+    }
+  };
+  const start=input.start.bind(input);
+  input.start=()=>{
+    start();
+    if(scanTimer!==null)return;
+    console.info('[xcloud-gamepad] input handshake complete, controller bridge started');
+    sync();
+    scanTimer=setInterval(sync,500);
+  };
+  return ()=>{
+    if(scanTimer!==null)clearInterval(scanTimer);
+    scanTimer=null;
+    for(const {handler} of physical.values())handler.detach();
+    physical.clear();
+  };
+}
+
 async function connect(){
   if(!/^[a-f0-9]{64}$/i.test(secret)||!title)throw new Error('Invalid stream launcher URL');
   if(typeof RTCPeerConnection==='undefined')throw new Error('This Chromium build does not support WebRTC');
@@ -96,25 +209,7 @@ async function connect(){
   if(!ready||stop)throw new Error('Provisioning timed out or cancelled');
   progress('Negotiating video, sound and gamepad…');
   player=new Player('player');
-  const channel=player._channels.input;
-  const start=channel.start.bind(channel);
-  channel.start=()=>{
-    start();
-    // Match WII-UU's physical and virtual gamepads after the Xbox handshake.
-    const pads=navigator.getGamepads();
-    if(Array.from(pads).some(Boolean)){
-      new Gamepad(0,{
-        enable_keyboard:false,enable_vibration:true,gamepad_deadzone:0.08,
-        gamepad_mapping:{A:'0',B:'1',X:'2',Y:'3',LeftShoulder:'4',
-          RightShoulder:'5',LeftTrigger:'6',RightTrigger:'7',
-          View:'8',Menu:'9',LeftThumb:'10',RightThumb:'11',
-          DPadUp:'12',DPadDown:'13',DPadLeft:'14',DPadRight:'15',Nexus:'16'}
-      }).attach(player);
-    } else {
-      // A controller may be connected later. Greenlight's handler detects hot-plug.
-      new Gamepad(0,{enable_keyboard:false,enable_vibration:true}).attach(player);
-    }
-  };
+  stopControllers=controllerBridge(player);
   player.onConnectionStateChange(state=>{
     if(state==='connected'){progress('Streaming');toolbar.classList.add('hidden');errors.textContent='';}
     if(state==='failed'||state==='closed'){progress('Connection lost');toolbar.classList.remove('hidden');}
@@ -138,6 +233,7 @@ async function connect(){
 }
 async function disconnect(){
   stop=true;clearInterval(timer);
+  if(stopControllers){stopControllers();stopControllers=null;}
   if(player){player.destroy();player=undefined;}
   if(sessionStarted){try{await request('stop',{});}catch{}}
   progress('Disconnected');
