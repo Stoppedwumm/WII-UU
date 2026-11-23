@@ -45,6 +45,22 @@ public final class XboxCloudNativeScreenTest {
         ok(!javax.swing.JFrame.class.isAssignableFrom(XboxCloudNativeScreen.class),
                 "xCloud must be embedded in WII-UU, not a separate JFrame");
 
+        // macOS presents an OS Keychain password dialog inaccessible to a
+        // GamePad. Only the isolated Xbox Chromium launch uses mock storage.
+        java.util.List<String> macCommand=new java.util.ArrayList<>(java.util.List.of("chrome","--app=http://127.0.0.1"));
+        XboxCloudNativeScreen.configureMacKeychain(macCommand,"Mac OS X");
+        ok(java.util.Collections.frequency(macCommand,"--use-mock-keychain")==1,
+                "Mac Chrome for Testing must not request OS Keychain authorization");
+        for(String os : java.util.List.of("Linux","Windows 11","FreeBSD","")) {
+            java.util.List<String> argsChrome=new java.util.ArrayList<>(java.util.List.of("chrome"));
+            XboxCloudNativeScreen.configureMacKeychain(argsChrome,os);
+            ok(!argsChrome.contains("--use-mock-keychain"),
+                    "Do not weaken browser credential protection on "+os);
+        }
+        java.util.List<String> nilOsCommand=new java.util.ArrayList<>(java.util.List.of("chrome"));
+        XboxCloudNativeScreen.configureMacKeychain(nilOsCommand,null);
+        ok(!nilOsCommand.contains("--use-mock-keychain"),"Null OS name must be safe");
+
         MenuView.applyTheme(false);
         render(screen,1280,800,"xcloud-ui-install-light.png");
         MenuView.applyTheme(true);
