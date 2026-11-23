@@ -739,6 +739,7 @@ async function poll() {
     const gameChanged = j.mode !== S.mode || JSON.stringify(j.game) !== JSON.stringify(S.game);
     if (gameChanged || secondChanged) {
       const started = j.mode === "game" && S.mode !== "game";
+      const leavingXbox = S.mode === "game" && S.game?.system === "Xbox Cloud" && j.mode !== "game";
       if (gameChanged) releasePadTouches();
       S.mode = j.mode; S.game = j.game;
       updateControlLayout();
@@ -753,7 +754,10 @@ async function poll() {
         else if (started || (S.view === "screen" && S.streamMode === "second" && !S.second)) show("play");
       } else {
         $("homeSheet").classList.add("hidden");
-        if (!(S.view === "screen" && S.streamMode === "tv")) show("lib");
+        // Closing the external Xbox window must return the GamePad to Home,
+        // even if it was mirroring TV. For regular emulators, keep the existing
+        // option to continue watching TV after the game exits.
+        if (leavingXbox || !(S.view === "screen" && S.streamMode === "tv")) show("lib");
       }
     }
   } catch (e) {
