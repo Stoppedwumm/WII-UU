@@ -434,8 +434,12 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                     if(closed){next.close();return;}
                     backend=next;status="Ready. Sign in with Microsoft to continue.";
                     command("signedIn",result->{
-                        if(Boolean.TRUE.equals(result.get("signedIn"))) completeLogin();
-                        else if(!pairing)status="Ready. Sign in with Microsoft to continue.";
+                        if(Boolean.TRUE.equals(result.get("signedIn"))) {
+                            // The replacement helper has a fresh entitlement/catalog map.
+                            // Always reload it even if the UI was already marked signed in.
+                            if(signedIn)loadGames();
+                            else completeLogin();
+                        } else if(!pairing)status="Ready. Sign in with Microsoft to continue.";
                         repaint.run();
                     });
                     repaint.run();
@@ -468,7 +472,9 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             status="Microsoft sign-in failed: "+MiniJson.string(message.get("message"));
         }else if("ended".equals(type)){
             pairingStatusTimer.stop();
-            backend=null;status="The local Xbox service stopped.";
+            backend=null;
+            games.clear(); // The previous helper's playable-title IDs are no longer valid.
+            status="The local Xbox service stopped. Select Reload to reconnect.";
         }
         repaint.run();
     }
