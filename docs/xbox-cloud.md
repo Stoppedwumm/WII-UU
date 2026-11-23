@@ -139,3 +139,23 @@ installing the updated version to use the updated authorization helper.
 An accepted Microsoft device code does not itself guarantee Xbox Cloud Gaming
 entitlement or a successful stream; any subsequent failure should be presented
 as a separate Xbox access or catalog error, not as a sign-in failure.
+
+## Troubleshooting Microsoft device-code approval
+
+The local Node helper writes privacy-limited authentication diagnostics to
+`backend.log` in WII-UU's Xbox runtime directory (next to `service.cjs`).
+This log includes `[xcloud-auth]` milestones: `device-flow-issued`,
+`device-poll-start`, periodic `device-poll-waiting`, `device-poll-resolved`,
+`user-token-saved`, `signed-in-event-sent`, and `native-status-check`.
+It also records catalog attempts separately from Microsoft sign-in.
+
+If Microsoft shows that `Xbox Web` is signed in but WII-UU stays on the
+pairing screen, reopen the Xbox Cloud Gaming view and inspect the latest
+`[xcloud-auth]` entries. `device-poll-waiting` after Microsoft approval
+indicates the helper has not received a completed device-code exchange.
+`device-poll-resolved` without `user-token-saved` indicates a token-store
+problem. `signed-in-event-sent` with `native-status-check signedIn=true`
+indicates the Java UI should advance; if it does not, investigate the UI
+callback/bridge. Logging is deliberately limited to stages and booleans:
+never paste OAuth credentials, device codes, or `xcloud-tokens.json` in bug
+reports.
