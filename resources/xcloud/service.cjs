@@ -273,11 +273,32 @@ function sessionPath() {
   if (!activeSession || !validSessionId(activeSession.id)) throw new Error('No active Xbox stream');
   return '/v5/sessions/cloud/' + activeSession.id;
 }
-async function endSession() {
-  if (activeSession) {
-    const current = activeSession;
-    activeSession = null;
-    try { await xbox('/v5/sessions/cloud/' + encodeURIComponent(current.id),'DELETE'); } catch { /* Best-effort cleanup */ }
+async function endSession(notify=false, expectedSession=null) {
+  // A pending state/keepalive request belongs to the session it queried.
+  // Never let its eventual failure terminate a replacement session.
+  if (!activeSession || (expectedSession && activeSession !== expectedSession)) return false;
+  const current = activeSession;
+  activeSession = null;
+  if (notify) emit({event:'streamEnded'});
+  try { await xbox('/v5/sessions/cloud/' + encodeURIComponent(current.id),'DELETE'); }
+  catch { /* Best-effort cleanup */ }
+  return true;
+}
+// Only terminal server states are treated as final. Provisioning/transition
+// states and temporary network errors must not close a healthy stream.
+const terminalStates = new Set(['Failed','Stopped','Closed','Ended','Terminated','Cancelled']);
+async function terminateIfEnded(result, queriedSession=activeSession) {
+  if (terminalStates.has(result?.state)) await endSession(true, queriedSession);
+  return result;
+}
+async function currentStreamState() {
+  const queriedSession = activeSession;
+  const path = sessionPath();
+  try { return await terminateIfEnded(await xbox(path+'/state'), queriedSession); }
+  catch (error) {
+    if (/\bHTTP (404|410)\b/.test(String(error?.message||'')))
+      await endSession(true, queriedSession);
+    throw error;
   }
 }
 async function api(action, payload={}) {
@@ -326,7 +347,7 @@ async function api(action, payload={}) {
       activeSession={id:sid,titleId:id};
       return {sessionId:sid};
     }
-    case 'state': return xbox(sessionPath()+'/state');
+    case 'state': return currentStreamState();
     case 'connect': {
       const refresh=store.getUserToken()?.data?.refresh_token;
       if (!refresh) throw new Error('Microsoft session expired');
@@ -357,8 +378,18 @@ async function api(action, payload={}) {
       return xbox(sessionPath()+'/ice','POST',{iceCandidates:payload.candidates});
     }
     case 'iceGet': return xbox(sessionPath()+'/ice');
-    case 'keepalive': return xbox(sessionPath()+'/keepalive','POST',{});
-    case 'stop': await endSession(); return {stopped:true};
+    case 'keepalive': {
+      const queriedSession = activeSession;
+      const path = sessionPath();
+      try {
+        return await terminateIfEnded(await xbox(path+'/keepalive','POST',{}), queriedSession);
+      } catch (error) {
+        if (/\bHTTP (404|410)\b/.test(String(error?.message||'')))
+          await endSession(true, queriedSession);
+        throw error;
+      }
+    }
+    case 'stop': await endSession(true); return {stopped:true};
     default: throw new Error('Unknown command');
   }
 }

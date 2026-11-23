@@ -7,7 +7,50 @@ const label=document.querySelector('#status');
 const errors=document.querySelector('#fail');
 const toolbar=document.querySelector('#top');
 const action=document.querySelector('#disconnect');
-let player, timer, stop=false, sessionStarted=false, stopControllers=null;
+let player, timer, stateTimer, audioTimer, stop=false, sessionStarted=false, stopControllers=null;
+const autoAudio=new URL(location.href).searchParams.get('autoAudio')!=='0';
+let soundStarted=false, audioStarting=false, streamConnected=false, unavailableChecks=0;
+async function enableAudio() {
+  if(audioStarting||soundStarted||stop)return;
+  const audio=player?.getAudioElement();
+  if(!audio)return;
+  audioStarting=true;
+  try {
+    audio.muted=false;
+    await audio.play();
+    soundStarted=true;
+    errors.textContent='';
+    document.querySelector('#enable-audio').textContent='Audio playing';
+    console.info('[xcloud-audio] playback enabled');
+  } catch(error) {
+    if(!autoAudio)errors.textContent='Audio playback blocked: '+(error?.message||'unknown');
+    toolbar.classList.remove('hidden');
+  } finally { audioStarting=false; }
+}
+async function sessionEnded() {
+  if(stop)return;
+  progress('Xbox session ended');
+  await disconnect();
+  // Chrome app windows are launched by Java, so Java kills the process when
+  // /api/stop emits streamEnded. window.close() alone is not reliable here.
+  window.close();
+}
+async function checkServerState() {
+  if(stop||!streamConnected)return;
+  try {
+    const response=await request('state');
+    unavailableChecks=0;
+    if(['Failed','Stopped','Closed','Ended','Terminated','Cancelled'].includes(response.state))
+      await sessionEnded();
+  } catch(error) {
+    if(stop)return;
+    // Brief service outages should not immediately discard an active game.
+    if(++unavailableChecks>=3) {
+      console.warn('[xcloud-webrtc] Xbox session state unavailable three times');
+      await sessionEnded();
+    }
+  }
+}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function progress(s){label.textContent=s;}
 function fail(error){const message=error instanceof Error?error.message:String(error);
@@ -295,8 +338,16 @@ async function connect(){
   player=new Player('player');
   stopControllers=controllerBridge(player);
   player.onConnectionStateChange(state=>{
-    if(state==='connected'){progress('Streaming');toolbar.classList.add('hidden');errors.textContent='';}
-    if(state==='failed'||state==='closed'){progress('Connection lost');toolbar.classList.remove('hidden');}
+    if(stop)return;
+    if(state==='connected'){
+      streamConnected=true;
+      progress('Streaming');toolbar.classList.add('hidden');errors.textContent='';
+      if(autoAudio)void enableAudio();
+    }
+    if(state==='failed'||state==='closed'){
+      progress('Connection lost');toolbar.classList.remove('hidden');
+      void sessionEnded();
+    }
   });
   const offer=await player.createOffer();
   await request('sdpPost',{sdp:offer.sdp});
@@ -313,30 +364,29 @@ async function connect(){
   console.info('[xcloud-webrtc] ICE candidates: local='+candidates.length+
     ' remote='+remoteCandidates.length);
   player.setRemoteIceCandidates(remoteCandidates);
-  timer=setInterval(()=>{void request('keepalive',{}).catch(fail)},30000);
+  timer=setInterval(()=>{
+    if(!stop)void request('keepalive',{}).catch(error=>{
+      if(!stop)console.warn('[xcloud-webrtc] keepalive failed:',error?.message||'unknown');
+    });
+  },30000);
+  stateTimer=setInterval(()=>{void checkServerState();},10000);
+  if(autoAudio){
+    // The media element can be created AFTER the data channels are ready.
+    // Keep trying until it exists, instead of requiring the mouse button.
+    audioTimer=setInterval(()=>{void enableAudio();},1200);
+    void enableAudio();
+  }
 }
 async function disconnect(){
-  stop=true;clearInterval(timer);
+  stop=true;clearInterval(timer);clearInterval(stateTimer);clearInterval(audioTimer);
   if(stopControllers){stopControllers();stopControllers=null;}
   if(player){player.destroy();player=undefined;}
   if(sessionStarted){try{await request('stop',{});}catch{}}
   progress('Disconnected');
 }
-document.querySelector('#enable-audio').onclick=async()=>{
-  const audio=player?.getAudioElement();
-  if(!audio){
-    errors.textContent='Audio is not ready. Try again once the stream connects.';
-    return;
-  }
-  try{
-    audio.muted=false;
-    await audio.play();
-    errors.textContent='';
-    document.querySelector('#enable-audio').textContent='Audio playing';
-  }catch(error){
-    errors.textContent='Chromium blocked playback: '+(error?.message||'click Enable audio again');
-    toolbar.classList.remove('hidden');
-  }
+document.querySelector('#enable-audio').onclick=()=>{
+  if(!player?.getAudioElement())errors.textContent='Audio is not ready yet.';
+  void enableAudio();
 };
 document.querySelector('#fullscreen').onclick=()=>document.fullscreenElement
   ?document.exitFullscreen():document.documentElement.requestFullscreen();

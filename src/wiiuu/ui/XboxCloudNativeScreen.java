@@ -67,7 +67,11 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private String loginCode = "";
     private String verificationUrl = "https://www.microsoft.com/link";
     private String query = "";
-    private int focus, page, columns = 3, rows = 2, pageSize = 6;
+    private int focus, searchFocus, page, columns = 3, rows = 2, pageSize = 6;
+    private boolean paintingSearch;
+
+    /** Search uses its own focus; never highlight catalog buttons behind the modal. */
+    private int selectedFocus() { return paintingSearch ? searchFocus : searchEditing ? -1 : focus; }
 
     XboxCloudNativeScreen(Config config, PluginStore.Entry entry, Runnable repaint, Runnable exit) {
         this(config, entry, repaint, exit, List::of);
@@ -103,7 +107,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void action(Graphics2D g, float x, float y, float w, float h,
                         String title, Runnable onClick, float u, boolean primary) {
         int index = hits.size();
-        boolean selected = focus == index;
+        boolean selected = selectedFocus() == index;
         Color bg = primary ? MenuView.ACCENT : MenuView.CARD;
         rounded(g, x, y, w, h, 16*u, bg);
         if (selected) {
@@ -117,7 +121,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         hits.add(new Hit(new Rectangle2D.Float(x, y, w, h), onClick, false));
     }
     private void card(Graphics2D g, float x, float y, float w, float h, Game game, float u, int index) {
-        boolean selected = hits.size() == focus;
+        boolean selected = hits.size() == selectedFocus();
         rounded(g, x, y, w, h, 20*u, MenuView.CARD);
         rounded(g, x+12*u,y+12*u,w-24*u,Math.max(40*u,h*0.47f),14*u,
                 selected ? MenuView.ACCENT : MenuView.dark ? new Color(47, 61, 80) : new Color(215,228,240));
@@ -170,8 +174,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             paintLibrary(g,width,height,u);
         }
         if(searchEditing) paintSearch(g,width,height,u);
-        if(hits.isEmpty()) focus=0;
-        else focus=Math.max(0,Math.min(focus,hits.size()-1));
+        if(searchEditing) searchFocus=hits.isEmpty()?0:Math.max(0,Math.min(searchFocus,hits.size()-1));
+        else focus=hits.isEmpty()?0:Math.max(0,Math.min(focus,hits.size()-1));
         label(g,status,pad,height-40*u,Font.PLAIN,15*u,MenuView.TEXT_DIM,width-pad*2);
         label(g,searchEditing ? "D-pad: Keys   A: Type   B: Done" :
                 "A: Select   B: Back   L/R: Page   HOME: Return",
@@ -222,10 +226,12 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void paintLibrary(Graphics2D g,int w,int h,float u) {
         float pad=32*u, top=140*u,gap=15*u;
         int ctl=hits.size();
-        float bw=Math.min(230*u,(w-2*pad-30*u)/3);
+        float bw=Math.min(230*u,(w-2*pad-3*gap)/4);
         action(g,pad,top,bw,45*u,"Search: "+(query.isBlank()?"All games":query),this::openSearch,u,false);
         action(g,pad+bw+gap,top,bw,45*u,"Reload",this::loadGames,u,false);
         action(g,pad+2*(bw+gap),top,bw,45*u,"Sign out",this::logout,u,false);
+        action(g,pad+3*(bw+gap),top,bw,45*u,
+                "Auto audio: "+(autoAudio()?"On":"Off"),this::toggleAutoAudio,u,false);
         float gridY=208*u, footer=75*u;
         columns=w>=1230?4:w>=760?3:2;
         rows=h>=730?2:1;
@@ -251,6 +257,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     }
     private void paintSearch(Graphics2D g,int w,int h,float u) {
         // One single UI surface; no JOptionPane or separate desktop window.
+        paintingSearch=true;
         g.setColor(new Color(0,0,0,MenuView.dark?190:145));
         g.fillRect(0,0,w,h);
         hits.clear();
@@ -277,6 +284,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         action(g,x+24*u,bottom,half,43*u,"Delete",this::erase,u,false);
         action(g,x+29*u+half,bottom,half,43*u,"Clear",()->{query="";page=0;repaint.run();},u,false);
         action(g,x+34*u+2*half,bottom,half,43*u,"Done",this::finishSearch,u,true);
+        paintingSearch=false;
     }
     /** Only trusted Microsoft Store assets; load bounded-size cover images off the paint thread. */
     private BufferedImage cover(String url) {
@@ -348,11 +356,21 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void erase() {
         if(!query.isEmpty()){query=query.substring(0,query.length()-1);page=0;repaint.run();}
     }
+    private boolean autoAudio() { return config.getBool("xcloud.audioAutoplay", true); }
+    private void toggleAutoAudio() {
+        config.set("xcloud.audioAutoplay", Boolean.toString(!autoAudio()));
+        config.save();
+        status="Xbox audio autoplay "+(autoAudio()?"enabled":"disabled")+
+                ". Applies to the next stream.";
+        repaint.run();
+    }
     private void openSearch() {
-        searchEditing=true;focus=0;repaint.run();
+        // Immediately invalidate the library's hit areas. InputRouter can
+        // deliver queued stick repeat events before the overlay is repainted.
+        searchEditing=true;hits.clear();searchFocus=0;repaint.run();
     }
     private void finishSearch() {
-        searchEditing=false;focus=games.isEmpty()?1:4;page=0;repaint.run();
+        searchEditing=false;hits.clear();focus=games.isEmpty()?1:5;page=0;repaint.run();
     }
     boolean wantsKeys() { return searchEditing; }
     boolean keyPressed(KeyEvent e) {
@@ -375,12 +393,13 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     }
     void navigate(int dx,int dy) {
         if(hits.isEmpty())return;
-        focus=Math.max(0,Math.min(focus,hits.size()-1));
-        Rectangle2D current=hits.get(focus).area();
+        int selection=searchEditing?searchFocus:focus;
+        selection=Math.max(0,Math.min(selection,hits.size()-1));
+        Rectangle2D current=hits.get(selection).area();
         double cx=current.getCenterX(),cy=current.getCenterY();
         double best=Double.MAX_VALUE;int chosen=-1;
         for(int n=0;n<hits.size();n++){
-            if(n==focus)continue;
+            if(n==selection)continue;
             Rectangle2D next=hits.get(n).area();
             double xx=next.getCenterX()-cx, yy=next.getCenterY()-cy;
             if(dx!=0 && xx*dx<=1)continue;
@@ -391,24 +410,27 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             if(score<best){best=score;chosen=n;}
         }
         if(chosen<0) {
-            if(dy!=0&&!searchEditing&&signedIn&&dy<0&&focus>3)page(-1);
+            if(dy!=0&&!searchEditing&&signedIn&&dy<0&&focus>4)page(-1);
             else if(dy!=0&&!searchEditing&&signedIn&&dy>0)page(1);
             else Sfx.bump();
             return;
         }
-        focus=chosen;Sfx.move();repaint.run();
+        if(searchEditing)searchFocus=chosen;
+        else focus=chosen;
+        Sfx.move();repaint.run();
     }
     void activate() {
-        if(hits.isEmpty()||focus<0||focus>=hits.size())return;
+        int selection=searchEditing?searchFocus:focus;
+        if(hits.isEmpty()||selection<0||selection>=hits.size())return;
         Sfx.select();
-        hits.get(focus).action().run();
+        hits.get(selection).action().run();
     }
     void page(int delta) {
         if(!signedIn||searchEditing)return;
         int pages=Math.max(1,(filtered().size()+Math.max(1,pageSize)-1)/Math.max(1,pageSize));
         int next=Math.max(0,Math.min(pages-1,page+Integer.signum(delta)));
         if(next==page){Sfx.bump();return;}
-        page=next;focus=4;Sfx.move();repaint.run();
+        page=next;focus=5;Sfx.move();repaint.run();
     }
     void back() {
         if(searchEditing){finishSearch();return;}
@@ -416,7 +438,11 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     }
     void click(int x,int y) {
         for(int n=0;n<hits.size();n++)
-            if(hits.get(n).area().contains(x,y)){focus=n;activate();return;}
+            if(hits.get(n).area().contains(x,y)){
+                if(searchEditing)searchFocus=n;
+                else focus=n;
+                activate();return;
+            }
     }
 
     private void installRuntime() {
@@ -486,6 +512,10 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         }else if("authError".equals(type)){
             pairing=false;pairingStatusTimer.stop();
             status="Microsoft sign-in failed: "+MiniJson.string(message.get("message"));
+        }else if("streamEnded".equals(type)){
+            // An Xbox-side disconnect cannot rely on window.close(), because
+            // Chrome app windows launched by Java are not script-opened.
+            if(browser!=null){stopGame();status="Xbox ended the stream. Choose another game.";}
         }else if("ended".equals(type)){
             pairingStatusTimer.stop();
             backend=null;
@@ -559,7 +589,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                     games.add(new Game(id,name,cover==null?"":cover));
             }
             games.sort(Comparator.comparing(Game::name,String.CASE_INSENSITIVE_ORDER));
-            page=0;focus=4;
+            page=0;focus=5;
             status=games.size()+" playable games available.";
         });
     }
@@ -577,12 +607,17 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         if(old!=null&&old.isAlive()){status="A cloud stream is already running.";repaint.run();return;}
         try {
             String url="http://127.0.0.1:"+backend.port+
-                    "/?title="+URLEncoder.encode(chosen.id(),StandardCharsets.UTF_8)+"#"+backend.secret;
+                    "/?title="+URLEncoder.encode(chosen.id(),StandardCharsets.UTF_8)+
+                    "&autoAudio="+(autoAudio()?"1":"0")+"#"+backend.secret;
             Path profile=Files.createDirectories(config.userHome().resolve("xcloud/chrome-profile"));
             ProcessBuilder builder=new ProcessBuilder(
                     XboxCloudRuntime.chromium(config).toString(),
                     "--user-data-dir="+profile.toAbsolutePath(),
-                    "--app="+url,"--no-first-run","--disable-sync","--disable-background-networking");
+                    "--app="+url,"--no-first-run","--disable-sync","--disable-background-networking",
+                    "--disable-infobars"); 
+            // This isolated browser only serves the local player. Permit
+            // playback without a mouse gesture when the user opts in.
+            if(autoAudio())builder.command().add("--autoplay-policy=no-user-gesture-required");
             builder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .redirectError(ProcessBuilder.Redirect.DISCARD);
             Process process=builder.start();
