@@ -75,6 +75,38 @@ sandbox. Linux must have a graphical session, working video drivers,
 namespaces Chromium may fail to start; WII-UU intentionally avoids
 automatically adding unsafe \`--no-sandbox\` flags.
 
+## WII-UU controller-manager integration
+
+Xbox Cloud Gaming now uses the same live controller-manager output as WII-UU games:
+**Settings > GamePad & players > Controller buttons** remaps are applied once,
+inside WII-UU, before the input reaches the stream. The current player order
+(Controllers/phone GamePads) determines Xbox slots 1–4. Phone controllers,
+managed USB/Bluetooth controllers and their analog sticks can therefore work
+even on macOS, where Linux `uinput` controllers do not exist.
+
+The Java application forwards only numeric button and axis frames over its
+private stdin channel to the Xbox helper. The Chromium page retrieves those
+frames through a session-key-protected localhost endpoint. Controller names,
+persistent IDs, WII-UU configuration and Microsoft tokens are not sent to
+the player page. When a managed controller is available it overrides the raw
+Chromium Gamepad API route, avoiding duplicate input from a physical controller
+and its Linux virtual pad. If WII-UU has no managed controllers, the existing
+Chromium gamepad support is used as a fallback.
+
+WII-UU face-button names represent physical positions (A east, B south,
+X north, Y west), while Xbox uses A south, B east, X west, Y north.
+The bridge translates these positions accordingly. HOME maps to Xbox Guide;
+View + Menu simultaneously also sends Guide. Up to four player slots are
+forwarded; viewers and higher-numbered local players are ignored. Controller
+disconnects and player changes release previously held buttons.
+
+Debug: the Chromium console should show
+`[xcloud-gamepad] WII-UU controller manager active` and
+`[xcloud-gamepad] WII-UU player 1 attached to Xbox slot 0`
+after the WebRTC input handshake. This route needs WII-UU's GamePad
+server to be running; on an installation without it, the standard browser
+gamepad fallback remains available.
+
 ## Controller routing
 
 Existing Linux phone GamePads and WII-UU-managed physical controllers
