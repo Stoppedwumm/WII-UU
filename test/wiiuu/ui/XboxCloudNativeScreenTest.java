@@ -96,6 +96,11 @@ public final class XboxCloudNativeScreenTest {
         for(int i=0;i<26;i++) games.add(constructor.newInstance("GAME"+i,"Sample Game "+i,""));
         MenuView.applyTheme(false);
         render(screen,1280,800,"xcloud-ui-catalog-light.png");
+        ok(config.getBool("xcloud.audioAutoplay",true),"Xbox audio should default to autoplay");
+        screen.click(840,165); // The controller-selectable Auto audio toggle
+        ok(!config.getBool("xcloud.audioAutoplay",true),"Native audio setting can disable autoplay");
+        screen.click(840,165);
+        ok(config.getBool("xcloud.audioAutoplay",false),"Native audio setting persists and re-enables autoplay");
         screen.navigate(0,1);
         screen.navigate(1,0);
         screen.page(1);
@@ -108,6 +113,12 @@ public final class XboxCloudNativeScreenTest {
         render(screen,1280,800,"xcloud-ui-catalog-before-search.png");
         screen.click(50,160); // Search action at the top of the native catalog
         ok(screen.wantsKeys(),"Search must open the integrated on-screen keyboard");
+        ok(((java.util.List<?>)field(screen,"hits")).isEmpty(),
+                "Opening the search overlay immediately invalidates library controls");
+        screen.navigate(1,0);screen.activate(); // Before the overlay's next repaint
+        ok("".equals(field(screen,"query")),
+                "A queued stick event must not activate the background catalog");
+
         screen.keyTyped('S');screen.keyTyped('O');screen.keyTyped('N');
         ok("SON".equals(field(screen,"query")),"Physical keyboard must write into native search");
         screen.keyPressed(new KeyEvent(new JPanel(),KeyEvent.KEY_PRESSED,0,0,KeyEvent.VK_BACK_SPACE,'\b'));
@@ -117,6 +128,8 @@ public final class XboxCloudNativeScreenTest {
         screen.navigate(1,0);screen.activate(); // On-screen controller key types a character
         ok(((String)field(screen,"query")).length()>2,"Controller activation must type using the on-screen keyboard");
         screen.back();
+        ok(((java.util.List<?>)field(screen,"hits")).isEmpty(),
+                "Closing the keyboard invalidates stale overlay hit regions");
         ok(!screen.wantsKeys(),"B must close search keyboard without leaving the application");
         ok(exits.get()==0,"Closing search must not close the application");
 
