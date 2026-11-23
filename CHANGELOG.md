@@ -3,6 +3,13 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.12 (2026-11-23)
+- Prevent Chromium's system keyring password popup on Raspberry Pi OS, Debian and other Linux systems when launching the isolated Xbox Cloud Gaming player.
+- Use `--password-store=basic` for the Xbox-only Chromium profile without changing the system keyring or regular browsers; keep Microsoft authentication in WII-UU's separate backend.
+- Add per-user Xbox Cloud Gaming favorites with controller X and touch/mouse star controls, plus a controller-friendly quick-launch shelf.
+- Cache favorite game cover artwork locally for offline display, retain favorites across restarts and remove cached artwork when a favorite is deleted.
+- Restrict quick launch to titles currently available in the signed-in Xbox catalog, with regression tests for favorites persistence, input navigation and Linux browser startup.
+
 ## 2.1.11 (2026-11-23)
 - Fix Xbox Cloud Gaming search so controller navigation uses the on-screen keyboard without moving the game selection behind it.
 - Close the portable Chrome for Testing player automatically when Xbox ends a cloud gaming session.
