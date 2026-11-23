@@ -357,6 +357,13 @@ public final class GamepadServer {
     private volatile Controllers controllers;
     private volatile Peers peers;
     private final wiiuu.input.PadRemap remaps;
+    private final XboxCloudPadBridge cloudPadBridge = new XboxCloudPadBridge();
+
+    /** Snapshot of WII-UU-managed controllers in the current player order (Xbox slots 0–3). */
+    public List<Map<String, Object>> cloudControllerFrames() {
+        return cloudPadBridge.snapshot(pads());
+    }
+
     private final Set<String> swallow = ConcurrentHashMap.newKeySet();
 
     /** Whether a controller's A or B were remapped (then they mean what was chosen, in the menu too). */
@@ -400,6 +407,7 @@ public final class GamepadServer {
         c.exec.execute(() -> {
             Client cl = clients.get("pad:" + id);
             if (cl != null && cl.player > 0) router.releaseAll(cl.player);
+            cloudPadBridge.release("pad:" + id);
             if (cl != null && pads != null && cl.player > 0) pads.release(cl.player);
         });
     }
@@ -1004,6 +1012,7 @@ public final class GamepadServer {
 
     /** Lets go of everything a phone holds down, before its number changes. */
     private void release(Client c) {
+        cloudPadBridge.release(c.id);
         if (c.player <= 0) return;
         router.releaseAll(c.player);
         if (dsu != null) dsu.setConnected(c.player, false);
@@ -1066,6 +1075,9 @@ public final class GamepadServer {
         // straight to OpenXCloud; phone pads are forwarded through Linux uinput.
         boolean cloud = PluginStore.externalRunning(config);
         boolean gameInput = launcher.isRunning() || cloud;
+        // This receives post-PadRemap button/axis events, including phones and
+        // macOS physical controllers (which do not have Linux virtual pads).
+        if (cloud) cloudPadBridge.input(c.id, c.player, body);
         // On macOS, OpenXCloud reads the actual controller through GameController.
         if (c.controller && c.id.startsWith("pad:mac") && gameInput && !launcher.inChoccy() && !videoPlaying()) return;
         // Do not apply menu-confirm swapping to an active native game.
