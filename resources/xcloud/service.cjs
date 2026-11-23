@@ -327,7 +327,7 @@ async function api(action, payload={}) {
     case 'icePost': {
       if (!Array.isArray(payload.candidates) || payload.candidates.length > 256)
         throw new Error('Invalid ICE candidates');
-      return xbox(sessionPath()+'/ice','POST',{candidates:payload.candidates});
+      return xbox(sessionPath()+'/ice','POST',{iceCandidates:payload.candidates});
     }
     case 'iceGet': return xbox(sessionPath()+'/ice');
     case 'keepalive': return xbox(sessionPath()+'/keepalive','POST',{});
