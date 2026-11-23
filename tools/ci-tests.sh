@@ -207,6 +207,7 @@ WIIUU_CI_COMMAND_20
     run_check "Test GamePad screen and controller layouts" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_21'
 node test/web/screen-choices.cjs
 node test/web/controller-layouts.cjs
+node test/web/xcloud-screen.cjs
 WIIUU_CI_COMMAND_21
     run_check "Check shell scripts" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_22'
 bash -n install.sh emulators.sh build.sh package.sh docs/get.sh
