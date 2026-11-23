@@ -155,5 +155,5 @@ test('player filters null and malformed remote ICE records before invoking xclou
   assert.equal(wrapped[0].candidate,'candidate:2 1 UDP 100 192.0.2.55 9002 typ host');
   assert.equal(wrapped[0].sdpMLineIndex,0);
   const service=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/service.cjs'),'utf8');
-  assert.match(service,/iceCandidates:payload\\.candidates/);
+  assert.ok(service.includes('iceCandidates:payload.candidates'));
 });
