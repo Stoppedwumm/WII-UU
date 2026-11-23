@@ -37,19 +37,48 @@ async function exchange(endpoint){
 // iceCandidates list. xbox-xcloud-player assumes every array slot is an
 // object and dereferences .candidate without checking.
 function validRemoteIce(data){
+  // Xbox returns the candidate array as JSON embedded in exchangeResponse.
+  // During negotiation that property may be null/empty even with HTTP 200.
+  if(typeof data?.exchangeResponse==='string'){
+    try{data=JSON.parse(data.exchangeResponse);}catch{return [];}
+  }
   const entries=Array.isArray(data)?data
     :Array.isArray(data?.iceCandidates)?data.iceCandidates
     :Array.isArray(data?.candidates)?data.candidates:[];
   return entries.filter(item=>item&&typeof item==='object'
       &&typeof item.candidate==='string'
       &&item.candidate.trim()!==''&&item.candidate!=='a=end-of-candidates'
-      &&(typeof item.sdpMid==='string'||Number.isInteger(item.sdpMLineIndex)))
-    .map(item=>({
-      candidate:item.candidate,
-      sdpMid:typeof item.sdpMid==='string'?item.sdpMid:null,
-      sdpMLineIndex:Number.isInteger(item.sdpMLineIndex)?item.sdpMLineIndex:null
-    }));
+      &&item.candidate!=='end-of-candidates'
+      &&(typeof item.sdpMid==='string'||Number.isInteger(Number(item.sdpMLineIndex))))
+    .map(item=>{
+      const candidate=item.candidate.trim().replace(/^a=candidate:/,'candidate:');
+      const index=Number(item.sdpMLineIndex);
+      return {candidate,sdpMid:typeof item.sdpMid==='string'?item.sdpMid:null,
+        sdpMLineIndex:Number.isInteger(index)&&index>=0?index:null};
+    });
 }
+async function fetchRemoteIce(){
+  let lastShape='';
+  for(let attempt=0;attempt<60&&!stop;attempt++){
+    const response=await request('iceGet');
+    const candidates=validRemoteIce(response);
+    if(candidates.length){
+      console.info('[xcloud-webrtc] Remote ICE ready: count='+candidates.length+' attempts='+(attempt+1));
+      return candidates;
+    }
+    const shape=Array.isArray(response)?'array'
+      :typeof response?.exchangeResponse==='string'?'exchangeResponse-string'
+      :response?.pending?'pending'
+      :response&&typeof response==='object'?Object.keys(response).sort().join(','):'empty';
+    if(shape!==lastShape||attempt%10===0){
+      console.info('[xcloud-webrtc] Waiting for remote ICE: attempt='+(attempt+1)+' shape='+shape);
+      lastShape=shape;
+    }
+    await sleep(500);
+  }
+  throw new Error('Xbox returned no usable remote ICE candidates after polling');
+}
+
 async function connect(){
   if(!/^[a-f0-9]{64}$/i.test(secret)||!title)throw new Error('Invalid stream launcher URL');
   if(typeof RTCPeerConnection==='undefined')throw new Error('This Chromium build does not support WebRTC');
@@ -101,16 +130,9 @@ async function connect(){
     .filter(item=>item&&typeof item.candidate==='string'&&item.candidate.trim()!=='');
   if(!candidates.length)throw new Error('Chromium could not gather ICE candidates');
   await request('icePost',{candidates});
-  const remote=await exchange('iceGet');
-  const remoteCandidates=validRemoteIce(remote);
-  console.info('[xcloud-webrtc] ICE candidates:', {
-    local:candidates.length,
-    remote:remoteCandidates.length,
-    skipped:(Array.isArray(remote)?remote:Array.isArray(remote?.iceCandidates)?remote.iceCandidates
-      :Array.isArray(remote?.candidates)?remote.candidates:[]).length-remoteCandidates.length
-  });
-  if(!remoteCandidates.length)
-    throw new Error('Xbox returned no usable remote ICE candidates');
+  const remoteCandidates=await fetchRemoteIce();
+  console.info('[xcloud-webrtc] ICE candidates: local='+candidates.length+
+    ' remote='+remoteCandidates.length);
   player.setRemoteIceCandidates(remoteCandidates);
   timer=setInterval(()=>{void request('keepalive',{}).catch(fail)},30000);
 }
