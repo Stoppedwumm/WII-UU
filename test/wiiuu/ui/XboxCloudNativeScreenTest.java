@@ -50,6 +50,20 @@ public final class XboxCloudNativeScreenTest {
         MenuView.applyTheme(true);
         render(screen,640,400,"xcloud-ui-install-small-dark.png");
 
+        // Simulate Microsoft device-code approval before an Xbox entitlement lookup.
+        // The native UI must leave pairing even when Xbox game servers are unavailable.
+        var onMessage=XboxCloudNativeScreen.class.getDeclaredMethod("onMessage",java.util.Map.class);
+        onMessage.setAccessible(true);
+        onMessage.invoke(screen,java.util.Map.of("event","code","code","OFFLINE","url","https://www.microsoft.com/link"));
+        ok((boolean)field(screen,"pairing"),"Pairing must show the Microsoft code");
+        onMessage.invoke(screen,java.util.Map.of("event","signedIn"));
+        ok((boolean)field(screen,"signedIn"),"Microsoft approval should mark account signed in");
+        ok(!(boolean)field(screen,"pairing"),"Microsoft approval should leave the pairing screen");
+        ok(((String)field(screen,"loginCode")).isEmpty(),"Do not keep showing the old code");
+        // Return to the signed-out state for the screenshot fixtures.
+        set(screen,"signedIn",false);
+        set(screen,"pairing",false);
+
         // Simulate the installed runtime using empty local files. No network or Node
         // process is started, since the screen was constructed before this fixture.
         Path runtime=wiiuu.core.XboxCloudRuntime.home(config);
@@ -61,6 +75,11 @@ public final class XboxCloudNativeScreenTest {
         Files.writeString(chrome,"fixture");
         Files.writeString(runtime.resolve("installed-version"),"native-v1");
         ok(wiiuu.core.XboxCloudRuntime.ready(config),"Fixture must enable the catalog renderer");
+
+        set(screen,"pairing",true);
+        set(screen,"loginCode","TEST-CODE");
+        render(screen,1280,800,"xcloud-ui-auth-waiting.png");
+        set(screen,"pairing",false);
 
         // Supply catalog fixture without live Xbox credentials or network requests.
         set(screen,"signedIn",true);
