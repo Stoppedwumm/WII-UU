@@ -32,7 +32,7 @@ final class XboxCloudFavorites {
     }
 
     private static boolean validId(String id) {
-        return id != null && id.matches("[a-zA-Z0-9_-]{1,100}");
+        return id != null && id.matches("[a-zA-Z0-9._:-]{1,300}");
     }
 
     private static boolean validCover(String url) {
@@ -135,7 +135,14 @@ final class XboxCloudFavorites {
 
     private Path coverFile(String id) {
         if (!validId(id)) throw new IllegalArgumentException("Invalid favorite ID");
-        return covers.resolve(id + ".png");
+        // Hash IDs rather than trusting Xbox's remote title ID as a filename.
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(id.getBytes(StandardCharsets.UTF_8));
+            return covers.resolve(java.util.HexFormat.of().formatHex(digest) + ".png");
+        } catch (NoSuchAlgorithmException error) {
+            throw new IllegalStateException("Missing SHA-256", error);
+        }
     }
 
     /** Never read arbitrarily large or malformed cached files onto the paint thread. */
