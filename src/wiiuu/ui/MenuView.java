@@ -1086,7 +1086,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             String[] lines = {name + "? Classic.", "Ooh, " + name + ". Good one.", name + "! Press A, you know you want to."};
             return lines[random.nextInt(lines.length)];
         }
-        if (t.favorite != null) return t.favorite.name() + " · Xbox Cloud Gaming";
+        if (t.favorite != null) return t.favorite.name() + " · X: Unpin";
         if (t.system == null) return null;
         String s = t.system.shortName();
         if (t.system.id().equals("reactions")) return "Reaction videos! I'm in those, you know.";
@@ -1697,6 +1697,34 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }
 
+    private boolean canUnpinHomeFavorite() {
+        return screen == Screen.HOME && !inDock && sel >= 0 && sel < tiles.size()
+                && tiles.get(sel).favorite != null && !modal() && !booting && !introPending
+                && intro == null && guide == null && !guidePending && settings == null
+                && nativePlugin == null && xcloudPanel == null && migration == null
+                && boss == null && cinema == null && !vizFull && idleGames == null;
+    }
+
+    private boolean unpinHomeFavorite() {
+        if (!canUnpinHomeFavorite()) return false;
+        var favorite = tiles.get(sel).favorite;
+        try {
+            XboxCloudFavorites pins = new XboxCloudFavorites(config.userHome());
+            if (pins.contains(favorite.id())) pins.toggle(favorite.id(), favorite.name(), favorite.cover());
+            int previous = sel;
+            setSnapshot(snap);
+            sel = Math.max(0, Math.min(previous, tiles.size() - 1));
+            scrollPage = page();
+            hlInit = false;
+            Sfx.select();
+            showToast("Unpinned " + favorite.name());
+        } catch (java.io.IOException error) {
+            showToast("Could not remove pin: " + error.getMessage());
+        }
+        repaint();
+        return true;
+    }
+
     /** Every phone / controller button: the setup guide's controller test sees them all. */
     @Override
     public boolean pressed(int player, wiiuu.input.PadButton b, boolean down) {
@@ -1722,6 +1750,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (boss != null) {
             BossFight f = boss;
             SwingUtilities.invokeLater(() -> f.pad(b, down));
+            return true;
+        }
+        if (b == wiiuu.input.PadButton.X && canUnpinHomeFavorite()) {
+            if (down) unpinHomeFavorite();
             return true;
         }
         if (guide == null || booting || intro != null) return false;
@@ -1857,6 +1889,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     case KeyEvent.VK_F2 -> toggleGamepadInfo();
                     case KeyEvent.VK_F5 -> refresh();
                     case KeyEvent.VK_V -> toggleVisualizer();
+                    case KeyEvent.VK_X -> unpinHomeFavorite();
                     default -> { }
                 }
             }
