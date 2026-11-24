@@ -1928,6 +1928,17 @@ public final class SettingsScreen {
         r.add(new Action("Diagnostic sharing", "Status of the opted-in archive log uploads.",
                 () -> say(wiiuu.core.Diagnostics.status(config)),
                 () -> wiiuu.core.Diagnostics.status(config), null));
+        r.add(new Action("Upload logs now",
+                "Manually request a diagnostic report without waiting for the next scheduled upload.",
+                () -> {
+                    if (!wiiuu.core.Diagnostics.enabled(config)) {
+                        say("Diagnostic sharing is off. Enable it in the setup guide first.");
+                    } else if (wiiuu.core.Diagnostics.uploadNow(config, wiiuu.core.BuildInfo.version())) {
+                        say("Diagnostic upload requested. Check the archive dashboard for the report.");
+                    } else {
+                        say("A manual upload is already queued.");
+                    }
+                }, () -> wiiuu.core.Diagnostics.status(config), null));
         r.add(new Action("Stop sharing & delete remote logs",
                 "Stop all diagnostic uploads immediately and request removal of stored logs on the archive server.",
                 () -> {

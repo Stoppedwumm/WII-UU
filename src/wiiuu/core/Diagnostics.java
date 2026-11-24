@@ -104,6 +104,28 @@ public final class Diagnostics {
         });
     }
 
+    private static final java.util.concurrent.atomic.AtomicBoolean manualPending =
+            new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** Queue a manual upload without blocking the UI or changing consent. */
+    public static synchronized boolean uploadNow(Config config, String version) {
+        if (!enabled(config) || !manualPending.compareAndSet(false, true)) return false;
+        start(config, version);
+        scheduler.execute(() -> {
+            try {
+                boolean needsEnrollment = !load(config).containsKey("token");
+                tick(config, version);
+                if (needsEnrollment && enabled(config) && load(config).containsKey("token"))
+                    tick(config, version);
+            } catch (Exception e) {
+                System.err.println("[diagnostics] manual upload failed: " + e.getMessage());
+            } finally {
+                manualPending.set(false);
+            }
+        });
+        return true;
+    }
+
     public static synchronized void start(Config config, String version) {
         if (scheduler != null) return;
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {

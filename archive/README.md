@@ -126,6 +126,8 @@ to the Internet without transport security.
   last upload and batch count.
 - `GET /admin/diagnostics/DEVICE_ID`: authenticated stored log history.
 
+To request a report immediately, select **Upload logs now** in **Settings > System > Diagnostics**. This requires existing consent, queues the upload asynchronously, and enrolls first if necessary. Server rate limits still apply.
+
 The user can revoke consent in **Settings > System > Diagnostics**, which stops
 client uploads immediately and requests server deletion; if offline, the client
 retries revocation. The archive keeps its release-upload token
