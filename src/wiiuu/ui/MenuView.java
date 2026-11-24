@@ -1153,6 +1153,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (xcloudPanel == null) return;
         xcloudPanel.close();
         xcloudPanel = null;
+        updateMusic();
         if (screen == Screen.HOME) setSnapshot(snap);
         lastInput = System.currentTimeMillis();
         requestFocusInWindow();
@@ -1162,6 +1163,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void openXboxCloud(wiiuu.core.PluginStore.Entry entry) {
         if (xcloudPanel != null) return;
         xcloudPanel = new XboxCloudNativeScreen(config, entry, this::repaint, this::closeXboxCloud, actions::xboxControllerFrames);
+        xcloudPanel.onStreamActivity(this::updateMusic);
         Sfx.select();
         repaint();
     }
@@ -1380,7 +1382,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void updateMusic() {
         // not while the first boot's intro (with its own beat) is pending or playing
         MenuAudio.get().musicOn(musicEnabled && revealed && playing == null && intro == null && !introPending && !idleOwnMusic && boss == null
-                && cinema == null);                         // the cinema is quiet
+                && cinema == null && (xcloudPanel == null || !xcloudPanel.streamActive()));
     }
 
     private void buildHomeTiles() {
