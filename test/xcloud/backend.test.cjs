@@ -142,7 +142,7 @@ test('local Xbox device-code bridge hides tokens and binds streaming API to a pr
     'X-Wiiuu-Session':ready.secret,'Content-Type':'application/json'
   },body:JSON.stringify({titleId:'NOT-IN-CATALOG'})});
   assert.equal(invalid.status,502);
-  assert.match((await invalid.json()).error,/entitled title/);
+  assert.match((await invalid.json()).error,/Invalid Xbox title|catalog title or pinned game/);
   send(3,'logout');
   assert.equal((await receive(m=>m.id===3)).result.signedIn,false);
   assert.equal(fs.existsSync(path.join(user,'xcloud-tokens.json')),false);

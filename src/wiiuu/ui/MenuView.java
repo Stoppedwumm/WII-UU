@@ -340,10 +340,12 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         final GameSystem system;
         final Game game;
         final int count;
+        XboxCloudFavorites.Favorite favorite;
+        BufferedImage favoriteCover;
         float scale = 1f;
 
         Object id() {
-            return game != null ? game.path() : system.id();
+            return favorite != null ? "xcloud:" + favorite.id() : game != null ? game.path() : system.id();
         }
 
         Tile(GameSystem system, Game game, int count) {
@@ -375,6 +377,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         dockPlugins = wiiuu.core.PluginStore.active(config);
         dockSel = Math.min(dockSel, dockCount() - 1);
         dockKey = null;
+        if (screen == Screen.HOME && !tiles.isEmpty()) setSnapshot(snap);
         repaint();
     }
     private int dockCount() { return Dock.values().length + dockPlugins.size(); }
@@ -537,7 +540,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void setSnapshot(Library.Snapshot s) {
         String keepSystem = screen == Screen.GAMES && openSystem != null ? openSystem.id() : null;
         Path keepGame = screen == Screen.GAMES && sel < tiles.size() ? tiles.get(sel).game.path() : null;
-        GameSystem keepHome = screen == Screen.HOME && sel < tiles.size() ? tiles.get(sel).system : null;
+        Object keepHome = screen == Screen.HOME && sel < tiles.size() ? tiles.get(sel).id() : null;
         snap = s;
         covers.clear();
         if (keepSystem != null) {
@@ -548,7 +551,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         } else {
             buildHomeTiles();
             sel = 0;
-            for (int i = 0; i < tiles.size(); i++) if (tiles.get(i).system == keepHome) sel = i;
+            for (int i = 0; i < tiles.size(); i++) if (tiles.get(i).id().equals(keepHome)) sel = i;
         }
         scrollPage = page();
         repaint();
@@ -1083,6 +1086,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             String[] lines = {name + "? Classic.", "Ooh, " + name + ". Good one.", name + "! Press A, you know you want to."};
             return lines[random.nextInt(lines.length)];
         }
+        if (t.favorite != null) return t.favorite.name() + " · X: Unpin";
         if (t.system == null) return null;
         String s = t.system.shortName();
         if (t.system.id().equals("reactions")) return "Reaction videos! I'm in those, you know.";
@@ -1149,6 +1153,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (xcloudPanel == null) return;
         xcloudPanel.close();
         xcloudPanel = null;
+        if (screen == Screen.HOME) setSnapshot(snap);
         lastInput = System.currentTimeMillis();
         requestFocusInWindow();
         repaint();
@@ -1388,6 +1393,18 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             if (s == Systems.REACTIONS && n == 0) continue;                                        // once there's a pack
             tiles.add(new Tile(s, null, n));
         }
+        if (wiiuu.core.PluginStore.active(config).stream().anyMatch(p -> p.id().equals("xcloud"))) {
+            XboxCloudFavorites pins = new XboxCloudFavorites(config.userHome());
+            for (var favorite : pins.all()) {
+                Tile tile = new Tile(null, null, 0);
+                tile.favorite = favorite;
+                tiles.add(tile);
+                coverLoader.execute(() -> {
+                    BufferedImage art = pins.cachedCover(favorite.id());
+                    SwingUtilities.invokeLater(() -> { tile.favoriteCover = art; repaint(); });
+                });
+            }
+        }
     }
 
     private void buildGameTiles() {
@@ -1563,6 +1580,13 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
         Tile t = tiles.get(sel);
         Sfx.select();
+        if (t.favorite != null) {
+            wiiuu.core.PluginStore.active(config).stream().filter(p -> p.id().equals("xcloud")).findFirst().ifPresent(entry -> {
+                openXboxCloud(entry);
+                if (xcloudPanel != null) xcloudPanel.launchFavorite(t.favorite);
+            });
+            return;
+        }
         if (screen == Screen.HOME && t.system == Systems.OPENBASED && actions.openBased() != null) {
             homeSel = sel;
             cinema = new Cinema(this, actions.openBased(), actions::launch);   // the lights go down
@@ -1673,6 +1697,34 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }
 
+    private boolean canUnpinHomeFavorite() {
+        return screen == Screen.HOME && !inDock && sel >= 0 && sel < tiles.size()
+                && tiles.get(sel).favorite != null && !modal() && !booting && !introPending
+                && intro == null && guide == null && !guidePending && settings == null
+                && nativePlugin == null && xcloudPanel == null && migration == null
+                && boss == null && cinema == null && !vizFull && idleGames == null;
+    }
+
+    private boolean unpinHomeFavorite() {
+        if (!canUnpinHomeFavorite()) return false;
+        var favorite = tiles.get(sel).favorite;
+        try {
+            XboxCloudFavorites pins = new XboxCloudFavorites(config.userHome());
+            if (pins.contains(favorite.id())) pins.toggle(favorite.id(), favorite.name(), favorite.cover());
+            int previous = sel;
+            setSnapshot(snap);
+            sel = Math.max(0, Math.min(previous, tiles.size() - 1));
+            scrollPage = page();
+            hlInit = false;
+            Sfx.select();
+            showToast("Unpinned " + favorite.name());
+        } catch (java.io.IOException error) {
+            showToast("Could not remove pin: " + error.getMessage());
+        }
+        repaint();
+        return true;
+    }
+
     /** Every phone / controller button: the setup guide's controller test sees them all. */
     @Override
     public boolean pressed(int player, wiiuu.input.PadButton b, boolean down) {
@@ -1698,6 +1750,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (boss != null) {
             BossFight f = boss;
             SwingUtilities.invokeLater(() -> f.pad(b, down));
+            return true;
+        }
+        if (b == wiiuu.input.PadButton.X && canUnpinHomeFavorite()) {
+            if (down) unpinHomeFavorite();
             return true;
         }
         if (guide == null || booting || intro != null) return false;
@@ -1833,6 +1889,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     case KeyEvent.VK_F2 -> toggleGamepadInfo();
                     case KeyEvent.VK_F5 -> refresh();
                     case KeyEvent.VK_V -> toggleVisualizer();
+                    case KeyEvent.VK_X -> unpinHomeFavorite();
                     default -> { }
                 }
             }
@@ -2845,7 +2902,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** @return the cached sprite, or null after queueing it for background rendering */
     private BufferedImage sprite(Tile t, Layout L, float scale) {
-        BufferedImage cover = t.game == null ? null : cover(t.game);
+        BufferedImage cover = t.favorite != null ? t.favoriteCover : t.game == null ? null : cover(t.game);
         wiiuu.core.Achievements.Progress ra = t.game == null || achievements == null ? null : achievements.progress(t.game);
         Object key = List.of(t.id(), (int) L.tileW, (int) L.tileH, scale,
                 cover == null ? "" : System.identityHashCode(cover), t.count, dark, ra == null ? "" : ra.label());
@@ -2896,7 +2953,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         g.fill(new RoundRectangle2D.Double(r.getX(), r.getY() + 3, r.getWidth(), r.getHeight(), rad, rad));
         g.setColor(CARD);
         g.fill(new RoundRectangle2D.Double(r.getX(), r.getY(), r.getWidth(), r.getHeight(), rad, rad));
-        g.setColor(t.game == null ? colorOf(t.system) : vary(colorOf(t.system), t.game.name()));
+        g.setColor(t.favorite != null ? new Color(16, 124, 16) : t.game == null ? colorOf(t.system) : vary(colorOf(t.system), t.game.name()));
         g.fill(new RoundRectangle2D.Double(r.getX(), r.getY(), r.getWidth(), r.getHeight() * 0.72, rad, rad));
         g.fill(new Rectangle2D.Double(r.getX(), r.getY() + rad, r.getWidth(), r.getHeight() * 0.72 - rad));
     }
@@ -2914,7 +2971,23 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         shadow(g, card, 6);
         g.setColor(CARD);
         g.fill(card);
-        if (t.game == null) paintSystemTile(g, t, card);
+        if (t.favorite != null) {
+            float x=pad, y=pad, artH=h*0.72f;
+            g.setColor(new Color(16,124,16));
+            g.fill(new RoundRectangle2D.Float(x,y,w,artH,rad,rad));
+            BufferedImage art=t.favoriteCover;
+            if (art != null) {
+                float factor=Math.min(w/art.getWidth(),artH/art.getHeight());
+                int iw=Math.max(1,Math.round(art.getWidth()*factor)), ih=Math.max(1,Math.round(art.getHeight()*factor));
+                g.drawImage(art,Math.round(x+(w-iw)/2),Math.round(y+(artH-ih)/2),iw,ih,null);
+            } else {
+                g.setColor(Color.WHITE);
+                drawFitted(g,"XBOX",Font.BOLD,x+w/2,y+artH*0.6f,w*0.8f,artH*0.35f);
+            }
+            g.setColor(TEXT);
+            g.setFont(font(Font.BOLD,Math.max(9,h*0.09f)));
+            drawCentered(g,ellipsize(g,t.favorite.name(),w*0.9f),x+w/2,y+h*0.9f);
+        } else if (t.game == null) paintSystemTile(g, t, card);
         else paintGameTile(g, t, card);
         g.setColor(OUTLINE);
         g.setStroke(new BasicStroke(1f));

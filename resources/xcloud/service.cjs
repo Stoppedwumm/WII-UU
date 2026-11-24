@@ -334,7 +334,22 @@ async function api(action, payload={}) {
       return {signedIn:false};
     case 'start': {
       const id=payload.titleId;
-      if (typeof id !== 'string' || !allowedTitles.has(id)) throw new Error('Choose an entitled title from the catalog');
+      if (typeof id !== 'string' || !/^[a-zA-Z0-9._:-]{1,300}$/.test(id))
+        throw new Error('Invalid Xbox title');
+      // A locally pinned title can launch before the catalog is loaded.
+      // Xbox still authorizes every play request for the signed-in account.
+      let pinned = false;
+      if (!allowedTitles.has(id)) {
+        try {
+          const file = path.join(userDir, 'favorites.json');
+          if (fs.statSync(file).size <= 128000) {
+            const entries = JSON.parse(fs.readFileSync(file, 'utf8'));
+            pinned = Array.isArray(entries) && entries.slice(0,64).some(item => item?.id === id);
+          }
+        } catch { /* No valid local pins. */ }
+        if (!pinned) throw new Error('Choose a catalog title or pinned game');
+      }
+      if (!store.getUserToken()) throw new Error('Sign in first');
       await endSession();
       const session=await xbox('/v5/sessions/cloud/play','POST',{
         clientSessionId:'', titleId:id, systemUpdateGroup:'',

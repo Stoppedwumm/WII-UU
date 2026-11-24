@@ -127,9 +127,10 @@ public final class XboxCloudNativeScreenTest {
                 "Controller X favorites the selected catalog game and persists it");
         render(screen,1280,800,"xcloud-ui-catalog-favorites.png");
         int quick=(int)field(screen,"quickLaunchStart");
-        ok(quick>=0 && (int)field(screen,"quickLaunchEnd")>quick+1,
-                "Favorites shelf offers controller-accessible quick launches");
-        set(screen,"focus",quick+1); // First quick-launch card, after previous-page arrow.
+        ok(quick==-1, "Favorites shelf is now on the home screen");
+        screen.launchFavorite(savedFavorites.get("GAME0"));
+        ok(field(screen,"pendingFavorite")!=null, "Pinned launch waits for sign-in, not catalog");
+        set(screen,"focus",5); // First catalog card.
         screen.toggleFocusedFavorite();
         ok(new XboxCloudFavorites(config.userHome()).all().isEmpty(),
                 "X removes a favorite directly from the quick-launch shelf");

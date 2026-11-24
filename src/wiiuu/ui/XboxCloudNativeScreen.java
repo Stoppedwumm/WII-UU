@@ -54,7 +54,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private final Map<String,BufferedImage> coverImages = new LinkedHashMap<>();
     private final XboxCloudFavorites favorites;
     private final Map<Integer,Game> favoriteTargets = new HashMap<>();
-    private int favoritePage, quickCapacity = 4, quickLaunchStart = -1, quickLaunchEnd = -1;
+    private int quickLaunchStart = -1, quickLaunchEnd = -1;
     private final Set<String> requestedCovers = new HashSet<>();
     private final ExecutorService coverLoader = Executors.newFixedThreadPool(2, task -> {
         Thread thread = new Thread(task, "xcloud-cover-image");
@@ -62,6 +62,18 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         return thread;
     });
     private Backend backend;
+    private Game pendingFavorite;
+    void launchFavorite(XboxCloudFavorites.Favorite favorite) {
+        pendingFavorite = new Game(favorite.id(), favorite.name(), favorite.cover());
+        if (signedIn && backend != null) launchPendingFavorite();
+    }
+    private boolean launchPendingFavorite() {
+        if (pendingFavorite == null) return false;
+        Game game = pendingFavorite;
+        pendingFavorite = null;
+        startGame(game);
+        return true;
+    }
     private volatile Process browser;
     private boolean closed, startingBackend, installing, signedIn, pairing, searchEditing;
     // Query only the local helper to recover if an asynchronous auth notification is delayed.
@@ -145,7 +157,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         g.setFont(MenuView.font(Font.BOLD, 17*u)); g.setColor(MenuView.TEXT);
         center(g, shortened(g, game.name(),w-24*u), x+w/2f, y+Math.max(40*u,h*0.47f)+43*u);
         g.setFont(MenuView.font(Font.PLAIN, 12*u));g.setColor(MenuView.TEXT_DIM);
-        center(g, "A  Play   X  Favorite", x+w/2f, y+h-16*u);
+        center(g, "A  Play   X  Pin", x+w/2f, y+h-16*u);
         if (selected) {
             g.setStroke(new BasicStroke(3*u));g.setColor(MenuView.ACCENT);
             g.draw(new RoundRectangle2D.Float(x-3*u,y-3*u,w+6*u,h+6*u,22*u,22*u));
@@ -248,9 +260,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         action(g,pad+2*(bw+gap),top,bw,45*u,"Sign out",this::logout,u,false);
         action(g,pad+3*(bw+gap),top,bw,45*u,
                 "Auto audio: "+(autoAudio()?"On":"Off"),this::toggleAutoAudio,u,false);
-        boolean showQuick = !favorites.all().isEmpty() && query.isBlank();
-        if(showQuick) paintQuickLaunch(g,w,u,pad);
-        float gridY=(showQuick?342:208)*u, footer=75*u;
+        float gridY=208*u, footer=75*u;
         columns=w>=1230?4:w>=760?3:2;
         rows=h>=730?2:1;
         pageSize=columns*rows;
@@ -273,65 +283,6 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         label(g,found.size()+" games    Page "+(page+1)+" / "+pages,
                 w-pad-270*u,top+31*u,Font.PLAIN,13*u,MenuView.TEXT_DIM,270*u);
     }
-    /** Favorites are launchable from one compact, controller-navigable shelf. */
-    private void paintQuickLaunch(Graphics2D g,int w,float u,float pad) {
-        List<XboxCloudFavorites.Favorite> all=favorites.all();
-        if(all.isEmpty())return;
-        int capacity=w>=1000?4:w>=650?3:2;
-        quickCapacity=capacity;
-        int pages=Math.max(1,(all.size()+capacity-1)/capacity);
-        favoritePage=Math.max(0,Math.min(favoritePage,pages-1));
-        label(g,"Favorites  •  A: Quick play   X: Remove",pad,211*u,Font.BOLD,16*u,
-                MenuView.TEXT,w-2*pad);
-        label(g,"Page "+(favoritePage+1)+"/"+pages,w-pad-160*u,211*u,Font.PLAIN,13*u,
-                MenuView.TEXT_DIM,150*u);
-        float arrow=31*u,gap=10*u,top=222*u,h=107*u;
-        float cardWidth=(w-2*pad-2*arrow-(capacity+1)*gap)/capacity;
-        quickLaunchStart=hits.size();
-        action(g,pad,top+28*u,arrow,49*u,"<",()->quickPage(-1),u,false);
-        for(int local=0;local<capacity;local++) {
-            int idx=favoritePage*capacity+local;
-            if(idx>=all.size())break;
-            XboxCloudFavorites.Favorite favorite=all.get(idx);
-            Game current=games.stream().filter(game->game.id().equals(favorite.id())).findFirst()
-                    .orElse(new Game(favorite.id(),favorite.name(),favorite.cover()));
-            float x=pad+arrow+gap+local*(cardWidth+gap);
-            boolean selected=hits.size()==selectedFocus();
-            rounded(g,x,top,cardWidth,h,15*u,MenuView.CARD);
-            if(selected) {
-                g.setColor(MenuView.ACCENT);g.setStroke(new BasicStroke(3*u));
-                g.draw(new RoundRectangle2D.Float(x-2*u,top-2*u,cardWidth+4*u,h+4*u,17*u,17*u));
-            }
-            BufferedImage art=cover(current);
-            if(art!=null) {
-                float imageW=Math.min(68*u,cardWidth*0.29f),imageH=68*u;
-                float scale=Math.min(imageW/art.getWidth(),imageH/art.getHeight());
-                g.drawImage(art,Math.round(x+8*u),Math.round(top+10*u),
-                        Math.max(1,Math.round(art.getWidth()*scale)),
-                        Math.max(1,Math.round(art.getHeight()*scale)),null);
-            }
-            float titleLeft=x+Math.min(78*u,cardWidth*0.35f);
-            label(g,favorite.name(),titleLeft,top+40*u,Font.BOLD,15*u,
-                    MenuView.TEXT,Math.max(10*u,cardWidth-(titleLeft-x)-8*u));
-            label(g,games.stream().anyMatch(game->game.id().equals(favorite.id()))?
-                    "A: Launch" : "Unavailable",titleLeft,top+69*u,Font.PLAIN,12*u,
-                    MenuView.TEXT_DIM,Math.max(10*u,cardWidth-(titleLeft-x)-8*u));
-            favoriteTargets.put(hits.size(),current);
-            hits.add(new Hit(new Rectangle2D.Float(x,top,cardWidth,h),()->startGame(current),true));
-        }
-        action(g,w-pad-arrow,top+28*u,arrow,49*u,">",()->quickPage(1),u,false);
-        quickLaunchEnd=hits.size();
-    }
-
-    private void quickPage(int direction) {
-        if(favorites.all().isEmpty())return;
-        int capacity=quickCapacity;
-        int pages=Math.max(1,(favorites.all().size()+capacity-1)/capacity);
-        int next=Math.max(0,Math.min(pages-1,favoritePage+Integer.signum(direction)));
-        if(next==favoritePage){Sfx.bump();return;}
-        favoritePage=next;Sfx.move();repaint.run();
-    }
-
     /** Controller X marks or removes the currently highlighted catalog tile. */
     void toggleFocusedFavorite() {
         if(searchEditing)return;
@@ -343,7 +294,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void toggleFavorite(Game game) {
         try {
             boolean added=favorites.toggle(game.id(),game.name(),game.cover());
-            status=(added?"Added to":"Removed from")+" Favorites: "+game.name();
+            status=(added?"Added to":"Removed from")+" Home screen: "+game.name();
             if(added) {
                 BufferedImage loaded=coverImages.get(game.cover());
                 if(loaded!=null)coverLoader.execute(()->favorites.cacheCover(game.id(),loaded));
@@ -351,7 +302,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             }
             repaint.run();
         } catch(IOException error) {
-            status="Could not update Favorites: "+error.getMessage();repaint.run();
+            status="Could not update Home screen: "+error.getMessage();repaint.run();
         }
     }
 
@@ -532,10 +483,6 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     }
     void page(int delta) {
         if(!signedIn||searchEditing)return;
-        if(quickLaunchStart>=0 && focus>=quickLaunchStart && focus<quickLaunchEnd) {
-            quickPage(delta);
-            return;
-        }
         int pages=Math.max(1,(filtered().size()+Math.max(1,pageSize)-1)/Math.max(1,pageSize));
         int next=Math.max(0,Math.min(pages-1,page+Integer.signum(delta)));
         if(next==page){Sfx.bump();return;}
@@ -585,7 +532,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                         if(Boolean.TRUE.equals(result.get("signedIn"))) {
                             // The replacement helper has a fresh entitlement/catalog map.
                             // Always reload it even if the UI was already marked signed in.
-                            if(signedIn)loadGames();
+                            if(signedIn) { if (!launchPendingFavorite()) loadGames(); }
                             else completeLogin();
                         } else if(!pairing) {
                             signedIn=false; // A new helper may no longer have valid account tokens.
@@ -644,7 +591,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         loginCode="";
         focus=0;
         status="Microsoft sign-in complete. Loading Xbox games...";
-        loadGames();
+        if (!launchPendingFavorite()) loadGames();
     }
 
     private void checkLogin(boolean showPending) {
@@ -726,12 +673,12 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         if(closed||backend==null||!signedIn)return;
         String desiredTitleId=chosen.id();
         Game available=games.stream().filter(game->game.id().equals(desiredTitleId)).findFirst().orElse(null);
-        if(available==null) {
+        if(available==null && !favorites.contains(desiredTitleId)) {
             status="This favorite is not currently playable. Reload the Xbox catalog.";
             repaint.run();
             return;
         }
-        chosen=available;
+        if (available != null) chosen=available;
         Process old=browser;
         if(old!=null&&old.isAlive()){status="A cloud stream is already running.";repaint.run();return;}
         try {
