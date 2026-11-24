@@ -377,6 +377,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         dockPlugins = wiiuu.core.PluginStore.active(config);
         dockSel = Math.min(dockSel, dockCount() - 1);
         dockKey = null;
+        if (screen == Screen.HOME && !tiles.isEmpty()) setSnapshot(snap);
         repaint();
     }
     private int dockCount() { return Dock.values().length + dockPlugins.size(); }
