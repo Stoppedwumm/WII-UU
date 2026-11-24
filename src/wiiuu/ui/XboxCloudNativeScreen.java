@@ -75,6 +75,15 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         return true;
     }
     private volatile Process browser;
+    private boolean streamActive;
+    private Runnable streamActivity = () -> {};
+    boolean streamActive() { return streamActive; }
+    void onStreamActivity(Runnable listener) { streamActivity = listener; }
+    private void setStreamActive(boolean active) {
+        if (streamActive == active) return;
+        streamActive = active;
+        streamActivity.run();
+    }
     private boolean closed, startingBackend, installing, signedIn, pairing, searchEditing;
     // Query only the local helper to recover if an asynchronous auth notification is delayed.
     private final javax.swing.Timer pairingStatusTimer = new javax.swing.Timer(3000, event -> checkLogin(false));
@@ -573,6 +582,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             // Chrome app windows launched by Java are not script-opened.
             if(browser!=null){stopGame();status="Xbox ended the stream. Choose another game.";}
         }else if("ended".equals(type)){
+            if (browser != null) stopGame();
             pairingStatusTimer.stop();
             backend=null;
             pairing=false;
@@ -700,19 +710,24 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             if(autoAudio())builder.command().add("--autoplay-policy=no-user-gesture-required");
             builder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .redirectError(ProcessBuilder.Redirect.DISCARD);
+            setStreamActive(true);
             Process process=builder.start();
             browser=process;
             PluginStore.trackExternal(config,entry,process);
             startControllerForwarding();
             status="Streaming "+chosen.name()+" in Chromium. Return here to select another game.";
             process.onExit().thenRun(()->SwingUtilities.invokeLater(()->{
-                if(browser==process){browser=null;stopControllerForwarding();if(!closed) {
+                if(browser==process){browser=null;stopControllerForwarding();setStreamActive(false);if(!closed) {
                     status="Stream closed. Choose another game.";
                     command("stop",result->repaint.run());
                     repaint.run();
                 }}
             }));
-        }catch(Exception error){status="Could not start Chromium: "+error.getMessage();}
+        }catch(Exception error){
+            if (browser != null) stopGame();
+            else setStreamActive(false);
+            status="Could not start Chromium: "+error.getMessage();
+        }
         repaint.run();
     }
     private void startControllerForwarding() {
@@ -739,6 +754,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         Process p=browser;
         if(p!=null&&p.isAlive()){p.descendants().forEach(ProcessHandle::destroy);p.destroy();}
         browser=null;
+        setStreamActive(false);
         command("stop",result->{status="Xbox stream stopped.";});
     }
     @Override public void close() {
@@ -750,6 +766,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         Process p=browser;
         if(p!=null&&p.isAlive()){p.descendants().forEach(ProcessHandle::destroy);p.destroy();}
         browser=null;
+        setStreamActive(false);
         if(backend!=null)backend.close();
         hits.clear();games.clear();
         coverLoader.shutdownNow();coverImages.clear();requestedCovers.clear();
