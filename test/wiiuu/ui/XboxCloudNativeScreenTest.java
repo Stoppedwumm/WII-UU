@@ -177,7 +177,21 @@ public final class XboxCloudNativeScreenTest {
         ok(!screen.wantsKeys(),"B must close search keyboard without leaving the application");
         ok(exits.get()==0,"Closing search must not close the application");
 
+        AtomicInteger musicChanges = new AtomicInteger();
+        screen.onStreamActivity(musicChanges::incrementAndGet);
+        var streamState = XboxCloudNativeScreen.class.getDeclaredMethod("setStreamActive", boolean.class);
+        streamState.setAccessible(true);
+        streamState.invoke(screen, true);
+        ok(screen.streamActive() && musicChanges.get()==1, "Starting Xbox must suppress menu music");
+        streamState.invoke(screen, true);
+        ok(musicChanges.get()==1, "Repeated stream state must not restart audio");
+        var stop = XboxCloudNativeScreen.class.getDeclaredMethod("stopGame");
+        stop.setAccessible(true);
+        stop.invoke(screen);
+        ok(!screen.streamActive() && musicChanges.get()==2, "Stopping Xbox must restore menu music policy");
+        streamState.invoke(screen, true);
         screen.close();
+        ok(!screen.streamActive() && musicChanges.get()==4, "Closing Xbox must restore menu music policy");
         Files.delete(runtime.resolve("installed-version")); // prevent launching the mock backend
         MenuView menu=new MenuView(config,true);
         var open=MenuView.class.getDeclaredMethod("openXboxCloud",PluginStore.Entry.class);
