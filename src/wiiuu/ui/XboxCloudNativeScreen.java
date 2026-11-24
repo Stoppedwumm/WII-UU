@@ -62,6 +62,18 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         return thread;
     });
     private Backend backend;
+    private Game pendingFavorite;
+    void launchFavorite(XboxCloudFavorites.Favorite favorite) {
+        pendingFavorite = new Game(favorite.id(), favorite.name(), favorite.cover());
+        if (signedIn && backend != null) launchPendingFavorite();
+    }
+    private boolean launchPendingFavorite() {
+        if (pendingFavorite == null) return false;
+        Game game = pendingFavorite;
+        pendingFavorite = null;
+        startGame(game);
+        return true;
+    }
     private volatile Process browser;
     private boolean closed, startingBackend, installing, signedIn, pairing, searchEditing;
     // Query only the local helper to recover if an asynchronous auth notification is delayed.
@@ -145,7 +157,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         g.setFont(MenuView.font(Font.BOLD, 17*u)); g.setColor(MenuView.TEXT);
         center(g, shortened(g, game.name(),w-24*u), x+w/2f, y+Math.max(40*u,h*0.47f)+43*u);
         g.setFont(MenuView.font(Font.PLAIN, 12*u));g.setColor(MenuView.TEXT_DIM);
-        center(g, "A  Play   X  Favorite", x+w/2f, y+h-16*u);
+        center(g, "A  Play   X  Pin", x+w/2f, y+h-16*u);
         if (selected) {
             g.setStroke(new BasicStroke(3*u));g.setColor(MenuView.ACCENT);
             g.draw(new RoundRectangle2D.Float(x-3*u,y-3*u,w+6*u,h+6*u,22*u,22*u));
@@ -248,8 +260,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         action(g,pad+2*(bw+gap),top,bw,45*u,"Sign out",this::logout,u,false);
         action(g,pad+3*(bw+gap),top,bw,45*u,
                 "Auto audio: "+(autoAudio()?"On":"Off"),this::toggleAutoAudio,u,false);
-        boolean showQuick = !favorites.all().isEmpty() && query.isBlank();
-        if(showQuick) paintQuickLaunch(g,w,u,pad);
+        boolean showQuick = false; // Favorites now live on the Wii-UU home screen.
         float gridY=(showQuick?342:208)*u, footer=75*u;
         columns=w>=1230?4:w>=760?3:2;
         rows=h>=730?2:1;
@@ -343,7 +354,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void toggleFavorite(Game game) {
         try {
             boolean added=favorites.toggle(game.id(),game.name(),game.cover());
-            status=(added?"Added to":"Removed from")+" Favorites: "+game.name();
+            status=(added?"Added to":"Removed from")+" Home screen: "+game.name();
             if(added) {
                 BufferedImage loaded=coverImages.get(game.cover());
                 if(loaded!=null)coverLoader.execute(()->favorites.cacheCover(game.id(),loaded));
@@ -351,7 +362,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             }
             repaint.run();
         } catch(IOException error) {
-            status="Could not update Favorites: "+error.getMessage();repaint.run();
+            status="Could not update Home screen: "+error.getMessage();repaint.run();
         }
     }
 
@@ -585,7 +596,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
                         if(Boolean.TRUE.equals(result.get("signedIn"))) {
                             // The replacement helper has a fresh entitlement/catalog map.
                             // Always reload it even if the UI was already marked signed in.
-                            if(signedIn)loadGames();
+                            if(signedIn) { if (!launchPendingFavorite()) loadGames(); }
                             else completeLogin();
                         } else if(!pairing) {
                             signedIn=false; // A new helper may no longer have valid account tokens.
@@ -644,7 +655,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         loginCode="";
         focus=0;
         status="Microsoft sign-in complete. Loading Xbox games...";
-        loadGames();
+        if (!launchPendingFavorite()) loadGames();
     }
 
     private void checkLogin(boolean showPending) {
@@ -726,12 +737,12 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         if(closed||backend==null||!signedIn)return;
         String desiredTitleId=chosen.id();
         Game available=games.stream().filter(game->game.id().equals(desiredTitleId)).findFirst().orElse(null);
-        if(available==null) {
+        if(available==null && !favorites.contains(desiredTitleId)) {
             status="This favorite is not currently playable. Reload the Xbox catalog.";
             repaint.run();
             return;
         }
-        chosen=available;
+        if (available != null) chosen=available;
         Process old=browser;
         if(old!=null&&old.isAlive()){status="A cloud stream is already running.";repaint.run();return;}
         try {
