@@ -195,33 +195,46 @@ class WIIUUManagedGamepad extends Gamepad {
   handleVibration(){}
 }
 // Keyboard/mouse is an opt-in local virtual Xbox pad. No OS-level hooks.
-const KEYBOARD_BUTTONS=Object.freeze({
-  Space:'A',KeyC:'B',KeyR:'X',KeyF:'Y',KeyQ:'LeftShoulder',KeyE:'RightShoulder',
-  KeyZ:'LeftTrigger',KeyX:'RightTrigger',Tab:'View',Enter:'Menu',
-  ShiftLeft:'LeftThumb',ShiftRight:'LeftThumb',ControlLeft:'RightThumb',
-  ArrowUp:'DPadUp',ArrowDown:'DPadDown',ArrowLeft:'DPadLeft',ArrowRight:'DPadRight'
+const DEFAULT_BINDINGS=Object.freeze({
+  MoveUp:'KeyW',MoveDown:'KeyS',MoveLeft:'KeyA',MoveRight:'KeyD',
+  A:'Space',B:'KeyC',X:'KeyR',Y:'KeyF',LeftShoulder:'KeyQ',RightShoulder:'KeyE',
+  LeftTrigger:'Mouse2',RightTrigger:'Mouse0',View:'Tab',Menu:'Enter',
+  LeftThumb:'ShiftLeft',RightThumb:'ControlLeft',DPadUp:'ArrowUp',DPadDown:'ArrowDown',
+  DPadLeft:'ArrowLeft',DPadRight:'ArrowRight',Nexus:'None'
 });
-function keyboardMousePad(){
+function parseBindings(raw){
+  const bindings={...DEFAULT_BINDINGS};
+  for(const pair of String(raw||'').split(',')){
+    const [target,input]=pair.split(':');
+    if(Object.hasOwn(bindings,target)&&/^(?:None|Mouse[0-4]|Key[A-Z]|Digit[0-9]|Numpad[0-9]|Space|Enter|Tab|Shift(?:Left|Right)|Control(?:Left|Right)|Alt(?:Left|Right)|Arrow(?:Up|Down|Left|Right)|Backspace|Delete|Insert|Home|End|PageUp|PageDown|Comma|Period|Slash|Semicolon|Quote|BracketLeft|BracketRight|Backslash|Minus|Equal|Backquote)$/.test(input||''))
+      bindings[target]=input;
+  }
+  return bindings;
+}
+function keyboardMousePad(bindings=DEFAULT_BINDINGS,sensitivity=100){
   const keys=new Set(),buttons=new Set();
+  const inputs=new Set(Object.values(bindings));
+  const factor=Math.max(10,Math.min(300,Number(sensitivity)||100))/100;
   let dx=0,dy=0;
   const clamp=n=>Math.max(-1,Math.min(1,n));
   return {
     keys,buttons,
-    move(x,y){dx=clamp(dx+x/45);dy=clamp(dy+y/45);},
+    handles(code){return inputs.has(code);},
+    move(x,y){dx=clamp(dx+x*factor/45);dy=clamp(dy+y*factor/45);},
     reset(){keys.clear();buttons.clear();dx=dy=0;},
     frame(slot){
-      const down=key=>keys.has(key)?1:0;
-      let x=down('KeyD')-down('KeyA'),y=down('KeyS')-down('KeyW');
+      const down=target=>{
+        const code=bindings[target];
+        if(!code||code==='None')return 0;
+        return (code.startsWith('Mouse')?buttons.has(Number(code.slice(5))):keys.has(code))?1:0;
+      };
+      let x=down('MoveRight')-down('MoveLeft'),y=down('MoveDown')-down('MoveUp');
       const length=Math.hypot(x,y);if(length>1){x/=length;y/=length;}
       const frame=gamepadFrame(null,slot,0);
       frame.LeftThumbXAxis=x;frame.LeftThumbYAxis=y;
       frame.RightThumbXAxis=dx;frame.RightThumbYAxis=dy;
       dx=dy=0;
-      for(const [key,field] of Object.entries(KEYBOARD_BUTTONS))
-        if(keys.has(key))frame[field]=1;
-      if(buttons.has(0))frame.RightTrigger=1;
-      if(buttons.has(2))frame.LeftTrigger=1;
-      if(buttons.has(1))frame.RightThumb=1;
+      for(const target of Object.keys(GAMEPAD_FIELDS))frame[target]=down(target);
       return frame;
     }
   };
@@ -240,7 +253,8 @@ function controllerBridge(activePlayer){
   const physical=new Map();
   const managed=new Map();
   const managerFrames=new Map();
-  const keyboard=keyboardMousePad();
+  const params=typeof location==='undefined'?null:new URLSearchParams(location.search);
+  const keyboard=keyboardMousePad(parseBindings(params?.get('bindings')),params?.get('sensitivity'));
   let keyboardEnabled=false,keyboardHandler=null;
   const doc=typeof document==='undefined'?null:document;
   const win=typeof window==='undefined'?null:window;
@@ -304,7 +318,7 @@ function controllerBridge(activePlayer){
   if(doc&&win&&surface){
     toggle=doc.createElement('button');
     toggle.type='button';toggle.textContent='Keyboard/mouse: Off (F8)';
-    toggle.title='WASD move, mouse aim, click capture, Esc release, F8 toggle';
+    toggle.title='Custom bindings in Wii-UU settings; click capture, Esc release, F8 toggle';
     doc.querySelector('#top')?.appendChild(toggle);
     listen(toggle,'click',()=>setKeyboardEnabled(!keyboardEnabled));
     const captured=()=>keyboardEnabled&&doc.pointerLockElement===surface;
@@ -318,12 +332,12 @@ function controllerBridge(activePlayer){
         event.preventDefault();setKeyboardEnabled(!keyboardEnabled);return;
       }
       if(!keyboardEnabled||!captured())return;
-      if(Object.hasOwn(KEYBOARD_BUTTONS,event.code)||['KeyW','KeyA','KeyS','KeyD'].includes(event.code)){
+      if(keyboard.handles(event.code)){
         event.preventDefault();keyboard.keys.add(event.code);
       }
     },true);
     listen(win,'keyup',event=>{keyboard.keys.delete(event.code);if(captured()&&
-      (Object.hasOwn(KEYBOARD_BUTTONS,event.code)||['KeyW','KeyA','KeyS','KeyD'].includes(event.code)))event.preventDefault();},true);
+      (keyboard.handles(event.code)))event.preventDefault();},true);
     listen(doc,'mousemove',event=>{if(captured())keyboard.move(event.movementX||0,event.movementY||0);});
     listen(doc,'mousedown',event=>{if(captured()){event.preventDefault();keyboard.buttons.add(event.button);}});
     listen(doc,'mouseup',event=>{keyboard.buttons.delete(event.button);if(captured())event.preventDefault();});
