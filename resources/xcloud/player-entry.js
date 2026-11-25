@@ -298,7 +298,7 @@ function controllerBridge(activePlayer){
   };
   const setKeyboardEnabled=enabled=>{
     keyboardEnabled=enabled;keyboard.reset();
-    if(!enabled&&doc?.pointerLockElement===surface)doc.exitPointerLock?.();
+    if(!enabled&&doc&&surface&&doc.pointerLockElement===surface)doc.exitPointerLock?.();
     syncKeyboard();
   };
   if(doc&&win&&surface){
