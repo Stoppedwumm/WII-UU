@@ -70,6 +70,9 @@ public final class App extends JPanel implements PadSink {
     private final GameScreen screen = new GameScreen();
     private final wiiuu.core.RaConnect ra;
     private JFrame frame;
+    private Runnable embeddedExit;
+    private volatile boolean disposed;
+    private Timer refreshTimer;
     private volatile boolean settingsOpen;
     private boolean stylusDown;
     private final java.util.Map<Integer, PadButton> heldKeys = new java.util.HashMap<>();
@@ -133,14 +136,44 @@ public final class App extends JPanel implements PadSink {
         addMouseMotionListener(mouse);
         addMouseWheelListener(mouse);
         library.addListener(s -> SwingUtilities.invokeLater(this::refresh));
-        new Timer(250, e -> {
+        refreshTimer = new Timer(250, e -> {
             if (playing == null || screen.hintShowing()) repaint();
-        }).start();
+        });
+        refreshTimer.start();
+    }
+
+    /** Create the same UI in a host window, without a second controller reader or HTTP API. */
+    public static App embedded(Config config, JFrame owner, Runnable exit) {
+        App app = new App(config, wiiuu.engine.SystemTheme.isDark());
+        app.frame = owner;
+        app.embeddedExit = java.util.Objects.requireNonNull(exit);
+        app.library.rescanAsync();
+        return app;
+    }
+
+    public void shutdownEmbedded() {
+        if (disposed) return;
+        disposed = true;
+        releaseKeyboard();
+        animation.stop();
+        refreshTimer.stop();
+        stop();
+    }
+
+    public void shutdownEmbeddedAndWait() {
+        shutdownEmbedded();
+        Choccy.Session active = session;
+        if (active != null) {
+            try {
+                if (!active.process().waitFor(4, java.util.concurrent.TimeUnit.SECONDS)) active.process().destroyForcibly();
+            } catch (InterruptedException e) { Thread.currentThread().interrupt(); active.process().destroyForcibly(); }
+        }
     }
 
     // ---- the game list ---------------------------------------------------------------------------
 
     private void refresh() {
+        if (disposed) return;
         GameSystem was = systems.isEmpty() ? null : systems.get(Math.min(sys, systems.size() - 1));
         List<GameSystem> now = new ArrayList<>();
         for (GameSystem s : Systems.ALL) {
@@ -180,7 +213,7 @@ public final class App extends JPanel implements PadSink {
     // ---- playing ---------------------------------------------------------------------------------
 
     boolean play(Game game) {
-        if (session != null) return false;
+        if (disposed || session != null) return false;
         long request = ++launchRequest;
         if (!Choccy.available()) {
             if (!Choccy.canGetJava()) {
@@ -253,6 +286,7 @@ public final class App extends JPanel implements PadSink {
         System.out.println("[choccy] " + game.name() + " with " + core.getFileName());
         s.process().onExit().thenAccept(p -> SwingUtilities.invokeLater(() -> {
             heldKeys.clear(); stylusDown = false;
+            if (disposed) return;
             session = null;
             playing = null;
             screen.clear();
@@ -413,6 +447,7 @@ public final class App extends JPanel implements PadSink {
         if (k == KeyEvent.VK_F1) { if (down) settings(); return; }
         if (settingsOpen) return;
         String mapped = wiiuu.input.ChoccyKeys.action(config, k);
+        if (embeddedExit != null && "fullscreen".equals(mapped)) return;
         if ("fullscreen".equals(mapped) && down) {
             fullScreen();
             return;
@@ -433,6 +468,7 @@ public final class App extends JPanel implements PadSink {
             return;
         }
         if (!down) return;
+        if (embeddedExit != null && k == KeyEvent.VK_ESCAPE && !onGames) { embeddedExit.run(); return; }
         switch (k) {
             case KeyEvent.VK_UP -> move(-1);
             case KeyEvent.VK_DOWN -> move(1);
@@ -462,7 +498,7 @@ public final class App extends JPanel implements PadSink {
     /** Controllers: in a game they play it (HOME goes back); in the list they choose. */
     @Override
     public void button(int player, PadButton b, boolean down) {
-        if (settingsOpen) return;
+        if (disposed || settingsOpen) return;
         if (down && intro != null) {
             SwingUtilities.invokeLater(this::skipIntro);
             return;
@@ -479,6 +515,8 @@ public final class App extends JPanel implements PadSink {
         }
         if (!down) return;
         SwingUtilities.invokeLater(() -> {
+            if (disposed) return;
+            if (embeddedExit != null && (b == PadButton.HOME || (b == PadButton.B && !onGames))) { embeddedExit.run(); return; }
             switch (b) {
                 case UP -> move(-1);
                 case DOWN -> move(1);
@@ -500,7 +538,7 @@ public final class App extends JPanel implements PadSink {
 
     @Override
     public void stick(int player, int stick, float x, float y) {
-        if (settingsOpen) return;
+        if (disposed || settingsOpen) return;
         Choccy.Session s = session;
         Game g = playing;
         int port = player > 0 ? player - 1 : Math.max(0, -player - 1);
@@ -568,6 +606,7 @@ public final class App extends JPanel implements PadSink {
 
     private void click(int x, int y, int count) {
         Layout l = new Layout();
+        if (embeddedExit != null && y < l.band && x > l.w - 130 * l.u) { embeddedExit.run(); return; }
         if (x < l.split) {
             int i = (int) ((y - l.top) / l.row);
             if (y >= l.top && i >= 0 && i < systems.size()) {
@@ -661,6 +700,10 @@ public final class App extends JPanel implements PadSink {
         g.setColor(new Color(0xE6CDB8));
         g.drawString("libretro cores, no RetroArch needed  ·  part of WII-UU", tx + 2 * u, gy + 62 * u);
         // which look, at the right of the band
+        if (embeddedExit != null) {
+            g.setColor(new Color(0xFFF7EE));
+            g.drawString("Close / HOME", l.w - 125 * u, gy + 12 * u);
+        }
         String which = look.name + " · T";
         FontMetrics fs = g.getFontMetrics();
         g.setColor(new Color(0xE6CDB8));
