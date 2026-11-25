@@ -694,7 +694,9 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         try {
             String url="http://127.0.0.1:"+backend.port+
                     "/?title="+URLEncoder.encode(chosen.id(),StandardCharsets.UTF_8)+
-                    "&autoAudio="+(autoAudio()?"1":"0")+"#"+backend.secret;
+                    "&autoAudio="+(autoAudio()?"1":"0")+
+                    "&bindings="+URLEncoder.encode(XboxKeyboardMap.serialized(config),StandardCharsets.UTF_8)+
+                    "&sensitivity="+XboxKeyboardMap.sensitivity(config)+"#"+backend.secret;
             Path profile=Files.createDirectories(config.userHome().resolve("xcloud/chrome-profile"));
             ProcessBuilder builder=new ProcessBuilder(
                     XboxCloudRuntime.chromium(config).toString(),
