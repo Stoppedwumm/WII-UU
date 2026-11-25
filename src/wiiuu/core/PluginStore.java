@@ -18,6 +18,7 @@ import java.util.function.Consumer;
 public final class PluginStore {
     public record Entry(String id, String name, String description, String script, String type) {
         public boolean nativePlugin() { return type.equals("native"); }
+        public boolean embeddedPlugin() { return type.equals("embedded"); }
         /** Reviewed external desktop companion; no WII-UU plugin runtime required. */
         public boolean externalPlugin() { return type.equals("external"); }
     }
@@ -51,15 +52,16 @@ public final class PluginStore {
                 String name = java.util.Objects.toString(MiniJson.string(row.get("name")), "");
                 String type = java.util.Objects.toString(MiniJson.string(row.get("type")), "web");
                 boolean external = "external".equals(type);
+                boolean embedded = "embedded".equals(type);
                 if (!id.matches("[a-z0-9][a-z0-9-]{0,47}")
-                        || !(external ? script.isEmpty() : script.matches("[a-z0-9-]+\\.js"))
+                        || !((external || embedded) ? script.isEmpty() : script.matches("[a-z0-9-]+\\.js"))
                         || name.isBlank() || name.length() > 48 || entries.stream().anyMatch(e -> e.id().equals(id)))
                     throw new IOException("Invalid bundled plugin catalog entry");
                 // External apps execute native binaries, so only the explicitly reviewed
                 // Xbox integration is allowed. Never accept arbitrary catalog commands.
-                if (!List.of("web", "native", "external").contains(type) || external && !id.equals("xcloud"))
+                if (!List.of("web", "native", "external", "embedded").contains(type) || external && !id.equals("xcloud") || embedded && !id.equals("choccy"))
                     throw new IOException("Unknown bundled plugin type");
-                if (!external) resource("store/" + script);
+                if (!external && !embedded) resource("store/" + script);
                 entries.add(new Entry(id, name, java.util.Objects.toString(MiniJson.string(row.get("description")), ""), script, type));
             }
             return List.copyOf(entries);
@@ -120,7 +122,7 @@ public final class PluginStore {
             copy("host/" + file, dir.resolve(file));
         copy("catalog.json", dir.resolve("catalog.json"));
         Files.createDirectories(dir.resolve("store"));
-        for (Entry entry : CATALOG) if (!entry.externalPlugin()) copy("store/" + entry.script(), dir.resolve("store").resolve(entry.script()));
+        for (Entry entry : CATALOG) if (!entry.externalPlugin() && !entry.embeddedPlugin()) copy("store/" + entry.script(), dir.resolve("store").resolve(entry.script()));
     }
     private static void copy(String name, Path target) throws IOException {
         byte[] content = resource(name);
@@ -215,7 +217,7 @@ public final class PluginStore {
                         report.accept("Open Xbox Cloud Gaming from the WII-UU dock to use its native login and catalog.");
                         return;
                     }
-                    if (entry.nativePlugin()) throw new IOException("Open this native plugin from the WII-UU bottom bar");
+                    if (entry.embeddedPlugin() || entry.nativePlugin()) throw new IOException("Open this native plugin from the WII-UU bottom bar");
                     if (installing || !ready(config)) throw new IOException("Install the plugin runtime in Settings > System > Plugin store (Node.js/npm required)");
                     Process old = RUNNING.get(key(config, entry));
                     if (old != null && old.isAlive()) { report.accept(entry.name() + " is already open. Switch to its window."); return; }

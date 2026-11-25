@@ -30,5 +30,11 @@
     "name": "Xbox Cloud Gaming",
     "description": "Xbox Cloud Gaming with native Microsoft device-code login and game catalog, streamed through an isolated portable Chromium player.",
     "type": "external"
+  },
+  {
+    "id": "choccy",
+    "name": "Choccy Milk",
+    "description": "Open the Choccy Milk library and emulator inside the Wii-UU window, using the current profile.",
+    "type": "embedded"
   }
 ]

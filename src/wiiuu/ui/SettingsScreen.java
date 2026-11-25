@@ -1749,7 +1749,7 @@ public final class SettingsScreen {
             }, () -> wiiuu.core.PluginStore.installing() ? "Installing..." : wiiuu.core.PluginStore.ready(config) ? "Installed" : "Not installed", null));
             rows.add(new Info(pluginStatus));
             for (wiiuu.core.PluginStore.Entry entry : wiiuu.core.PluginStore.catalog()) {
-                String kind = entry.externalPlugin() ? " · Xbox streaming" : entry.nativePlugin() ? " · Native" : " · Website";
+                String kind = entry.externalPlugin() ? " · Xbox streaming" : entry.embeddedPlugin() ? " · Built-in app" : entry.nativePlugin() ? " · Native" : " · Website";
                 rows.add(new Header(entry.name() + kind));
                 rows.add(new Info(entry.description()));
                 if (entry.externalPlugin()) {
