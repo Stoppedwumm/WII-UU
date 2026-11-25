@@ -96,7 +96,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     private volatile Boolean macKeysAllowed;
     private boolean macKeysPrompted;
     private JFrame frame;
-    private MenuView view;
+    private volatile MenuView view;
 
     private Main(Config config) {
         this.config = config;
@@ -126,6 +126,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         router.setPadSink(new InputRouter.PadSink() {
             @Override
             public boolean button(int player, wiiuu.input.PadButton b, boolean down) {
+                MenuView current = view;
+                if (current != null && current.embeddedButton(player, b, down)) return true;
                 // HOME also ends a video (mpv, VLC...), the only way out with just a controller
                 Game g = launcher.current();
                 boolean video = g != null && (wiiuu.core.OpenBased.handles(g) || wiiuu.core.Reactions.handles(g));
@@ -139,6 +141,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
             @Override
             public boolean stick(int player, int stick, float x, float y) {
+                MenuView current = view;
+                if (current != null && current.embeddedStick(player, stick, x, y)) return true;
                 return launcher.inChoccy() && launcher.choccyStick(player, stick, x, y);
             }
         });
@@ -543,7 +547,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
             @Override
             public void windowActivated(WindowEvent e) {
-                view.requestFocusInWindow();
+                view.focusActiveApp();
             }
         });
         frame.setContentPane(view);
@@ -847,6 +851,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
     @Override
     public void quit() {
+        if (view != null) view.shutdownEmbeddedPlugin();
         launcher.stop(true);        // make sure the emulator is really gone before we exit
         if (server != null) {
             server.announceClosing(quitReason);
@@ -887,6 +892,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             case "signout" -> "1".equals(System.getenv("WIIUU_CONSOLE")) ? 11 : 0;
             default -> 0;
         };
+        if (view != null) view.shutdownEmbeddedPlugin();
         launcher.stop(true);
         if (server != null) {
             server.announceClosing(action);
