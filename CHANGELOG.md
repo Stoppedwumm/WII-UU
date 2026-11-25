@@ -3,12 +3,23 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
-## 2.1.12 (2026-11-23)
-- Prevent Chromium's system keyring password popup on Raspberry Pi OS, Debian and other Linux systems when launching the isolated Xbox Cloud Gaming player.
-- Use `--password-store=basic` for the Xbox-only Chromium profile without changing the system keyring or regular browsers; keep Microsoft authentication in WII-UU's separate backend.
-- Add per-user Xbox Cloud Gaming favorites with controller X and touch/mouse star controls, plus a controller-friendly quick-launch shelf.
-- Cache favorite game cover artwork locally for offline display, retain favorites across restarts and remove cached artwork when a favorite is deleted.
-- Restrict quick launch to titles currently available in the signed-in Xbox catalog, with regression tests for favorites persistence, input navigation and Linux browser startup.
+## 2.1.12 (2026-11-25)
+**Xbox Cloud Gaming**
+- Prevent Chromium system keyring password prompts on Raspberry Pi OS, Debian and other Linux systems using the isolated Xbox browser profile without changing other browsers or the system keyring.
+- Pin and unpin Xbox Cloud Gaming favorites directly on the WII-UU home screen with controller X or the catalog star controls; existing favorites migrate automatically.
+- Cache favorite cover artwork locally, preserve favorites across restarts in each user profile, and remove cached art when a pin is deleted.
+- Launch pinned games directly using saved title IDs without loading the Xbox catalog; Xbox authentication and entitlement requirements still apply.
+- Unpin games directly from Home using controller or keyboard X, even offline or when a game is no longer available.
+- Automatically mute WII-UU menu music when an Xbox stream launches and restore the previous music policy when it ends or fails.
+
+**Keyboard and mouse**
+- Play controller-only Xbox Cloud games with an opt-in keyboard and mouse adapter that emulates an Xbox controller alongside physical controllers in available player slots.
+- Toggle the adapter with F8, click the game to capture the mouse, and press Escape to release it; held inputs reset on focus loss.
+- Customize keyboard and mouse button assignments under Settings > GamePad & players > Xbox keyboard / mouse mapper, including movement controls, unassigned inputs and reset to defaults.
+- Adjust mouse sensitivity from 10% to 300%; saved bindings apply on the next stream launch.
+
+**Diagnostics**
+- Add a controller-friendly Upload logs now action in Settings > System > Diagnostics, with existing consent checks, enrollment, upload scheduling and server rate limits preserved.
 
 ## 2.1.11 (2026-11-23)
 - Fix Xbox Cloud Gaming search so controller navigation uses the on-screen keyboard without moving the game selection behind it.
