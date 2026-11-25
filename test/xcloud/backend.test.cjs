@@ -435,3 +435,20 @@ test('Keyboard and mouse map to an Xbox controller and release cleanly',()=>{
   assert.equal(frame.A,0);assert.equal(frame.RightTrigger,0);
   assert.equal(frame.LeftThumbXAxis,0);assert.equal(frame.LeftThumbYAxis,0);
 });
+
+test('Custom Xbox bindings override defaults and sanitize invalid inputs',()=>{
+  const vm=require('node:vm');
+  const source=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
+  const from=source.indexOf('const GAMEPAD_FIELDS=');
+  const to=source.indexOf('class WIIUUKeyboardGamepad',from);
+  const adapter=vm.runInNewContext(source.slice(from,to)+
+    '\nkeyboardMousePad(parseBindings("A:Mouse1,MoveUp:KeyI,RightTrigger:None,B:F8"),200)',{Gamepad:class{}});
+  adapter.keys.add('KeyI');adapter.keys.add('KeyC');adapter.buttons.add(0);adapter.buttons.add(1);
+  adapter.move(9,0);
+  const frame=adapter.frame(0);
+  assert.equal(frame.A,1);assert.equal(frame.B,1);
+  assert.equal(frame.RightTrigger,0);assert.equal(frame.LeftThumbYAxis,-1);
+  assert.equal(frame.RightThumbXAxis,0.4);
+  assert.equal(adapter.handles('KeyI'),true);
+  assert.equal(adapter.handles('KeyW'),false);
+});
