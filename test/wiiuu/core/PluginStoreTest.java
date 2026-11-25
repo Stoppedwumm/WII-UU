@@ -32,6 +32,12 @@ public final class PluginStoreTest {
         if (Files.exists(config.home().resolve("plugin-runtime"))) throw new AssertionError("Launch must not silently install");
         PluginStore.setEnabled(restart, plugin, false);
         if (!PluginStore.active(new Config(config.home())).isEmpty()) throw new AssertionError("Deactivation did not persist");
+        var embedded = PluginStore.catalog().stream().filter(PluginStore.Entry::embeddedPlugin).findFirst().orElseThrow();
+        if (!embedded.id().equals("choccy") || !embedded.script().isEmpty() || embedded.nativePlugin() || embedded.externalPlugin())
+            throw new AssertionError("Embedded plugin catalog contract");
+        PluginStore.setEnabled(config, embedded, true);
+        if (!PluginStore.active(new Config(config.home())).contains(embedded)) throw new AssertionError("Embedded activation not saved");
+        PluginStore.setEnabled(config, embedded, false);
         // A running native process must count as game mode for phone input, but
         // another user's processes and already-exited processes must not.
         var external = PluginStore.catalog().stream().filter(PluginStore.Entry::externalPlugin)
