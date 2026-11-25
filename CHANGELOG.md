@@ -3,6 +3,10 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.1.13 (2026-11-25)
+- Activate Choccy Milk in Settings > System > Plugin store and open its full library and emulator UI from the WII-UU dock in the same window, without a second desktop app or browser runtime.
+- Add a trusted built-in UI application adapter to the plugin system, reuse the existing controller input and current user profile, and restore the menu when the app closes.
+
 ## 2.1.12 (2026-11-25)
 **Xbox Cloud Gaming**
 - Prevent Chromium system keyring password prompts on Raspberry Pi OS, Debian and other Linux systems using the isolated Xbox browser profile without changing other browsers or the system keyring.
