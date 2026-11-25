@@ -1374,6 +1374,7 @@ public final class SettingsScreen {
             config.set("buzz.enabled", on ? null : "false");
             config.save();
         }));
+        r.add(new Link("Xbox keyboard / mouse mapper", "Map keyboard and mouse inputs to Xbox controller buttons.", null, this::xboxKeyboardPage));
         r.add(new Header("Keyboard keys"));
         r.add(new Info("While a game runs, GamePad buttons are typed as these keys into the emulator. "
                 + "The defaults follow RetroArch (A=X, B=Z, X=S, Y=A, L=Q, R=W, + = Enter)."));
@@ -1382,6 +1383,29 @@ public final class SettingsScreen {
             r.add(new Link("Player " + p, null, null, () -> keysPage(player)));
         }
         return r;
+    }
+
+    private Page xboxKeyboardPage() {
+        return new Page("Xbox keyboard / mouse mapper", () -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info("Choose an input for each Xbox control. F8 toggles the adapter in the Xbox player; Escape releases the mouse. Changes apply to the next stream."));
+            List<String> inputs = XboxKeyboardMap.inputs();
+            for (String target : XboxKeyboardMap.defaults().keySet()) {
+                r.add(new Choice(XboxKeyboardMap.label(target), "Left / right or A changes the assigned input.",
+                        () -> inputs, () -> Math.max(0, inputs.indexOf(XboxKeyboardMap.binding(config, target))),
+                        i -> { config.set("xcloud.bind." + target, inputs.get(i)); config.save(); }));
+            }
+            r.add(new NumberRow("Mouse sensitivity", "Higher values move the right stick further for the same mouse movement.",
+                    10, 300, () -> config.getInt("xcloud.mouseSensitivity", 100),
+                    n -> { config.set("xcloud.mouseSensitivity", Integer.toString(n)); config.save(); }));
+            r.add(new Action("Reset mappings", "Restore the default Xbox keyboard and mouse controls.", () -> {
+                for (String target : XboxKeyboardMap.defaults().keySet()) config.set("xcloud.bind." + target, null);
+                config.set("xcloud.mouseSensitivity", null);
+                config.save();
+                reload(false);
+            }, null, null));
+            return r;
+        });
     }
 
     /** The controllers plugged in here, to remap. */
