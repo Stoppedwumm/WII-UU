@@ -32,6 +32,29 @@ public final class DiagnosticsTest {
         Diagnostics.disable(cfg);
         check(!Diagnostics.enabled(cfg), "revocation disables uploads synchronously");
         check(Diagnostics.status(cfg).equals("Off"), "disabled UI status");
+        var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
+        var report=new java.util.concurrent.atomic.AtomicReference<String>();
+        server.createContext("/api/diagnostics/enroll", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] body="{\"deviceId\":\"test-device\",\"token\":\"test-token\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(201,body.length);try(var out=exchange.getResponseBody()){out.write(body);}
+        });
+        server.createContext("/api/diagnostics/logs", exchange -> {
+            report.set(new String(exchange.getRequestBody().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8));
+            exchange.sendResponseHeaders(201,-1);exchange.close();
+        });
+        server.start();
+        try {
+            cfg.set("diagnostics.url","http://127.0.0.1:"+server.getAddress().getPort());
+            Diagnostics.enable(cfg,"0042");
+            Diagnostics.tick(cfg,"test");
+            check(report.get()!=null && report.get().contains("No recent readable log lines"),"enrolled empty device sends first report");
+            check(Diagnostics.uploadStatus(cfg).startsWith("Uploaded"),"actual result shown");
+            Files.createDirectories(cfg.logDir());
+            Files.writeString(cfg.logDir().resolve("large.log"),"old line\n".repeat(300000)+"tail-marker password=secret-value\n");
+            Diagnostics.tick(cfg,"test");
+            check(report.get().contains("tail-marker") && !report.get().contains("secret-value"),"large logs send redacted tail");
+        } finally {server.stop(0);}
         System.out.println("DiagnosticsTest passed");
     }
     private static void check(boolean ok,String message) {
