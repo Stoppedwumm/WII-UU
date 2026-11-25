@@ -23,6 +23,16 @@ public final class PluginDockTest {
                 for (int i = 0; i < 4; i++) view.navigate(1, 0);
                 if (selection.getInt(view) != 4) throw new AssertionError("Cannot navigate from Settings controls to first app");
                 save(view, "plugin-dock.png");
+                var embedded = PluginStore.catalog().stream().filter(PluginStore.Entry::embeddedPlugin).findFirst().orElseThrow();
+                selection.setInt(view, 4 + PluginStore.active(config).indexOf(embedded));
+                view.activate();
+                if (view.getComponentCount() != 1 || !(view.getComponent(0) instanceof choccymilk.App))
+                    throw new AssertionError("Choccy Milk must be a child of the existing menu");
+                view.doLayout();
+                var close = MenuView.class.getDeclaredMethod("closeEmbeddedPlugin");
+                close.setAccessible(true);
+                close.invoke(view);
+                if (view.getComponentCount() != 0) throw new AssertionError("Embedded app must be removed on close");
                 for (var entry : PluginStore.catalog()) PluginStore.setEnabled(config, entry, false);
                 view.reloadPluginDock();
                 if (selection.getInt(view) > 3) throw new AssertionError("Selection must stay valid after disabling apps");
