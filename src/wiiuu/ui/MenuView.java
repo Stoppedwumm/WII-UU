@@ -956,7 +956,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private boolean canIdle() {
-        return !booting && intro == null && !introPending && guide == null && !guidePending && settings == null && nativePlugin == null && xcloudPanel == null && boss == null
+        return embeddedApp == null && !booting && intro == null && !introPending && guide == null && !guidePending && settings == null && nativePlugin == null && xcloudPanel == null && boss == null
                 && playing == null && !showPad && !confirmQuit && !vizFull && isShowing();
     }
 
@@ -1147,6 +1147,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     private SettingsScreen settings;
     private NativePluginScreen nativePlugin;
+    private volatile EmbeddedAppSession embeddedApp;
     private XboxCloudNativeScreen xcloudPanel;
 
     private void closeXboxCloud() {
@@ -1168,6 +1169,63 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }
 
+    private void openEmbeddedPlugin(wiiuu.core.PluginStore.Entry entry) {
+        if (embeddedApp != null || !wiiuu.core.PluginStore.enabled(config, entry)) return;
+        try {
+            var owner = SwingUtilities.getWindowAncestor(this);
+            embeddedApp = EmbeddedAppSession.open(entry, config,
+                    owner instanceof javax.swing.JFrame f ? f : null, this::closeEmbeddedPlugin);
+            setLayout(new java.awt.BorderLayout());
+            add(embeddedApp.component(), java.awt.BorderLayout.CENTER);
+            updateMusic();
+            revalidate();
+            embeddedApp.component().requestFocusInWindow();
+            repaint();
+        } catch (RuntimeException e) { showToast("Could not open " + entry.name() + ": " + e.getMessage()); }
+    }
+
+    private void closeEmbeddedPlugin() {
+        EmbeddedAppSession app = embeddedApp;
+        if (app == null) return;
+        app.closeAndWait();
+        embeddedApp = null;
+        remove(app.component());
+        lastInput = System.currentTimeMillis();
+        updateMusic();
+        revalidate();
+        requestFocusInWindow();
+        repaint();
+    }
+
+    public void shutdownEmbeddedPlugin() {
+        EmbeddedAppSession app = embeddedApp;
+        if (app != null) app.closeAndWait();
+    }
+
+    public boolean embeddedButton(int player, wiiuu.input.PadButton button, boolean down) {
+        EmbeddedAppSession app = embeddedApp;
+        if (app == null) return false;
+        SwingUtilities.invokeLater(() -> {
+            if (embeddedApp == app) app.button(player, button, down);
+        });
+        return true;
+    }
+
+    public boolean embeddedStick(int player, int stick, float x, float y) {
+        EmbeddedAppSession app = embeddedApp;
+        if (app == null) return false;
+        SwingUtilities.invokeLater(() -> {
+            if (embeddedApp == app) app.stick(player, stick, x, y);
+        });
+        return true;
+    }
+
+    public void focusActiveApp() {
+        EmbeddedAppSession app = embeddedApp;
+        if (app != null) app.component().requestFocusInWindow();
+        else requestFocusInWindow();
+    }
+
     private void closeNativePlugin() {
         if (nativePlugin == null) return;
         nativePlugin.close(); nativePlugin = null;
@@ -1183,7 +1241,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** Shows the settings on the TV (F1, the dock's Settings, or Main). */
     public void openSettings(SettingsScreen.Services services) {
-        if (settings != null || nativePlugin != null || xcloudPanel != null || guide != null || intro != null || booting || playing != null) return;
+        if (settings != null || embeddedApp != null || nativePlugin != null || xcloudPanel != null || guide != null || intro != null || booting || playing != null) return;
         settings = new SettingsScreen(this, services);
         repaint();
     }
@@ -1382,7 +1440,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private void updateMusic() {
         // not while the first boot's intro (with its own beat) is pending or playing
         MenuAudio.get().musicOn(musicEnabled && revealed && playing == null && intro == null && !introPending && !idleOwnMusic && boss == null
-                && cinema == null && (xcloudPanel == null || !xcloudPanel.streamActive()));
+                && cinema == null && embeddedApp == null && (xcloudPanel == null || !xcloudPanel.streamActive()));
     }
 
     private void buildHomeTiles() {
@@ -1555,6 +1613,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             Sfx.select();
             if (dockSel >= Dock.values().length) {
                 wiiuu.core.PluginStore.Entry plugin = dockPlugins.get(dockSel - Dock.values().length);
+                if (plugin.embeddedPlugin()) { openEmbeddedPlugin(plugin); return; }
                 if (plugin.nativePlugin()) { openNativePlugin(plugin); return; }
                 if (plugin.externalPlugin() && plugin.id().equals("xcloud")) {
                     openXboxCloud(plugin);
@@ -2028,7 +2087,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     // ---- animation ----------------------------------------------------------------------
 
     private void tick() {
-        if (layoutEditor != null) return;
+        if (layoutEditor != null || embeddedApp != null) return;
         if (migration != null) {
             if (migration.finished()) endMigration(migration, migration.result());
             else {
@@ -2488,6 +2547,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     protected void paintComponent(Graphics g0) {
+        if (embeddedApp != null) return;
         long paintStart = FPS_DEBUG ? System.nanoTime() : 0;
         try {
             paintFrame(g0);
