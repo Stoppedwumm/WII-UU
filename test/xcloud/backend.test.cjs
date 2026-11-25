@@ -416,3 +416,22 @@ test('Xbox player has controller-free audio startup and release-banner flags',()
   assert.match(player,/async function sessionEnded\(\)/);
   assert.match(player,/await disconnect\(\)/);
 });
+
+test('Keyboard and mouse map to an Xbox controller and release cleanly',()=>{
+  const vm=require('node:vm');
+  const source=fs.readFileSync(path.join(__dirname,'../../resources/xcloud/player-entry.js'),'utf8');
+  const from=source.indexOf('const GAMEPAD_FIELDS=');
+  const to=source.indexOf('class WIIUUKeyboardGamepad',from);
+  const adapter=vm.runInNewContext(source.slice(from,to)+'\nkeyboardMousePad()', {Gamepad:class{}});
+  adapter.keys.add('KeyW');adapter.keys.add('KeyD');adapter.keys.add('Space');
+  adapter.buttons.add(0);adapter.move(90,-45);
+  let frame=adapter.frame(0);
+  assert.equal(frame.A,1);assert.equal(frame.RightTrigger,1);
+  assert.ok(Math.abs(Math.hypot(frame.LeftThumbXAxis,frame.LeftThumbYAxis)-1)<1e-9);
+  assert.equal(frame.RightThumbXAxis,1);assert.equal(frame.RightThumbYAxis,-1);
+  frame=adapter.frame(0);
+  assert.equal(frame.RightThumbXAxis,0,'Mouse movement must not stick');
+  adapter.reset();frame=adapter.frame(0);
+  assert.equal(frame.A,0);assert.equal(frame.RightTrigger,0);
+  assert.equal(frame.LeftThumbXAxis,0);assert.equal(frame.LeftThumbYAxis,0);
+});

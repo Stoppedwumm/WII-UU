@@ -194,11 +194,64 @@ class WIIUUManagedGamepad extends Gamepad {
   }
   handleVibration(){}
 }
+// Keyboard/mouse is an opt-in local virtual Xbox pad. No OS-level hooks.
+const KEYBOARD_BUTTONS=Object.freeze({
+  Space:'A',KeyC:'B',KeyR:'X',KeyF:'Y',KeyQ:'LeftShoulder',KeyE:'RightShoulder',
+  KeyZ:'LeftTrigger',KeyX:'RightTrigger',Tab:'View',Enter:'Menu',
+  ShiftLeft:'LeftThumb',ShiftRight:'LeftThumb',ControlLeft:'RightThumb',
+  ArrowUp:'DPadUp',ArrowDown:'DPadDown',ArrowLeft:'DPadLeft',ArrowRight:'DPadRight'
+});
+function keyboardMousePad(){
+  const keys=new Set(),buttons=new Set();
+  let dx=0,dy=0;
+  const clamp=n=>Math.max(-1,Math.min(1,n));
+  return {
+    keys,buttons,
+    move(x,y){dx=clamp(dx+x/45);dy=clamp(dy+y/45);},
+    reset(){keys.clear();buttons.clear();dx=dy=0;},
+    frame(slot){
+      const down=key=>keys.has(key)?1:0;
+      let x=down('KeyD')-down('KeyA'),y=down('KeyS')-down('KeyW');
+      const length=Math.hypot(x,y);if(length>1){x/=length;y/=length;}
+      const frame=gamepadFrame(null,slot,0);
+      frame.LeftThumbXAxis=x;frame.LeftThumbYAxis=y;
+      frame.RightThumbXAxis=dx;frame.RightThumbYAxis=dy;
+      dx=dy=0;
+      for(const [key,field] of Object.entries(KEYBOARD_BUTTONS))
+        if(keys.has(key))frame[field]=1;
+      if(buttons.has(0))frame.RightTrigger=1;
+      if(buttons.has(2))frame.LeftTrigger=1;
+      if(buttons.has(1))frame.RightThumb=1;
+      return frame;
+    }
+  };
+}
+class WIIUUKeyboardGamepad extends Gamepad {
+  constructor(slot,adapter){
+    super(slot,{enable_keyboard:false,enable_gamepad:false,enable_vibration:false});
+    this.adapter=adapter;
+  }
+  detectActiveGamepad(){}
+  getGamepadState(){return this.adapter.frame(this._index);}
+  handleVibration(){}
+}
 function controllerBridge(activePlayer){
   const input=activePlayer._channels.input;
   const physical=new Map();
   const managed=new Map();
   const managerFrames=new Map();
+  const keyboard=keyboardMousePad();
+  let keyboardEnabled=false,keyboardHandler=null;
+  const doc=typeof document==='undefined'?null:document;
+  const win=typeof window==='undefined'?null:window;
+  const surface=doc?.querySelector('#player');
+  let toggle=null;
+  const listeners=[];
+  const listen=(target,type,fn,options)=>{
+    if(!target)return;
+    target.addEventListener(type,fn,options);
+    listeners.push(()=>target.removeEventListener(type,fn,options));
+  };
   let scanTimer=null, managerTimer=null, managerBusy=false;
   let activeMode='browser';
   let firstFrameReported=false;
@@ -226,6 +279,59 @@ function controllerBridge(activePlayer){
       registry.delete(key);
     }
   };
+  const syncKeyboard=()=>{
+    if(!channelsReady())return;
+    const used=new Set([...physical.values(),...managed.values()].map(v=>v.slot));
+    if(keyboardHandler && (!keyboardEnabled || used.has(keyboardHandler.slot))){
+      keyboardHandler.handler.detach();keyboardHandler=null;
+    }
+    if(keyboardEnabled&&!keyboardHandler){
+      const slot=[0,1,2,3].find(i=>!used.has(i));
+      if(slot!==undefined){
+        const handler=new WIIUUKeyboardGamepad(slot,keyboard);
+        handler.attach(activePlayer);keyboardHandler={slot,handler};
+      }
+    }
+    if(toggle)toggle.textContent=keyboardEnabled
+      ?(keyboardHandler?'Keyboard/mouse: On (F8)':'Keyboard/mouse: No free slot')
+      :'Keyboard/mouse: Off (F8)';
+  };
+  const setKeyboardEnabled=enabled=>{
+    keyboardEnabled=enabled;keyboard.reset();
+    if(!enabled&&doc&&surface&&doc.pointerLockElement===surface)doc.exitPointerLock?.();
+    syncKeyboard();
+  };
+  if(doc&&win&&surface){
+    toggle=doc.createElement('button');
+    toggle.type='button';toggle.textContent='Keyboard/mouse: Off (F8)';
+    toggle.title='WASD move, mouse aim, click capture, Esc release, F8 toggle';
+    doc.querySelector('#top')?.appendChild(toggle);
+    listen(toggle,'click',()=>setKeyboardEnabled(!keyboardEnabled));
+    const captured=()=>keyboardEnabled&&doc.pointerLockElement===surface;
+    listen(surface,'click',()=>{
+      if(keyboardEnabled&&!captured()){
+        try{Promise.resolve(surface.requestPointerLock?.()).catch(()=>{});}catch{}
+      }
+    });
+    listen(win,'keydown',event=>{
+      if(event.code==='F8'&&!event.repeat){
+        event.preventDefault();setKeyboardEnabled(!keyboardEnabled);return;
+      }
+      if(!keyboardEnabled||!captured())return;
+      if(Object.hasOwn(KEYBOARD_BUTTONS,event.code)||['KeyW','KeyA','KeyS','KeyD'].includes(event.code)){
+        event.preventDefault();keyboard.keys.add(event.code);
+      }
+    },true);
+    listen(win,'keyup',event=>{keyboard.keys.delete(event.code);if(captured()&&
+      (Object.hasOwn(KEYBOARD_BUTTONS,event.code)||['KeyW','KeyA','KeyS','KeyD'].includes(event.code)))event.preventDefault();},true);
+    listen(doc,'mousemove',event=>{if(captured())keyboard.move(event.movementX||0,event.movementY||0);});
+    listen(doc,'mousedown',event=>{if(captured()){event.preventDefault();keyboard.buttons.add(event.button);}});
+    listen(doc,'mouseup',event=>{keyboard.buttons.delete(event.button);if(captured())event.preventDefault();});
+    listen(doc,'contextmenu',event=>{if(captured())event.preventDefault();});
+    listen(doc,'pointerlockchange',()=>{if(!captured())keyboard.reset();});
+    listen(win,'blur',()=>keyboard.reset());
+    listen(doc,'visibilitychange',()=>{if(doc.hidden)keyboard.reset();});
+  }
   const sync=()=>{
     // Attaching before both WebRTC channels open causes Xbox to miss the
     // gamepadChanged message permanently. Retry on the next scan instead.
@@ -244,6 +350,7 @@ function controllerBridge(activePlayer){
     for(const pad of pads){
       if(physical.has(pad.index))continue;
       const occupied=new Set(Array.from(physical.values(),v=>v.slot));
+      if(keyboardHandler)occupied.add(keyboardHandler.slot);
       const slot=[0,1,2,3].find(i=>!occupied.has(i));
       if(slot===undefined)break;
       const handler=new WIIUUGamepad(slot,pad.index);
@@ -252,6 +359,7 @@ function controllerBridge(activePlayer){
       console.info('[xcloud-gamepad] connected physical='+pad.index+' slot='+slot+
         ' mapping='+(pad.mapping||'unknown'));
     }
+    syncKeyboard();
   };
   const syncManaged=()=>{
     if(!channelsReady())return;
@@ -267,6 +375,9 @@ function controllerBridge(activePlayer){
           managed.delete(slot);
         }
       }
+      if(keyboardHandler&&managerFrames.has(keyboardHandler.slot)){
+        keyboardHandler.handler.detach();keyboardHandler=null;
+      }
       for(const slot of managerFrames.keys()){
         if(managed.has(slot))continue;
         const handler=new WIIUUManagedGamepad(slot,managerFrames);
@@ -280,6 +391,7 @@ function controllerBridge(activePlayer){
       console.info('[xcloud-gamepad] WII-UU controller manager idle, using browser gamepads');
       sync();
     }
+    syncKeyboard();
   };
   const refreshManager=async()=>{
     if(managerBusy||stop)return;
@@ -313,6 +425,9 @@ function controllerBridge(activePlayer){
     if(scanTimer!==null)clearInterval(scanTimer);
     if(managerTimer!==null)clearInterval(managerTimer);
     scanTimer=null;managerTimer=null;
+    setKeyboardEnabled(false);
+    if(keyboardHandler){keyboardHandler.handler.detach();keyboardHandler=null;}
+    listeners.forEach(remove=>remove());toggle?.remove();
     detach(physical);
     detach(managed);
     managerFrames.clear();
