@@ -5,6 +5,7 @@ in Settings > General > What's new, and before installing an update.
 
 ## 2.1.13 (2026-11-25)
 **Bugfixes and QOL Updates**
+- Fix silent diagnostic upload skips on devices with empty or oversized log files, send the first report after enrollment, and show upload success, rate limits and failures in Settings.
 
 ## 2.1.12 (2026-11-25)
 **Xbox Cloud Gaming**
