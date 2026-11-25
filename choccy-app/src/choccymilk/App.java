@@ -151,6 +151,8 @@ public final class App extends JPanel implements PadSink {
         return app;
     }
 
+    public boolean gameRunning() { return !disposed && session != null; }
+
     public void shutdownEmbedded() {
         if (disposed) return;
         disposed = true;

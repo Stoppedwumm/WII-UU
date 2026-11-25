@@ -10,6 +10,7 @@ import wiiuu.input.PadSink;
 /** Adapter for trusted, compiled UI-library apps; never loads arbitrary catalog code. */
 interface EmbeddedAppSession {
     JComponent component();
+    boolean gameRunning();
     void closeAndWait();
     void button(int player, PadButton button, boolean down);
     void stick(int player, int stick, float x, float y);
@@ -22,6 +23,7 @@ interface EmbeddedAppSession {
                 choccymilk.App app = choccymilk.App.embedded(config, owner, exit);
                 yield new EmbeddedAppSession() {
                     public JComponent component() { return app; }
+                    public boolean gameRunning() { return app.gameRunning(); }
                     public void closeAndWait() { app.shutdownEmbeddedAndWait(); }
                     public void button(int player, PadButton button, boolean down) { app.button(player, button, down); }
                     public void stick(int player, int stick, float x, float y) { app.stick(player, stick, x, y); }

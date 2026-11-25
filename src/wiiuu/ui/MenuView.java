@@ -80,6 +80,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         void refresh();
 
         void closeGame();
+        default void embeddedInputChanged(boolean active) {}
         /** Active WII-UU-managed GamePads in their assigned player slots. */
         default List<Map<String, Object>> xboxControllerFrames() { return List.of(); }
 
@@ -1175,6 +1176,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             var owner = SwingUtilities.getWindowAncestor(this);
             embeddedApp = EmbeddedAppSession.open(entry, config,
                     owner instanceof javax.swing.JFrame f ? f : null, this::closeEmbeddedPlugin);
+            actions.embeddedInputChanged(true);
             setLayout(new java.awt.BorderLayout());
             add(embeddedApp.component(), java.awt.BorderLayout.CENTER);
             updateMusic();
@@ -1189,6 +1191,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (app == null) return;
         app.closeAndWait();
         embeddedApp = null;
+        actions.embeddedInputChanged(false);
         remove(app.component());
         lastInput = System.currentTimeMillis();
         updateMusic();
@@ -1200,6 +1203,11 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     public void shutdownEmbeddedPlugin() {
         EmbeddedAppSession app = embeddedApp;
         if (app != null) app.closeAndWait();
+    }
+
+    public boolean embeddedGameRunning() {
+        EmbeddedAppSession app = embeddedApp;
+        return app != null && app.gameRunning();
     }
 
     public boolean embeddedButton(int player, wiiuu.input.PadButton button, boolean down) {
@@ -1481,6 +1489,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void navigate(int dx, int dy) {
+        if (embeddedApp != null) return;
         // The changelog is a separate Swing window, not an in-menu overlay.
         // Its controller focus must take precedence over menu navigation.
         if (ChangelogDialog.controllerNavigate(dx, dy)) return;

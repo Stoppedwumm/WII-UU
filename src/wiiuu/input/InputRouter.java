@@ -95,6 +95,23 @@ public final class InputRouter implements PadSink {
         this.keysEnabled = keysEnabled;
     }
 
+    private volatile long menuInputEpoch;
+    private volatile boolean menuSuspended;
+
+    /** Invalidate queued menu actions and clear held state on the router thread. */
+    public void setMenuSuspended(boolean suspended) {
+        menuSuspended = suspended;
+        menuInputEpoch++;
+        exec.execute(() -> {
+            releaseInjectedKeys();
+            repeats.values().forEach(f -> f.cancel(false));
+            repeats.clear();
+            repeatButton.clear();
+            held.clear();
+            stickState.clear();
+        });
+    }
+
     public void setMenu(MenuActions menu) {
         this.menu = menu;
     }
@@ -126,14 +143,17 @@ public final class InputRouter implements PadSink {
     public void button(int player, PadButton b, boolean down) {
         PadSink s = sink;
         if (s != null && s.button(player, b, down)) return;
-        exec.execute(() -> handle(player, b, down));
+        long epoch = menuInputEpoch;
+        exec.execute(() -> { if (!menuSuspended && epoch == menuInputEpoch) handle(player, b, down); });
     }
 
     /** Analog stick update; stick 0 = left, 1 = right. Values in [-1, 1], +y is down. */
     public void stick(int player, int stick, float x, float y) {
         PadSink s = sink;
         if (s != null && s.stick(player, stick, x, y)) return;
+        long epoch = menuInputEpoch;
         exec.execute(() -> {
+            if (menuSuspended || epoch != menuInputEpoch) return;
             PadButton up = stick == 0 ? PadButton.LS_UP : PadButton.RS_UP;
             PadButton dn = stick == 0 ? PadButton.LS_DOWN : PadButton.RS_DOWN;
             PadButton lf = stick == 0 ? PadButton.LS_LEFT : PadButton.RS_LEFT;
@@ -228,21 +248,22 @@ public final class InputRouter implements PadSink {
 
     private void menuInput(int player, PadButton b, boolean down) {
         MenuActions m = menu;
-        if (m == null) return;
+        if (m == null || menuSuspended) return;
+        long epoch = menuInputEpoch;
         if (b.isDirection()) {
-            SwingUtilities.invokeLater(() -> m.pressed(player, b, down));
+            SwingUtilities.invokeLater(() -> { if (!menuSuspended && epoch == menuInputEpoch) m.pressed(player, b, down); });
             if (down) {
-                fireDirection(m, b);
+                fireDirection(m, b, epoch);
                 stopRepeat(player);
                 repeatButton.put(player, b);
-                repeats.put(player, exec.scheduleAtFixedRate(() -> fireDirection(m, b), 380, 110, TimeUnit.MILLISECONDS));
+                repeats.put(player, exec.scheduleAtFixedRate(() -> fireDirection(m, b, epoch), 380, 110, TimeUnit.MILLISECONDS));
             } else if (repeatButton.get(player) == b) {
                 stopRepeat(player);
             }
             return;
         }
         SwingUtilities.invokeLater(() -> {
-            if (m.pressed(player, b, down) || !down) return;
+            if (menuSuspended || epoch != menuInputEpoch || m.pressed(player, b, down) || !down) return;
             switch (b) {
                 case A, BUZZ_RED -> m.activate();           // a buzzer can still pick a game
                 case B, BUZZ_YELLOW -> m.back();
@@ -261,7 +282,7 @@ public final class InputRouter implements PadSink {
         repeatButton.remove(player);
     }
 
-    private static void fireDirection(MenuActions m, PadButton b) {
+    private void fireDirection(MenuActions m, PadButton b, long epoch) {
         int dx = 0, dy = 0;
         switch (b) {
             case UP, LS_UP -> dy = -1;
@@ -271,6 +292,6 @@ public final class InputRouter implements PadSink {
             default -> { return; }
         }
         int fx = dx, fy = dy;
-        SwingUtilities.invokeLater(() -> m.navigate(fx, fy));
+        SwingUtilities.invokeLater(() -> { if (!menuSuspended && epoch == menuInputEpoch) m.navigate(fx, fy); });
     }
 }

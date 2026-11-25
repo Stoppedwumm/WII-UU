@@ -76,6 +76,8 @@ public final class GamepadServer {
 
         void padsChanged(int connected);
 
+        default boolean embeddedGameRunning() { return false; }
+
         /** OpenBased, for its state and setup from the phone; null without it. */
         default wiiuu.core.OpenBased openBased() {
             return null;
@@ -1075,13 +1077,14 @@ public final class GamepadServer {
         // straight to OpenXCloud; phone pads are forwarded through Linux uinput.
         boolean cloud = PluginStore.externalRunning(config);
         boolean gameInput = launcher.isRunning() || cloud;
+        boolean embeddedGame = host.embeddedGameRunning();
         // This receives post-PadRemap button/axis events, including phones and
         // macOS physical controllers (which do not have Linux virtual pads).
         if (cloud) cloudPadBridge.input(c.id, c.player, body);
         // On macOS, OpenXCloud reads the actual controller through GameController.
-        if (c.controller && c.id.startsWith("pad:mac") && gameInput && !launcher.inChoccy() && !videoPlaying()) return;
+        if (c.controller && c.id.startsWith("pad:mac") && gameInput && !embeddedGame && !launcher.inChoccy() && !videoPlaying()) return;
         // Do not apply menu-confirm swapping to an active native game.
-        boolean swap = c.controller && !gameInput && !"east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())
+        boolean swap = c.controller && !gameInput && !embeddedGame && !"east".equalsIgnoreCase(config.get("input.padConfirm", "south").trim())
                 && !remapsAOrB(c.label);
         for (String line : body.split("\n")) {
             String[] p = line.trim().split(" ");

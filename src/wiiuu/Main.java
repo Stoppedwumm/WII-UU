@@ -459,6 +459,17 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
         }
     }
 
+    @Override
+    public void embeddedInputChanged(boolean active) {
+        router.setMenuSuspended(active);
+    }
+
+    @Override
+    public boolean embeddedGameRunning() {
+        MenuView current = view;
+        return current != null && current.embeddedGameRunning();
+    }
+
     private void createWindow() {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
