@@ -7,6 +7,7 @@ in Settings > General > What's new, and before installing an update.
 **Bugfixes and QOL Updates**
 - Activate Choccy Milk in Settings > System > Plugin store and open its full library and emulator UI from the WII-UU dock in the same window, without a second desktop app or browser runtime.
 - Add a trusted built-in UI application adapter to the plugin system, reuse the existing controller input and current user profile, and restore the menu when the app closes.
+- Fix silent diagnostic upload skips on devices with empty or oversized log files, send the first report after enrollment, and show upload success, rate limits and failures in Settings.
 
 ## 2.1.12 (2026-11-25)
 **Xbox Cloud Gaming**
