@@ -35,6 +35,9 @@ public final class Diagnostics {
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(8)).followRedirects(HttpClient.Redirect.NEVER).build();
     private static ScheduledExecutorService scheduler;
+    private static final Map<Path,String> uploadResults = new java.util.concurrent.ConcurrentHashMap<>();
+    private static void result(Config config, String message) { uploadResults.put(config.home().toAbsolutePath().normalize(), message); }
+    public static String uploadStatus(Config config) { return uploadResults.getOrDefault(config.home().toAbsolutePath().normalize(), "No upload attempted this session"); }
     private Diagnostics() {}
 
     private static Path file(Config config) { return config.home().resolve("diagnostics.properties"); }
@@ -83,6 +86,7 @@ public final class Diagnostics {
         p.setProperty("consent", "true");
         p.remove("token"); p.remove("deviceId"); // Re-enroll only with explicit consent
         store(config,p);
+        result(config, "Enrollment pending");
     }
     /** Stops uploads immediately. Server deletion is retried while offline. */
     public static synchronized void disable(Config config) throws IOException {
@@ -100,7 +104,7 @@ public final class Diagnostics {
         start(config, version);
         scheduler.execute(() -> {
             try { tick(config,version); }
-            catch (Exception e) { System.err.println("[diagnostics] " + e.getMessage()); }
+            catch (Exception e) { result(config, "Upload failed: " + safeFailure(e)); System.err.println("[diagnostics] " + safeFailure(e)); }
         });
     }
 
@@ -110,15 +114,14 @@ public final class Diagnostics {
     /** Queue a manual upload without blocking the UI or changing consent. */
     public static synchronized boolean uploadNow(Config config, String version) {
         if (!enabled(config) || !manualPending.compareAndSet(false, true)) return false;
+        result(config, "Upload queued");
         start(config, version);
         scheduler.execute(() -> {
             try {
-                boolean needsEnrollment = !load(config).containsKey("token");
                 tick(config, version);
-                if (needsEnrollment && enabled(config) && load(config).containsKey("token"))
-                    tick(config, version);
             } catch (Exception e) {
-                System.err.println("[diagnostics] manual upload failed: " + e.getMessage());
+                result(config, "Upload failed: " + safeFailure(e));
+                System.err.println("[diagnostics] manual upload failed: " + safeFailure(e));
             } finally {
                 manualPending.set(false);
             }
@@ -135,7 +138,7 @@ public final class Diagnostics {
         });
         scheduler.scheduleWithFixedDelay(() -> {
             try { tick(config,version); }
-            catch (Exception e) { System.err.println("[diagnostics] " + e.getMessage()); }
+            catch (Exception e) { result(config, "Upload failed: " + safeFailure(e)); System.err.println("[diagnostics] " + safeFailure(e)); }
         }, 1, 15, TimeUnit.MINUTES);
     }
     static void tick(Config config, String version) throws Exception {
@@ -179,10 +182,12 @@ public final class Diagnostics {
                 }
                 store(config,current);
             }
-            return; // Send first report only on the next scheduled pass.
+            // The normal scheduled pass also sends the first report immediately after enrollment.
+            p = load(config);
+            if (!"true".equals(p.getProperty("consent")) || !token.equals(p.getProperty("token"))) return;
         }
         List<String> entries=recentLogs(config);
-        if (entries.isEmpty()) return;
+        if (entries.isEmpty()) entries = List.of("[diagnostics] No recent readable log lines available on this device.");
         synchronized (Diagnostics.class) {
             Properties latest=load(config);
             if (!"true".equals(latest.getProperty("consent"))
@@ -196,8 +201,9 @@ public final class Diagnostics {
         payload.append("]}");
         HttpResponse<String> response=request(base + "/api/diagnostics/logs","POST",payload.toString(),
                 p.getProperty("deviceId"),p.getProperty("token"));
-        if (response.statusCode()!=201 && response.statusCode()!=429)
-            throw new IOException("Upload rejected: HTTP "+response.statusCode());
+        if (response.statusCode()==201) result(config, "Uploaded " + entries.size() + " lines at " + java.time.Instant.now());
+        else if (response.statusCode()==429) result(config, "Rate limited: retry after 10 minutes");
+        else throw new IOException("Upload rejected: HTTP " + response.statusCode());
     }
     private static HttpResponse<String> request(String url,String method,String body,String id,String token)
             throws IOException, InterruptedException {
@@ -219,25 +225,42 @@ public final class Diagnostics {
         }
         List<String> lines=new ArrayList<>(); int bytes=0;
         for(Path p:files){
-            long size=Files.size(p);
-            if(size>2_000_000) continue; // Refuse unexpected large logs, rather than reading them.
-            List<String> all=Files.readAllLines(p,StandardCharsets.UTF_8);
-            int from=Math.max(0,all.size()-45);
-            for(int i=from;i<all.size() && lines.size()<120;i++){
-                String clean=redact(all.get(i));
+            // Read only the tail, even for very large or actively growing logs.
+            String tail;
+            try (var file = new java.io.RandomAccessFile(p.toFile(), "r")) {
+                long length=file.length();
+                int count=(int)Math.min(length,64_000);
+                file.seek(length-count);
+                byte[] data=new byte[count];
+                file.readFully(data);
+                tail=new String(data,StandardCharsets.UTF_8);
+                if(length>count){int first=tail.indexOf('\n');tail=first<0?"":tail.substring(first+1);}
+            } catch(IOException e){ continue; }
+            String[] all=tail.split("\\R");
+            int from=Math.max(0,all.length-45);
+            for(int i=from;i<all.length && lines.size()<120;i++){
+                if(all[i].isBlank())continue;
+                String clean=redact(p.getFileName()+": "+all[i]);
                 if(clean.length()>800)clean=clean.substring(0,800);
-                bytes+=clean.length()*2;
-                if(bytes>35_000)return lines;
-                lines.add(p.getFileName()+": "+clean);
+                int cost=jsonEscape(clean).getBytes(StandardCharsets.UTF_8).length+3;
+                if(bytes+cost>35_000)return lines;
+                bytes+=cost;
+                lines.add(clean);
             }
         }
         return lines;
+    }
+    private static String safeFailure(Exception e) {
+        String message=e.getMessage();
+        if(e instanceof IOException && message!=null && (message.matches("(Upload rejected|Enrollment rejected): HTTP [0-9]{3}") || message.equals("Diagnostic upload requires HTTPS") || message.equals("Incomplete enrollment response"))) return message;
+        return e.getClass().getSimpleName();
     }
     private static long mtime(Path p) {
         try {return Files.getLastModifiedTime(p).toMillis();}catch(IOException e){return 0;}
     }
     static String redact(String input) {
-        return input.replaceAll("(?i)(token|api[_-]?key|password|secret|cookie|authorization)\\s*[:=]\\s*[^\\s,;]+","$1=[REDACTED]")
+        return input.replaceAll("(?i)(authorization\\s*[:=]\\s*(?:bearer|basic)\\s+)[^\\s,;]+","$1[REDACTED]")
+                .replaceAll("(?i)(token|api[_-]?key|password|secret|cookie|authorization)\\s*[:=]\\s*[^\\s,;]+","$1=[REDACTED]")
                 .replaceAll("https?://[^\\s]+","[URL]")
                 .replaceAll("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b","[IP]")
                 .replaceAll("(?:/home/|/Users/|C:\\\\Users\\\\)[^/\\\\\\s]+","[HOME]");

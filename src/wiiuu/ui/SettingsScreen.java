@@ -1958,11 +1958,11 @@ public final class SettingsScreen {
                     if (!wiiuu.core.Diagnostics.enabled(config)) {
                         say("Diagnostic sharing is off. Enable it in the setup guide first.");
                     } else if (wiiuu.core.Diagnostics.uploadNow(config, wiiuu.core.BuildInfo.version())) {
-                        say("Diagnostic upload requested. Check the archive dashboard for the report.");
+                        say("Diagnostic upload queued. The row shows the actual result.");
                     } else {
                         say("A manual upload is already queued.");
                     }
-                }, () -> wiiuu.core.Diagnostics.status(config), null));
+                }, () -> wiiuu.core.Diagnostics.uploadStatus(config), null));
         r.add(new Action("Stop sharing & delete remote logs",
                 "Stop all diagnostic uploads immediately and request removal of stored logs on the archive server.",
                 () -> {
