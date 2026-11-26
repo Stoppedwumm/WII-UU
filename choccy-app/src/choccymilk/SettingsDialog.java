@@ -85,6 +85,7 @@ final class SettingsDialog {
         JComboBox<String> role = ui.comboBox(new String[]{"off", "host", "join"});
         role.setSelectedItem(BluetoothLink.role(config));
         bluetooth.add(ui.label(BluetoothLink.availability()));
+        bluetooth.add(ui.label("Connect to either WII-UU or another Choccy Milk."));
         bluetooth.add(ui.label("Paired device Bluetooth MAC address")); bluetooth.add(peer);
         bluetooth.add(ui.label("DS local multiplayer (experimental): host / join / off")); bluetooth.add(role);
         bluetooth.add(ui.label("Save, start the host first, then join from the other device. Use the in-game local multiplayer menu."));
