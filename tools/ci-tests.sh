@@ -65,8 +65,11 @@ WIIUU_CI_COMMAND_2
       run_check "Check Windows installer syntax" pwsh -NoProfile -Command - <<'WIIUU_CI_COMMAND_3'
 $tokens = $null
 $errors = $null
-[System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path install.ps1).Path, [ref]$tokens, [ref]$errors) | Out-Null
-if ($errors) { $errors | Out-String | Write-Error }
+foreach ($file in @('install.ps1', 'docs/get.ps1', 'tools/tests/windows-web-installer.ps1')) {
+    [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
+    if ($errors) { throw ($errors | Out-String) }
+}
+& ./tools/tests/windows-web-installer.ps1
 WIIUU_CI_COMMAND_3
     fi
     run_check "Test shared core manager" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_4'
