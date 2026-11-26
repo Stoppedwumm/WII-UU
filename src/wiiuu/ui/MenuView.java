@@ -67,6 +67,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
         void openSettings();
 
+        default void openAchievements() { openSettings(); }
+
         void quit();
 
         /**
@@ -329,7 +331,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private enum Screen { HOME, GAMES }
 
     private enum Dock {
-        GAMEPAD("GamePad"), SETTINGS("Settings"), REFRESH("Refresh"), POWER("Power");
+        GAMEPAD("GamePad"), SETTINGS("Settings"), REFRESH("Refresh"), POWER("Power"), ACHIEVEMENTS("Achievements");
         final String label;
 
         Dock(String label) {
@@ -1104,6 +1106,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             case SETTINGS -> "Settings! I'll come with you.";
             case REFRESH -> "Got new games? I'll go look for them.";
             case POWER -> "Don't press that. Or do. I'm not your boss.";
+            case ACHIEVEMENTS -> "See your RetroAchievements progress.";
         };
     }
 
@@ -1249,8 +1252,17 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** Shows the settings on the TV (F1, the dock's Settings, or Main). */
     public void openSettings(SettingsScreen.Services services) {
+        openSettings(services, false);
+    }
+
+    /** Opens the viewer directly, retaining the current game library and cursor. */
+    public void openAchievements(SettingsScreen.Services services) {
+        openSettings(services, true);
+    }
+
+    private void openSettings(SettingsScreen.Services services, boolean achievementsOnly) {
         if (settings != null || embeddedApp != null || nativePlugin != null || xcloudPanel != null || guide != null || intro != null || booting || playing != null) return;
-        settings = new SettingsScreen(this, services);
+        settings = new SettingsScreen(this, services, achievementsOnly);
         repaint();
     }
 
@@ -1635,6 +1647,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             switch (Dock.values()[dockSel]) {
                 case GAMEPAD -> showPad = true;
                 case SETTINGS -> SwingUtilities.invokeLater(actions::openSettings);
+                case ACHIEVEMENTS -> SwingUtilities.invokeLater(actions::openAchievements);
                 case REFRESH -> refresh();
                 case POWER -> {
                     confirmQuit = true;
@@ -3297,7 +3310,21 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private void drawDockIcon(Graphics2D g, Dock d, Rectangle2D r, Color c) {
-        MenuPainter.icon(g, MenuPainter.Icon.valueOf(d.name()), r, c);
+        if (d != Dock.ACHIEVEMENTS) {
+            MenuPainter.icon(g, MenuPainter.Icon.valueOf(d.name()), r, c);
+            return;
+        }
+        Graphics2D icon = (Graphics2D) g.create();
+        try {
+            float x = (float) r.getCenterX(), y = (float) r.getCenterY(), s = (float) r.getWidth() * 0.36f;
+            icon.setColor(c);
+            icon.setStroke(new BasicStroke(s * 0.11f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            icon.draw(new java.awt.geom.Arc2D.Float(x - s * 0.85f, y - s * 0.52f, s * 0.75f, s * 0.75f, 90, 180, java.awt.geom.Arc2D.OPEN));
+            icon.draw(new java.awt.geom.Arc2D.Float(x + s * 0.10f, y - s * 0.52f, s * 0.75f, s * 0.75f, -90, 180, java.awt.geom.Arc2D.OPEN));
+            icon.fill(new java.awt.geom.Arc2D.Float(x - s * 0.55f, y - s * 1.02f, s * 1.1f, s * 1.25f, 180, 180, java.awt.geom.Arc2D.CHORD));
+            icon.draw(new java.awt.geom.Line2D.Float(x, y + s * 0.16f, x, y + s * 0.57f));
+            icon.draw(new java.awt.geom.Line2D.Float(x - s * 0.45f, y + s * 0.57f, x + s * 0.45f, y + s * 0.57f));
+        } finally { icon.dispose(); }
     }
 
     private static void drawGamepadIcon(Graphics2D g, float x, float y, float w, float h, Color c) {
