@@ -55,11 +55,6 @@ final class BluetoothNetplay implements AutoCloseable {
                     FunctionDescriptor.ofVoid(JAVA_INT, ADDRESS, JAVA_LONG, JAVA_SHORT), arena);
             MemorySegment pump = linker.upcallStub(lookup.bind(this, "receivePending", MethodType.methodType(void.class)),
                     FunctionDescriptor.ofVoid(), arena);
-            active = true;
-            start.invokeExact((short)(host ? 0 : 1), send, pump);
-            if (host && connected != null && !(boolean) connected.invokeExact((short)1))
-                throw new IOException("Core rejected multiplayer peer");
-            remoteConnected = true;
             worker("ds-bluetooth-receive", () -> {
                 while (!closed) {
                     int size = in.readInt();
@@ -74,6 +69,11 @@ final class BluetoothNetplay implements AutoCloseable {
                     out.writeInt(packet.length); out.write(packet); out.flush();
                 }
             });
+            active = true;
+            start.invokeExact((short)(host ? 0 : 1), send, pump);
+            if (host && connected != null && !(boolean) connected.invokeExact((short)1))
+                throw new IOException("Core rejected multiplayer peer");
+            remoteConnected = true;
         } catch (Throwable e) { close(); throw e; }
     }
     private Thread reader, writer;
