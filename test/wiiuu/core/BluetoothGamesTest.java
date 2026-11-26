@@ -25,7 +25,7 @@ public final class BluetoothGamesTest {
         check(Arrays.equals(data, Files.readAllBytes(config.romDir(nes).resolve("test.nes"))), "no overwrite");
         ByteArrayOutputStream bad = new ByteArrayOutputStream();
         DataOutputStream packet = new DataOutputStream(bad);
-        packet.writeInt(0x57425431); packet.writeUTF("nes"); packet.writeUTF("bad.nes");
+        packet.writeInt(0x57425432); packet.writeUTF("nes"); packet.writeUTF("bad.nes");
         packet.writeLong(1); packet.write(42); packet.write(new byte[32]);
         try {
             BluetoothGames.receive(new DataInputStream(new ByteArrayInputStream(bad.toByteArray())),
