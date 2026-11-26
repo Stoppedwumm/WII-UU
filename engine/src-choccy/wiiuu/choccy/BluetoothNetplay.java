@@ -16,6 +16,7 @@ final class BluetoothNetplay implements AutoCloseable {
     private final ArrayBlockingQueue<byte[]> incoming = new ArrayBlockingQueue<>(128), outgoing = new ArrayBlockingQueue<>(128);
     private MethodHandle start, receive, stop, poll, connected, disconnected;
     private String protocol = "";
+    private int maxPacket = BluetoothDsProtocol.MAX_PACKET;
     private BluetoothLink link;
     private volatile boolean failed, closed;
     private boolean active, remoteConnected;
@@ -40,13 +41,18 @@ final class BluetoothNetplay implements AutoCloseable {
         MemorySegment pointer = data.getAtIndex(ADDRESS, index);
         return pointer.address() == 0 ? null : linker.downcallHandle(pointer, desc);
     }
-    void connect(String coreVersion) throws Throwable {
-        if (start == null || receive == null) throw new IOException("This melonDS DS build has no libretro netpacket support. Update the core.");
+    void connect(String coreName, String coreVersion) throws Throwable {
+        if (start == null || receive == null) throw new IOException("This core does not expose libretro netpacket multiplayer. Choose a compatible core or disable Bluetooth multiplayer.");
         link = BluetoothLink.open(host, peer, BluetoothLink.DS_CHANNEL);
         try {
             String version = protocol.isEmpty() ? coreVersion : protocol;
             var out = link.output(); var in = link.input();
-            BluetoothDsProtocol.handshake(in, out, version);
+            int features = BluetoothDsProtocol.REQUIRED
+                    | (poll != null ? BluetoothDsProtocol.POLL : 0)
+                    | (connected != null && disconnected != null ? BluetoothDsProtocol.CONNECTION_EVENTS : 0);
+            var negotiated = BluetoothDsProtocol.handshake(in, out,
+                    new BluetoothDsProtocol.Capabilities(coreName, version, host, features, BluetoothDsProtocol.MAX_PACKET));
+            maxPacket = negotiated.maxPacket();
             Linker linker = Linker.nativeLinker();
             var lookup = MethodHandles.lookup();
             MemorySegment send = linker.upcallStub(lookup.bind(this, "send", MethodType.methodType(void.class,
@@ -56,8 +62,9 @@ final class BluetoothNetplay implements AutoCloseable {
                     FunctionDescriptor.ofVoid(), arena);
             worker("ds-bluetooth-receive", () -> {
                 while (!closed) {
-                    if (!incoming.offer(BluetoothDsProtocol.readPacket(in)))
-                        throw new IOException("DS receive buffer overflow");
+                    byte[] packet = BluetoothDsProtocol.readPacket(in);
+                    if (packet.length > maxPacket || !incoming.offer(packet))
+                        throw new IOException("Invalid multiplayer packet or receive buffer overflow");
                 }
             });
             worker("ds-bluetooth-send", () -> {
@@ -88,7 +95,7 @@ final class BluetoothNetplay implements AutoCloseable {
         try {
             int id = Short.toUnsignedInt(client);
             if (id != 65535 && id != (host ? 1 : 0)) return;
-            if (size < 0 || size > BluetoothDsProtocol.MAX_PACKET || buf.address() == 0
+            if (size < 0 || size > maxPacket || buf.address() == 0
                     || !outgoing.offer(buf.reinterpret(size).toArray(JAVA_BYTE))) failed = true;
         } catch (Throwable e) { failed = true; }
     }
