@@ -265,8 +265,8 @@ public final class ChoccyMilk {
                     : name + " couldn't load this game");
         }
         if (bluetooth != null) {
-            progress("Bluetooth DS: " + (bluetoothRole.equals("host") ? "waiting for paired player…" : "connecting to host…"));
-            bluetooth.connect(version);
+            progress("Bluetooth multiplayer: " + (bluetoothRole.equals("host") ? "waiting for paired player…" : "connecting to host…"));
+            bluetooth.connect(name, version);
         }
         MemorySegment av = arena.allocate(40, 8);
         fn(linker, lib, "retro_get_system_av_info", FunctionDescriptor.ofVoid(ADDRESS)).invokeExact(av);
