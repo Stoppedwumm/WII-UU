@@ -166,13 +166,13 @@ final class SettingsDialog {
                 if (!btPeer.isBlank() && !BluetoothLink.validAddress(btPeer)) throw new IllegalArgumentException("Invalid Bluetooth MAC address");
                 if (!"off".equals(role.getSelectedItem()) && (!BluetoothLink.supported() || !BluetoothLink.validAddress(btPeer)))
                     throw new IllegalArgumentException("Bluetooth DS multiplayer needs Linux and a paired device MAC");
-                config.set("choccy.bluetooth.peer", btPeer);
-                config.set("choccy.bluetooth.ds", (String)role.getSelectedItem());
                 if (!DsOnline.validDns(dns.getText().trim())) throw new IllegalArgumentException("DS DNS must be an IPv4 address, or blank");
                 if (!DsOnline.validName(name.getText().trim())) throw new IllegalArgumentException("DS profile name needs 1–10 letters, digits, _ or -");
                 Path romPath = Path.of(roms.getText().trim());
                 if (roms.getText().isBlank() || Files.exists(romPath) && !Files.isDirectory(romPath)) throw new IllegalArgumentException("Choose a game library folder");
                 if (!bios.getText().isBlank() && !Files.isDirectory(Path.of(bios.getText().trim()))) throw new IllegalArgumentException("Choose an existing BIOS folder, or leave it blank");
+                config.set("choccy.bluetooth.peer", btPeer);
+                config.set("choccy.bluetooth.ds", (String)role.getSelectedItem());
                 config.set("roms.base", romPath.toString()); config.set("choccy.systemDir", bios.getText().isBlank() ? null : bios.getText().trim());
                 config.set("choccy.theme", (String) theme.getSelectedItem()); config.set("choccy.intro", Boolean.toString(intro.isSelected()));
                 config.set("choccy.nds.online", Boolean.toString(wfc.isSelected())); config.set("choccy.nds.dns", dns.getText().trim());
