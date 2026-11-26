@@ -41,22 +41,26 @@ public final class PluginDockTest {
                 var viewerServices = new SettingsScreen.Services(config, null, () -> "", () -> {}, () -> {}, () -> {}, null,
                         () -> {}, () -> {}, null, () -> {}, new wiiuu.core.Achievements(config),
                         s -> {}, () -> false, () -> false, () -> null, () -> null);
+                var quickRef = new java.util.concurrent.atomic.AtomicReference<MenuView>();
                 MenuView quick = new MenuView(config, true, new MenuView.Actions() {
                     @Override public void launch(wiiuu.core.Game game) {}
                     @Override public void openSettings() { throw new AssertionError("Dock opened Settings instead of viewer"); }
-                    @Override public void openAchievements() { view.openAchievements(viewerServices); }
+                    @Override public void openAchievements() { quickRef.get().openAchievements(viewerServices); }
                     @Override public void quit() {}
                     @Override public void refresh() {}
                     @Override public void closeGame() {}
                 });
+                quickRef.set(quick);
                 inDock.setBoolean(quick, true);
                 selection.setInt(quick, 4);
                 quick.activate();
-                // The dock action is queued on the EDT, so test the direct overlay independently here.
-                quick.openAchievements(viewerServices);
+                // Drain the queued dock action before checking the overlay.
+                java.awt.SecondaryLoop loop = java.awt.Toolkit.getDefaultToolkit().getSystemEventQueue().createSecondaryLoop();
+                SwingUtilities.invokeLater(loop::exit);
+                loop.enter();
                 var overlayField = MenuView.class.getDeclaredField("settings"); overlayField.setAccessible(true);
                 SettingsScreen overlay = (SettingsScreen) overlayField.get(quick);
-                if (overlay == null) throw new AssertionError("Viewer did not open directly");
+                if (overlay == null) throw new AssertionError("Dock did not open viewer directly");
                 var direct = SettingsScreen.class.getDeclaredField("achievementsOnly"); direct.setAccessible(true);
                 if (!direct.getBoolean(overlay)) throw new AssertionError("Viewer is not standalone");
                 quick.back();
