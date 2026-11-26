@@ -79,6 +79,61 @@ final class SettingsDialog {
         online.add(ui.label("These settings are shared with WII-UU. Local wireless / Download Play is separate."));
         tabs.addTab("DS online", online);
 
+        JPanel bluetooth = ui.panel(new GridLayout(0, 1, 8, 8));
+        bluetooth.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        JTextField peer = ui.textField(BluetoothLink.peer(config), 24);
+        JComboBox<String> role = ui.comboBox(new String[]{"off", "host", "join"});
+        role.setSelectedItem(BluetoothLink.role(config));
+        bluetooth.add(ui.label(BluetoothLink.availability()));
+        bluetooth.add(ui.label("Connect to either WII-UU or another Choccy Milk."));
+        bluetooth.add(ui.label("Paired device Bluetooth MAC address")); bluetooth.add(peer);
+        bluetooth.add(ui.label("Local multiplayer (experimental): host / join / off")); bluetooth.add(role);
+        JCheckBox allBtCores = ui.checkBox("Try other libretro netpacket cores (not just DS)", BluetoothLink.allCores(config));
+        bluetooth.add(allBtCores);
+        bluetooth.add(ui.label("Save, launch host first, then join. Both devices need compatible netpacket cores."));
+        JComboBox<GameSystem> transferSystem = ui.comboBox(Systems.ALL.stream().filter(s -> !s.extensions().isEmpty()).toArray(GameSystem[]::new));
+        transferSystem.setRenderer(new DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(JList<?> l, Object value, int i, boolean s, boolean f) {
+                return super.getListCellRendererComponent(l, value instanceof GameSystem gs ? gs.name() : value, i, s, f);
+            }
+        });
+        bluetooth.add(transferSystem);
+        JButton send = ui.button("Send game…"), receive = ui.button("Receive game");
+        JLabel transferStatus = ui.label("Start Receive on the other device first.");
+        bluetooth.add(send); bluetooth.add(receive); bluetooth.add(transferStatus);
+        java.util.function.Consumer<Path> transfer = path -> {
+            if (gameRunning.getAsBoolean() || !BluetoothLink.validAddress(peer.getText().trim())) {
+                transferStatus.setText("Close the game and enter a paired Bluetooth MAC address."); return;
+            }
+            GameSystem system = (GameSystem) transferSystem.getSelectedItem();
+            String address = peer.getText().trim();
+            send.setEnabled(false); receive.setEnabled(false);
+            transferStatus.setText(path == null ? "Waiting for sender…" : "Connecting…");
+            new SwingWorker<String, Long>() {
+                protected String doInBackground() throws Exception {
+                    if (path == null) return "Received " + BluetoothGames.receive(config, address, n -> publish(n)).getFileName();
+                    BluetoothGames.send(address, system, path, n -> publish(n));
+                    return "Sent " + path.getFileName();
+                }
+                protected void process(java.util.List<Long> values) {
+                    transferStatus.setText(values.get(values.size() - 1) / 1048576 + " MiB transferred");
+                }
+                protected void done() {
+                    try { transferStatus.setText(get()); }
+                    catch (Exception e) { transferStatus.setText("Bluetooth transfer failed: " + (e.getCause() == null ? e.getMessage() : e.getCause().getMessage())); }
+                    send.setEnabled(true); receive.setEnabled(true);
+                }
+            }.execute();
+        };
+        send.addActionListener(e -> {
+            GameSystem system = (GameSystem) transferSystem.getSelectedItem();
+            JFileChooser picker = new JFileChooser(config.romDir(system).toFile());
+            if (picker.showOpenDialog(dialog) == JFileChooser.APPROVE_OPTION) transfer.accept(picker.getSelectedFile().toPath());
+        });
+        receive.addActionListener(e -> transfer.accept(null));
+        if (!BluetoothLink.supported()) { send.setEnabled(false); receive.setEnabled(false); role.setEnabled(false); peer.setEnabled(false); allBtCores.setEnabled(false); }
+        tabs.addTab("Bluetooth", ui.scrollPane(bluetooth));
+
         JPanel picture = ui.panel(new BorderLayout());
         JComboBox<GameSystem> console = ui.comboBox(Systems.ALL.stream().filter(Cores::has).toArray(GameSystem[]::new));
         console.setRenderer(new DefaultListCellRenderer() { @Override public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean s, boolean f) {
@@ -110,11 +165,18 @@ final class SettingsDialog {
         save.addActionListener(e -> {
             try {
                 ChoccyKeys.validate(keys);
+                String btPeer = peer.getText().trim();
+                if (!btPeer.isBlank() && !BluetoothLink.validAddress(btPeer)) throw new IllegalArgumentException("Invalid Bluetooth MAC address");
+                if (!"off".equals(role.getSelectedItem()) && (!BluetoothLink.supported() || !BluetoothLink.validAddress(btPeer)))
+                    throw new IllegalArgumentException("Bluetooth multiplayer needs Linux and a paired device MAC");
                 if (!DsOnline.validDns(dns.getText().trim())) throw new IllegalArgumentException("DS DNS must be an IPv4 address, or blank");
                 if (!DsOnline.validName(name.getText().trim())) throw new IllegalArgumentException("DS profile name needs 1–10 letters, digits, _ or -");
                 Path romPath = Path.of(roms.getText().trim());
                 if (roms.getText().isBlank() || Files.exists(romPath) && !Files.isDirectory(romPath)) throw new IllegalArgumentException("Choose a game library folder");
                 if (!bios.getText().isBlank() && !Files.isDirectory(Path.of(bios.getText().trim()))) throw new IllegalArgumentException("Choose an existing BIOS folder, or leave it blank");
+                config.set("choccy.bluetooth.peer", btPeer);
+                config.set("choccy.bluetooth.ds", (String)role.getSelectedItem());
+                config.set("choccy.bluetooth.allCores", Boolean.toString(allBtCores.isSelected()));
                 config.set("roms.base", romPath.toString()); config.set("choccy.systemDir", bios.getText().isBlank() ? null : bios.getText().trim());
                 config.set("choccy.theme", (String) theme.getSelectedItem()); config.set("choccy.intro", Boolean.toString(intro.isSelected()));
                 config.set("choccy.nds.online", Boolean.toString(wfc.isSelected())); config.set("choccy.nds.dns", dns.getText().trim());
