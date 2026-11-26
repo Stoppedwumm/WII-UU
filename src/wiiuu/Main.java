@@ -613,8 +613,8 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
     }
 
     @Override
-    public void openAchievements() {
-        view.openAchievements(settingsServices());
+    public void openAchievements(Game game) {
+        view.openAchievements(settingsServices(), game);
         view.requestFocusInWindow();
     }
 
