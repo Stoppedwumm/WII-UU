@@ -1805,8 +1805,8 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private Rectangle2D achievementActionRect(Layout layout, int index) {
         Rectangle2D tile = tileRect(layout, index, scrollPage);
         double h = Math.max(19, tile.getHeight() * 0.20), w = tile.getWidth() * 0.90;
-        return new RoundRectangle2D.Double(tile.getCenterX() - w / 2,
-                tile.getMaxY() - h - tile.getHeight() * 0.055, w, h, h, h);
+        return new Rectangle2D.Double(tile.getCenterX() - w / 2,
+                tile.getMaxY() - h - tile.getHeight() * 0.055, w, h);
     }
 
     private void hoverAchievementGame(int x, int y) {
@@ -1849,11 +1849,13 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (index < 0) return;
         Rectangle2D button = achievementActionRect(layout, index);
         if (button.getMaxX() <= 0 || button.getMinX() >= layout.w) return;
+        RoundRectangle2D shape = new RoundRectangle2D.Double(button.getX(), button.getY(),
+                button.getWidth(), button.getHeight(), button.getHeight(), button.getHeight());
         g.setColor(new Color(18, 28, 44, 238));
-        g.fill(button);
+        g.fill(shape);
         g.setColor(new Color(255, 213, 79));
         g.setStroke(new BasicStroke(1.4f));
-        g.draw(button);
+        g.draw(shape);
         g.setStroke(new BasicStroke(1));
         float h = (float) button.getHeight();
         g.setColor(Color.WHITE);
