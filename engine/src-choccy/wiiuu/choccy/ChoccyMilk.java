@@ -80,6 +80,7 @@ public final class ChoccyMilk {
     private final DataOutputStream out;
 
     private MethodHandle run, getMemoryData, getMemorySize;
+    private BluetoothNetplay bluetooth;
     private int pixelFormat = PIXEL_0RGB1555;
     private double fps = 60, sampleRate = 44100;
     private float aspect = 4f / 3;
@@ -144,6 +145,8 @@ public final class ChoccyMilk {
             } catch (Throwable t) {
                 why[0] = t.getMessage() == null ? t.toString() : t.getMessage();
                 System.err.println("[choccy] " + why[0]);
+            } finally {
+                if (m.bluetooth != null) m.bluetooth.close();
             }
         };
         // melonDS DS does not switch to libco coroutine stacks. Give it an ordinary JVM thread,
@@ -210,6 +213,12 @@ public final class ChoccyMilk {
         saveDirC = arena.allocateFrom(saveDir.toString());
         Files.createDirectories(saveDir);
 
+        String bluetoothRole = overrides.getOrDefault("wiiuu.bluetooth.role", "off");
+        if (!bluetoothRole.equals("off")) {
+            if (!bluetoothRole.equals("host") && !bluetoothRole.equals("join"))
+                throw new IOException("Invalid Bluetooth multiplayer role");
+            bluetooth = new BluetoothNetplay(arena, bluetoothRole, overrides.getOrDefault("wiiuu.bluetooth.peer", ""));
+        }
         // callbacks, then init
         MethodHandles.Lookup me = MethodHandles.lookup();
         interfaces(linker, me);
@@ -255,6 +264,10 @@ public final class ChoccyMilk {
                     ? name + " requested a graphics context this Choccy Milk profile cannot open"
                     : name + " couldn't load this game");
         }
+        if (bluetooth != null) {
+            progress("Bluetooth DS: " + (bluetoothRole.equals("host") ? "waiting for paired player…" : "connecting to host…"));
+            bluetooth.connect(version);
+        }
         MemorySegment av = arena.allocate(40, 8);
         fn(linker, lib, "retro_get_system_av_info", FunctionDescriptor.ofVoid(ADDRESS)).invokeExact(av);
         readAv(av);
@@ -299,6 +312,10 @@ public final class ChoccyMilk {
             hideFrame = behind && skippedInARow < 3;        // at least every 4th frame is drawn
             skippedInARow = hideFrame ? skippedInARow + 1 : 0;
             if (hideFrame) framesSkipped++;
+            if (bluetooth != null && !bluetooth.tick()) {
+                bluetooth = null;
+                notice("Bluetooth multiplayer disconnected");
+            }
             run.invokeExact();
             flushSingle();
             doStates();
@@ -328,6 +345,7 @@ public final class ChoccyMilk {
                 lastSave = System.currentTimeMillis();
             }
         }
+        if (bluetooth != null) { bluetooth.close(); bluetooth = null; }
         writeSave();
         unloaded = true;                                    // from here on, the core's memory is going away
         if (graphics != null) graphics.stop();
@@ -425,6 +443,7 @@ public final class ChoccyMilk {
 
     private boolean env(int cmd, MemorySegment data) {
         switch (cmd) {
+            case 78 -> { return bluetooth != null && bluetooth.register(data); }
             case 27 -> {                                    // GET_LOG_INTERFACE
                 data.reinterpret(8).copyFrom(logInterface);
                 return true;
@@ -938,6 +957,7 @@ public final class ChoccyMilk {
     /** Saves or loads the states asked for (between frames, on the core's thread). */
     private void doStates() {
         for (String[] m; (m = stateQueue.poll()) != null; ) {
+            if (bluetooth != null) { notice("Save states are disabled during Bluetooth multiplayer"); continue; }
             int slot;
             try {
                 slot = Math.max(0, Math.min(9, Integer.parseInt(m[1])));
