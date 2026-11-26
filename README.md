@@ -7,6 +7,7 @@ no dependencies beyond Java 17+ for the launcher; optional JavaScript apps use a
 
 Website: **https://wiiuu.stoppedwumm.net** (served from `docs/`). It has a one-line install for
 Linux, Raspberry Pi and macOS: `curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash`.
+On Windows PowerShell: `& ([scriptblock]::Create((irm https://wiiuu.stoppedwumm.net/get.ps1)))`.
 
 ![Menu](docs/menu.png)
 ![TV and phone GamePad](docs/tv-and-gamepad.jpg)
@@ -56,7 +57,11 @@ it, then:
 * **Linux / macOS:** `./install.sh`
   (on Linux, `./install.sh --with-emulators` also installs the emulators, from official releases or source, and
   configures them for you; see below.)
-* **Windows:** double-click `install.bat`
+* **Windows:** double-click `install.bat` or use the PowerShell web installer:
+  ```powershell
+  & ([scriptblock]::Create((irm https://wiiuu.stoppedwumm.net/get.ps1)))
+  ```
+  Append `-Optimize` to preview old staging files without downloading the release ZIP.
 
 If WII-UU is already installed, rerun the installer to **Uninstall**, **Repair** from the
 installer's files, **Update** from the release server, or **Optimize device space**. Optimization
