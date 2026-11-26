@@ -210,6 +210,8 @@ javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/ChoccySettin
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.ChoccySettingsTest
 javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/BluetoothGamesTest.java
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.BluetoothGamesTest
+javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/BluetoothBridgeTest.java
+java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.BluetoothBridgeTest
 javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/BluetoothInteroperabilityTest.java
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.BluetoothInteroperabilityTest build/wiiuu.jar build/ChoccyMilk.jar
 WIIUU_CI_COMMAND_20
