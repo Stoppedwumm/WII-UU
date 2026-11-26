@@ -10,8 +10,11 @@ public final class BluetoothLink implements AutoCloseable {
     private final Process process;
     private final DataInputStream in;
     private final DataOutputStream out;
+    private final Thread shutdown;
     private BluetoothLink(Process process) {
         this.process = process;
+        shutdown = new Thread(process::destroyForcibly, "bluetooth-close");
+        Runtime.getRuntime().addShutdownHook(shutdown);
         in = new DataInputStream(new BufferedInputStream(process.getInputStream()));
         out = new DataOutputStream(new BufferedOutputStream(process.getOutputStream()));
     }
@@ -95,6 +98,7 @@ public final class BluetoothLink implements AutoCloseable {
     public DataOutputStream output() { return out; }
     @Override public void close() {
         process.destroyForcibly();
+        try { Runtime.getRuntime().removeShutdownHook(shutdown); } catch (IllegalStateException ignored) {}
         try { in.close(); } catch (IOException ignored) {}
         try { out.close(); } catch (IOException ignored) {}
     }
