@@ -3,6 +3,11 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.2.0 (2026-11-26)
+**RetroAchievements addition**
+- Added Achievement Viewer
+- Linked RetroAchievements User to Wii-UU User
+
 ## 2.1.13 (2026-11-25)
 **Bugfixes and QOL Updates**
 - Activate Choccy Milk in Settings > System > Plugin store and open its full library and emulator UI from the WII-UU dock in the same window, without a second desktop app or browser runtime.
