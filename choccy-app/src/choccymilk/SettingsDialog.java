@@ -87,8 +87,10 @@ final class SettingsDialog {
         bluetooth.add(ui.label(BluetoothLink.availability()));
         bluetooth.add(ui.label("Connect to either WII-UU or another Choccy Milk."));
         bluetooth.add(ui.label("Paired device Bluetooth MAC address")); bluetooth.add(peer);
-        bluetooth.add(ui.label("DS local multiplayer (experimental): host / join / off")); bluetooth.add(role);
-        bluetooth.add(ui.label("Save, start the host first, then join from the other device. Use the in-game local multiplayer menu."));
+        bluetooth.add(ui.label("Local multiplayer (experimental): host / join / off")); bluetooth.add(role);
+        JCheckBox allBtCores = ui.checkBox("Try other libretro netpacket cores (not just DS)", BluetoothLink.allCores(config));
+        bluetooth.add(allBtCores);
+        bluetooth.add(ui.label("Save, launch host first, then join. Both devices need compatible netpacket cores."));
         JComboBox<GameSystem> transferSystem = ui.comboBox(Systems.ALL.stream().filter(s -> !s.extensions().isEmpty()).toArray(GameSystem[]::new));
         transferSystem.setRenderer(new DefaultListCellRenderer() {
             @Override public Component getListCellRendererComponent(JList<?> l, Object value, int i, boolean s, boolean f) {
@@ -129,7 +131,7 @@ final class SettingsDialog {
             if (picker.showOpenDialog(dialog) == JFileChooser.APPROVE_OPTION) transfer.accept(picker.getSelectedFile().toPath());
         });
         receive.addActionListener(e -> transfer.accept(null));
-        if (!BluetoothLink.supported()) { send.setEnabled(false); receive.setEnabled(false); role.setEnabled(false); peer.setEnabled(false); }
+        if (!BluetoothLink.supported()) { send.setEnabled(false); receive.setEnabled(false); role.setEnabled(false); peer.setEnabled(false); allBtCores.setEnabled(false); }
         tabs.addTab("Bluetooth", ui.scrollPane(bluetooth));
 
         JPanel picture = ui.panel(new BorderLayout());
@@ -166,7 +168,7 @@ final class SettingsDialog {
                 String btPeer = peer.getText().trim();
                 if (!btPeer.isBlank() && !BluetoothLink.validAddress(btPeer)) throw new IllegalArgumentException("Invalid Bluetooth MAC address");
                 if (!"off".equals(role.getSelectedItem()) && (!BluetoothLink.supported() || !BluetoothLink.validAddress(btPeer)))
-                    throw new IllegalArgumentException("Bluetooth DS multiplayer needs Linux and a paired device MAC");
+                    throw new IllegalArgumentException("Bluetooth multiplayer needs Linux and a paired device MAC");
                 if (!DsOnline.validDns(dns.getText().trim())) throw new IllegalArgumentException("DS DNS must be an IPv4 address, or blank");
                 if (!DsOnline.validName(name.getText().trim())) throw new IllegalArgumentException("DS profile name needs 1–10 letters, digits, _ or -");
                 Path romPath = Path.of(roms.getText().trim());
@@ -174,6 +176,7 @@ final class SettingsDialog {
                 if (!bios.getText().isBlank() && !Files.isDirectory(Path.of(bios.getText().trim()))) throw new IllegalArgumentException("Choose an existing BIOS folder, or leave it blank");
                 config.set("choccy.bluetooth.peer", btPeer);
                 config.set("choccy.bluetooth.ds", (String)role.getSelectedItem());
+                config.set("choccy.bluetooth.allCores", Boolean.toString(allBtCores.isSelected()));
                 config.set("roms.base", romPath.toString()); config.set("choccy.systemDir", bios.getText().isBlank() ? null : bios.getText().trim());
                 config.set("choccy.theme", (String) theme.getSelectedItem()); config.set("choccy.intro", Boolean.toString(intro.isSelected()));
                 config.set("choccy.nds.online", Boolean.toString(wfc.isSelected())); config.set("choccy.nds.dns", dns.getText().trim());
