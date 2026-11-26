@@ -208,6 +208,8 @@ WIIUU_CI_COMMAND_19
     run_check "Test standalone bindings and shared DS online options" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_20'
 javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/ChoccySettingsTest.java
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.ChoccySettingsTest
+javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/BluetoothGamesTest.java
+java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.BluetoothGamesTest
 WIIUU_CI_COMMAND_20
     run_check "Test GamePad screen and controller layouts" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_21'
 node test/web/screen-choices.cjs
