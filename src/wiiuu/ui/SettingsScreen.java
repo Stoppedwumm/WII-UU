@@ -1285,7 +1285,7 @@ public final class SettingsScreen {
                         touch();
                     }, null, null));
                     if (failed) r.add(new Info("Couldn't load achievements. Check your connection and API key, then retry."));
-                    else if (data != null) r.addAll(render.apply(data));
+                    else if (attempted) r.addAll(render.apply(data));
                 }
                 return r;
             }
