@@ -52,6 +52,7 @@ public final class BluetoothLink implements AutoCloseable {
                     s = conn
                     if addr[0].upper() != peer:
                         raise OSError('Unexpected Bluetooth peer')
+                    secure(s)
                 else:
                     s.connect((peer, channel))
                 s.settimeout(120)
@@ -96,6 +97,12 @@ public final class BluetoothLink implements AutoCloseable {
     }
     public DataInputStream input() { return in; }
     public DataOutputStream output() { return out; }
+    /** Let the bridge flush its final acknowledgement before tearing down a successful transfer. */
+    public void finish() throws IOException {
+        out.close();
+        try { process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
     @Override public void close() {
         process.destroyForcibly();
         try { Runtime.getRuntime().removeShutdownHook(shutdown); } catch (IllegalStateException ignored) {}
