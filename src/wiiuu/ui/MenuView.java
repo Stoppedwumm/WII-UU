@@ -67,7 +67,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
         void openSettings();
 
-        default void openAchievements() { openSettings(); }
+        default void openAchievements(Game game) { openSettings(); }
 
         void quit();
 
@@ -331,7 +331,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     private enum Screen { HOME, GAMES }
 
     private enum Dock {
-        GAMEPAD("GamePad"), SETTINGS("Settings"), REFRESH("Refresh"), POWER("Power"), ACHIEVEMENTS("Achievements");
+        GAMEPAD("GamePad"), SETTINGS("Settings"), REFRESH("Refresh"), POWER("Power");
         final String label;
 
         Dock(String label) {
@@ -1106,7 +1106,6 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             case SETTINGS -> "Settings! I'll come with you.";
             case REFRESH -> "Got new games? I'll go look for them.";
             case POWER -> "Don't press that. Or do. I'm not your boss.";
-            case ACHIEVEMENTS -> "See your RetroAchievements progress.";
         };
     }
 
@@ -1252,17 +1251,17 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     /** Shows the settings on the TV (F1, the dock's Settings, or Main). */
     public void openSettings(SettingsScreen.Services services) {
-        openSettings(services, false);
+        openSettings(services, false, null);
     }
 
     /** Opens the viewer directly, retaining the current game library and cursor. */
-    public void openAchievements(SettingsScreen.Services services) {
-        openSettings(services, true);
+    public void openAchievements(SettingsScreen.Services services, Game game) {
+        openSettings(services, true, game);
     }
 
-    private void openSettings(SettingsScreen.Services services, boolean achievementsOnly) {
+    private void openSettings(SettingsScreen.Services services, boolean achievementsOnly, Game game) {
         if (settings != null || embeddedApp != null || nativePlugin != null || xcloudPanel != null || guide != null || intro != null || booting || playing != null) return;
-        settings = new SettingsScreen(this, services, achievementsOnly);
+        settings = new SettingsScreen(this, services, achievementsOnly, game);
         repaint();
     }
 
@@ -1501,6 +1500,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
     @Override
     public void navigate(int dx, int dy) {
+        hoveredAchievementGame = null;
         if (embeddedApp != null) return;
         // The changelog is a separate Swing window, not an in-menu overlay.
         // Its controller focus must take precedence over menu navigation.
@@ -1647,7 +1647,6 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
             switch (Dock.values()[dockSel]) {
                 case GAMEPAD -> showPad = true;
                 case SETTINGS -> SwingUtilities.invokeLater(actions::openSettings);
-                case ACHIEVEMENTS -> SwingUtilities.invokeLater(actions::openAchievements);
                 case REFRESH -> refresh();
                 case POWER -> {
                     confirmQuit = true;
@@ -1780,6 +1779,88 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         repaint();
     }
 
+    private Game hoveredAchievementGame;
+
+    private boolean gameActionsAvailable() {
+        return screen == Screen.GAMES && !modal() && !booting && !introPending
+                && intro == null && guide == null && !guidePending && settings == null
+                && embeddedApp == null && nativePlugin == null && xcloudPanel == null && migration == null
+                && boss == null && cinema == null && !vizFull && idleGames == null;
+    }
+
+    private boolean hasAchievementAction(int index) {
+        return gameActionsAvailable() && index >= 0 && index < tiles.size()
+                && wiiuu.core.Achievements.supports(tiles.get(index).game);
+    }
+
+    private int achievementActionIndex() {
+        if (!gameActionsAvailable()) return -1;
+        if (hoveredAchievementGame != null) {
+            for (int i = 0; i < tiles.size(); i++)
+                if (hoveredAchievementGame.equals(tiles.get(i).game) && hasAchievementAction(i)) return i;
+        }
+        return !inDock && hasAchievementAction(sel) ? sel : -1;
+    }
+
+    private Rectangle2D achievementActionRect(Layout layout, int index) {
+        Rectangle2D tile = tileRect(layout, index, scrollPage);
+        double h = Math.max(19, tile.getHeight() * 0.20), w = tile.getWidth() * 0.90;
+        return new RoundRectangle2D.Double(tile.getCenterX() - w / 2,
+                tile.getMaxY() - h - tile.getHeight() * 0.055, w, h, h, h);
+    }
+
+    private void hoverAchievementGame(int x, int y) {
+        Game next = null;
+        if (gameActionsAvailable()) {
+            Layout layout = geom();
+            for (int i = Math.max(0, (int) Math.floor(scrollPage) * PER_PAGE);
+                 i < Math.min(tiles.size(), ((int) Math.ceil(scrollPage) + 1) * PER_PAGE); i++) {
+                if (hasAchievementAction(i) && tileRect(layout, i, scrollPage).contains(x, y)) {
+                    next = tiles.get(i).game;
+                    break;
+                }
+            }
+        }
+        if (!java.util.Objects.equals(next, hoveredAchievementGame)) {
+            hoveredAchievementGame = next;
+            repaint();
+        }
+    }
+
+    private boolean openGameAchievements(int index) {
+        if (!hasAchievementAction(index)) return false;
+        Game game = tiles.get(index).game;
+        sel = index;
+        inDock = false;
+        hoveredAchievementGame = null;
+        Sfx.select();
+        actions.openAchievements(game);
+        repaint();
+        return true;
+    }
+
+    private boolean clickAchievementAction(int x, int y) {
+        int index = achievementActionIndex();
+        return index >= 0 && achievementActionRect(geom(), index).contains(x, y) && openGameAchievements(index);
+    }
+
+    private void paintGameAchievementAction(Graphics2D g, Layout layout) {
+        int index = achievementActionIndex();
+        if (index < 0) return;
+        Rectangle2D button = achievementActionRect(layout, index);
+        if (button.getMaxX() <= 0 || button.getMinX() >= layout.w) return;
+        g.setColor(new Color(18, 28, 44, 238));
+        g.fill(button);
+        g.setColor(new Color(255, 213, 79));
+        g.setStroke(new BasicStroke(1.4f));
+        g.draw(button);
+        g.setStroke(new BasicStroke(1));
+        float h = (float) button.getHeight();
+        g.setColor(Color.WHITE);
+        drawFitted(g, "Y  Achievements", Font.BOLD, (float) button.getCenterX(),
+                (float) button.getCenterY(), (float) button.getWidth() * 0.87f, h * 0.52f);
+    }
+
     private boolean canUnpinHomeFavorite() {
         return screen == Screen.HOME && !inDock && sel >= 0 && sel < tiles.size()
                 && tiles.get(sel).favorite != null && !modal() && !booting && !introPending
@@ -1833,6 +1914,10 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         if (boss != null) {
             BossFight f = boss;
             SwingUtilities.invokeLater(() -> f.pad(b, down));
+            return true;
+        }
+        if (b == wiiuu.input.PadButton.Y && !inDock && hasAchievementAction(sel)) {
+            if (down) openGameAchievements(sel);
             return true;
         }
         if (b == wiiuu.input.PadButton.X && canUnpinHomeFavorite()) {
@@ -1973,6 +2058,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     case KeyEvent.VK_F5 -> refresh();
                     case KeyEvent.VK_V -> toggleVisualizer();
                     case KeyEvent.VK_X -> unpinHomeFavorite();
+                    case KeyEvent.VK_Y -> { if (!inDock) openGameAchievements(sel); }
                     default -> { }
                 }
             }
@@ -2047,6 +2133,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
                     back();
                     return;
                 }
+                if (e.getButton() == MouseEvent.BUTTON1 && clickAchievementAction(e.getX(), e.getY())) return;
                 Layout L = geom();
                 for (int i = dockStart(); i < dockEnd(); i++) {
                     if (dockRect(L, i).contains(e.getPoint())) {
@@ -2072,12 +2159,22 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
 
             @Override
             public void mouseMoved(MouseEvent e) {
-                boolean link = settings == null && (guide != null ? guide.pairingHit(e.getX(), e.getY()) : pairingHit(e.getX(), e.getY()));
+                hoverAchievementGame(e.getX(), e.getY());
+                int index = achievementActionIndex();
+                boolean achievementLink = index >= 0 && achievementActionRect(geom(), index).contains(e.getPoint());
+                boolean link = achievementLink || (settings == null && (guide != null ? guide.pairingHit(e.getX(), e.getY()) : pairingHit(e.getX(), e.getY())));
                 setCursor(java.awt.Cursor.getPredefinedCursor(link ? java.awt.Cursor.HAND_CURSOR : java.awt.Cursor.DEFAULT_CURSOR));
             }
 
             @Override
+            public void mouseExited(MouseEvent e) {
+                hoveredAchievementGame = null;
+                repaint();
+            }
+
+            @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
+                hoveredAchievementGame = null;
                 if (xcloudPanel != null) { xcloudPanel.page(e.getWheelRotation()); return; }
                 if (nativePlugin != null) { nativePlugin.page(e.getWheelRotation()); return; }
                 if (wakeIdle()) return;
@@ -2912,6 +3009,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
         }
         if (!inDock && sel >= first && sel <= last) paintTile(g, L, sel);
         if (!modal() && hlInit && !inDock) paintCursor(g, 26);
+        paintGameAchievementAction(g, L);
         g.setClip(oldClip);
         // warm up the neighbouring pages in the background so paging is instant
         int cur = page();
@@ -3310,21 +3408,7 @@ public final class MenuView extends JComponent implements InputRouter.MenuAction
     }
 
     private void drawDockIcon(Graphics2D g, Dock d, Rectangle2D r, Color c) {
-        if (d != Dock.ACHIEVEMENTS) {
-            MenuPainter.icon(g, MenuPainter.Icon.valueOf(d.name()), r, c);
-            return;
-        }
-        Graphics2D icon = (Graphics2D) g.create();
-        try {
-            float x = (float) r.getCenterX(), y = (float) r.getCenterY(), s = (float) r.getWidth() * 0.36f;
-            icon.setColor(c);
-            icon.setStroke(new BasicStroke(s * 0.11f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            icon.draw(new java.awt.geom.Arc2D.Float(x - s * 0.85f, y - s * 0.52f, s * 0.75f, s * 0.75f, 90, 180, java.awt.geom.Arc2D.OPEN));
-            icon.draw(new java.awt.geom.Arc2D.Float(x + s * 0.10f, y - s * 0.52f, s * 0.75f, s * 0.75f, -90, 180, java.awt.geom.Arc2D.OPEN));
-            icon.fill(new java.awt.geom.Arc2D.Float(x - s * 0.55f, y - s * 1.02f, s * 1.1f, s * 1.25f, 180, 180, java.awt.geom.Arc2D.CHORD));
-            icon.draw(new java.awt.geom.Line2D.Float(x, y + s * 0.16f, x, y + s * 0.57f));
-            icon.draw(new java.awt.geom.Line2D.Float(x - s * 0.45f, y + s * 0.57f, x + s * 0.45f, y + s * 0.57f));
-        } finally { icon.dispose(); }
+        MenuPainter.icon(g, MenuPainter.Icon.valueOf(d.name()), r, c);
     }
 
     private static void drawGamepadIcon(Graphics2D g, float x, float y, float w, float h, Color c) {
