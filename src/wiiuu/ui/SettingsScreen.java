@@ -952,7 +952,7 @@ public final class SettingsScreen {
         }));
         r.add(new Action("Choccy Milk cores", "Choose the core for each console, see installed cores, or download/reinstall one. Changes apply to the next game.",
                 () -> wiiuu.engine.CoreManagerPanel.open(view, config, view::gameRunning), null, null));
-        r.add(new Link("Bluetooth games & DS multiplayer", "Send and receive games or play DS local wireless with a paired device.", null, this::bluetoothPage));
+        r.add(new Link("Bluetooth games & multiplayer", "Send and receive games or play compatible cores with a paired device.", null, this::bluetoothPage));
         r.add(new Link("DS online (WFC)", "Online settings shared with standalone Choccy Milk; uses the melonDS DS core.", null, this::dsOnlinePage));
         r.add(new Link("Choccy Milk picture", "Upscaling (also rounded xBR and a CRT TV look), blending frames and "
                 + "widescreen, per console.", null, this::choccyPicturePage));
@@ -1137,7 +1137,7 @@ public final class SettingsScreen {
     private volatile boolean bluetoothBusy;
 
     private Page bluetoothPage() {
-        return new Page("Bluetooth games & DS multiplayer", () -> {
+        return new Page("Bluetooth games & multiplayer", () -> {
             List<Row> r = new ArrayList<>();
             r.add(new Info(wiiuu.core.BluetoothLink.availability()));
             r.add(new Info("Either end can be WII-UU or Choccy Milk. Same-app and mixed-app connections use the same protocol."));
@@ -1155,14 +1155,16 @@ public final class SettingsScreen {
             r.add(new Link("Send game", "Select the console and game file.", null, this::bluetoothSendPage));
             r.add(new Action("Receive game", "Wait for the paired device to send a game.", () -> bluetoothTransfer(null, null),
                     () -> bluetoothStatus, null));
-            r.add(new Header("DS local multiplayer (experimental)"));
+            r.add(new Header("Local multiplayer (experimental)"));
             List<String> roles = List.of("off", "host", "join");
-            r.add(new Choice("DS Bluetooth role", "Choose Host on one device and Join on the other, then launch a DS game on both.", 
+            r.add(new Choice("Bluetooth role", "Choose Host on one device and Join on the other, then launch compatible games.", 
                     () -> List.of("Off", "Host", "Join"), () -> Math.max(0, roles.indexOf(wiiuu.core.BluetoothLink.role(config))), i -> {
                         if (view.gameRunning()) { say("Close the game before changing multiplayer"); return; }
                         config.set("choccy.bluetooth.ds", roles.get(i)); config.save();
                     }));
-            r.add(new Info("Launch the host first. Both devices need compatible melonDS DS cores. Use the game's Local Multiplayer menu. No Wi-Fi or Internet is needed; Bluetooth latency may affect compatibility."));
+            r.add(toggle("Try other multiplayer cores", "Off uses melonDS DS only. On also tries any selected Choccy Milk core exposing libretro netpacket multiplayer; unsupported cores report an error.",
+                    "choccy.bluetooth.allCores", false, null));
+            r.add(new Info("Launch the host first. Both devices need matching core protocols. DS uses melonDS DS. Other cores must implement libretro netpacket; ordinary rollback netplay cores are not supported. Use the game's local multiplayer menu."));
             return r;
         });
     }
