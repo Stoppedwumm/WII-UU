@@ -9,7 +9,7 @@ import java.util.function.LongConsumer;
 
 /** One explicitly selected file per connection, with integrity verification and no overwrite. */
 public final class BluetoothGames {
-    private static final int MAGIC = 0x57425431;
+    private static final int MAGIC = 0x57425432;
     private static final long MAX = 64L * 1024 * 1024 * 1024;
     private BluetoothGames() {}
     public static boolean transferable(GameSystem system, String name) {
@@ -30,7 +30,12 @@ public final class BluetoothGames {
     }
     public static Path receive(Config config, String peer, LongConsumer progress) throws IOException {
         try (BluetoothLink link = BluetoothLink.open(true, peer, BluetoothLink.TRANSFER_CHANNEL)) {
-            Path received = receive(link.input(), link.output(), config, progress);
+            Path received;
+            try { received = receive(link.input(), link.output(), config, progress); }
+            catch (IOException e) {
+                try { link.finish(); } catch (IOException drain) { e.addSuppressed(drain); }
+                throw e;
+            }
             link.finish();
             return received;
         }
@@ -48,10 +53,12 @@ public final class BluetoothGames {
         }
         out.write(sha.digest()); out.flush();
         if (!in.readBoolean()) throw new IOException(in.readUTF());
+        // Confirm that the receiver's final success acknowledgement actually arrived.
+        out.writeBoolean(true); out.flush();
     }
     static Path receive(DataInputStream in, DataOutputStream out, Config config, LongConsumer progress) throws IOException {
         Path temporary = null;
-        boolean accepted = false;
+        boolean accepted = false, committed = false;
         try {
             if (in.readInt() != MAGIC) throw new IOException("Unsupported transfer protocol");
             GameSystem system = Systems.byId(in.readUTF()).orElse(null);
@@ -72,11 +79,16 @@ public final class BluetoothGames {
             if (!MessageDigest.isEqual(expected, sha.digest())) throw new IOException("Game checksum mismatch");
             Files.move(temporary, target); // deliberately no REPLACE_EXISTING
             temporary = null;
+            committed = true;
             out.writeBoolean(true); out.flush();
+            if (!in.readBoolean()) throw new IOException("Game installed, but sender did not confirm receipt");
             return target;
         } catch (IOException | RuntimeException e) {
-            try { out.writeBoolean(false); out.writeUTF(accepted ? "Transfer failed" : "Game rejected: " + e.getMessage()); out.flush(); }
-            catch (IOException ignored) {}
+            if (!committed) {
+                try { out.writeBoolean(false); out.writeUTF(accepted ? "Transfer failed" : "Game rejected: " + e.getMessage()); out.flush(); }
+                catch (IOException ignored) {}
+            }
+            if (committed) throw new IOException("Game installed, but final acknowledgement could not be confirmed", e);
             if (e instanceof IOException io) throw io;
             throw new IOException("Invalid transfer", e);
         } finally {
