@@ -328,6 +328,22 @@ public final class Achievements {
             return new PlayedPage(List.copyOf(games), Math.max(0, num(response.get("Total"))));
         }
 
+        /** Resolve an installed ROM on demand, even if tile progress is disabled or not refreshed. */
+        public List<AchievementDetail> details(Game game) throws IOException, InterruptedException {
+            if (!configured()) throw new IOException("Set your username and Web API key first.");
+            if (!current()) throw new IOException("Account changed");
+            if (!supports(game) || !Files.exists(game.path())) return null;
+            int id;
+            Properties ids = loadIds();
+            String cached = ids.getProperty(idKey(game));
+            if (cached != null) {
+                try { id = Integer.parseInt(cached); }
+                catch (NumberFormatException e) { id = 0; }
+            } else id = identify(game, CONSOLES.get(game.system().id()), new HashMap<>());
+            if (!current()) throw new IOException("Account changed");
+            return id > 0 ? details(id) : null;
+        }
+
         public List<AchievementDetail> details(int gameId) throws IOException, InterruptedException {
             if (!configured()) throw new IOException("Set your username and Web API key first.");
             if (gameId <= 0) throw new IllegalArgumentException("Invalid game ID");
@@ -347,6 +363,11 @@ public final class Achievements {
             }
             return List.copyOf(result);
         }
+    }
+
+    /** Whether the library can offer an achievement action for this game's console. */
+    public static boolean supports(Game game) {
+        return game != null && CONSOLES.containsKey(game.system().id());
     }
 
     public Viewer viewer() { return new Viewer(); }
