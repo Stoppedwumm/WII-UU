@@ -254,11 +254,31 @@ public final class Config {
                     .orElse(new Profile("default", "Default user"));
         }
         public static synchronized Profile create(Path home, String rawName) throws IOException {
+            return createProfile(home, rawName, false);
+        }
+
+        /** Create a local profile named after an existing RetroAchievements account.
+         * Credentials are intentionally not copied or requested until that profile is selected.
+         */
+        public static synchronized Profile createAchievementUser(Path home, String username) throws IOException {
+            return createProfile(home, username, true);
+        }
+
+        private static Profile createProfile(Path home, String rawName, boolean achievementUser) throws IOException {
             String name = cleanName(rawName);
+            if (achievementUser && name.codePoints().anyMatch(Character::isWhitespace))
+                throw new IllegalArgumentException("Enter a RetroAchievements username without spaces");
             Properties p = read(home);
             unique(p, name, null);
             String id = UUID.randomUUID().toString().replace("-", "");
-            Files.createDirectories(dataHome(home, id));
+            Path data = Files.createDirectories(dataHome(home, id));
+            if (achievementUser) {
+                Properties initial = new Properties();
+                initial.setProperty("ra.user", name);
+                try (OutputStream out = Files.newOutputStream(data.resolve("config.properties"))) {
+                    initial.store(out, "WII-UU private user settings.");
+                }
+            }
             p.setProperty("user." + id, name);
             write(home, p);
             return new Profile(id, name);
