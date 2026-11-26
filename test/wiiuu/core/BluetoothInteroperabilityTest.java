@@ -51,7 +51,13 @@ public final class BluetoothInteroperabilityTest {
     private static boolean peer(Socket socket, String version, boolean host, boolean compatible) throws IOException {
         var in = new DataInputStream(socket.getInputStream());
         var out = new DataOutputStream(socket.getOutputStream());
-        try { BluetoothDsProtocol.handshake(in, out, version); }
+        int features = BluetoothDsProtocol.REQUIRED | (host ? BluetoothDsProtocol.POLL : BluetoothDsProtocol.CONNECTION_EVENTS);
+        try {
+            var agreed = BluetoothDsProtocol.handshake(in, out,
+                    new BluetoothDsProtocol.Capabilities("melonDS DS", version, host, features, host ? 65536 : 4096));
+            check(agreed.features() == BluetoothDsProtocol.REQUIRED && agreed.maxPacket() == 4096, "negotiated capabilities");
+            check(agreed.remote().host() != host, "opposite role");
+        }
         catch (IOException mismatch) { if (!compatible) return false; throw mismatch; }
         byte[] first = {1, 2, 3}, second = {4, 5, 6, 7};
         BluetoothDsProtocol.writePacket(out, host ? first : second);
