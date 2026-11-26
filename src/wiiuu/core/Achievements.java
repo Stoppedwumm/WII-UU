@@ -291,6 +291,92 @@ public final class Achievements {
         }
     }
 
+    /** Account-wide progress, including games that are not installed on this console. */
+    public record PlayedGame(int id, String title, String console, int earned, int hardcore, int total) {}
+    public record PlayedPage(List<PlayedGame> games, int total) {}
+    public record AchievementDetail(String title, String description, int points, String earned, String hardcore) {
+        public String state() {
+            return !hardcore.isBlank() ? "Hardcore" : !earned.isBlank() ? "Unlocked" : "Locked";
+        }
+    }
+
+    /** Capture credentials once so a viewer session cannot combine two accounts' responses. */
+    public final class Viewer {
+        private final String username = user(), apiKey = key();
+
+        public String username() { return username; }
+        public boolean configured() { return !username.isBlank() && !apiKey.isBlank(); }
+        public boolean current() { return username.equals(user()) && apiKey.equals(key()); }
+
+        public PlayedPage games(int offset, int count) throws IOException, InterruptedException {
+            if (!configured()) throw new IOException("Set your username and Web API key first.");
+            if (offset < 0 || count < 1 || count > 500) throw new IllegalArgumentException("Invalid page");
+            Map<String, Object> response = MiniJson.object(MiniJson.parse(getWithKey(apiKey,
+                    "API_GetUserCompletionProgress.php", "u", username, "c", String.valueOf(count),
+                    "o", String.valueOf(offset))));
+            if (!(response.get("Results") instanceof List<?>) || !response.containsKey("Total"))
+                throw new IOException("Invalid completion progress response");
+            List<PlayedGame> games = new ArrayList<>();
+            for (Object value : MiniJson.array(response.get("Results"))) {
+                Map<String, Object> item = MiniJson.object(value);
+                int id = num(item.get("GameID"));
+                if (id <= 0) continue;
+                games.add(new PlayedGame(id, field(item, "Title"), field(item, "ConsoleName"),
+                        num(item.get("NumAwarded")), num(item.get("NumAwardedHardcore")),
+                        num(item.get("MaxPossible"))));
+            }
+            return new PlayedPage(List.copyOf(games), Math.max(0, num(response.get("Total"))));
+        }
+
+        /** Resolve an installed ROM on demand, even if tile progress is disabled or not refreshed. */
+        public List<AchievementDetail> details(Game game) throws IOException, InterruptedException {
+            if (!configured()) throw new IOException("Set your username and Web API key first.");
+            if (!current()) throw new IOException("Account changed");
+            if (!supports(game) || !Files.exists(game.path())) return null;
+            int id;
+            Properties ids = loadIds();
+            String cached = ids.getProperty(idKey(game));
+            if (cached != null) {
+                try { id = Integer.parseInt(cached); }
+                catch (NumberFormatException e) { id = 0; }
+            } else id = identify(game, CONSOLES.get(game.system().id()), new HashMap<>());
+            if (!current()) throw new IOException("Account changed");
+            return id > 0 ? details(id) : null;
+        }
+
+        public List<AchievementDetail> details(int gameId) throws IOException, InterruptedException {
+            if (!configured()) throw new IOException("Set your username and Web API key first.");
+            if (gameId <= 0) throw new IllegalArgumentException("Invalid game ID");
+            Map<String, Object> response = MiniJson.object(MiniJson.parse(getWithKey(apiKey,
+                    "API_GetGameInfoAndUserProgress.php", "u", username, "g", String.valueOf(gameId))));
+            Object achievements = response.get("Achievements");
+            if (!(achievements instanceof Map<?, ?>) && !(achievements instanceof List<?>))
+                throw new IOException("Invalid achievement details response");
+            List<Object> items = new ArrayList<>(MiniJson.object(achievements).values());
+            items.addAll(MiniJson.array(achievements));
+            items.sort(java.util.Comparator.comparingInt(item -> num(MiniJson.object(item).get("DisplayOrder"))));
+            List<AchievementDetail> result = new ArrayList<>();
+            for (Object value : items) {
+                Map<String, Object> item = MiniJson.object(value);
+                result.add(new AchievementDetail(field(item, "Title"), field(item, "Description"),
+                        num(item.get("Points")), field(item, "DateEarned"), field(item, "DateEarnedHardcore")));
+            }
+            return List.copyOf(result);
+        }
+    }
+
+    /** Whether the library can offer an achievement action for this game's console. */
+    public static boolean supports(Game game) {
+        return game != null && CONSOLES.containsKey(game.system().id());
+    }
+
+    public Viewer viewer() { return new Viewer(); }
+
+    private static String field(Map<String, Object> item, String name) {
+        String value = MiniJson.string(item.get(name));
+        return value == null ? "" : value;
+    }
+
     // ---- RetroArch --------------------------------------------------------------------------------
 
     /**
@@ -354,7 +440,11 @@ public final class Achievements {
     }
 
     private String get(String endpoint, String... params) throws IOException, InterruptedException {
-        StringBuilder url = new StringBuilder(API).append(endpoint).append("?y=").append(enc(key()));
+        return getWithKey(key(), endpoint, params);
+    }
+
+    private String getWithKey(String apiKey, String endpoint, String... params) throws IOException, InterruptedException {
+        StringBuilder url = new StringBuilder(API).append(endpoint).append("?y=").append(enc(apiKey));
         for (int i = 0; i + 1 < params.length; i += 2) url.append('&').append(params[i]).append('=').append(enc(params[i + 1]));
         HttpRequest req = HttpRequest.newBuilder(URI.create(url.toString())).timeout(Duration.ofSeconds(40))
                 .header("User-Agent", "WII-UU (achievement progress)").GET().build();

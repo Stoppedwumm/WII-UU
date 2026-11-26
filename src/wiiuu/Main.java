@@ -608,7 +608,18 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
 
     @Override
     public void openSettings() {
-        view.openSettings(new SettingsScreen.Services(config, openBased, () -> server == null ? null : server.url(),
+        view.openSettings(settingsServices());
+        view.requestFocusInWindow();
+    }
+
+    @Override
+    public void openAchievements(Game game) {
+        view.openAchievements(settingsServices(), game);
+        view.requestFocusInWindow();
+    }
+
+    private SettingsScreen.Services settingsServices() {
+        return new SettingsScreen.Services(config, openBased, () -> server == null ? null : server.url(),
                 () -> view.startGuide(), this::restartIntoGuide, this::restartForUser,
                 new Updater(config, BUILD_VERSION), () -> {
                     quitReason = "update";
@@ -621,8 +632,7 @@ public final class Main implements MenuView.Actions, GamepadServer.Host, Launche
             openBased.refreshAsync();
             reactions.refreshAsync();
         }, scraper, () -> findCovers(true), achievements, this::askPhone, () -> phoneForm != null,
-                () -> server != null && view.padCount() > 0, () -> server, launcher::ra));
-        view.requestFocusInWindow();
+                () -> server != null && view.padCount() > 0, () -> server, launcher::ra);
     }
 
     private final wiiuu.core.Reactions reactions;
