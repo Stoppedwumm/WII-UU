@@ -419,6 +419,7 @@ public final class SettingsScreen {
     private final MenuView view;
     private final Services sv;
     private final Config config;
+    private final boolean achievementsOnly;
     private final long opened = System.currentTimeMillis();
     private long closing;
 
@@ -453,11 +454,21 @@ public final class SettingsScreen {
     }
 
     SettingsScreen(MenuView view, Services services) {
+        this(view, services, false);
+    }
+
+    SettingsScreen(MenuView view, Services services, boolean achievementsOnly) {
         this.view = view;
         this.sv = services;
         this.config = services.config();
+        this.achievementsOnly = achievementsOnly;
         if (config.getBool("dev.unlocked", false)) categories.add("Developer");
-        showCategory(0);
+        if (achievementsOnly) {
+            category = 1;
+            page = achievementViewerPage();
+            inSidebar = false;
+            reload(true);
+        } else showCategory(0);
         Sfx.select();
     }
 
@@ -564,6 +575,8 @@ public final class SettingsScreen {
             if (!stack.isEmpty()) {
                 pop();
                 Sfx.back();
+            } else if (achievementsOnly) {
+                close();
             } else {
                 inSidebar = true;
                 Sfx.move();
@@ -621,6 +634,8 @@ public final class SettingsScreen {
         if (!stack.isEmpty()) {
             pop();
             Sfx.back();
+        } else if (achievementsOnly) {
+            close();
         } else if (!inSidebar) {
             inSidebar = true;
             Sfx.back();
@@ -638,6 +653,10 @@ public final class SettingsScreen {
         }
         if (editor != null) {
             editor.moveCaret(delta);
+            return;
+        }
+        if (achievementsOnly) {
+            navigate(0, Integer.signum(delta));
             return;
         }
         int c = category + delta;
@@ -743,7 +762,7 @@ public final class SettingsScreen {
             Sfx.back();
             return;
         }
-        for (int i = 0; i < categories.size(); i++) {
+        for (int i = 0; !achievementsOnly && i < categories.size(); i++) {
             if (categoryRects[i] != null && categoryRects[i].contains(x, y)) {
                 if (i != category || !stack.isEmpty()) {
                     slideDir = i > category ? 1 : -1;
@@ -2959,13 +2978,13 @@ public final class SettingsScreen {
         g.setColor(MenuView.TEXT);
         g.setFont(MenuView.font(Font.BOLD, u * 4.6f));
         float titleY = u * 9;
-        String title = "Settings";
+        String title = achievementsOnly ? "Achievements" : "Settings";
         g.drawString(title, pad, titleY);
         float tx = pad + g.getFontMetrics().stringWidth(title);
         if (!stack.isEmpty() || page != null) {
             g.setColor(MenuView.TEXT_DIM);
             g.setFont(MenuView.font(Font.PLAIN, u * 3));
-            String crumb = "  ›  " + categories.get(category);
+            String crumb = achievementsOnly ? "" : "  ›  " + categories.get(category);
             for (Page p : stack.subList(Math.min(1, stack.size()), stack.size())) crumb += "  ›  " + p.title();
             if (!stack.isEmpty()) crumb += "  ›  " + page.title();
             fit(g, crumb, Font.PLAIN, u * 3, w - tx - pad - u * 10);
@@ -2983,9 +3002,9 @@ public final class SettingsScreen {
         g.draw(new java.awt.geom.Line2D.Double(closeRect.getMaxX() - m, closeRect.getY() + m, closeRect.getX() + m, closeRect.getMaxY() - m));
 
         // sidebar
-        float sideW = Math.max(w * 0.22f, u * 30), top = u * 14, bottom = h - u * 11;
+        float sideW = achievementsOnly ? 0 : Math.max(w * 0.22f, u * 30), top = u * 14, bottom = h - u * 11;
         float itemH = u * 7.2f;
-        for (int i = 0; i < categories.size(); i++) {
+        for (int i = 0; !achievementsOnly && i < categories.size(); i++) {
             float y = top + i * (itemH + u * 1.2f);
             Rectangle2D r = new Rectangle2D.Float(pad, y, sideW - u * 2, itemH);
             categoryRects[i] = r;
@@ -3001,7 +3020,7 @@ public final class SettingsScreen {
         }
 
         // WII-UU, below the categories, with its bubble above it
-        if (mascotOn()) {
+        if (!achievementsOnly && mascotOn()) {
             float s = u * 3.6f;
             if (!inSidebar && frameSet) mascot.look(frame[0] + frame[2] / 2, frame[1] + frame[3] / 2);
             else {
@@ -3012,7 +3031,7 @@ public final class SettingsScreen {
         }
 
         // the page: a card with the rows, sliding in when it changes
-        float cx = pad + sideW + u * 2, cw = w - cx - pad, cy = top, ch = bottom - top;
+        float cx = pad + (achievementsOnly ? 0 : sideW + u * 2), cw = w - cx - pad, cy = top, ch = bottom - top;
         double slide = 1 - ease((now - changed) / (double) SLIDE_MS);
         float shift = (float) (slide * slideDir * u * 6);
         g.setColor(MenuView.CARD);
@@ -3050,6 +3069,7 @@ public final class SettingsScreen {
         g.setColor(MenuView.TEXT_DIM);
         String hints = editor != null ? "A type   B delete   L/R move   + done"
                 : capturing != null ? "Press the key   Esc cancel"
+                : achievementsOnly ? "A choose   B back   L/R move"
                 : "A choose   B back   ◀ ▶ change   L/R category";
         fit(g, hints, Font.PLAIN, u * 2.3f, u * 48);
         g.drawString(hints, w - pad - g.getFontMetrics().stringWidth(hints), fy);
