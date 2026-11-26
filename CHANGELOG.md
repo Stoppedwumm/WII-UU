@@ -5,7 +5,7 @@ in Settings > General > What's new, and before installing an update.
 
 ## 2.2.0 (2026-11-26)
 **RetroAchievements addition**
-- Added Achievement Viewer
+- Add a controller-friendly RetroAchievements viewer under Games and User profiles, with paginated account-wide game progress, locked/unlocked and hardcore achievements, points, descriptions and unlock dates.
 - Linked RetroAchievements User to Wii-UU User
 
 ## 2.1.13 (2026-11-25)
