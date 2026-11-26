@@ -4,6 +4,10 @@ What changed in each WII-UU release, newest first. WII-UU shows these notes afte
 in Settings > General > What's new, and before installing an update.
 
 ## 2.2.0 (2026-11-26)
+**Bluetooth (experimental, Linux / Raspberry Pi OS)**
+- Send and receive selected single-file games between WII-UU and standalone Choccy Milk using paired Bluetooth Classic devices, with SHA-256 verification and no overwrite.
+- Add two-player DS local multiplayer via melonDS DS libretro netpacket callbacks over Bluetooth RFCOMM. Set host/join in Bluetooth settings; requires compatible cores and hardware testing.
+
 **RetroAchievements addition**
 - Add a controller-friendly RetroAchievements viewer from the hovered or focused game tile (click the Achievements button or press Y), and under Games and User profiles, with paginated account-wide game progress, locked/unlocked and hardcore achievements, points, descriptions and unlock dates.
 - Linked RetroAchievements User to Wii-UU User
