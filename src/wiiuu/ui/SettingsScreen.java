@@ -1140,6 +1140,7 @@ public final class SettingsScreen {
         return new Page("Bluetooth games & DS multiplayer", () -> {
             List<Row> r = new ArrayList<>();
             r.add(new Info(wiiuu.core.BluetoothLink.availability()));
+            r.add(new Info("Either end can be WII-UU or Choccy Milk. Same-app and mixed-app connections use the same protocol."));
             if (!wiiuu.core.BluetoothLink.supported()) return r;
             r.add(new Text("Paired device MAC", "Enter the other device's Bluetooth address, not its Wi-Fi MAC.",
                     () -> wiiuu.core.BluetoothLink.peer(config), value -> {
