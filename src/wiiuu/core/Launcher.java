@@ -265,7 +265,7 @@ public final class Launcher {
             throw new LaunchException("Getting Java for Choccy Milk (about 50 MB, once)\u2026 the game starts by itself", true);
         }
         String system = game.system().id();
-        boolean localOnly = hereOnce.remove(game.path()) || system.equals("nds") && DsOnline.enabled(config)
+        boolean localOnly = hereOnce.remove(game.path()) || system.equals("nds") && (DsOnline.enabled(config) || BluetoothLink.dsEnabled(config))
                 || ChoccyPicture.n64OpenGl(config, system);
         Elsewhere away = localOnly ? null : elsewhere.apply(game);
         if (away != null) {
@@ -468,6 +468,12 @@ public final class Launcher {
         String lending = lendingTo.get();
         if (lending != null) throw new LaunchException("This WII-UU is playing a game for " + lending + " right now");
         long request = ++launchRequest;
+        if (game.system().id().equals("nds") && BluetoothLink.dsEnabled(config)) {
+            if (!BluetoothLink.supported() || !BluetoothLink.validAddress(BluetoothLink.peer(config)))
+                throw new LaunchException("Bluetooth DS multiplayer requires Linux and a paired peer MAC address.");
+            launchChoccy(game, request);
+            return;
+        }
         if (!OpenBased.handles(game) && !Reactions.handles(game) && choccyFor(game)) {
             launchChoccy(game, request);
             return;
