@@ -6,7 +6,7 @@ in Settings > General > What's new, and before installing an update.
 ## 2.2.0 (2026-11-26)
 **Bluetooth (experimental, Linux / Raspberry Pi OS)**
 - Send and receive selected single-file games between any pair of WII-UU and/or standalone Choccy Milk devices using paired Bluetooth Classic devices, with SHA-256 verification and no overwrite.
-- Add two-player DS local multiplayer via melonDS DS libretro netpacket callbacks over Bluetooth RFCOMM. Either application can host or join either application, including same-app sessions. Requires compatible cores and hardware testing.
+- Add two-player local multiplayer via libretro netpacket callbacks over Bluetooth RFCOMM, defaulting to melonDS DS with opt-in support for other netpacket-compatible cores. Peers negotiate core identity, protocol, capabilities and packet size. Either application can host or join either application, including same-app sessions. Requires compatible cores and hardware testing.
 
 **RetroAchievements addition**
 - Add a controller-friendly RetroAchievements viewer from the hovered or focused game tile (click the Achievements button or press Y), and under Games and User profiles, with paginated account-wide game progress, locked/unlocked and hardcore achievements, points, descriptions and unlock dates.
