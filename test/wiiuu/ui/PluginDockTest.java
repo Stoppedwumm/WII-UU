@@ -20,11 +20,11 @@ public final class PluginDockTest {
                 view.setSize(1600, 900);
                 var inDock = MenuView.class.getDeclaredField("inDock"); inDock.setAccessible(true); inDock.setBoolean(view, true);
                 var selection = MenuView.class.getDeclaredField("dockSel"); selection.setAccessible(true);
-                for (int i = 0; i < 5; i++) view.navigate(1, 0);
-                if (selection.getInt(view) != 5) throw new AssertionError("Cannot navigate from built-in controls to first app");
+                for (int i = 0; i < 4; i++) view.navigate(1, 0);
+                if (selection.getInt(view) != 4) throw new AssertionError("Cannot navigate from Settings controls to first app");
                 save(view, "plugin-dock.png");
                 var embedded = PluginStore.catalog().stream().filter(PluginStore.Entry::embeddedPlugin).findFirst().orElseThrow();
-                selection.setInt(view, 5 + PluginStore.active(config).indexOf(embedded));
+                selection.setInt(view, 4 + PluginStore.active(config).indexOf(embedded));
                 view.activate();
                 if (view.getComponentCount() != 1 || !(view.getComponent(0) instanceof choccymilk.App))
                     throw new AssertionError("Choccy Milk must be a child of the existing menu");
@@ -35,36 +35,9 @@ public final class PluginDockTest {
                 if (view.getComponentCount() != 0) throw new AssertionError("Embedded app must be removed on close");
                 for (var entry : PluginStore.catalog()) PluginStore.setEnabled(config, entry, false);
                 view.reloadPluginDock();
-                if (selection.getInt(view) > 4) throw new AssertionError("Selection must stay valid after disabling apps");
+                if (selection.getInt(view) > 3) throw new AssertionError("Selection must stay valid after disabling apps");
                 var services = new SettingsScreen.Services(config, null, () -> "", () -> {}, () -> {}, () -> {}, null,
                         () -> {}, () -> {}, null, () -> {}, null, s -> {}, () -> false, () -> false, () -> null, () -> null);
-                var viewerServices = new SettingsScreen.Services(config, null, () -> "", () -> {}, () -> {}, () -> {}, null,
-                        () -> {}, () -> {}, null, () -> {}, new wiiuu.core.Achievements(config),
-                        s -> {}, () -> false, () -> false, () -> null, () -> null);
-                var quickRef = new java.util.concurrent.atomic.AtomicReference<MenuView>();
-                MenuView quick = new MenuView(config, true, new MenuView.Actions() {
-                    @Override public void launch(wiiuu.core.Game game) {}
-                    @Override public void openSettings() { throw new AssertionError("Dock opened Settings instead of viewer"); }
-                    @Override public void openAchievements() { quickRef.get().openAchievements(viewerServices); }
-                    @Override public void quit() {}
-                    @Override public void refresh() {}
-                    @Override public void closeGame() {}
-                });
-                quickRef.set(quick);
-                inDock.setBoolean(quick, true);
-                selection.setInt(quick, 4);
-                quick.activate();
-                // Drain the queued dock action before checking the overlay.
-                java.awt.SecondaryLoop loop = java.awt.Toolkit.getDefaultToolkit().getSystemEventQueue().createSecondaryLoop();
-                SwingUtilities.invokeLater(loop::exit);
-                loop.enter();
-                var overlayField = MenuView.class.getDeclaredField("settings"); overlayField.setAccessible(true);
-                SettingsScreen overlay = (SettingsScreen) overlayField.get(quick);
-                if (overlay == null) throw new AssertionError("Dock did not open viewer directly");
-                var direct = SettingsScreen.class.getDeclaredField("achievementsOnly"); direct.setAccessible(true);
-                if (!direct.getBoolean(overlay)) throw new AssertionError("Viewer is not standalone");
-                quick.back();
-                if (!overlay.isClosing()) throw new AssertionError("B should return directly to library");
                 SettingsScreen settings = new SettingsScreen(view, services);
                 var category = SettingsScreen.class.getDeclaredMethod("showCategory", int.class);
                 category.setAccessible(true); category.invoke(settings, 4);
