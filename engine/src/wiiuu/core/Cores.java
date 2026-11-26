@@ -336,9 +336,11 @@ public final class Cores {
             if (BluetoothLink.dsEnabled(config)) {
                 o.remove("wiiuu.dsOnline");
                 o.put("melonds_network_mode", "disabled");
-                o.put("wiiuu.bluetooth.role", BluetoothLink.role(config));
-                o.put("wiiuu.bluetooth.peer", BluetoothLink.peer(config));
             }
+        }
+        if (BluetoothLink.multiplayerEnabled(config, systemId)) {
+            o.put("wiiuu.bluetooth.role", BluetoothLink.role(config));
+            o.put("wiiuu.bluetooth.peer", BluetoothLink.peer(config));
         }
         if (systemId.equals("n64")) {
             if (!ChoccyPicture.n64OpenGl(config, systemId)) {
