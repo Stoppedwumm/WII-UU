@@ -175,6 +175,8 @@ WIIUU_CI_COMMAND_13
     run_check "Test multi-user profiles and sign-out UI" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_14'
 javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/UserProfilesTest.java test/wiiuu/ui/SignOutPowerTest.java test/wiiuu/ui/UserSelectScreenTest.java test/wiiuu/input/LocalPadsHomeTest.java
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.UserProfilesTest
+javac --release 17 -cp build/classes -d build/tests test/wiiuu/core/AchievementViewerTest.java
+java --add-modules jdk.httpserver -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.core.AchievementViewerTest
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.SignOutPowerTest
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.ui.UserSelectScreenTest
 java -Djava.awt.headless=true -cp build/classes:build/tests wiiuu.input.LocalPadsHomeTest
