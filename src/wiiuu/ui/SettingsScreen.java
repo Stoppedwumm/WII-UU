@@ -1870,6 +1870,20 @@ public final class SettingsScreen {
                             say("Unable to create user: " + e.getMessage());
                         }
                     }), null, null));
+            r.add(new Action("Add RetroAchievements user", "Create a local profile with an existing RetroAchievements username. Sign in after switching.", () ->
+                    edit("RetroAchievements username", "", false, name -> {
+                        try {
+                            wiiuu.core.Config.Users.Profile added =
+                                    wiiuu.core.Config.Users.createAchievementUser(config.home(), name);
+                            reload(false);
+                            say("Created " + added.name() + ". Switch to it and open RetroAchievements account to sign in.");
+                        } catch (IOException | IllegalArgumentException e) {
+                            say("Unable to create user: " + e.getMessage());
+                        }
+                    }), null, null));
+            r.add(new Link("RetroAchievements account", "Set up achievements for the current local user.",
+                    () -> config.get("ra.user", "").isBlank() ? "not set" : config.get("ra.user", ""),
+                    this::achievementsPage));
             r.add(new Action("Rename current user", "The user ID and saved data stay the same.", () ->
                     edit("User name", wiiuu.core.Config.Users.active(config.home()).name(), false, name -> {
                         try {
