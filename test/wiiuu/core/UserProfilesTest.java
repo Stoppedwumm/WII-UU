@@ -88,6 +88,21 @@ public final class UserProfilesTest {
         try { Config.Users.remove(home, alice.id()); throw new AssertionError("active profile removed"); }
         catch (IllegalArgumentException expected) {}
         check(new Config(home).get("ra.user", "").equals("Alice"), "data available after switching back");
+        Config.Users.Profile achievement = Config.Users.createAchievementUser(home, " RetroPlayer ");
+        check(achievement.name().equals("RetroPlayer"), "achievement profile uses trimmed username");
+        check(Config.Users.activeId(home).equals(alice.id()), "creating achievement user does not switch sessions");
+        try { Config.Users.createAchievementUser(home, "retroplayer"); throw new AssertionError("duplicate accepted"); }
+        catch (IllegalArgumentException expected) {}
+        try { Config.Users.createAchievementUser(home, "two words"); throw new AssertionError("spaces accepted"); }
+        catch (IllegalArgumentException expected) {}
+        Config.Users.select(home, achievement.id());
+        Config achievementConfig = new Config(home);
+        check(achievementConfig.get("ra.user", "").equals("RetroPlayer"), "achievement username prefilled");
+        check(achievementConfig.get("ra.apikey", "").isEmpty(), "no inherited achievement API key");
+        check(achievementConfig.get("ra.password", "").isEmpty(), "no inherited achievement password");
+        check(achievementConfig.get("ra.token", "").isEmpty(), "no inherited achievement token");
+        Config.Users.select(home, alice.id());
+        check(new Config(home).get("ra.user", "").equals("Alice"), "original achievement username unchanged");
         System.out.println("UserProfilesTest passed");
     }
 
