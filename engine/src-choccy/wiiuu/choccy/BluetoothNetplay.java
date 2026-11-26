@@ -5,6 +5,7 @@ import java.lang.foreign.*;
 import java.lang.invoke.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import wiiuu.core.BluetoothLink;
+import wiiuu.core.BluetoothDsProtocol;
 import static java.lang.foreign.ValueLayout.*;
 
 /** Two-player libretro netpacket session over a paired RFCOMM stream. Native callbacks stay on the core thread. */
@@ -45,9 +46,7 @@ final class BluetoothNetplay implements AutoCloseable {
         try {
             String version = protocol.isEmpty() ? coreVersion : protocol;
             var out = link.output(); var in = link.input();
-            out.writeUTF("WIIUU-DS-BT-1"); out.writeUTF(version); out.flush();
-            if (!in.readUTF().equals("WIIUU-DS-BT-1") || !in.readUTF().equals(version))
-                throw new IOException("Incompatible DS multiplayer core versions");
+            BluetoothDsProtocol.handshake(in, out, version);
             Linker linker = Linker.nativeLinker();
             var lookup = MethodHandles.lookup();
             MemorySegment send = linker.upcallStub(lookup.bind(this, "send", MethodType.methodType(void.class,
@@ -57,16 +56,14 @@ final class BluetoothNetplay implements AutoCloseable {
                     FunctionDescriptor.ofVoid(), arena);
             worker("ds-bluetooth-receive", () -> {
                 while (!closed) {
-                    int size = in.readInt();
-                    if (size <= 0 || size > 65536) throw new IOException("Invalid DS packet");
-                    byte[] packet = in.readNBytes(size);
-                    if (packet.length != size || !incoming.offer(packet)) throw new IOException("DS receive buffer overflow");
+                    if (!incoming.offer(BluetoothDsProtocol.readPacket(in)))
+                        throw new IOException("DS receive buffer overflow");
                 }
             });
             worker("ds-bluetooth-send", () -> {
                 while (!closed) {
                     byte[] packet = outgoing.take();
-                    out.writeInt(packet.length); out.write(packet); out.flush();
+                    BluetoothDsProtocol.writePacket(out, packet);
                 }
             });
             active = true;
@@ -91,7 +88,7 @@ final class BluetoothNetplay implements AutoCloseable {
         try {
             int id = Short.toUnsignedInt(client);
             if (id != 65535 && id != (host ? 1 : 0)) return;
-            if (size < 0 || size > 65536 || buf.address() == 0
+            if (size < 0 || size > BluetoothDsProtocol.MAX_PACKET || buf.address() == 0
                     || !outgoing.offer(buf.reinterpret(size).toArray(JAVA_BYTE))) failed = true;
         } catch (Throwable e) { failed = true; }
     }
