@@ -25,11 +25,14 @@ public final class BluetoothGames {
             throw new IOException("Choose a supported, self-contained game file (not a multi-file disc manifest).");
         try (BluetoothLink link = BluetoothLink.open(false, peer, BluetoothLink.TRANSFER_CHANNEL)) {
             send(link.input(), link.output(), system, file, progress);
+            link.finish();
         }
     }
     public static Path receive(Config config, String peer, LongConsumer progress) throws IOException {
         try (BluetoothLink link = BluetoothLink.open(true, peer, BluetoothLink.TRANSFER_CHANNEL)) {
-            return receive(link.input(), link.output(), config, progress);
+            Path received = receive(link.input(), link.output(), config, progress);
+            link.finish();
+            return received;
         }
     }
     static void send(DataInputStream in, DataOutputStream out, GameSystem system, Path file, LongConsumer progress) throws IOException {
