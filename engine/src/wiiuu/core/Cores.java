@@ -252,7 +252,7 @@ public final class Cores {
                 t.start();
                 throw new Downloading("Getting " + want.get(0) + " for " + system.name() + "'s core settings\u2026 the game starts by itself in a moment", true);
             }
-            if (dsOnline) throw new Downloading("DS online needs melonDS DS. Install its libretro core, or enable core downloads and restart the app to retry.");
+            if (dsOnline) throw new Downloading("DS networking needs melonDS DS. Install its libretro core, or enable core downloads and restart the app to retry.");
             System.out.println("[choccy] " + want.get(0) + " isn't available for this computer: " + system.name()
                     + " plays with its usual core (widescreen stretched, upscaling smoothed)");
         }
