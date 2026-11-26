@@ -454,10 +454,10 @@ public final class SettingsScreen {
     }
 
     SettingsScreen(MenuView view, Services services) {
-        this(view, services, false);
+        this(view, services, false, null);
     }
 
-    SettingsScreen(MenuView view, Services services, boolean achievementsOnly) {
+    SettingsScreen(MenuView view, Services services, boolean achievementsOnly, wiiuu.core.Game game) {
         this.view = view;
         this.sv = services;
         this.config = services.config();
@@ -465,7 +465,7 @@ public final class SettingsScreen {
         if (config.getBool("dev.unlocked", false)) categories.add("Developer");
         if (achievementsOnly) {
             category = 1;
-            page = achievementViewerPage();
+            page = game == null ? achievementViewerPage() : localGameAchievementsPage(game);
             inSidebar = false;
             reload(true);
         } else showCategory(0);
@@ -1323,11 +1323,23 @@ public final class SettingsScreen {
         });
     }
 
+    private Page localGameAchievementsPage(wiiuu.core.Game game) {
+        var viewer = sv.achievements().viewer();
+        return asyncAchievementPage(game.name(), viewer, () -> viewer.details(game), achievements -> {
+            if (achievements == null) return List.of(new Info("No RetroAchievements game found for this ROM."));
+            return achievementDetailRows(game.system().name(), achievements);
+        });
+    }
+
     private Page achievementDetailsPage(wiiuu.core.Achievements.Viewer viewer,
                                         wiiuu.core.Achievements.PlayedGame game) {
-        return asyncAchievementPage(game.title(), viewer, () -> viewer.details(game.id()), achievements -> {
+        return asyncAchievementPage(game.title(), viewer, () -> viewer.details(game.id()),
+                achievements -> achievementDetailRows(game.console(), achievements));
+    }
+
+    private List<Row> achievementDetailRows(String console, List<wiiuu.core.Achievements.AchievementDetail> achievements) {
             List<Row> r = new ArrayList<>();
-            r.add(new Info(game.console() + " · " + achievements.stream()
+            r.add(new Info(console + " · " + achievements.stream()
                     .filter(a -> !a.state().equals("Locked")).count() + "/" + achievements.size() + " unlocked"));
             if (achievements.isEmpty()) r.add(new Info("This game has no achievements."));
             for (var a : achievements) {
@@ -1339,7 +1351,6 @@ public final class SettingsScreen {
                                 new Info(a.hardcore().isBlank() ? "Not unlocked in hardcore" : "Hardcore: " + a.hardcore())))));
             }
             return r;
-        });
     }
 
     private String raCheck = "";
@@ -2986,7 +2997,7 @@ public final class SettingsScreen {
             g.setFont(MenuView.font(Font.PLAIN, u * 3));
             String crumb = achievementsOnly ? "" : "  ›  " + categories.get(category);
             for (Page p : stack.subList(Math.min(1, stack.size()), stack.size())) crumb += "  ›  " + p.title();
-            if (!stack.isEmpty()) crumb += "  ›  " + page.title();
+            if (!stack.isEmpty() || achievementsOnly) crumb += "  ›  " + page.title();
             fit(g, crumb, Font.PLAIN, u * 3, w - tx - pad - u * 10);
             g.drawString(crumb, tx, titleY);
         }
