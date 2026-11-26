@@ -952,6 +952,7 @@ public final class SettingsScreen {
         }));
         r.add(new Action("Choccy Milk cores", "Choose the core for each console, see installed cores, or download/reinstall one. Changes apply to the next game.",
                 () -> wiiuu.engine.CoreManagerPanel.open(view, config, view::gameRunning), null, null));
+        r.add(new Link("Bluetooth games & DS multiplayer", "Send and receive games or play DS local wireless with a paired device.", null, this::bluetoothPage));
         r.add(new Link("DS online (WFC)", "Online settings shared with standalone Choccy Milk; uses the melonDS DS core.", null, this::dsOnlinePage));
         r.add(new Link("Choccy Milk picture", "Upscaling (also rounded xBR and a CRT TV look), blending frames and "
                 + "widescreen, per console.", null, this::choccyPicturePage));
@@ -1130,6 +1131,84 @@ public final class SettingsScreen {
                     + "room for the picture. Wired networks score better than Wi-Fi."));
             return r;
         });
+    }
+
+    private volatile String bluetoothStatus = "";
+    private volatile boolean bluetoothBusy;
+
+    private Page bluetoothPage() {
+        return new Page("Bluetooth games & DS multiplayer", () -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info(wiiuu.core.BluetoothLink.availability()));
+            if (!wiiuu.core.BluetoothLink.supported()) return r;
+            r.add(new Text("Paired device MAC", "Enter the other device's Bluetooth address, not its Wi-Fi MAC.",
+                    () -> wiiuu.core.BluetoothLink.peer(config), value -> {
+                        String peer = value.trim();
+                        if (!peer.isBlank() && !wiiuu.core.BluetoothLink.validAddress(peer)) {
+                            say("Use a Bluetooth MAC such as AA:BB:CC:DD:EE:FF"); return;
+                        }
+                        config.set("choccy.bluetooth.peer", peer); config.save();
+                    }, false, "not set"));
+            r.add(new Header("Game transfer"));
+            r.add(new Info("Start Receive on the other device first. Only selected single-file games are sent; existing files are never replaced."));
+            r.add(new Link("Send game", "Select the console and game file.", null, this::bluetoothSendPage));
+            r.add(new Action("Receive game", "Wait for the paired device to send a game.", () -> bluetoothTransfer(null, null),
+                    () -> bluetoothStatus, null));
+            r.add(new Header("DS local multiplayer (experimental)"));
+            List<String> roles = List.of("off", "host", "join");
+            r.add(new Choice("DS Bluetooth role", "Choose Host on one device and Join on the other, then launch a DS game on both.", 
+                    () -> List.of("Off", "Host", "Join"), () -> Math.max(0, roles.indexOf(wiiuu.core.BluetoothLink.role(config))), i -> {
+                        if (view.gameRunning()) { say("Close the game before changing multiplayer"); return; }
+                        config.set("choccy.bluetooth.ds", roles.get(i)); config.save();
+                    }));
+            r.add(new Info("Launch the host first. Both devices need compatible melonDS DS cores. Use the game's Local Multiplayer menu. No Wi-Fi or Internet is needed; Bluetooth latency may affect compatibility."));
+            return r;
+        });
+    }
+
+    private Page bluetoothSendPage() {
+        return new Page("Send game by Bluetooth", () -> {
+            List<Row> r = new ArrayList<>();
+            for (GameSystem system : Systems.ALL) {
+                if (system.extensions().isEmpty()) continue;
+                r.add(new Link(system.name(), "Select a self-contained game file.", null,
+                        () -> browser("Choose game to send", config.romDir(system), false,
+                                path -> bluetoothTransfer(system, path))));
+            }
+            return r;
+        });
+    }
+
+    private void bluetoothTransfer(GameSystem system, Path path) {
+        if (bluetoothBusy || view.gameRunning()) { say("Finish the current game or Bluetooth transfer first."); return; }
+        String peer = wiiuu.core.BluetoothLink.peer(config);
+        if (!wiiuu.core.BluetoothLink.validAddress(peer)) { say("Set the paired Bluetooth device address first."); return; }
+        if (path != null && !wiiuu.core.BluetoothGames.transferable(system, path.getFileName().toString())) {
+            say("Choose a supported single-file game."); return;
+        }
+        bluetoothBusy = true;
+        bluetoothStatus = path == null ? "Waiting for sender..." : "Connecting to receiver...";
+        touch();
+        Thread worker = new Thread(() -> {
+            try {
+                java.util.function.LongConsumer progress = n -> {
+                    bluetoothStatus = (n / 1048576) + " MiB transferred";
+                    SwingUtilities.invokeLater(this::touch);
+                };
+                if (path == null) {
+                    Path received = wiiuu.core.BluetoothGames.receive(config, peer, progress);
+                    bluetoothStatus = "Received " + received.getFileName();
+                } else {
+                    wiiuu.core.BluetoothGames.send(peer, system, path, progress);
+                    bluetoothStatus = "Sent " + path.getFileName();
+                }
+            } catch (IOException e) { bluetoothStatus = "Bluetooth: " + e.getMessage(); }
+            finally {
+                bluetoothBusy = false;
+                SwingUtilities.invokeLater(() -> { say(bluetoothStatus); touch(); });
+            }
+        }, "bluetooth-game-transfer");
+        worker.setDaemon(true); worker.start();
     }
 
     private Page dsOnlinePage() {
