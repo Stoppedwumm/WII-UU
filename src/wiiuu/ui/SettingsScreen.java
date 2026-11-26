@@ -913,6 +913,8 @@ public final class SettingsScreen {
         r.add(new Header("RetroAchievements"));
         r.add(new Link("RetroAchievements account", "Achievements in RetroArch mode, and your progress on your games' tiles.",
                 () -> sv.achievements().configured() ? config.get("ra.user", "") : "not set", this::achievementsPage));
+        r.add(new Link("Achievements viewer", "Browse your played games and individual achievements.",
+                null, this::achievementViewerPage));
         if (sv.achievements().configured()) {
             r.add(toggle("Show progress on games", "How many of a game's achievements you have, on its tile.", "ra.enabled", true, null));
         }
@@ -1194,6 +1196,129 @@ public final class SettingsScreen {
                 config.set("choccy." + id + ".widescreen", on ? "true" : null);
                 config.save();
             }));
+            return r;
+        });
+    }
+
+    private static final int ACHIEVEMENT_PAGE_SIZE = 50;
+
+    /** A page-owned async load; no network on the UI thread and no results leaked between pages. */
+    private <T> Page asyncAchievementPage(String title, wiiuu.core.Achievements.Viewer viewer,
+                                          java.util.concurrent.Callable<T> load,
+                                          java.util.function.Function<T, List<Row>> render) {
+        final class State {
+            T data;
+            boolean loading, attempted, failed;
+            Page target;
+
+            void fetch() {
+                if (loading) return;
+                attempted = true;
+                loading = true;
+                failed = false;
+                data = null;
+                Thread worker = new Thread(() -> {
+                    T loaded = null;
+                    boolean error = false;
+                    try {
+                        loaded = load.call();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        error = true;
+                    } catch (Exception e) {
+                        error = true;
+                    }
+                    final T result = loaded;
+                    final boolean failure = error;
+                    SwingUtilities.invokeLater(() -> {
+                        data = result;
+                        failed = failure;
+                        loading = false;
+                        if (page == target) {
+                            reload(true);
+                            touch();
+                        }
+                    });
+                }, "achievement-viewer");
+                worker.setDaemon(true);
+                worker.start();
+            }
+
+            List<Row> rows() {
+                List<Row> r = new ArrayList<>();
+                if (!viewer.current()) {
+                    r.add(new Info("The account changed. Reopen the viewer to see the current account."));
+                    return r;
+                }
+                if (!viewer.configured()) {
+                    r.add(new Info("Set your RetroAchievements username and Web API key first."));
+                    r.add(new Link("RetroAchievements account", "Configure your own account.", null,
+                            SettingsScreen.this::achievementsPage));
+                    return r;
+                }
+                if (!attempted) fetch();
+                if (loading) {
+                    r.add(new Info("Loading achievements..."));
+                } else {
+                    r.add(new Action(failed ? "Retry" : "Refresh", "Fetch the latest progress.", () -> {
+                        fetch();
+                        reload(true);
+                        touch();
+                    }, null, null));
+                    if (failed) r.add(new Info("Couldn't load achievements. Check your connection and API key, then retry."));
+                    else if (data != null) r.addAll(render.apply(data));
+                }
+                return r;
+            }
+        }
+        State state = new State();
+        state.target = new Page(title, state::rows);
+        return state.target;
+    }
+
+    private Page achievementViewerPage() {
+        return achievementGamesPage(sv.achievements().viewer(), 0);
+    }
+
+    private Page achievementGamesPage(wiiuu.core.Achievements.Viewer viewer, int offset) {
+        return asyncAchievementPage("Achievements viewer", viewer,
+                () -> viewer.games(offset, ACHIEVEMENT_PAGE_SIZE), result -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info("RetroAchievements: " + viewer.username() + " · " + result.total() + " played games"));
+            if (result.games().isEmpty()) r.add(new Info("No game progress on this page."));
+            if (offset > 0) r.add(new Action("Previous page", "Go to the previous games.", () -> {
+                page = achievementGamesPage(viewer, Math.max(0, offset - ACHIEVEMENT_PAGE_SIZE));
+                reload(true);
+            }, null, null));
+            for (var game : result.games()) {
+                r.add(new Link(game.title(), game.console() + " · " + game.hardcore() + " hardcore",
+                        () -> game.earned() + "/" + game.total(),
+                        () -> achievementDetailsPage(viewer, game)));
+            }
+            if (offset + ACHIEVEMENT_PAGE_SIZE < result.total())
+                r.add(new Action("Next page", "Browse more played games.", () -> {
+                    page = achievementGamesPage(viewer, offset + ACHIEVEMENT_PAGE_SIZE);
+                    reload(true);
+                }, null, null));
+            return r;
+        });
+    }
+
+    private Page achievementDetailsPage(wiiuu.core.Achievements.Viewer viewer,
+                                        wiiuu.core.Achievements.PlayedGame game) {
+        return asyncAchievementPage(game.title(), viewer, () -> viewer.details(game.id()), achievements -> {
+            List<Row> r = new ArrayList<>();
+            r.add(new Info(game.console() + " · " + achievements.stream()
+                    .filter(a -> !a.state().equals("Locked")).count() + "/" + achievements.size() + " unlocked"));
+            if (achievements.isEmpty()) r.add(new Info("This game has no achievements."));
+            for (var a : achievements) {
+                r.add(new Link(a.title(), a.description(), () -> a.state() + " · " + a.points() + " pts",
+                        () -> new Page(a.title(), () -> List.of(
+                                new Info(a.description()),
+                                new Info(a.state() + " · " + a.points() + " points"),
+                                new Info(a.earned().isBlank() ? "Not unlocked in softcore" : "Unlocked: " + a.earned()),
+                                new Info(a.hardcore().isBlank() ? "Not unlocked in hardcore" : "Hardcore: " + a.hardcore())))));
+            }
             return r;
         });
     }
@@ -1881,6 +2006,8 @@ public final class SettingsScreen {
                             say("Unable to create user: " + e.getMessage());
                         }
                     }), null, null));
+            r.add(new Link("Achievements viewer", "View progress for the current local user.", null,
+                    this::achievementViewerPage));
             r.add(new Link("RetroAchievements account", "Set up achievements for the current local user.",
                     () -> config.get("ra.user", "").isBlank() ? "not set" : config.get("ra.user", ""),
                     this::achievementsPage));
