@@ -61,7 +61,7 @@ def stage(root, release, beta):
     shutil.copyfile(downloads / name, downloads / 'WII-UU-latest.zip')
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
         # Only explicitly named regular release payloads are copied; paths never come from the ZIP.
-        for filename in ['install.sh', 'WII-UU-Cleanup.jar', 'WII-UU-OEM-Creator.jar', 'ChoccyMilk.jar', 'CHANGELOG.md']:
+        for filename in ['install.sh', 'install.ps1', 'WII-UU-Cleanup.jar', 'WII-UU-OEM-Creator.jar', 'ChoccyMilk.jar', 'CHANGELOG.md']:
             entries = [entry for entry in archive.infolist() if not entry.is_dir() and Path(entry.filename).name == filename]
             if len(entries) == 1:
                 destination = directory / 'changelog.md' if filename == 'CHANGELOG.md' else downloads / filename

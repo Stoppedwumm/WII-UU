@@ -4,6 +4,9 @@ What changed in each WII-UU release, newest first. WII-UU shows these notes afte
 in Settings > General > What's new, and before installing an update.
 
 ## 2.2.0 (2026-11-26)
+**Windows installer**
+- Add a PowerShell web installer with the same uninstall, repair, update and disk-space optimization menu as the Unix one-liner. Maintenance does not download the full release ZIP; cleanup previews eligible staging folders before removal.
+
 **Bluetooth (experimental, Linux / Raspberry Pi OS)**
 - Send and receive selected single-file games between any pair of WII-UU and/or standalone Choccy Milk devices using paired Bluetooth Classic devices, with SHA-256 verification and no overwrite.
 - Add two-player local multiplayer via libretro netpacket callbacks over Bluetooth RFCOMM, defaulting to melonDS DS with opt-in support for other netpacket-compatible cores. Peers negotiate core identity, protocol, capabilities and packet size. Either application can host or join either application, including same-app sessions. Requires compatible cores and hardware testing.

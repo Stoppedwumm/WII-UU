@@ -35,7 +35,7 @@ else
   DOWNLOAD=docs/beta/download
 fi
 mkdir -p "$DOWNLOAD"
-cp install.sh build/WII-UU-Cleanup.jar build/WII-UU-OEM-Creator.jar "$DOWNLOAD/"
+cp install.sh install.ps1 build/WII-UU-Cleanup.jar build/WII-UU-OEM-Creator.jar "$DOWNLOAD/"
 cp "dist/$NAME.zip" "docs/download/$NAME.zip"
 cp "dist/$NAME.zip" "$DOWNLOAD/WII-UU-latest.zip"
 # the reactions editor on its own (it runs anywhere with Java 17+ and ffmpeg)

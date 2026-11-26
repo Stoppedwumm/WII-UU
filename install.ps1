@@ -1,15 +1,19 @@
 # WII-UU installer for Windows.
-#   powershell -ExecutionPolicy Bypass -File install.ps1 [-Roms D:\Games\roms] [-Port 8080] [-VirtualDisplay] [-Uninstall] [-Yes]
+#   powershell -ExecutionPolicy Bypass -File install.ps1 [-Roms D:\Games\roms] [-Port 8080] [-VirtualDisplay] [-Uninstall] [-Optimize] [-Yes]
 #   -VirtualDisplay: also install a virtual display (split DS/3DS screens: top on the TV, touch screen on the phone)
 # or just double-click install.bat
 param(
     [string]$Roms = (Join-Path $env:USERPROFILE "WiiUU\roms"),
     [int]$Port = 8080,
     [switch]$Uninstall,
+    [switch]$Optimize,
+    [switch]$Bootstrap,
+    [switch]$SkipMaintenance,
     [switch]$VirtualDisplay,
     [switch]$Yes
 )
 $ErrorActionPreference = "Stop"
+if ($Uninstall -and $Optimize) { throw "Choose either -Uninstall or -Optimize." }
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Prefix = Join-Path $env:LOCALAPPDATA "WII-UU"
 $ConfDir = if ($env:WIIUU_HOME) { $env:WIIUU_HOME } else { Join-Path $env:USERPROFILE ".wiiuu" }
@@ -41,7 +45,32 @@ function Get-CleanupJar {
         Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 }
 
-if (-not $Uninstall -and -not $Yes -and -not [Console]::IsInputRedirected -and
+function Optimize-Space {
+    $cleaner = Get-CleanupJar
+    if (-not $cleaner -and $Bootstrap) {
+        # The web bootstrap directory is removed by get.ps1 after this process exits.
+        $cleaner = Join-Path $Here 'WII-UU-Cleanup.jar'
+        $url = if ($env:WIIUU_CLEANUP_URL) { $env:WIIUU_CLEANUP_URL } else { 'https://wiiuu.stoppedwumm.net/download/WII-UU-Cleanup.jar' }
+        Say 'Downloading the small standalone cleanup tool'
+        if (Test-Path -LiteralPath $url -PathType Leaf) {
+            Copy-Item -LiteralPath $url -Destination $cleaner
+        } else {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $cleaner
+        }
+    }
+    if (-not $cleaner) { throw 'WII-UU-Cleanup.jar is missing. Use the web installer or complete release package.' }
+    if (-not (Get-Command java -ErrorAction SilentlyContinue)) { throw 'Java 17 or newer is required to run the cleanup tool.' }
+    & java -jar $cleaner
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    if (-not (Ask 'Close WII-UU and any other installers first. Remove eligible staging files?')) { exit 0 }
+    & java -jar $cleaner --apply
+    exit $LASTEXITCODE
+}
+
+if ($Optimize) { Optimize-Space }
+
+if (-not $Uninstall -and -not $Yes -and -not $SkipMaintenance -and -not [Console]::IsInputRedirected -and
     (Test-Path -LiteralPath (Join-Path $Prefix "wiiuu.jar") -PathType Leaf)) {
     Say "WII-UU is already installed"
     Write-Host "1) Uninstall WII-UU"
@@ -62,13 +91,7 @@ if (-not $Uninstall -and -not $Yes -and -not [Console]::IsInputRedirected -and
             exit $LASTEXITCODE
         }
         "4" {
-            $cleaner = Get-CleanupJar
-            if (-not $cleaner) { throw "WII-UU-Cleanup.jar is missing. Use the complete WII-UU installer package." }
-            & java -jar $cleaner
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            if (-not (Ask "Close WII-UU and any other installers first. Remove eligible staging files?")) { exit 0 }
-            & java -jar $cleaner --apply
-            exit $LASTEXITCODE
+            Optimize-Space
         }
         "0" { exit 0 }
         "" { exit 0 }
@@ -82,6 +105,9 @@ if ($Uninstall) {
     Ok "Removed. Your ROMs ($Roms) and settings ($ConfDir) were kept."
     exit 0
 }
+
+# Only installation or repair needs the complete release package.
+if ($Bootstrap) { exit 42 }
 
 $WorkDir = Join-Path $ConfDir "tmp"
 New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
