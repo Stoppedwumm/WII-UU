@@ -211,7 +211,7 @@ public final class Cores {
      * downloaded once, else the usual one (also when that core doesn't exist for this computer).
      */
     public Path choccyCoreFor(GameSystem system, Runnable afterDownload) throws Downloading {
-        boolean dsOnline = system.id().equals("nds") && DsOnline.enabled(config);
+        boolean dsOnline = system.id().equals("nds") && (DsOnline.enabled(config) || BluetoothLink.dsEnabled(config));
         String selected = config.get("choccy.core." + system.id(), "").trim();
         if (ChoccyPicture.n64OpenGl(config, system.id())) {
             if (!selected.isEmpty() && !selected.equals("mupen64plus_next")) {
@@ -331,7 +331,15 @@ public final class Cores {
     /** Core options for Choccy Milk, including the selected N64 renderer and CPU. */
     public java.util.Map<String, String> choccyOptions(String systemId) {
         java.util.Map<String, String> o = new java.util.LinkedHashMap<>(ChoccyPicture.options(config, systemId));
-        if (systemId.equals("nds")) o.putAll(DsOnline.options(config));
+        if (systemId.equals("nds")) {
+            o.putAll(DsOnline.options(config));
+            if (BluetoothLink.dsEnabled(config)) {
+                o.remove("wiiuu.dsOnline");
+                o.put("melonds_network_mode", "disabled");
+                o.put("wiiuu.bluetooth.role", BluetoothLink.role(config));
+                o.put("wiiuu.bluetooth.peer", BluetoothLink.peer(config));
+            }
+        }
         if (systemId.equals("n64")) {
             if (!ChoccyPicture.n64OpenGl(config, systemId)) {
                 // the software renderer (Angrylion: no OpenGL needed) on every processor core
