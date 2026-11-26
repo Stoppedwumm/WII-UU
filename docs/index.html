@@ -469,7 +469,9 @@ curl -fsSL https://wiiuu.stoppedwumm.net/get.sh | bash -s -- --with-emulators</c
           On a Pi, use the 64-bit Raspberry Pi OS.</p>
       </div>
       <div class="panel" id="p-win" role="tabpanel" hidden>
-        <p><a href="download/WII-UU-latest.zip">Download the zip</a>, unzip it and double-click <b>install.bat</b>.
+        <pre class="code"><code>&amp; ([scriptblock]::Create((irm https://wiiuu.stoppedwumm.net/get.ps1)))</code></pre>
+        <p>Run in Windows PowerShell. On an existing installation, choose Uninstall, Repair, Update or Optimize device space without downloading the full ZIP first.</p>
+        <p>Or <a href="download/WII-UU-latest.zip">download the zip</a>, unzip it and double-click <b>install.bat</b>.
           It installs Java with winget if needed, adds Start-menu and Desktop shortcuts, and opens the GamePad port in the firewall when run as administrator.</p>
         <p>Then set each emulator's path under <b>Settings (F1)</b>.</p>
       </div>
