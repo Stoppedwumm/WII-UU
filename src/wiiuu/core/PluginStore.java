@@ -24,9 +24,12 @@ public final class PluginStore {
     }
     private static final List<Entry> CATALOG = readCatalog();
     private static final Map<String, Process> RUNNING = new ConcurrentHashMap<>();
+    private record InProcess(Runnable stop, java.util.concurrent.CompletableFuture<Void> done) {}
+    private static final Map<String, InProcess> IN_PROCESS = new ConcurrentHashMap<>();
     private static boolean installing;
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            for (InProcess session : IN_PROCESS.values()) session.stop().run();
             for (Process process : RUNNING.values()) {
                 process.descendants().forEach(ProcessHandle::destroy);
                 process.destroy();
@@ -77,6 +80,8 @@ public final class PluginStore {
     public static boolean externalRunning(Config config) {
         for (Entry entry : CATALOG) {
             if (!entry.externalPlugin()) continue;
+            InProcess session=IN_PROCESS.get(key(config,entry));
+            if(session!=null&&!session.done().isDone())return true;
             Process process = RUNNING.get(key(config, entry));
             if (process != null && process.isAlive()) return true;
         }
@@ -92,11 +97,25 @@ public final class PluginStore {
         process.onExit().thenRun(() -> RUNNING.remove(key(config, entry), process));
     }
 
+    /** Track the in-JVM Xbox media session without treating our own JVM as a child process. */
+    public static synchronized void trackInProcess(Config config, Entry entry, Runnable stop,
+            java.util.concurrent.CompletableFuture<Void> done) {
+        if (!CATALOG.contains(entry) || !entry.externalPlugin() || !"xcloud".equals(entry.id()))
+            throw new IllegalArgumentException("Invalid external streaming app");
+        String key=key(config,entry);
+        InProcess session=new InProcess(stop,done);
+        InProcess prior=IN_PROCESS.put(key,session);
+        if(prior!=null&&!prior.done().isDone())prior.stop().run();
+        done.whenComplete((ignored,error)->IN_PROCESS.remove(key,session));
+    }
+
     public static synchronized void setEnabled(Config config, Entry entry, boolean enabled) {
         if (!CATALOG.contains(entry)) throw new IllegalArgumentException("Unknown plugin");
         config.set("plugin." + entry.id() + ".enabled", Boolean.toString(enabled));
         config.save();
         if (!enabled) {
+            InProcess session=IN_PROCESS.get(key(config,entry));
+            if(session!=null)session.stop().run();
             Process process = RUNNING.get(key(config, entry));
             if (process != null) {
                 process.descendants().forEach(ProcessHandle::destroy);
@@ -153,7 +172,7 @@ public final class PluginStore {
     public static void install(Config config, Consumer<String> done) {
         synchronized (PluginStore.class) {
             if (installing) { done.accept("The plugin runtime is already installing."); return; }
-            if (!RUNNING.isEmpty()) { done.accept("Close plugin windows before updating the runtime."); return; }
+            if (!RUNNING.isEmpty() || !IN_PROCESS.isEmpty()) { done.accept("Close plugin windows before updating the runtime."); return; }
             installing = true;
         }
         Thread thread = new Thread(() -> {

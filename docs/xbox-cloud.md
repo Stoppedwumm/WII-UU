@@ -263,11 +263,14 @@ reports.
 
 ## Experimental Java-native RTC backend
 
-The library's **RTC: Chromium / RTC: Native (beta)** toggle selects a Java media
-process using webrtc-java 1.0.1 (JNI-backed libwebrtc) and its Swing video view.
+The library's **RTC: Chromium / RTC: Native (beta)** toggle selects an in-process Java media
+client using webrtc-java 1.0.1 (JNI-backed libwebrtc) and its Swing video view.
 It uses the same Xbox authentication service, saved account, favorites,
 session signaling and controller-manager mappings. No Python, Chromium,
-Electron or browser JavaScript runs in the selected Java media process.
+Electron, browser JavaScript or second JVM runs in the selected Java media client.
+The player opens a Swing window inside the existing JVM. A dedicated worker
+handles signaling; Java receives controller frames directly from WII-UU.
+Restart WII-UU after updating or relocating the optional JNI runtime.
 
 Build the experimental helper on the target machine using Java 17+ and Maven:
 
@@ -286,7 +289,7 @@ This prototype requests H.264/Opus, 720p/30, receives video through a native
 libwebrtc decoder and uses its audio device playout. Escape closes the player.
 It sends mapped controller input; native keyboard/mouse fallback, rumble,
 frame timing reports, hardware decoder tuning and automatic installation
-remain future work. Logs go to `native-rtc.log`. The initial runtime installer
+remain future work. Startup errors appear in the game library. The initial runtime installer
 still requires Chromium for the fallback. No silent automatic session retry.
 Live Xbox compatibility, Raspberry Pi performance and native audio need testing.
 

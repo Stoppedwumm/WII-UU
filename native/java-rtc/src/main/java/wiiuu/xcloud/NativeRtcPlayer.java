@@ -46,13 +46,14 @@ public final class NativeRtcPlayer {
     private int sequence;
     private volatile VideoTrack video;
     private VideoTrackSink sink;
-    private NativeRtcPlayer() {
-        int port=Integer.parseInt(System.getenv("WIIUU_RTC_PORT"));
-        secret=System.getenv("WIIUU_RTC_SECRET");
-        title=System.getenv("WIIUU_RTC_TITLE");
+    private final java.util.function.Supplier<List<Map<String,Object>>> controllerFrames;
+    private NativeRtcPlayer(int port,String secret,String title,boolean audio,java.util.function.Supplier<List<Map<String,Object>>> controllerFrames) {
+        this.secret=secret;
+        this.title=title;
+        this.controllerFrames=Objects.requireNonNull(controllerFrames);
         if(port<1||port>65535||secret==null||!secret.matches("[a-f0-9]{64}")||title==null)throw new IllegalArgumentException("Invalid launcher");
         endpoint=URI.create("http://127.0.0.1:"+port+"/api/");
-        muted="0".equals(System.getenv("WIIUU_RTC_AUDIO"));
+        muted=!audio;
     }
     static Map<String,Object> obj(Object... fields){
         Map<String,Object> out=new LinkedHashMap<>();
@@ -229,9 +230,9 @@ public final class NativeRtcPlayer {
     private void input()throws Exception{
         if(!open("input")||!open("control")||!handshake)return;
         Map<Integer,JsonObject> frames=new TreeMap<>();
-        try{JsonElement p=object(request("controllers",null,1)).get("pads");
+        try{JsonElement p=JSON.toJsonTree(controllerFrames.get());
             if(p!=null&&p.isJsonArray())for(JsonElement e:p.getAsJsonArray()){JsonObject f=object(e);if(f.has("GamepadIndex")){int slot=(int)number(f,"GamepadIndex");if(slot>=0&&slot<4)frames.put(slot,f);}}
-        }catch(IOException ignored){}
+        }catch(RuntimeException ignored){}
         Set<Integer> next=new TreeSet<>(frames.keySet());
         for(int slot:next)if(!activePads.contains(slot))send("control",obj("message","gamepadChanged","gamepadIndex",slot,"wasAdded",true));
         for(int slot:activePads)if(!next.contains(slot))frames.put(slot,new JsonObject());
@@ -267,16 +268,31 @@ public final class NativeRtcPlayer {
         }
     }
     private void run()throws Exception{
-        try{ui();negotiate();loop();}
+        try{check();ui();check();negotiate();loop();}
         finally{
             closing.set(true);
             if(video!=null&&sink!=null)try{video.removeSink(sink);}catch(Exception ignored){}
-            for(RTCDataChannel c:channels.values())try{c.unregisterObserver();c.close();c.dispose();}catch(Exception ignored){}
+            for(var e:channels.entrySet())try{RTCDataChannel c=e.getValue();if(e.getKey().equals("message"))c.unregisterObserver();c.close();c.dispose();}catch(Exception ignored){}
             if(peer!=null)try{peer.close();}catch(Exception ignored){}
             if(factory!=null)try{factory.dispose();}catch(Exception ignored){}
             if(started)try{request("stop",Map.of(),5);}catch(Exception ignored){}
-            if(window!=null)SwingUtilities.invokeLater(window::dispose);
+            if(window!=null)SwingUtilities.invokeAndWait(window::dispose);
         }
+    }
+    /** Starts an in-process worker; completion fires only after native and server cleanup. */
+    public static Runnable open(int port,String secret,String title,boolean audio,
+            java.util.function.Supplier<List<Map<String,Object>>> frames,CompletableFuture<Void> finished){
+        NativeRtcPlayer session=new NativeRtcPlayer(port,secret,title,audio,frames);
+        Thread worker=new Thread(()->{
+            try{session.run();finished.complete(null);}
+            catch(InterruptedException e){finished.complete(null);}
+            catch(Throwable e){finished.completeExceptionally(new IllegalStateException("Java RTC failed: "+e.getClass().getSimpleName()));}
+        },"wiiuu-java-rtc");
+        worker.setDaemon(true);
+        worker.start();
+        // Do not interrupt a native JNI call or a pending session start. The
+        // cancellation flag is checked between bounded signaling calls.
+        return ()->session.closing.set(true);
     }
     public static void main(String[] args){
         if(args.length==1&&args[0].equals("--self-test")){
@@ -286,8 +302,6 @@ public final class NativeRtcPlayer {
             if(remoteIce(JsonParser.parseString("{\"iceCandidates\":[null,{}, {\"candidate\":\"a=candidate:1 1 udp 1 127.0.0.1 1234 typ host\",\"sdpMid\":\"0\"}]}")).size()!=1)throw new AssertionError("ICE filtering");
             System.out.println("Java RTC protocol fixtures passed");return;
         }
-        int code=0;
-        try{new NativeRtcPlayer().run();}catch(InterruptedException ignored){}catch(Throwable e){System.err.println("Java RTC failed: "+e.getClass().getSimpleName());code=1;}
-        System.exit(code);
+        throw new IllegalArgumentException("Use --self-test or the in-process open API");
     }
 }

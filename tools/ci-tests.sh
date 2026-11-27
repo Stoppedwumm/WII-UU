@@ -61,7 +61,8 @@ java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.UpdateCha
 java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.ReleaseArchiveTest
 python3 -m unittest discover -s tools/tests -p 'test_release*.py'
 mvn -B -q -f native/java-rtc/pom.xml package
-java -cp 'native/java-rtc/target/java-rtc.jar:native/java-rtc/target/dependency/*' wiiuu.xcloud.NativeRtcPlayer --self-test
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) rtc_sep=';' ;; *) rtc_sep=':' ;; esac
+java -cp "native/java-rtc/target/java-rtc.jar${rtc_sep}native/java-rtc/target/dependency/*" wiiuu.xcloud.NativeRtcPlayer --self-test
 WIIUU_CI_COMMAND_2
     if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
       run_check "Check Windows installer syntax" pwsh -NoProfile -Command - <<'WIIUU_CI_COMMAND_3'
