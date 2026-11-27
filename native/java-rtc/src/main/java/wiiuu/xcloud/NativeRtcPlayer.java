@@ -153,7 +153,7 @@ public final class NativeRtcPlayer {
             } else view.accept(frame);
             rendered.incrementAndGet();
             if(firstPicture.compareAndSet(false,true))
-                SwingUtilities.invokeLater(()->{if(!closing.get())stage.showVideo();});
+                SwingUtilities.invokeLater(()->{if(!closing.get())stage.beginIntro();});
         },dev.onvoid.webrtc.media.video.VideoFrame::release);
         System.out.println("[xcloud] Native profile "+profile.width()+"x"+profile.height()+" @ "+profile.fps()+" fps, "+profile.bitrate()+" kbps");
         peer=factory.createPeerConnection(new RTCConfiguration(),new PeerConnectionObserver(){
@@ -176,7 +176,8 @@ public final class NativeRtcPlayer {
         });
         if(peer==null)throw new IllegalStateException("Peer creation failed");
         peer.setAudioRecording(false);
-        peer.setAudioPlayout(!muted);
+        // Do not play game audio underneath the loading and logo screens.
+        peer.setAudioPlayout(false);
         RTCRtpTransceiverInit recv=new RTCRtpTransceiverInit();recv.direction=RTCRtpTransceiverDirection.RECV_ONLY;
         RTCRtpTransceiver vt=peer.addTransceiver(MediaType.VIDEO,recv);
         List<RTCRtpCodecCapability> h264=factory.getRtpReceiverCapabilities(MediaType.VIDEO).getCodecs().stream().filter(c->c.getName().equalsIgnoreCase("H264")||c.getName().equalsIgnoreCase("rtx")).toList();
@@ -345,10 +346,11 @@ public final class NativeRtcPlayer {
         if(!firstPicture.get())loadingStatus("Waiting for the first video frame...");
         else label("Streaming (Java RTC)");
         long lastState=System.nanoTime(),lastKeep=lastState,lastReport=lastState,lastRendered=0,lastDropped=0,lastPainted=0;
-        int failures=0;boolean lastMute=muted;
+        int failures=0;boolean lastPlayout=false;
         Future<Boolean> pending=null;
         while(!closing.get()){
-            if(lastMute!=muted){peer.setAudioPlayout(!muted);lastMute=muted;}
+            boolean playout=stage.videoVisible()&&!muted;
+            if(lastPlayout!=playout){peer.setAudioPlayout(playout);lastPlayout=playout;}
             if(open("message")&&!messageOpened){messageOpened=true;send("message",obj("type","Handshake","version","messageV1","id",UUID.randomUUID().toString(),"cv","0"));}
             if(open("control")&&!controlOpened){controlOpened=true;send("control",obj("message","authorizationRequest","accessKey","4BDB3609-C1F1-4195-9B37-FEFF45DA8B8E"));Map<String,Object> size=obj("width",profile.width(),"height",profile.height());send("control",obj("message","VideoPreference","type","VideoPreference","resolution",size,"dimensions",size,"maxFPS",profile.fps()));}
             if(open("input")&&!inputOpened){inputOpened=true;binary(header(8,sequence++,now(),1).put((byte)0).flip());}
@@ -359,7 +361,7 @@ public final class NativeRtcPlayer {
                     send("message",obj("type","TransactionComplete","id",string(m,"id"),"content","","cv",""));closing.set(true);
                 }
             }
-            input();
+            if(stage.videoVisible())input();
             long n=System.nanoTime();
             // HTTP must never block the controller or message loop.
             if(pending!=null&&pending.isDone()){
@@ -435,6 +437,7 @@ public final class NativeRtcPlayer {
             LatestFrame.selfTest();
             FastVideoView.selfTest();
             LoadingStage.selfTest();
+            CloudLogoIntro.selfTest();
             System.out.println("Java RTC protocol and performance fixtures passed");return;
         }
         throw new IllegalArgumentException("Use --self-test or the in-process open API");
