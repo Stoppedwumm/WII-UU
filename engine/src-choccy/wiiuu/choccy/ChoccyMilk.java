@@ -129,7 +129,7 @@ public final class ChoccyMilk {
             System.err.println("usage: ChoccyMilk CORE ROM SAVES SYSTEM [key=value ...]");
             System.exit(2);
         }
-        OutputStream stdout = framesOut(java.util.Arrays.asList(args).contains("wiiuu.n64OpenGl=true"));
+        OutputStream stdout = framesOut();
         System.setOut(System.err);                          // stdout is for frames only; anything printed goes to the log
         ChoccyMilk m = new ChoccyMilk(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), Path.of(args[3]), stdout);
         for (int i = 4; i < args.length; i++) {
@@ -166,11 +166,12 @@ public final class ChoccyMilk {
      * Where the frames go: stdout, but on Linux and macOS a copy of it, with the real stdout (file 1)
      * then pointed at stderr: cores printf to stdout, and that mustn't land in the middle of a frame.
      */
-    private static OutputStream framesOut(boolean n64OpenGl) throws Exception {
-        OutputStream plain = new java.io.FileOutputStream(java.io.FileDescriptor.out);
+    private static OutputStream framesOut() throws Exception {
         if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) {
-            return n64OpenGl ? WindowsFrameOutput.open() : plain;
+            // Every native core can print to C stdout, not just N64 with OpenGL.
+            return WindowsFrameOutput.open();
         }
+        OutputStream plain = new java.io.FileOutputStream(java.io.FileDescriptor.out);
         try {
             Linker linker = Linker.nativeLinker();
             SymbolLookup libc = linker.defaultLookup();

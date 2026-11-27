@@ -11,7 +11,7 @@ import java.lang.invoke.MethodHandle;
 
 import static java.lang.foreign.ValueLayout.*;
 
-/** Keep the Windows N64 core's C stdout (printf) out of the binary frame stream. */
+/** Keep native Windows core logging out of the binary frame stream. */
 final class WindowsFrameOutput extends OutputStream {
     private final MemorySegment pipe, buffer, count;
     private final MethodHandle writeFile;
@@ -27,18 +27,29 @@ final class WindowsFrameOutput extends OutputStream {
         Arena arena = Arena.global(); // the child process owns the duplicate until exit
         try {
             SymbolLookup kernel = SymbolLookup.libraryLookup("kernel32.dll", arena);
-            SymbolLookup crt = SymbolLookup.libraryLookup("msvcrt.dll", arena);
             var std = fn(kernel, "GetStdHandle", FunctionDescriptor.of(ADDRESS, JAVA_INT));
             var process = fn(kernel, "GetCurrentProcess", FunctionDescriptor.of(ADDRESS));
             var duplicate = fn(kernel, "DuplicateHandle", FunctionDescriptor.of(JAVA_INT,
                     ADDRESS, ADDRESS, ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, JAVA_INT));
-            var redirect = fn(crt, "_dup2", FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT));
+            var setStd = fn(kernel, "SetStdHandle", FunctionDescriptor.of(JAVA_INT, JAVA_INT, ADDRESS));
             MemorySegment me = (MemorySegment) process.invokeExact();
             MemorySegment slot = arena.allocate(ADDRESS);
             MemorySegment stdout = (MemorySegment) std.invokeExact(-11);
-            if ((int) duplicate.invokeExact(me, stdout, me, slot, 0, 0, 2) == 0
-                    || (int) redirect.invokeExact(2, 1) != 0) {
-                throw new IOException("Could not separate Windows core logging from video.");
+            MemorySegment stderr = (MemorySegment) std.invokeExact(-12);
+            if ((int) duplicate.invokeExact(me, stdout, me, slot, 0, 0, 2) == 0) {
+                throw new IOException("Could not duplicate the Windows video pipe.");
+            }
+            // Redirect both CRTs: libretro DLLs may use legacy MinGW MSVCRT or modern UCRT.
+            for (String library : new String[]{"msvcrt.dll", "ucrtbase.dll"}) {
+                SymbolLookup crt = SymbolLookup.libraryLookup(library, arena);
+                var redirect = fn(crt, "_dup2", FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT));
+                if ((int) redirect.invokeExact(2, 1) != 0) {
+                    throw new IOException("Could not redirect " + library + " stdout.");
+                }
+            }
+            // Also redirect direct GetStdHandle/WriteFile output and CRTs loaded later.
+            if ((int) setStd.invokeExact(-11, stderr) == 0) {
+                throw new IOException("Could not redirect Windows stdout handle.");
             }
             var write = fn(kernel, "WriteFile", FunctionDescriptor.of(JAVA_INT,
                     ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS));

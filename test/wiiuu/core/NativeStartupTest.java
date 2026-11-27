@@ -19,7 +19,7 @@ public final class NativeStartupTest {
         Path rom = home.resolve("fixture.nds"); Files.write(rom, new byte[]{0});
         Path log = home.resolve("nds.log");
         Choccy.setHome(home);
-        CountDownLatch firstFrame = new CountDownLatch(1);
+        CountDownLatch firstFrame = new CountDownLatch(2);
         AtomicBoolean correct = new AtomicBoolean(); AtomicReference<String> phase = new AtomicReference<>();
         Choccy.Session session = Choccy.play(Path.of(args[0]).toAbsolutePath(), rom, home.resolve("saves"), home,
                 Map.of("wiiuu.sound", "pipe"), (rgb, w, h, aspect) -> {
@@ -28,12 +28,13 @@ public final class NativeStartupTest {
                 }, log);
         session.onStartup(phase::set);
         try {
-            if (!firstFrame.await(15, TimeUnit.SECONDS)) throw new AssertionError("No native DS frame; phase=" + phase.get() + "; ending=" + session.ending() + "\n" + Files.readString(log));
+            if (!firstFrame.await(15, TimeUnit.SECONDS)) throw new AssertionError("No native DS frame; phase=" + phase.get() + "; ending=" + session.ending() + "\n" + readLog(log));
             check(correct.get(), "native DS pixels reach parent");
-            check(Files.readString(log).contains("native DS fixture banner"), "native stdout stays out of frame protocol");
+            check(readLog(log).contains("native DS fixture banner"), "native stdout stays out of frame protocol");
+            check(readLog(log).contains("BIOS fixture output between frames"), "runtime native stdout stays out of frame protocol");
             session.quit();
             check(session.process().waitFor(10, TimeUnit.SECONDS), "native helper stops");
-            check(session.process().exitValue() == 0, "native helper success: " + Files.readString(log));
+            check(session.process().exitValue() == 0, "native helper success: " + readLog(log));
         } finally { if (session.process().isAlive()) session.process().destroyForcibly(); }
         String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         Process bad = new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), "wiiuu.core.NativeStartupTest$BrokenHelper").start();
@@ -46,6 +47,10 @@ public final class NativeStartupTest {
     }
     public static final class BrokenHelper {
         public static void main(String[] args) throws Exception { System.out.println("unexpected native output"); System.out.flush(); while (System.in.read() != -1) {} }
+    }
+    // Windows stderr can use a legacy console encoding. Do not reject otherwise useful logs.
+    private static String readLog(Path log) throws java.io.IOException {
+        return new String(Files.readAllBytes(log), java.nio.charset.StandardCharsets.UTF_8);
     }
     private static void check(boolean ok, String message) { if (!ok) throw new AssertionError(message); }
 }

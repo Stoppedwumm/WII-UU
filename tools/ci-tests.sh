@@ -38,6 +38,9 @@ javac --release 17 -cp build/native-startup -d build/native-startup test/wiiuu/c
 if [[ "$RUNNER_OS" == macOS ]]; then
   core=build/native-startup/melondsds_libretro.dylib
   clang -dynamiclib -o "$core" test/native/ds_startup_fixture.c
+elif [[ "$RUNNER_OS" == Windows ]]; then
+  core=build/native-startup/melondsds_libretro.dll
+  gcc -shared -Wl,--export-all-symbols -o "$core" test/native/ds_startup_fixture.c
 else
   core=build/native-startup/melondsds_libretro.so
   gcc -shared -fPIC -o "$core" test/native/ds_startup_fixture.c
