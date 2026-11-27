@@ -5,6 +5,7 @@ in Settings > General > What's new, and before installing an update.
 
 ## 2.2.2 (2026-11-17)
 - Improve native RTC performance
+- Removed the bottom bar
 
 ## 2.2.1 (2026-11-17)
 **Bug fixes**
