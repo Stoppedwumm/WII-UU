@@ -356,7 +356,7 @@ async function api(action, payload={}) {
         settings:{nanoVersion:'V3;WebrtcTransport.dll',enableOptionalDataCollection:false,
           enableTextToSpeech:false,highContrast:0,locale:'de-DE',useIceConnection:false,
           timezoneOffsetMinutes:new Date().getTimezoneOffset(),sdkType:'web',osName:'windows'},
-        serverId:'',fallbackRegionNames:[] }, [640,960,1280].includes(payload.videoWidth) && payload.videoHeight === payload.videoWidth * 9 / 16 ? {width:payload.videoWidth,height:payload.videoHeight} : undefined);
+        serverId:'',fallbackRegionNames:[] }, undefined, [640,960,1280].includes(payload.videoWidth) && payload.videoHeight === payload.videoWidth * 9 / 16 ? {width:payload.videoWidth,height:payload.videoHeight} : undefined);
       const sid=session.sessionId || String(session.sessionPath || '').split('/').pop();
       if (!validSessionId(sid)) throw new Error('Xbox returned an invalid stream identifier');
       activeSession={id:sid,titleId:id};
