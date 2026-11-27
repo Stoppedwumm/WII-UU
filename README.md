@@ -1312,7 +1312,7 @@ in space, points flip into place and soft tiles float in the background.
 ## Build from source
 
 ```sh
-./build.sh      # -> build/wiiuu.jar, build/ChoccyMilk.jar, build/wiiuu-engine.jar   (JDK 17+)
+./build.sh      # -> build/wiiuu.jar, build/ChoccyMilk.jar, build/wiiuu-engine.jar   (JDK 17+, Maven)
 ./package.sh    # -> dist/WII-UU-<version>.zip
 java -jar build/wiiuu.jar
 ```

@@ -4,6 +4,9 @@ What changed in each WII-UU release, newest first. WII-UU shows these notes afte
 in Settings > General > What's new, and before installing an update.
 
 ## 2.2.0 (2026-11-26)
+**Xbox Cloud Gaming (experimental)**
+- Add an optional Java-native WebRTC player running in the WII-UU JVM with native video/audio and direct controller mapping. Bundle the Java module and platform JNI libraries in wiiuu.jar; the existing Chromium backend remains the default and fallback.
+
 **Windows installer**
 - Add a PowerShell web installer with the same uninstall, repair, update and disk-space optimization menu as the Unix one-liner. Maintenance does not download the full release ZIP; cleanup previews eligible staging folders before removal.
 

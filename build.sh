@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Builds with only the JDK (javac + jar), Java 17 or newer:
+# Builds with Java 17+ (javac + jar), Python 3 and Maven for the packaged RTC client.
+# WIIUU_SKIP_JAVA_RTC=1 permits a development-only JDK build without RTC:
 #   build/wiiuu-engine.jar  the WII-UU engine, the library WII-UU and Choccy Milk share (engine/)
 #   build/wiiuu.jar         WII-UU (src/, with the engine inside)
 #   build/WII-UU-Cleanup.jar  standalone tool for stale upgrade staging folders
 #   build/ChoccyMilk.jar    Choccy Milk on its own (choccy-app/, with the engine inside)
 set -euo pipefail
 cd "$(dirname "$0")"
-rm -rf build/classes build/engine build/choccy-classes build/cleanup-classes build/oem-classes
+rm -rf build/classes build/engine build/choccy-classes build/cleanup-classes build/oem-classes build/java-rtc-resources
 mkdir -p build/classes build/engine build/choccy-classes build/cleanup-classes
 python3 tools/build-version.py
 APP_VERSION="$(python3 -c 'import json; print(json.load(open("build/version.json"))["version"])')"
@@ -57,6 +58,10 @@ find src choccy-app/src -name '*.java' > build/sources.txt
 javac --release 17 -encoding UTF-8 -cp build/engine -d build/classes @build/sources.txt
 cp -r build/engine/. build/classes/
 cp -r resources/. build/classes/
+if [ "${WIIUU_SKIP_JAVA_RTC:-0}" != 1 ]; then
+  mvn -B -q -f native/java-rtc/pom.xml -Puniversal clean package
+  python3 tools/package-java-rtc.py native/java-rtc/target build/classes/xcloud/java-rtc
+fi
 [ ! -d choccy-app/resources ] || cp -r choccy-app/resources/. build/classes/
 if [ -d build/cloudflared ]; then
   if [ "${WIIUU_SLIM_RELAY:-0}" = 1 ]; then
@@ -72,13 +77,20 @@ fi
 cp build/wiiuu-build.properties build/classes/wiiuu-build.properties
 # the release notes WII-UU shows after an update (Settings > General > What's new)
 [ -f CHANGELOG.md ] && cp CHANGELOG.md build/classes/CHANGELOG.md
-printf 'Main-Class: wiiuu.Main\nImplementation-Version: %s\n' "$APP_VERSION" > build/manifest.txt
+printf 'Main-Class: wiiuu.Main\nEnable-Native-Access: ALL-UNNAMED\nImplementation-Version: %s\n' "$APP_VERSION" > build/manifest.txt
 jar --create --file build/wiiuu.jar --manifest build/manifest.txt -C build/classes .
 echo "Built build/wiiuu.jar"
 # the reactions editor (reaction mode's videos): the same classes, its own start
 printf 'Main-Class: wiiuu.react.Editor\n' > build/manifest-reactions.txt
-# (without WII-UU's example reaction packs: the editor doesn't need them)
+# (without WII-UU's example reaction packs or the large native RTC bundle)
+# Remove the bundle before writing the standalone editor, then restore it for tests.
+if [ -d build/classes/xcloud/java-rtc ]; then
+  mv build/classes/xcloud/java-rtc build/java-rtc-resources
+fi
 jar --create --file build/WII-UU-Reactions.jar --manifest build/manifest-reactions.txt -C build/classes .
+if [ -d build/java-rtc-resources ]; then
+  mv build/java-rtc-resources build/classes/xcloud/java-rtc
+fi
 zip -q -d build/WII-UU-Reactions.jar 'reactions/*' 'cloudflared/*' >/dev/null || true
 echo "Built build/WII-UU-Reactions.jar"
 # Choccy Milk on its own, on the engine

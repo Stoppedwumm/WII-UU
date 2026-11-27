@@ -60,6 +60,11 @@ java -Djava.awt.headless=true -cp build/installer-tests wiiuu.core.UserProfilesT
 java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.UpdateChannelsTest
 java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.ReleaseArchiveTest
 python3 -m unittest discover -s tools/tests -p 'test_release*.py'
+mvn -B -q -f native/java-rtc/pom.xml package
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) rtc_sep=';' ;; *) rtc_sep=':' ;; esac
+java -cp "native/java-rtc/target/java-rtc.jar${rtc_sep}native/java-rtc/target/dependency/*" wiiuu.xcloud.NativeRtcPlayer --self-test
+javac --release 17 -d build/installer-tests src/wiiuu/ui/NativeRtcBundle.java src/wiiuu/ui/NativeRtcSession.java test/wiiuu/ui/NativeRtcSessionTest.java
+java -cp build/installer-tests wiiuu.ui.NativeRtcSessionTest
 WIIUU_CI_COMMAND_2
     if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
       run_check "Check Windows installer syntax" pwsh -NoProfile -Command - <<'WIIUU_CI_COMMAND_3'
@@ -109,6 +114,9 @@ npm install --prefix build/xcloud-deps --no-save --no-fund --no-audit --ignore-s
 node -e "const xal=require('./build/xcloud-deps/node_modules/xal-node'); if(!xal.Msal || !xal.TokenStore) throw Error('xal-node missing API')"
 node build/xcloud-deps/node_modules/esbuild/bin/esbuild build/xcloud-deps/player-entry.js --bundle --platform=browser --format=iife --target=chrome110 --outfile=build/xcloud-deps/player.bundle.js
 test -s build/xcloud-deps/player.bundle.js
+python3 tools/package-java-rtc.py --verify build/wiiuu.jar
+javac --release 17 -cp build/wiiuu.jar -d build/tests test/wiiuu/ui/NativeRtcBundleTest.java
+java -Djava.awt.headless=true -cp build/wiiuu.jar:build/tests wiiuu.ui.NativeRtcBundleTest
 WIIUU_CI_COMMAND_8
     run_check "Build and test the standalone UI library" bash -euo pipefail -s <<'WIIUU_CI_COMMAND_9'
 ./ui-library/build.sh

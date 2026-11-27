@@ -259,3 +259,38 @@ indicates the Java UI should advance; if it does not, investigate the UI
 callback/bridge. Logging is deliberately limited to stages and booleans:
 never paste OAuth credentials, device codes, or `xcloud-tokens.json` in bug
 reports.
+
+
+## Experimental Java-native RTC backend
+
+The library's **RTC: Chromium / RTC: Native (beta)** toggle selects an in-process Java media
+client using webrtc-java 1.0.1 (JNI-backed libwebrtc) and its Swing video view.
+It uses the same Xbox authentication service, saved account, favorites,
+session signaling and controller-manager mappings. No Python, Chromium,
+Electron, browser JavaScript or second JVM runs in the selected Java media client.
+The player opens a Swing window inside the existing JVM. A dedicated worker
+handles signaling; Java receives controller frames directly from WII-UU.
+Restart WII-UU after updating or relocating the JNI runtime.
+
+The Java player and its pinned dependencies are included in `wiiuu.jar` on
+normal builds and release ZIPs. Native libraries are bundled for Linux x64
+and ARM64, macOS Intel and Apple Silicon, and Windows x64. At first launch
+WII-UU verifies and extracts just the required platform jars into a
+content-addressed cache under `<WII-UU home>/native/xcloud/java-rtc/`.
+No Maven or manual JAR copying is needed on the installed device.
+
+Install the existing Xbox runtime for Microsoft login and the Chromium
+fallback, then select **RTC: Native (beta)** and launch a game.
+Source builds use Maven on the build machine; `WIIUU_SKIP_JAVA_RTC=1`
+allows a development build without the RTC bundle. Release packaging
+always includes it.
+
+This prototype requests H.264/Opus, 720p/30, receives video through a native
+libwebrtc decoder and uses its audio device playout. Escape closes the player.
+It sends mapped controller input; native keyboard/mouse fallback, rumble,
+frame timing reports, hardware decoder tuning
+remain future work. Startup errors appear in the game library. The initial runtime installer
+still requires Chromium for the fallback. No silent automatic session retry.
+Live Xbox compatibility, Raspberry Pi performance and native audio need testing.
+
+Protocol reference: [openxcloud](https://github.com/StoppedwummPython/openxcloud/tree/main/crates/xcloud-proto).
