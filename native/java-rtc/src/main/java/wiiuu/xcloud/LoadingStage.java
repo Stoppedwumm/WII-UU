@@ -23,12 +23,18 @@ final class LoadingStage extends JPanel {
         if(loading==null)return;
         Object font=loading.getClientProperty("wiiuu.cloud.logoFont");
         Object accent=loading.getClientProperty("wiiuu.cloud.logoAccent");
+        Object painter=loading.getClientProperty("wiiuu.cloud.mascotPainter");
         remove(loading); // stops the mascot timer
         loading=null;
         intro=new CloudLogoIntro(font instanceof Font f?f:new Font(Font.SANS_SERIF,Font.BOLD,100),
-                accent instanceof Color c?c:new Color(0x58d4f4),this::showVideo);
+                accent instanceof Color c?c:new Color(0x58d4f4),this::showVideo,mascotPainter(painter));
         add(intro,BorderLayout.CENTER);
         revalidate();repaint();
+    }
+    @SuppressWarnings("unchecked")
+    private static java.util.function.BiConsumer<Graphics2D,float[]> mascotPainter(Object value){
+        return value instanceof java.util.function.BiConsumer<?,?> p
+                ?(java.util.function.BiConsumer<Graphics2D,float[]>)p:(g,pose)->{};
     }
     private void showVideo(){
         if(intro==null)return;
