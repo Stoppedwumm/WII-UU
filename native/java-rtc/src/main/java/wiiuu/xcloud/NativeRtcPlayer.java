@@ -54,7 +54,6 @@ public final class NativeRtcPlayer {
     private final String secret,title;
     private final URI endpoint;
     private JFrame window;
-    private JLabel status;
     private FastVideoView view;
     private final AtomicBoolean statsPending=new AtomicBoolean();
     private volatile String decoderStats="";
@@ -94,7 +93,11 @@ public final class NativeRtcPlayer {
         return JsonParser.parseString(r.body());
     }
     private JsonObject state()throws Exception{return object(request("state",null,15));}
-    private void label(String text){SwingUtilities.invokeLater(()->status.setText(text));}
+    private void label(String text){
+        SwingUtilities.invokeLater(()->{
+            if(window!=null)window.setTitle("WII-UU Xbox Cloud Player | "+text+(muted?" | Muted":""));
+        });
+    }
     private void ui()throws Exception{
         SwingUtilities.invokeAndWait(()->{
             window=new JFrame("WII-UU Xbox Cloud Player");
@@ -103,14 +106,16 @@ public final class NativeRtcPlayer {
             boolean armLinux=System.getProperty("os.name","").toLowerCase(Locale.ROOT).contains("linux")
                     &&Set.of("aarch64","arm64","arm","armv7l").contains(System.getProperty("os.arch","").toLowerCase(Locale.ROOT));
             view=new FastVideoView(armLinux);
-            status=new JLabel("Preparing Java RTC...",SwingConstants.CENTER);
-            JButton stop=new JButton("Disconnect");stop.addActionListener(e->closing.set(true));
-            JButton audio=new JButton(muted?"Enable audio":"Mute audio");
-            audio.addActionListener(e->{muted=!muted;audio.setText(muted?"Enable audio":"Mute audio");});
-            JPanel bar=new JPanel(new BorderLayout());bar.add(status,BorderLayout.CENTER);bar.add(stop,BorderLayout.EAST);bar.add(audio,BorderLayout.WEST);
-            window.add(view,BorderLayout.CENTER);window.add(bar,BorderLayout.SOUTH);
+            view.setPreferredSize(new Dimension(profile.width(),profile.height()));
+            window.setContentPane(view);
+            // Keep the entire client area for video; controls do not consume any screen space.
             window.getRootPane().registerKeyboardAction(e->closing.set(true),KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE,0),JComponent.WHEN_IN_FOCUSED_WINDOW);
-            window.setSize(profile.width(),profile.height()+48);window.setLocationRelativeTo(null);window.setVisible(true);
+            window.getRootPane().registerKeyboardAction(e->{
+                muted=!muted;
+                label(muted?"Audio muted":"Audio enabled");
+            },KeyStroke.getKeyStroke(KeyEvent.VK_M,0),JComponent.WHEN_IN_FOCUSED_WINDOW);
+            window.setTitle("WII-UU Xbox Cloud Player | Preparing Java RTC..."+(muted?" | Muted":""));
+            window.pack();window.setLocationRelativeTo(null);window.setVisible(true);
         });
     }
     private void setup(){
