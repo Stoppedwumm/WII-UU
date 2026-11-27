@@ -2,7 +2,6 @@ package wiiuu.xcloud;
 
 import com.google.gson.*;
 import dev.onvoid.webrtc.*;
-import dev.onvoid.webrtc.client.swing.VideoView;
 import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
@@ -26,13 +25,11 @@ public final class NativeRtcPlayer {
     private static final Gson JSON = new Gson();
     record Profile(int width,int height,int fps,int bitrate) {
         static Profile choose(String os,String arch,String override) {
-            boolean armLinux=os.toLowerCase(Locale.ROOT).contains("linux")
-                    && Set.of("aarch64","arm64","arm","armv7l").contains(arch.toLowerCase(Locale.ROOT));
             return switch(override.toLowerCase(Locale.ROOT)) {
                 case "360p" -> new Profile(640,360,30,2000);
                 case "540p" -> new Profile(960,540,30,3500);
                 case "720p" -> new Profile(1280,720,30,8000);
-                default -> armLinux ? new Profile(960,540,30,3500) : new Profile(1280,720,30,8000);
+                default -> new Profile(1280,720,30,8000);
             };
         }
     }
@@ -58,7 +55,12 @@ public final class NativeRtcPlayer {
     private final URI endpoint;
     private JFrame window;
     private JLabel status;
-    private VideoView view;
+    private FastVideoView view;
+    private final AtomicBoolean statsPending=new AtomicBoolean();
+    private volatile String decoderStats="";
+    private String statsId="";
+    private double priorDecoded,priorDecodeTime,priorEmitted,priorJitterTime;
+    private long priorStatsTime;
     private PeerConnectionFactory factory;
     private RTCPeerConnection peer;
     private volatile boolean muted, rtcFailed;
@@ -98,7 +100,9 @@ public final class NativeRtcPlayer {
             window=new JFrame("WII-UU Xbox Cloud Player");
             window.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
             window.addWindowListener(new WindowAdapter(){public void windowClosing(WindowEvent e){closing.set(true);}});
-            view=new VideoView();
+            boolean armLinux=System.getProperty("os.name","").toLowerCase(Locale.ROOT).contains("linux")
+                    &&Set.of("aarch64","arm64","arm","armv7l").contains(System.getProperty("os.arch","").toLowerCase(Locale.ROOT));
+            view=new FastVideoView(armLinux);
             status=new JLabel("Preparing Java RTC...",SwingConstants.CENTER);
             JButton stop=new JButton("Disconnect");stop.addActionListener(e->closing.set(true));
             JButton audio=new JButton(muted?"Enable audio":"Mute audio");
@@ -286,9 +290,41 @@ public final class NativeRtcPlayer {
         for(int slot:activePads)if(!next.contains(slot))send("control",obj("message","gamepadChanged","gamepadIndex",slot,"wasAdded",false));
         activePads.clear();activePads.addAll(next);
     }
+    private static double stat(Map<String,Object> a,String key){
+        return a.get(key) instanceof Number n ? n.doubleValue() : Double.NaN;
+    }
+    private void sampleDecoder(){
+        if(!statsPending.compareAndSet(false,true))return;
+        try{
+            peer.getStats(report->{
+                try{
+                    if(closing.get())return;
+                    for(RTCStats entry:report.getStats().values()){
+                        Map<String,Object> a=entry.getAttributes();
+                        if(entry.getType()!=RTCStatsType.INBOUND_RTP||!"video".equals(a.get("kind"))&&!"video".equals(a.get("mediaType")))continue;
+                        double decoded=stat(a,"framesDecoded"),decode=stat(a,"totalDecodeTime"),
+                                emitted=stat(a,"jitterBufferEmittedCount"),jitter=stat(a,"jitterBufferDelay");
+                        long timestamp=entry.getTimestamp();
+                        if(entry.getId().equals(statsId)&&timestamp>priorStatsTime&&decoded>priorDecoded){
+                            double df=decoded-priorDecoded,seconds=(timestamp-priorStatsTime)/1e6;
+                            double decodeMs=(decode-priorDecodeTime)*1000/df;
+                            double jitterMs=emitted>priorEmitted?(jitter-priorJitterTime)*1000/(emitted-priorEmitted):Double.NaN;
+                            decoderStats=String.format(Locale.ROOT,"decode %.1f fps / %s ms | jitter %s ms",df/seconds,metric(decodeMs),metric(jitterMs));
+                            System.out.println("[xcloud] "+decoderStats+" | decoder="+a.getOrDefault("decoderImplementation","unknown")
+                                    +" | power efficient="+a.getOrDefault("powerEfficientDecoder","unknown")
+                                    +" | packet loss="+a.getOrDefault("packetsLost","unknown")+" | decoder drops="+a.getOrDefault("framesDropped","unknown"));
+                        }
+                        statsId=entry.getId();priorStatsTime=timestamp;priorDecoded=decoded;priorDecodeTime=decode;priorEmitted=emitted;priorJitterTime=jitter;
+                        break;
+                    }
+                }finally{statsPending.set(false);}
+            });
+        }catch(RuntimeException e){statsPending.set(false);}
+    }
+    private static String metric(double value){return Double.isFinite(value)&&value>=0?String.format(Locale.ROOT,"%.1f",value):"n/a";}
     private void loop()throws Exception{
         label("Streaming (Java RTC)");
-        long lastState=System.nanoTime(),lastKeep=lastState,lastReport=lastState,lastRendered=0,lastDropped=0;
+        long lastState=System.nanoTime(),lastKeep=lastState,lastReport=lastState,lastRendered=0,lastDropped=0,lastPainted=0;
         int failures=0;boolean lastMute=muted;
         Future<Boolean> pending=null;
         while(!closing.get()){
@@ -325,11 +361,14 @@ public final class NativeRtcPlayer {
                 });
             }
             if(n-lastReport>=TimeUnit.SECONDS.toNanos(5)){
-                long total=rendered.get(),drops=frames.dropped();
-                double fps=(total-lastRendered)*1e9/(n-lastReport);
-                label(String.format(Locale.ROOT,"Java RTC | %s | %.1f fps | %d render drops",
-                        streamSize.isEmpty()?"waiting for video":streamSize,fps,drops-lastDropped));
-                lastReport=n;lastRendered=total;lastDropped=drops;
+                sampleDecoder();
+                long total=rendered.get(),drops=frames.dropped(),painted=view.painted();
+                double fps=(total-lastRendered)*1e9/(n-lastReport),paintFps=(painted-lastPainted)*1e9/(n-lastReport);
+                String performance=String.format(Locale.ROOT,"%s | convert %.1f / paint %.1f fps | %d drops",
+                        streamSize.isEmpty()?"waiting for video":streamSize,fps,paintFps,drops-lastDropped);
+                label(performance+(decoderStats.isEmpty()?"":" | "+decoderStats));
+                System.out.println("[xcloud] "+performance);
+                lastReport=n;lastRendered=total;lastDropped=drops;lastPainted=painted;
             }
             Thread.sleep(16);
         }
@@ -369,10 +408,11 @@ public final class NativeRtcPlayer {
             ByteBuffer b=padPacket(7,25,Map.of(2,f));
             if(b.remaining()!=38||b.getShort(0)!=2||b.getInt(2)!=7||b.get(15)!=2||b.getShort(16)!=16||b.getShort(20)!=32767||Short.toUnsignedInt(b.getShort(26))!=65535)throw new AssertionError("Input wire format");
             if(remoteIce(JsonParser.parseString("{\"iceCandidates\":[null,{}, {\"candidate\":\"a=candidate:1 1 udp 1 127.0.0.1 1234 typ host\",\"sdpMid\":\"0\"}]}")).size()!=1)throw new AssertionError("ICE filtering");
-            if(!Profile.choose("Linux","aarch64","auto").equals(new Profile(960,540,30,3500))
+            if(!Profile.choose("Linux","aarch64","auto").equals(new Profile(1280,720,30,8000))
                     ||Profile.choose("Windows","amd64","auto").width()!=1280
                     ||Profile.choose("Linux","arm64","720p").width()!=1280)throw new AssertionError("RTC quality profile");
             LatestFrame.selfTest();
+            FastVideoView.selfTest();
             System.out.println("Java RTC protocol and performance fixtures passed");return;
         }
         throw new IllegalArgumentException("Use --self-test or the in-process open API");
