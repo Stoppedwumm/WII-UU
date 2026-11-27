@@ -24,7 +24,27 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Browser-free JVM media process. Xbox account grants remain in the loopback service. */
 public final class NativeRtcPlayer {
     private static final Gson JSON = new Gson();
-    private static final int WIDTH=1280, HEIGHT=720, FPS=30;
+    record Profile(int width,int height,int fps,int bitrate) {
+        static Profile choose(String os,String arch,String override) {
+            boolean armLinux=os.toLowerCase(Locale.ROOT).contains("linux")
+                    && Set.of("aarch64","arm64","arm","armv7l").contains(arch.toLowerCase(Locale.ROOT));
+            return switch(override.toLowerCase(Locale.ROOT)) {
+                case "360p" -> new Profile(640,360,30,2000);
+                case "540p" -> new Profile(960,540,30,3500);
+                case "720p" -> new Profile(1280,720,30,8000);
+                default -> armLinux ? new Profile(960,540,30,3500) : new Profile(1280,720,30,8000);
+            };
+        }
+    }
+    private final Profile profile=Profile.choose(System.getProperty("os.name",""),System.getProperty("os.arch",""),
+            System.getProperty("wiiuu.xcloud.profile","auto"));
+    private final ExecutorService maintenance=Executors.newSingleThreadExecutor(r->{
+        Thread t=new Thread(r,"xcloud-keepalive");t.setDaemon(true);return t;
+    });
+    private LatestFrame<dev.onvoid.webrtc.media.video.VideoFrame> frames;
+    private volatile long lastVideo;
+    private final java.util.concurrent.atomic.AtomicLong rendered=new java.util.concurrent.atomic.AtomicLong();
+    private volatile String streamSize="";
     private static final String[] BUTTONS={"Nexus","Menu","View","A","B","X","Y","DPadUp","DPadDown","DPadLeft","DPadRight","LeftShoulder","RightShoulder","LeftThumb","RightThumb"};
     private static final Set<String> TERMINAL=Set.of("Failed","Stopped","Closed","Ended","Terminated","Cancelled");
     private final AtomicBoolean closing=new AtomicBoolean();
@@ -86,11 +106,34 @@ public final class NativeRtcPlayer {
             JPanel bar=new JPanel(new BorderLayout());bar.add(status,BorderLayout.CENTER);bar.add(stop,BorderLayout.EAST);bar.add(audio,BorderLayout.WEST);
             window.add(view,BorderLayout.CENTER);window.add(bar,BorderLayout.SOUTH);
             window.getRootPane().registerKeyboardAction(e->closing.set(true),KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE,0),JComponent.WHEN_IN_FOCUSED_WINDOW);
-            window.setSize(WIDTH,HEIGHT);window.setLocationRelativeTo(null);window.setVisible(true);
+            window.setSize(profile.width(),profile.height()+48);window.setLocationRelativeTo(null);window.setVisible(true);
         });
     }
     private void setup(){
-        factory=new PeerConnectionFactory();
+        // Default WebRTC uses software H264 on Linux. Use hardware where available,
+        // with the library's built-in software fallback. Pi 5 itself has no H264 accelerator.
+        try {
+            var decoders=new dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory();
+            System.out.println("[xcloud] Hardware decoder candidates: "+decoders.getHardwareCodecs());
+            factory=PeerConnectionFactory.builder().setVideoDecoderFactory(decoders).build();
+        } catch(RuntimeException | LinkageError unsupported) {
+            factory=new PeerConnectionFactory();
+        }
+        frames=new LatestFrame<>("xcloud-video-render",frame->{
+            if(closing.get())return;
+            var buffer=frame.buffer;
+            streamSize=buffer.getWidth()+"x"+buffer.getHeight();
+            // If the server ignores the resolution hint, scale I420 before RGB conversion.
+            double scale=Math.min(1,Math.min((double)profile.width()/buffer.getWidth(),(double)profile.height()/buffer.getHeight()));
+            if(scale<1) {
+                int w=Math.max(2,((int)(buffer.getWidth()*scale))&~1),h=Math.max(2,((int)(buffer.getHeight()*scale))&~1);
+                var scaled=buffer.cropAndScale(0,0,buffer.getWidth(),buffer.getHeight(),w,h);
+                try { view.accept(new dev.onvoid.webrtc.media.video.VideoFrame(scaled,frame.rotation,frame.timestampNs)); }
+                finally { scaled.release(); }
+            } else view.accept(frame);
+            rendered.incrementAndGet();
+        },dev.onvoid.webrtc.media.video.VideoFrame::release);
+        System.out.println("[xcloud] Native profile "+profile.width()+"x"+profile.height()+" @ "+profile.fps()+" fps, "+profile.bitrate()+" kbps");
         peer=factory.createPeerConnection(new RTCConfiguration(),new PeerConnectionObserver(){
             public void onIceCandidate(RTCIceCandidate c){
                 if(c!=null&&c.sdp!=null&&!c.sdp.isBlank())candidates.add(obj("candidate",c.sdp,"sdpMid",c.sdpMid,"sdpMLineIndex",c.sdpMLineIndex));
@@ -102,7 +145,9 @@ public final class NativeRtcPlayer {
             public void onTrack(RTCRtpTransceiver t){
                 if(t.getReceiver().getTrack() instanceof VideoTrack v && video==null){
                     video=v;
-                    sink=frame->{try{if(!closing.get())view.accept(frame);}finally{frame.release();}};
+                    // SHARED delivers an owned reference. Transfer it into the bounded
+                    // mailbox; it releases both replaced and consumed frames.
+                    sink=frame->{lastVideo=System.nanoTime();frames.offer(frame);};
                     v.addSink(sink,VideoFrameAccess.SHARED);
                 }
             }
@@ -162,7 +207,7 @@ public final class NativeRtcPlayer {
         return out;
     }
     private void negotiate()throws Exception{
-        request("start",obj("titleId",title),90);started=true;
+        request("start",obj("titleId",title,"videoWidth",profile.width(),"videoHeight",profile.height()),90);started=true;
         label("Waiting for Xbox server...");
         boolean transferred=false,ready=false;
         for(int i=0;i<240;i++){check();String s=string(state(),"state");
@@ -225,8 +270,8 @@ public final class NativeRtcPlayer {
         message("/properties/clientappinstallidchanged",obj("clientAppInstallId",UUID.randomUUID().toString()));
         message("/characteristics/orientationchanged",obj("orientation",0));
         message("/characteristics/touchinputenabledchanged",obj("touchInputEnabled",false));
-        message("/characteristics/clientdevicecapabilities",obj("supportsCustomResolution",true,"supportsHevc",false,"supportsHdr",false,"supportsFps",FPS,"maxWidth",WIDTH,"maxHeight",HEIGHT,"maxBitrateKbps",8000,"video",obj("width",WIDTH,"height",HEIGHT,"maxWidth",WIDTH,"maxHeight",HEIGHT,"maxBitrateKbps",8000)));
-        message("/characteristics/dimensionschanged",obj("horizontal",WIDTH,"vertical",HEIGHT,"preferredWidth",WIDTH,"preferredHeight",HEIGHT,"safeAreaLeft",0,"safeAreaTop",0,"safeAreaRight",WIDTH,"safeAreaBottom",HEIGHT,"supportsCustomResolution",true));
+        message("/characteristics/clientdevicecapabilities",obj("supportsCustomResolution",true,"supportsHevc",false,"supportsHdr",false,"supportsFps",profile.fps(),"maxWidth",profile.width(),"maxHeight",profile.height(),"maxBitrateKbps",profile.bitrate(),"video",obj("width",profile.width(),"height",profile.height(),"maxWidth",profile.width(),"maxHeight",profile.height(),"maxBitrateKbps",profile.bitrate())));
+        message("/characteristics/dimensionschanged",obj("horizontal",profile.width(),"vertical",profile.height(),"preferredWidth",profile.width(),"preferredHeight",profile.height(),"safeAreaLeft",0,"safeAreaTop",0,"safeAreaRight",profile.width(),"safeAreaBottom",profile.height(),"supportsCustomResolution",true));
     }
     private void input()throws Exception{
         if(!open("input")||!open("control")||!handshake)return;
@@ -243,11 +288,13 @@ public final class NativeRtcPlayer {
     }
     private void loop()throws Exception{
         label("Streaming (Java RTC)");
-        long lastState=System.nanoTime(),lastKeep=lastState;int failures=0;boolean lastMute=muted;
+        long lastState=System.nanoTime(),lastKeep=lastState,lastReport=lastState,lastRendered=0,lastDropped=0;
+        int failures=0;boolean lastMute=muted;
+        Future<Boolean> pending=null;
         while(!closing.get()){
             if(lastMute!=muted){peer.setAudioPlayout(!muted);lastMute=muted;}
             if(open("message")&&!messageOpened){messageOpened=true;send("message",obj("type","Handshake","version","messageV1","id",UUID.randomUUID().toString(),"cv","0"));}
-            if(open("control")&&!controlOpened){controlOpened=true;send("control",obj("message","authorizationRequest","accessKey","4BDB3609-C1F1-4195-9B37-FEFF45DA8B8E"));Map<String,Object> size=obj("width",WIDTH,"height",HEIGHT);send("control",obj("message","VideoPreference","type","VideoPreference","resolution",size,"dimensions",size,"maxFPS",FPS));}
+            if(open("control")&&!controlOpened){controlOpened=true;send("control",obj("message","authorizationRequest","accessKey","4BDB3609-C1F1-4195-9B37-FEFF45DA8B8E"));Map<String,Object> size=obj("width",profile.width(),"height",profile.height());send("control",obj("message","VideoPreference","type","VideoPreference","resolution",size,"dimensions",size,"maxFPS",profile.fps()));}
             if(open("input")&&!inputOpened){inputOpened=true;binary(header(8,sequence++,now(),1).put((byte)0).flip());}
             String raw;while((raw=messages.poll())!=null){
                 JsonObject m;try{m=object(JsonParser.parseString(raw));}catch(JsonParseException ex){continue;}
@@ -258,21 +305,42 @@ public final class NativeRtcPlayer {
             }
             input();
             long n=System.nanoTime();
-            if(n-lastState>=TimeUnit.SECONDS.toNanos(5)){
-                lastState=n;send("control",obj("message","videoKeyframeRequested","ifrRequested",true));
-                try{if(TERMINAL.contains(string(state(),"state")))closing.set(true);
-                    if(n-lastKeep>=TimeUnit.SECONDS.toNanos(25)){request("keepalive",Map.of(),15);lastKeep=n;}
-                    failures=0;
-                }catch(IOException e){if(++failures>=3)throw e;}
+            // HTTP must never block the controller or message loop.
+            if(pending!=null&&pending.isDone()){
+                try{if(pending.get())closing.set(true);failures=0;}
+                catch(ExecutionException e){if(++failures>=3)throw new IOException("Xbox session check failed",e.getCause());}
+                pending=null;
             }
-            Thread.sleep(33);
+            if(pending==null&&n-lastState>=TimeUnit.SECONDS.toNanos(5)){
+                lastState=n;
+                // Periodic IDR bursts waste bandwidth/CPU; request only when video stalls.
+                if(lastVideo==0||n-lastVideo>=TimeUnit.SECONDS.toNanos(2))
+                    send("control",obj("message","videoKeyframeRequested","ifrRequested",true));
+                boolean keep=n-lastKeep>=TimeUnit.SECONDS.toNanos(25);
+                if(keep)lastKeep=n;
+                pending=maintenance.submit(()->{
+                    if(TERMINAL.contains(string(state(),"state")))return true;
+                    if(keep)request("keepalive",Map.of(),15);
+                    return false;
+                });
+            }
+            if(n-lastReport>=TimeUnit.SECONDS.toNanos(5)){
+                long total=rendered.get(),drops=frames.dropped();
+                double fps=(total-lastRendered)*1e9/(n-lastReport);
+                label(String.format(Locale.ROOT,"Java RTC | %s | %.1f fps | %d render drops",
+                        streamSize.isEmpty()?"waiting for video":streamSize,fps,drops-lastDropped));
+                lastReport=n;lastRendered=total;lastDropped=drops;
+            }
+            Thread.sleep(16);
         }
     }
     private void run()throws Exception{
         try{check();ui();check();negotiate();loop();}
         finally{
             closing.set(true);
+            maintenance.shutdownNow();
             if(video!=null&&sink!=null)try{video.removeSink(sink);}catch(Exception ignored){}
+            if(frames!=null)frames.close();
             for(var e:channels.entrySet())try{RTCDataChannel c=e.getValue();if(e.getKey().equals("message"))c.unregisterObserver();c.close();c.dispose();}catch(Exception ignored){}
             if(peer!=null)try{peer.close();}catch(Exception ignored){}
             if(factory!=null)try{factory.dispose();}catch(Exception ignored){}
@@ -301,7 +369,11 @@ public final class NativeRtcPlayer {
             ByteBuffer b=padPacket(7,25,Map.of(2,f));
             if(b.remaining()!=38||b.getShort(0)!=2||b.getInt(2)!=7||b.get(15)!=2||b.getShort(16)!=16||b.getShort(20)!=32767||Short.toUnsignedInt(b.getShort(26))!=65535)throw new AssertionError("Input wire format");
             if(remoteIce(JsonParser.parseString("{\"iceCandidates\":[null,{}, {\"candidate\":\"a=candidate:1 1 udp 1 127.0.0.1 1234 typ host\",\"sdpMid\":\"0\"}]}")).size()!=1)throw new AssertionError("ICE filtering");
-            System.out.println("Java RTC protocol fixtures passed");return;
+            if(!Profile.choose("Linux","aarch64","auto").equals(new Profile(960,540,30,3500))
+                    ||Profile.choose("Windows","amd64","auto").width()!=1280
+                    ||Profile.choose("Linux","arm64","720p").width()!=1280)throw new AssertionError("RTC quality profile");
+            LatestFrame.selfTest();
+            System.out.println("Java RTC protocol and performance fixtures passed");return;
         }
         throw new IllegalArgumentException("Use --self-test or the in-process open API");
     }

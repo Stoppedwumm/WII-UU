@@ -151,12 +151,12 @@ function regionHost() {
     throw new Error('Unexpected Xbox streaming region');
   return url.origin;
 }
-function deviceInfo() {
+function deviceInfo(display) {
   return JSON.stringify({
     appInfo: { env: { clientAppId:'www.xbox.com', clientAppType:'browser', clientAppVersion:'21.1.98', clientSdkVersion:'8.5.3', httpEnvironment:'prod', sdkInstallId:'' } },
     dev: { hw:{ make:'Microsoft', model:'unknown', sdktype:'web' },
       os:{name:'windows',ver:'22631.2715',platform:'desktop'},
-      displayInfo:{dimensions:{widthInPixels:1920,heightInPixels:1080},pixelDensity:{dpiX:2,dpiY:2}},
+      displayInfo:{dimensions:{widthInPixels:display?.width ?? 1920,heightInPixels:display?.height ?? 1080},pixelDensity:{dpiX:2,dpiY:2}},
       browser:{browserName:'chrome',browserVersion:'119.0'} }
   });
 }
@@ -174,7 +174,7 @@ async function streamingTokens() {
   if (!cloudToken?.data?.gsToken) throw new Error('Xbox Cloud Gaming access is unavailable for this account');
   return cloudToken;
 }
-async function xbox(pathname, method='GET', data, hostOverride) {
+async function xbox(pathname, method='GET', data, hostOverride, display) {
   if (!cloudToken) await streamingTokens();
   const host = hostOverride || regionHost();
   const url = new URL(pathname, host);
@@ -182,7 +182,7 @@ async function xbox(pathname, method='GET', data, hostOverride) {
     throw new Error('Invalid Xbox API path');
   const result = await fetch(url, {method, signal:AbortSignal.timeout(30000), headers:{
     'Accept':'application/json', 'Content-Type':'application/json',
-    'X-Gssv-Client':'XboxComBrowser', 'X-MS-Device-Info':deviceInfo(),
+    'X-Gssv-Client':'XboxComBrowser', 'X-MS-Device-Info':deviceInfo(display),
     'Authorization':'Bearer ' + cloudToken.data.gsToken
   }, body:data === undefined ? undefined : JSON.stringify(data), redirect:'error'});
   if (!result.ok) {
@@ -356,7 +356,7 @@ async function api(action, payload={}) {
         settings:{nanoVersion:'V3;WebrtcTransport.dll',enableOptionalDataCollection:false,
           enableTextToSpeech:false,highContrast:0,locale:'de-DE',useIceConnection:false,
           timezoneOffsetMinutes:new Date().getTimezoneOffset(),sdkType:'web',osName:'windows'},
-        serverId:'',fallbackRegionNames:[] });
+        serverId:'',fallbackRegionNames:[] }, [640,960,1280].includes(payload.videoWidth) && payload.videoHeight === payload.videoWidth * 9 / 16 ? {width:payload.videoWidth,height:payload.videoHeight} : undefined);
       const sid=session.sessionId || String(session.sessionPath || '').split('/').pop();
       if (!validSessionId(sid)) throw new Error('Xbox returned an invalid stream identifier');
       activeSession={id:sid,titleId:id};
