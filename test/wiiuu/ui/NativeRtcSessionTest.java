@@ -19,10 +19,13 @@ public final class NativeRtcSessionTest {
             import java.util.concurrent.*;
             public class NativeRtcPlayer {
                 public static Runnable open(int port,String secret,String title,boolean audio,
-                    Supplier<List<Map<String,Object>>> frames,CompletableFuture<Void> finished){
+                    Supplier<List<Map<String,Object>>> frames,CompletableFuture<Void> finished,
+                    Supplier<javax.swing.JComponent> loadingFactory){
                     if(port!=1234 || !title.equals("fixture") || !audio ||
                        !frames.get().get(0).get("pid").equals(ProcessHandle.current().pid()))
                         throw new AssertionError("Not running in original JVM");
+                    if(!"mascot-fixture".equals(loadingFactory.get().getName()))
+                        throw new AssertionError("Loading panel factory did not cross classloader");
                     return () -> finished.complete(null);
                 }
             }
@@ -34,9 +37,11 @@ public final class NativeRtcSessionTest {
             jar.putNextEntry(new JarEntry(name));Files.copy(root.resolve(name),jar);jar.closeEntry();
         }
         for(int i=0;i<2;i++){
-            NativeRtcSession session=NativeRtcSession.open(root,1234,"fixture","fixture",true,()->List.of(Map.of("pid",ProcessHandle.current().pid())));
+            NativeRtcSession session=NativeRtcSession.open(root,1234,"fixture","fixture",true,()->List.of(Map.of("pid",ProcessHandle.current().pid())),()->{
+                javax.swing.JPanel panel=new javax.swing.JPanel();panel.setName("mascot-fixture");return panel;
+            });
             try {
-                NativeRtcSession.open(root,1234,"fixture","fixture",true,List::of);
+                NativeRtcSession.open(root,1234,"fixture","fixture",true,List::of,javax.swing.JPanel::new);
                 throw new AssertionError("Overlapping session accepted");
             }catch(java.io.IOException expected){}
             session.close();session.finished().get(5,TimeUnit.SECONDS);

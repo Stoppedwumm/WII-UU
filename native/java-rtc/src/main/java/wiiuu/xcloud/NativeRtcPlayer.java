@@ -55,6 +55,9 @@ public final class NativeRtcPlayer {
     private final URI endpoint;
     private JFrame window;
     private FastVideoView view;
+    private LoadingStage stage;
+    private final java.util.function.Supplier<JComponent> loadingFactory;
+    private final AtomicBoolean firstPicture=new AtomicBoolean();
     private final AtomicBoolean statsPending=new AtomicBoolean();
     private volatile String decoderStats="";
     private String statsId="";
@@ -68,10 +71,12 @@ public final class NativeRtcPlayer {
     private volatile VideoTrack video;
     private VideoTrackSink sink;
     private final java.util.function.Supplier<List<Map<String,Object>>> controllerFrames;
-    private NativeRtcPlayer(int port,String secret,String title,boolean audio,java.util.function.Supplier<List<Map<String,Object>>> controllerFrames) {
+    private NativeRtcPlayer(int port,String secret,String title,boolean audio,java.util.function.Supplier<List<Map<String,Object>>> controllerFrames,
+            java.util.function.Supplier<JComponent> loadingFactory) {
         this.secret=secret;
         this.title=title;
         this.controllerFrames=Objects.requireNonNull(controllerFrames);
+        this.loadingFactory=Objects.requireNonNull(loadingFactory);
         if(port<1||port>65535||secret==null||!secret.matches("[a-f0-9]{64}")||title==null)throw new IllegalArgumentException("Invalid launcher");
         endpoint=URI.create("http://127.0.0.1:"+port+"/api/");
         muted=!audio;
@@ -98,6 +103,10 @@ public final class NativeRtcPlayer {
             if(window!=null)window.setTitle("WII-UU Xbox Cloud Player | "+text+(muted?" | Muted":""));
         });
     }
+    private void loadingStatus(String text){
+        label(text);
+        SwingUtilities.invokeLater(()->{if(stage!=null)stage.status(text);});
+    }
     private void ui()throws Exception{
         SwingUtilities.invokeAndWait(()->{
             window=new JFrame("WII-UU Xbox Cloud Player");
@@ -107,7 +116,9 @@ public final class NativeRtcPlayer {
                     &&Set.of("aarch64","arm64","arm","armv7l").contains(System.getProperty("os.arch","").toLowerCase(Locale.ROOT));
             view=new FastVideoView(armLinux);
             view.setPreferredSize(new Dimension(profile.width(),profile.height()));
-            window.setContentPane(view);
+            stage=new LoadingStage(loadingFactory.get(),view);
+            stage.setPreferredSize(new Dimension(profile.width(),profile.height()));
+            window.setContentPane(stage);
             // Keep the entire client area for video; controls do not consume any screen space.
             window.getRootPane().registerKeyboardAction(e->closing.set(true),KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE,0),JComponent.WHEN_IN_FOCUSED_WINDOW);
             window.getRootPane().registerKeyboardAction(e->{
@@ -141,6 +152,8 @@ public final class NativeRtcPlayer {
                 finally { scaled.release(); }
             } else view.accept(frame);
             rendered.incrementAndGet();
+            if(firstPicture.compareAndSet(false,true))
+                SwingUtilities.invokeLater(()->{if(!closing.get())stage.showVideo();});
         },dev.onvoid.webrtc.media.video.VideoFrame::release);
         System.out.println("[xcloud] Native profile "+profile.width()+"x"+profile.height()+" @ "+profile.fps()+" fps, "+profile.bitrate()+" kbps");
         peer=factory.createPeerConnection(new RTCConfiguration(),new PeerConnectionObserver(){
@@ -216,17 +229,18 @@ public final class NativeRtcPlayer {
         return out;
     }
     private void negotiate()throws Exception{
+        loadingStatus("Requesting Xbox session...");
         request("start",obj("titleId",title,"videoWidth",profile.width(),"videoHeight",profile.height()),90);started=true;
-        label("Waiting for Xbox server...");
+        loadingStatus("Waiting for Xbox server...");
         boolean transferred=false,ready=false;
         for(int i=0;i<240;i++){check();String s=string(state(),"state");
             if(s.equals("Provisioned")){ready=true;break;}
             if(TERMINAL.contains(s))throw new IOException("Session ended");
-            if(s.equals("ReadyToConnect")&&!transferred){request("connect",Map.of(),35);transferred=true;}
+            if(s.equals("ReadyToConnect")&&!transferred){loadingStatus("Connecting to Xbox server...");request("connect",Map.of(),35);transferred=true;}
             pause(1000);
         }
         if(!ready)throw new IOException("Provisioning timed out");
-        label("Negotiating Java WebRTC...");
+        loadingStatus("Negotiating Java WebRTC...");
         setup();
         RTCSessionDescription offer=offer();description(offer,true);
         request("sdpPost",obj("sdp",offer.sdp),35);
@@ -328,7 +342,8 @@ public final class NativeRtcPlayer {
     }
     private static String metric(double value){return Double.isFinite(value)&&value>=0?String.format(Locale.ROOT,"%.1f",value):"n/a";}
     private void loop()throws Exception{
-        label("Streaming (Java RTC)");
+        if(!firstPicture.get())loadingStatus("Waiting for the first video frame...");
+        else label("Streaming (Java RTC)");
         long lastState=System.nanoTime(),lastKeep=lastState,lastReport=lastState,lastRendered=0,lastDropped=0,lastPainted=0;
         int failures=0;boolean lastMute=muted;
         Future<Boolean> pending=null;
@@ -388,14 +403,15 @@ public final class NativeRtcPlayer {
             for(var e:channels.entrySet())try{RTCDataChannel c=e.getValue();if(e.getKey().equals("message"))c.unregisterObserver();c.close();c.dispose();}catch(Exception ignored){}
             if(peer!=null)try{peer.close();}catch(Exception ignored){}
             if(factory!=null)try{factory.dispose();}catch(Exception ignored){}
-            if(started)try{request("stop",Map.of(),5);}catch(Exception ignored){}
             if(window!=null)SwingUtilities.invokeAndWait(window::dispose);
+            if(started)try{request("stop",Map.of(),5);}catch(Exception ignored){}
         }
     }
     /** Starts an in-process worker; completion fires only after native and server cleanup. */
     public static Runnable open(int port,String secret,String title,boolean audio,
-            java.util.function.Supplier<List<Map<String,Object>>> frames,CompletableFuture<Void> finished){
-        NativeRtcPlayer session=new NativeRtcPlayer(port,secret,title,audio,frames);
+            java.util.function.Supplier<List<Map<String,Object>>> frames,CompletableFuture<Void> finished,
+            java.util.function.Supplier<JComponent> loadingFactory){
+        NativeRtcPlayer session=new NativeRtcPlayer(port,secret,title,audio,frames,loadingFactory);
         Thread worker=new Thread(()->{
             try{session.run();if(session.rtcFailed)finished.completeExceptionally(new IllegalStateException("Java RTC connection failed"));else finished.complete(null);}
             catch(InterruptedException e){if(session.rtcFailed)finished.completeExceptionally(new IllegalStateException("Java RTC connection failed"));else finished.complete(null);}
@@ -418,6 +434,7 @@ public final class NativeRtcPlayer {
                     ||Profile.choose("Linux","arm64","720p").width()!=1280)throw new AssertionError("RTC quality profile");
             LatestFrame.selfTest();
             FastVideoView.selfTest();
+            LoadingStage.selfTest();
             System.out.println("Java RTC protocol and performance fixtures passed");return;
         }
         throw new IllegalArgumentException("Use --self-test or the in-process open API");

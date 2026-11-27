@@ -694,7 +694,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
 
     private void startNativeRtc(Game chosen) throws IOException {
         NativeRtcSession session=NativeRtcSession.open(XboxCloudRuntime.home(config).resolve("java-rtc"),
-                backend.port,backend.secret,chosen.id(),autoAudio(),controllerFrames);
+                backend.port,backend.secret,chosen.id(),autoAudio(),controllerFrames,
+                ()->new CloudLoadingPanel(new Mascot()));
         nativeSession=session;
         PluginStore.trackInProcess(config,entry,session::close,session.finished());
         setStreamActive(true);
