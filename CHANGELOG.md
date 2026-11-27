@@ -5,18 +5,26 @@ in Settings > General > What's new, and before installing an update.
 
 ## 2.2.0 (2026-11-26)
 **Xbox Cloud Gaming (experimental)**
-- Add an optional Java-native WebRTC player running in the WII-UU JVM with native video/audio and direct controller mapping. Bundle the Java module and platform JNI libraries in wiiuu.jar; the existing Chromium backend remains the default and fallback.
+- Add an optional Java-native WebRTC player using JNI/libwebrtc, with native video/audio and direct WII-UU controller-manager mappings. Select RTC: Native (beta) in the Xbox library; Chromium remains the default and can be selected as a fallback.
+- Run the native player in a separate Swing window inside the existing WII-UU JVM, without a browser, Python player or second JVM for media playback. Reuse existing Microsoft authentication, saved accounts, favorites and Node-based session signaling.
+- Bundle the Java module, dependencies and native libraries for Linux x64/ARM64, macOS Intel/Apple Silicon and Windows x64 in wiiuu.jar. Verify and extract only the matching platform runtime into a local cache; no Maven or manual JAR installation is required on client devices.
+- The native prototype requests H.264/Opus at 720p/30 and supports mapped controller input. Native keyboard/mouse input, rumble and hardware-decoder tuning remain future work. Live Xbox sessions, Raspberry Pi performance and native audio still require hardware testing. The existing Xbox runtime installation is still required for login and Chromium fallback; failed native sessions are not silently retried in Chromium.
 
 **Windows installer**
-- Add a PowerShell web installer with the same uninstall, repair, update and disk-space optimization menu as the Unix one-liner. Maintenance does not download the full release ZIP; cleanup previews eligible staging folders before removal.
+- Add a PowerShell web installer with the same uninstall, repair, update and disk-space optimization menu as the Unix one-liner: `& ([scriptblock]::Create((irm https://wiiuu.stoppedwumm.net/get.ps1)))` (available after release-site deployment).
+- Open the maintenance menu before downloading the release ZIP; optimization and uninstall do not need the full package. Use `-Optimize` to preview eligible staging folders before removal, following the existing 24-hour cleanup policy.
+- Respect the configured data drive for release staging and cleanup, preserve user ROMs/settings/saves during optimization, and publish the installer for both stable and beta release channels.
 
 **Bluetooth (experimental, Linux / Raspberry Pi OS)**
 - Send and receive selected single-file games between any pair of WII-UU and/or standalone Choccy Milk devices using paired Bluetooth Classic devices, with SHA-256 verification and no overwrite.
-- Add two-player local multiplayer via libretro netpacket callbacks over Bluetooth RFCOMM, defaulting to melonDS DS with opt-in support for other netpacket-compatible cores. Peers negotiate core identity, protocol, capabilities and packet size. Either application can host or join either application, including same-app sessions. Requires compatible cores and hardware testing.
+- Configure the paired peer's Bluetooth MAC and send/receive actions under Bluetooth games & multiplayer in WII-UU Settings > Games, or the Bluetooth tab in Choccy Milk Settings. Uses authenticated/encrypted RFCOMM with BlueZ and Python 3; no Wi-Fi relay is needed.
+- Add two-player local multiplayer via libretro netpacket callbacks over Bluetooth RFCOMM, defaulting to melonDS DS with opt-in support for other netpacket-compatible cores. Peers negotiate core identity, protocol, capabilities and packet size. Either application can host or join either application, including same-app sessions.
+- Select Host on one device and Join on the other, then start compatible games on both (host first). Protocol interoperability is covered by simulated-stream tests; actual Bluetooth hardware and DS local wireless gameplay remain unverified. Windows, macOS and Android are not supported by this experimental transport.
 
 **RetroAchievements addition**
-- Add a controller-friendly RetroAchievements viewer from the hovered or focused game tile (click the Achievements button or press Y), and under Games and User profiles, with paginated account-wide game progress, locked/unlocked and hardcore achievements, points, descriptions and unlock dates.
-- Linked RetroAchievements User to Wii-UU User
+- Add a controller-friendly RetroAchievements viewer from the hovered or focused installed game tile (click Achievements or press controller/keyboard Y). Open that game's achievement details and return directly to the library; ROM identification works even when home progress badges are disabled. Show a clear message if no RetroAchievements game matches.
+- Retain the account-wide viewer under Settings > Games and User profiles, with paginated game progress, locked/unlocked and hardcore achievements, points, descriptions and unlock dates.
+- Add an Add RetroAchievements user action in User profiles to create a separate local WII-UU profile named after an existing RetroAchievements account. Pre-fill only its username, leave credentials blank and keep the current session selected. Switch to the new profile and sign in via its account settings; no external RetroAchievements account is created.
 
 ## 2.1.13 (2026-11-25)
 **Bugfixes and QOL Updates**
