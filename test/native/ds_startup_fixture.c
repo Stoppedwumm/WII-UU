@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 typedef bool (*environment_t)(unsigned, void *);
 typedef void (*video_t)(const void *, unsigned, unsigned, size_t);
@@ -24,7 +25,19 @@ void retro_set_input_state(void *cb) { (void) cb; }
 void retro_init(void) { int format = 1; environment(10, &format); }
 void retro_get_system_info(struct system_info *info) { *info = (struct system_info){"DS startup fixture", "1", "nds", true, false}; }
 bool retro_load_game(const struct game_info *game) {
-    (void) game;
+    /* Mirror melonDS DS: register options only once content is loaded. */
+    if (game && game->path && !strstr(game->path, "offline.nds")) {
+        struct variable { const char *key, *value; };
+        struct variable options[] = {
+            {"melonds_network_mode", "Networking Mode; disabled|indirect"},
+            {NULL, NULL}
+        };
+        struct variable mode = {"melonds_network_mode", NULL};
+        if (!environment(16, options) || !environment(15, &mode)
+                || !mode.value || strcmp(mode.value, "indirect")) return false;
+        puts("WFC fixture received indirect mode");
+        fflush(stdout);
+    }
     for (unsigned i = 0; i < 256 * 384; i++) pixels[i] = i < 256 * 192 ? 0x112233 : 0x445566;
     return true;
 }

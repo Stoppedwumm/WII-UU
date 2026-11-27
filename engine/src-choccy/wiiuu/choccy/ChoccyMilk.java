@@ -238,7 +238,6 @@ public final class ChoccyMilk {
                 FunctionDescriptor.of(JAVA_SHORT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT));
         progress("Initializing core…");
         fn(linker, lib, "retro_init", FunctionDescriptor.ofVoid()).invokeExact();
-        checkOnlineCapabilities();
 
         // what the core wants: the file's path, or its bytes
         MemorySegment info = arena.allocate(40, 8);
@@ -264,6 +263,13 @@ public final class ChoccyMilk {
             throw new IllegalStateException(wantsHardware
                     ? name + " requested a graphics context this Choccy Milk profile cannot open"
                     : name + " couldn't load this game");
+        }
+        // melonDS DS registers core options inside retro_load_game, not retro_init.
+        // Validate after successful loading, before running any frames.
+        checkOnlineCapabilities();
+        if ("true".equals(overrides.get("wiiuu.dsOnline"))) {
+            System.err.println("[choccy] WFC networking option registered; mode: "
+                    + overrides.getOrDefault("melonds_network_mode", defaults.get("melonds_network_mode")));
         }
         if (bluetooth != null) {
             progress("Bluetooth multiplayer: " + (bluetoothRole.equals("host") ? "waiting for paired player…" : "connecting to host…"));
