@@ -63,6 +63,16 @@ public final class PluginStoreTest {
             running.remove(cloudKey, cloud);
         }
         if (PluginStore.externalRunning(config)) throw new AssertionError("Cloud still active after exit");
+        var finished = new java.util.concurrent.CompletableFuture<Void>();
+        var stops = new java.util.concurrent.atomic.AtomicInteger();
+        PluginStore.trackInProcess(config,external,stops::incrementAndGet,finished);
+        if(!PluginStore.externalRunning(config))throw new AssertionError("In-JVM RTC should route game input");
+        Config other = new Config(Files.createTempDirectory("wiiuu-java-rtc-other-"));
+        if(PluginStore.externalRunning(other))throw new AssertionError("RTC leaked across profiles");
+        PluginStore.setEnabled(config,external,false);
+        if(stops.get()!=1||!PluginStore.externalRunning(config))throw new AssertionError("Stopping RTC must remain tracked until cleanup");
+        finished.complete(null);
+        if(PluginStore.externalRunning(config))throw new AssertionError("RTC still tracked after cleanup");
         System.out.println("Plugin activation, persistence, native process and runtime gating passed");
     }
 }

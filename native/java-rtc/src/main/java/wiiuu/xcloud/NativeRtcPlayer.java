@@ -41,7 +41,7 @@ public final class NativeRtcPlayer {
     private VideoView view;
     private PeerConnectionFactory factory;
     private RTCPeerConnection peer;
-    private volatile boolean muted;
+    private volatile boolean muted, rtcFailed;
     private boolean started, handshake, inputOpened, controlOpened, messageOpened;
     private int sequence;
     private volatile VideoTrack video;
@@ -96,7 +96,8 @@ public final class NativeRtcPlayer {
                 if(c!=null&&c.sdp!=null&&!c.sdp.isBlank())candidates.add(obj("candidate",c.sdp,"sdpMid",c.sdpMid,"sdpMLineIndex",c.sdpMLineIndex));
             }
             public void onConnectionChange(RTCPeerConnectionState s){
-                if(s==RTCPeerConnectionState.FAILED||s==RTCPeerConnectionState.CLOSED)closing.set(true);
+                if(s==RTCPeerConnectionState.FAILED){rtcFailed=true;closing.set(true);}
+                else if(s==RTCPeerConnectionState.CLOSED)closing.set(true);
             }
             public void onTrack(RTCRtpTransceiver t){
                 if(t.getReceiver().getTrack() instanceof VideoTrack v && video==null){
@@ -284,8 +285,8 @@ public final class NativeRtcPlayer {
             java.util.function.Supplier<List<Map<String,Object>>> frames,CompletableFuture<Void> finished){
         NativeRtcPlayer session=new NativeRtcPlayer(port,secret,title,audio,frames);
         Thread worker=new Thread(()->{
-            try{session.run();finished.complete(null);}
-            catch(InterruptedException e){finished.complete(null);}
+            try{session.run();if(session.rtcFailed)finished.completeExceptionally(new IllegalStateException("Java RTC connection failed"));else finished.complete(null);}
+            catch(InterruptedException e){if(session.rtcFailed)finished.completeExceptionally(new IllegalStateException("Java RTC connection failed"));else finished.complete(null);}
             catch(Throwable e){finished.completeExceptionally(new IllegalStateException("Java RTC failed: "+e.getClass().getSimpleName()));}
         },"wiiuu-java-rtc");
         worker.setDaemon(true);

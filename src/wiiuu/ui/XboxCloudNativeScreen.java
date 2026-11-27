@@ -76,6 +76,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     }
     private volatile Process browser;
     private NativeRtcSession nativeSession;
+    private boolean logoutAfterStream;
     private boolean playing() { return nativeSession!=null || (browser!=null&&browser.isAlive()); }
     private boolean streamActive;
     private Runnable streamActivity = () -> {};
@@ -672,6 +673,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         });
     }
     private void logout() {
+        if(nativeSession!=null){logoutAfterStream=true;stopGame();return;}
         if(playing())stopGame();
         command("logout",result->{
             signedIn=false;pairing=false;pairingStatusTimer.stop();
@@ -702,7 +704,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             nativeSession=null;
             setStreamActive(false);
             if(!closed){
-                status=error==null?"Stream closed. Choose another game.":"Native RTC failed: "+error.getMessage();
+                status=error==null?"Stream closed. Choose another game.":error.getMessage();
+                if(logoutAfterStream){logoutAfterStream=false;logout();}
                 repaint.run();
             }
         }));
@@ -718,7 +721,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             return;
         }
         if (available != null) chosen=available;
-        if(playing()){status="A cloud stream is already running.";repaint.run();return;}
+        if(playing()||PluginStore.externalRunning(config)){status="A cloud stream is already running or stopping.";repaint.run();return;}
         boolean useNative=nativeRtc();
         try {
             if(useNative) {
@@ -804,7 +807,11 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         if(p!=null&&p.isAlive()){p.descendants().forEach(ProcessHandle::destroy);p.destroy();}
         browser=null;
         setStreamActive(false);
-        if(backend!=null)backend.close();
+        Backend oldBackend=backend;
+        if(oldBackend!=null){
+            if(nativeSession!=null)nativeSession.finished().whenCompleteAsync((ignored,error)->oldBackend.close());
+            else oldBackend.close();
+        }
         hits.clear();games.clear();
         coverLoader.shutdownNow();coverImages.clear();requestedCovers.clear();
         favoriteTargets.clear();
