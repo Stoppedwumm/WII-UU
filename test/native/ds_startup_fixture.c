@@ -34,6 +34,15 @@ size_t retro_get_memory_size(unsigned type) { (void) type; return 0; }
 size_t retro_serialize_size(void) { return 0; }
 bool retro_serialize(void *data, size_t size) { (void) data; (void) size; return false; }
 bool retro_unserialize(const void *data, size_t size) { (void) data; (void) size; return false; }
-void retro_run(void) { video(pixels, 256, 384, 256 * sizeof(uint32_t)); }
+void retro_run(void) {
+    static bool announced;
+    if (!announced) {
+        video(pixels, 256, 384, 256 * sizeof(uint32_t));
+        puts("BIOS fixture output between frames");
+        fflush(stdout);
+        announced = true;
+    }
+    video(pixels, 256, 384, 256 * sizeof(uint32_t));
+}
 void retro_unload_game(void) {}
 void retro_deinit(void) {}
