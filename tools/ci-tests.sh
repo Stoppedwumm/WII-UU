@@ -60,6 +60,7 @@ java -Djava.awt.headless=true -cp build/installer-tests wiiuu.core.UserProfilesT
 java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.UpdateChannelsTest
 java --add-modules jdk.httpserver -cp build/installer-tests wiiuu.core.ReleaseArchiveTest
 python3 -m unittest discover -s tools/tests -p 'test_release*.py'
+python3 -m unittest discover -s test/xcloud -p 'test_native_rtc.py'
 WIIUU_CI_COMMAND_2
     if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
       run_check "Check Windows installer syntax" pwsh -NoProfile -Command - <<'WIIUU_CI_COMMAND_3'

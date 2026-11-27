@@ -259,3 +259,44 @@ indicates the Java UI should advance; if it does not, investigate the UI
 callback/bridge. Logging is deliberately limited to stages and booleans:
 never paste OAuth credentials, device codes, or `xcloud-tokens.json` in bug
 reports.
+
+
+## Experimental browser-free RTC backend
+
+The game library's **RTC: Chromium / RTC: Native (beta)** button switches the
+next launch between the original browser and the experimental native media player.
+Chromium remains the default. The native backend uses aiortc (ICE, DTLS, SRTP,
+SCTP), PyAV/FFmpeg (H.264 and Opus decoding), and pygame/SDL (video and audio).
+It does not start a browser or execute the browser player JavaScript.
+
+First install the existing Xbox runtime for authentication and the fallback.
+Install Python 3.11 or newer, then create a virtual environment named
+`rtc-venv` **inside the existing Xbox runtime directory**
+(`<WII-UU home>/native/xcloud`). With that directory as your working directory:
+
+```sh
+python3 -m venv rtc-venv
+rtc-venv/bin/python -m pip install "aiortc>=1.12,<2" "aiohttp>=3.11,<4" "pygame>=2.6,<3"
+```
+
+On Windows (PowerShell):
+
+```powershell
+py -3 -m venv rtc-venv
+.\rtc-venv\Scripts\python.exe -m pip install "aiortc>=1.12,<2" "aiohttp>=3.11,<4" "pygame>=2.6,<3"
+```
+
+These packages may require additional system build dependencies if there are no
+wheels for your architecture. The helper is extracted from the WII-UU JAR at
+launch. It requests 720p/30 FPS, uses existing managed controller mappings and
+slots, and keeps the existing session service and account store. Escape closes
+the stream and M toggles audio. Errors are recorded in `native-rtc.log` without
+raw signaling messages or credentials. Select Chromium again to recover from an
+unsuccessful test. No silent retry launches a second Xbox session.
+
+This is a first experimental media path, not a production replacement:
+hardware decoding, native raw-controller fallback, keyboard/mouse mappings,
+rumble, stream statistics, frame timing reports and platform-specific packaging
+are not implemented. Real Xbox session compatibility and Pi performance need
+live testing. The current installer still requires the original browser
+runtime. Wire-format reference: [openxcloud protocol implementation](https://github.com/StoppedwummPython/openxcloud/tree/main/crates/xcloud-proto).

@@ -209,6 +209,8 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             paintSignIn(g,width,height,u);
         } else {
             paintLibrary(g,width,height,u);
+            action(g,width-pad-300*u,26*u,172*u,48*u,
+                    nativeRtc()?"RTC: Native (beta)":"RTC: Chromium",this::toggleNativeRtc,u,false);
         }
         if(searchEditing) paintSearch(g,width,height,u);
         if(searchEditing) searchFocus=hits.isEmpty()?0:Math.max(0,Math.min(searchFocus,hits.size()-1));
@@ -420,6 +422,13 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     }
     private void erase() {
         if(!query.isEmpty()){query=query.substring(0,query.length()-1);page=0;repaint.run();}
+    }
+    private boolean nativeRtc() { return config.getBool("xcloud.nativeRtc", false); }
+    private void toggleNativeRtc() {
+        config.set("xcloud.nativeRtc", Boolean.toString(!nativeRtc()));
+        config.save();
+        status=nativeRtc()?"Experimental native RTC selected. Install its Python dependencies first.":"Chromium RTC selected.";
+        repaint.run();
     }
     private boolean autoAudio() { return config.getBool("xcloud.audioAutoplay", true); }
     private void toggleAutoAudio() {
@@ -679,6 +688,29 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             chromeCommand.add("--password-store=basic");
     }
 
+    // The native helper shares the authenticated loopback API, but gets its
+    // short-lived secret through the child environment instead of its arguments.
+    private ProcessBuilder nativeRtcBuilder(Game chosen) throws IOException {
+        Path root=XboxCloudRuntime.home(config);
+        boolean windows=System.getProperty("os.name","").toLowerCase(Locale.ROOT).contains("win");
+        Path python=root.resolve(windows?"rtc-venv/Scripts/python.exe":"rtc-venv/bin/python");
+        if(!Files.isRegularFile(python))
+            throw new IOException("Native RTC environment not installed (see docs/xbox-cloud.md)");
+        Path script=root.resolve("native-player.py");
+        try(InputStream bundled=XboxCloudNativeScreen.class.getResourceAsStream("/xcloud/native-player.py")){
+            if(bundled==null)throw new IOException("Native RTC player resource missing");
+            Files.copy(bundled,script,StandardCopyOption.REPLACE_EXISTING);
+        }
+        ProcessBuilder builder=new ProcessBuilder(python.toAbsolutePath().toString(),script.toAbsolutePath().toString())
+                .directory(root.toFile());
+        builder.environment().put("WIIUU_RTC_PORT",Integer.toString(backend.port));
+        builder.environment().put("WIIUU_RTC_SECRET",backend.secret);
+        builder.environment().put("WIIUU_RTC_TITLE",chosen.id());
+        builder.environment().put("WIIUU_RTC_AUDIO",autoAudio()?"1":"0");
+        builder.environment().put("PYGAME_HIDE_SUPPORT_PROMPT","1");
+        return builder;
+    }
+
     private void startGame(Game chosen) {
         if(closed||backend==null||!signedIn)return;
         String desiredTitleId=chosen.id();
@@ -691,14 +723,19 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         if (available != null) chosen=available;
         Process old=browser;
         if(old!=null&&old.isAlive()){status="A cloud stream is already running.";repaint.run();return;}
+        boolean useNative=nativeRtc();
         try {
+            ProcessBuilder builder;
+            if(useNative) {
+                builder=nativeRtcBuilder(chosen);
+            } else {
             String url="http://127.0.0.1:"+backend.port+
                     "/?title="+URLEncoder.encode(chosen.id(),StandardCharsets.UTF_8)+
                     "&autoAudio="+(autoAudio()?"1":"0")+
                     "&bindings="+URLEncoder.encode(XboxKeyboardMap.serialized(config),StandardCharsets.UTF_8)+
                     "&sensitivity="+XboxKeyboardMap.sensitivity(config)+"#"+backend.secret;
             Path profile=Files.createDirectories(config.userHome().resolve("xcloud/chrome-profile"));
-            ProcessBuilder builder=new ProcessBuilder(
+            builder=new ProcessBuilder(
                     XboxCloudRuntime.chromium(config).toString(),
                     "--user-data-dir="+profile.toAbsolutePath(),
                     "--app="+url,"--no-first-run","--disable-sync","--disable-background-networking",
@@ -710,17 +747,20 @@ final class XboxCloudNativeScreen implements AutoCloseable {
             // This isolated browser only serves the local player. Permit
             // playback without a mouse gesture when the user opts in.
             if(autoAudio())builder.command().add("--autoplay-policy=no-user-gesture-required");
-            builder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .redirectError(ProcessBuilder.Redirect.DISCARD);
+            }
+            builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+            if(useNative) builder.redirectError(ProcessBuilder.Redirect.appendTo(
+                    XboxCloudRuntime.home(config).resolve("native-rtc.log").toFile()));
+            else builder.redirectError(ProcessBuilder.Redirect.DISCARD);
             setStreamActive(true);
             Process process=builder.start();
             browser=process;
             PluginStore.trackExternal(config,entry,process);
             startControllerForwarding();
-            status="Streaming "+chosen.name()+" in Chromium. Return here to select another game.";
+            status="Starting "+chosen.name()+" using "+(useNative?"native RTC":"Chromium")+". Return here to select another game.";
             process.onExit().thenRun(()->SwingUtilities.invokeLater(()->{
                 if(browser==process){browser=null;stopControllerForwarding();setStreamActive(false);if(!closed) {
-                    status="Stream closed. Choose another game.";
+                    status=useNative&&process.exitValue()!=0?"Native RTC failed. See native-rtc.log or select Chromium.":"Stream closed. Choose another game.";
                     command("stop",result->repaint.run());
                     repaint.run();
                 }}
@@ -728,7 +768,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
         }catch(Exception error){
             if (browser != null) stopGame();
             else setStreamActive(false);
-            status="Could not start Chromium: "+error.getMessage();
+            status="Could not start "+(useNative?"native RTC":"Chromium")+": "+error.getMessage();
         }
         repaint.run();
     }
