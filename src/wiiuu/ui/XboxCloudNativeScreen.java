@@ -427,7 +427,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void toggleNativeRtc() {
         config.set("xcloud.nativeRtc", Boolean.toString(!nativeRtc()));
         config.save();
-        status=nativeRtc()?"Experimental native RTC selected. Install its Python dependencies first.":"Chromium RTC selected.";
+        status=nativeRtc()?"Experimental native RTC selected. Install the Java RTC runtime first.":"Chromium RTC selected.";
         repaint.run();
     }
     private boolean autoAudio() { return config.getBool("xcloud.audioAutoplay", true); }
@@ -693,21 +693,17 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private ProcessBuilder nativeRtcBuilder(Game chosen) throws IOException {
         Path root=XboxCloudRuntime.home(config);
         boolean windows=System.getProperty("os.name","").toLowerCase(Locale.ROOT).contains("win");
-        Path python=root.resolve(windows?"rtc-venv/Scripts/python.exe":"rtc-venv/bin/python");
-        if(!Files.isRegularFile(python))
-            throw new IOException("Native RTC environment not installed (see docs/xbox-cloud.md)");
-        Path script=root.resolve("native-player.py");
-        try(InputStream bundled=XboxCloudNativeScreen.class.getResourceAsStream("/xcloud/native-player.py")){
-            if(bundled==null)throw new IOException("Native RTC player resource missing");
-            Files.copy(bundled,script,StandardCopyOption.REPLACE_EXISTING);
-        }
-        ProcessBuilder builder=new ProcessBuilder(python.toAbsolutePath().toString(),script.toAbsolutePath().toString())
+        Path player=root.resolve("java-rtc");
+        if(!Files.isRegularFile(player.resolve("java-rtc.jar")) || !Files.isDirectory(player.resolve("dependency")))
+            throw new IOException("Java RTC not installed (see docs/xbox-cloud.md)");
+        Path executable=Path.of(System.getProperty("java.home"),"bin",windows?"java.exe":"java");
+        String cp=player.resolve("java-rtc.jar")+File.pathSeparator+player.resolve("dependency/*");
+        ProcessBuilder builder=new ProcessBuilder(executable.toString(),"-cp",cp,"wiiuu.xcloud.NativeRtcPlayer")
                 .directory(root.toFile());
         builder.environment().put("WIIUU_RTC_PORT",Integer.toString(backend.port));
         builder.environment().put("WIIUU_RTC_SECRET",backend.secret);
         builder.environment().put("WIIUU_RTC_TITLE",chosen.id());
         builder.environment().put("WIIUU_RTC_AUDIO",autoAudio()?"1":"0");
-        builder.environment().put("PYGAME_HIDE_SUPPORT_PROMPT","1");
         return builder;
     }
 

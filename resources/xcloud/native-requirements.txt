@@ -1,3 +1,0 @@
-aiortc>=1.12,<2
-aiohttp>=3.11,<4
-pygame>=2.6,<3
