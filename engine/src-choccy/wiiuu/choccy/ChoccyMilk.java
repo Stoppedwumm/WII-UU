@@ -439,7 +439,7 @@ public final class ChoccyMilk {
 
     private void checkOnlineCapabilities() {
         if ("true".equals(overrides.get("wiiuu.dsOnline")) && !defaults.containsKey("melonds_network_mode"))
-            throw new IllegalStateException("This DS core was built without WFC networking. Install a networking-enabled melonDS DS core, or turn off DS online.");
+            throw new IllegalStateException("This DS core did not register WFC networking. Reinstall melonDS DS in Settings > Cores (Download / reinstall), then retry, or turn off DS online.");
     }
 
     private boolean env(int cmd, MemorySegment data) {

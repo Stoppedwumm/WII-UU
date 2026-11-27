@@ -20,8 +20,8 @@ public final class CoreManager {
     public String selected(String system) { return config.get("choccy.core." + system, "").trim(); }
     public void select(String system, String id) {
         if (!id.isEmpty() && !catalogue(system).contains(id)) throw new IllegalArgumentException("Choose a core from this console's catalogue");
-        if (system.equals("nds") && DsOnline.enabled(config) && !id.isEmpty() && !id.equals("melondsds"))
-            throw new IllegalArgumentException("DS online requires melonDS DS. Turn off DS online to choose a different core.");
+        if (system.equals("nds") && (DsOnline.enabled(config) || BluetoothLink.dsEnabled(config)) && !id.isEmpty() && !id.equals("melondsds"))
+            throw new IllegalArgumentException("DS networking requires melonDS DS. Turn off WFC and Bluetooth multiplayer to choose another core.");
         config.set("choccy.core." + system, id.isEmpty() ? null : id); config.save();
     }
     public Path download(String system, String id) {

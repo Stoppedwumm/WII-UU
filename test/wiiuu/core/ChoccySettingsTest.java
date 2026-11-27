@@ -40,6 +40,10 @@ public final class ChoccySettingsTest {
         check(custom.get("wiiuu.username").equals(name), "profile reaches helper");
         check(custom.get("melonds_mac_address_mode").equals("from-username"), "explicit identity selection");
         c.set("choccy.nds.dns", "bad"); rejects(() -> DsOnline.options(c), "bad DNS rejected before launch");
+        check(Cores.melonDsReleaseUrl("Windows 11", "amd64").endsWith("win32-x86_64-Release.zip"), "official Windows networking core");
+        check(Cores.melonDsReleaseUrl("Linux", "aarch64").endsWith("linux-arm64-Release.zip"), "official Raspberry Pi 64-bit core");
+        check(Cores.melonDsReleaseUrl("Mac OS X", "arm64").endsWith("macos-arm64-Release.zip"), "official Apple Silicon core");
+        check(Cores.melonDsReleaseUrl("Windows", "aarch64") == null, "unsupported upstream architecture");
         Cores cores = new Cores(c);
         var n64Software = cores.choccyOptions("n64");
         check("angrylion".equals(n64Software.get("mupen64plus-rdp-plugin")), "N64 software default");

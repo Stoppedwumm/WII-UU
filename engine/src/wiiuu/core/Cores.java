@@ -192,7 +192,9 @@ public final class Cores {
     public Path downloadChoccyCore(String name) {
         if (!name.matches("[a-z0-9_]+")) throw new IllegalArgumentException("Invalid core name");
         Path own = Choccy.translated() ? choccyCoreDir().resolve(Choccy.arch()) : choccyCoreDir();
-        return download(name, own, buildbot(Choccy.arch()));
+        String upstream = name.equals("melondsds") ? melonDsReleaseUrl(System.getProperty("os.name"), Choccy.arch()) : null;
+        return upstream == null ? download(name, own, buildbot(Choccy.arch()))
+                : downloadZip(name, own, upstream, true);
     }
     private Path selectedCore(String name, Runnable afterDownload) throws Downloading {
         Path installed = installedChoccyCore(name);
@@ -219,11 +221,13 @@ public final class Cores {
             }
             return selectedCore("mupen64plus_next", afterDownload);
         }
-        if (!dsOnline && !selected.isEmpty()) {
+        // The managed core must take precedence over an older RetroArch copy, including after reinstall.
+        if (dsOnline) return selectedCore("melondsds", afterDownload);
+        if (!selected.isEmpty()) {
             if (!CoreManager.catalogue(system.id()).contains(selected)) throw new Downloading("Invalid selected core. Choose a core in the core manager or use Automatic.");
             return selectedCore(selected, afterDownload);
         }
-        List<String> want = dsOnline ? List.of("melondsds") : ChoccyPicture.cores(config, system.id());
+        List<String> want = ChoccyPicture.cores(config, system.id());
         if (want != null) {
             boolean translated = Choccy.translated();
             Path own = translated ? choccyCoreDir().resolve(Choccy.arch()) : choccyCoreDir();
@@ -252,7 +256,6 @@ public final class Cores {
                 t.start();
                 throw new Downloading("Getting " + want.get(0) + " for " + system.name() + "'s core settings\u2026 the game starts by itself in a moment", true);
             }
-            if (dsOnline) throw new Downloading("DS networking needs melonDS DS. Install its libretro core, or enable core downloads and restart the app to retry.");
             System.out.println("[choccy] " + want.get(0) + " isn't available for this computer: " + system.name()
                     + " plays with its usual core (widescreen stretched, upscaling smoothed)");
         }
@@ -525,7 +528,25 @@ public final class Cores {
 
     private Path download(String name, Path dir, String from) {
         if (from == null || !name.matches("[a-z0-9_]+")) return null;
-        String url = from + name + "_libretro." + EXT + ".zip";
+        return downloadZip(name, dir, from + name + "_libretro." + EXT + ".zip", false);
+    }
+
+    // Pin the upstream release whose build enables networking and uses netpacket API 78.
+    static String melonDsReleaseUrl(String os, String arch) {
+        os = os.toLowerCase(Locale.ROOT);
+        arch = arch.toLowerCase(Locale.ROOT);
+        boolean arm = arch.equals("arm64") || arch.equals("aarch64");
+        boolean x64 = arch.equals("x64") || arch.equals("amd64") || arch.equals("x86_64");
+        if (!arm && !x64) return null;
+        String platform;
+        if (os.contains("win") && x64) platform = "win32-x86_64";
+        else if (os.contains("mac")) platform = "macos-" + (arm ? "arm64" : "x86_64");
+        else if (os.contains("linux")) platform = "linux-" + (arm ? "arm64" : "x86_64");
+        else return null;
+        return "https://github.com/JesseTG/melonds-ds/releases/download/v1.4.0/melondsds_libretro-" + platform + "-Release.zip";
+    }
+
+    private Path downloadZip(String name, Path dir, String url, boolean upstream) {
         Path target = dir.resolve(name + "_libretro." + EXT);
         Path tmp = null;
         try {
@@ -544,7 +565,10 @@ public final class Cores {
             try (ZipInputStream z = new ZipInputStream(r.body())) {
                 ZipEntry e;
                 while ((e = z.getNextEntry()) != null) {
-                    if (!e.isDirectory() && e.getName().equals(name + "_libretro." + EXT)) {
+                    String filename = name + "_libretro." + EXT;
+                    // Upstream release archives wrap the core in a platform-specific folder/cores/.
+                    if (!e.isDirectory() && (e.getName().equals(filename)
+                            || (upstream && e.getName().endsWith("/cores/" + filename)))) {
                         Files.copy(z, tmp, StandardCopyOption.REPLACE_EXISTING);
                         found = true;
                         break;

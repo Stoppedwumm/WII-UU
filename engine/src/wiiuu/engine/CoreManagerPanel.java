@@ -32,11 +32,11 @@ public final class CoreManagerPanel extends JPanel {
         JCheckBox autoDownload = new JCheckBox("Download missing cores automatically on launch", config.getBool("retroarch.download", true));
         autoDownload.addActionListener(e -> { config.set("retroarch.download", Boolean.toString(autoDownload.isSelected())); config.save(); });
         fields.add(autoDownload);
-        fields.add(new JLabel("Cores available from the libretro buildbot")); fields.add(choices);
+        fields.add(new JLabel("Available cores (melonDS DS uses its upstream release on supported platforms)")); fields.add(choices);
         location.setEditable(false); fields.add(location);
         fields.add(new JLabel("Selections are shared with WII-UU / standalone Choccy Milk and apply to the next game."));
         fields.add(new JLabel("Core availability varies by platform. Choccy Milk needs software rendering."));
-        fields.add(new JLabel("DS online requires melonDS DS. Other cores may change picture settings or save-state compatibility."));
+        fields.add(new JLabel("DS WFC / local netpacket multiplayer require melonDS DS. Reinstall it if networking is missing."));
         fields.add(new JLabel("Stop the running game before downloading. Game saves and BIOS files are kept."));
         fields.add(new JLabel("Use selected core applies immediately; closing this window does not undo it."));
         add(fields, BorderLayout.CENTER);
