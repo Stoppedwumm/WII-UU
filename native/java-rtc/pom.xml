@@ -11,4 +11,11 @@
     <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.1</version></plugin>
     <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-dependency-plugin</artifactId><version>3.9.0</version><executions><execution><phase>package</phase><goals><goal>copy-dependencies</goal></goals><configuration><includeScope>runtime</includeScope></configuration></execution></executions></plugin>
   </plugins></build>
+  <profiles><profile><id>universal</id><dependencies>
+    <dependency><groupId>dev.onvoid.webrtc</groupId><artifactId>webrtc-java</artifactId><version>1.0.1</version><classifier>linux-x86_64</classifier></dependency>
+    <dependency><groupId>dev.onvoid.webrtc</groupId><artifactId>webrtc-java</artifactId><version>1.0.1</version><classifier>linux-aarch64</classifier></dependency>
+    <dependency><groupId>dev.onvoid.webrtc</groupId><artifactId>webrtc-java</artifactId><version>1.0.1</version><classifier>macos-x86_64</classifier></dependency>
+    <dependency><groupId>dev.onvoid.webrtc</groupId><artifactId>webrtc-java</artifactId><version>1.0.1</version><classifier>macos-aarch64</classifier></dependency>
+    <dependency><groupId>dev.onvoid.webrtc</groupId><artifactId>webrtc-java</artifactId><version>1.0.1</version><classifier>windows-x86_64</classifier></dependency>
+  </dependencies></profile></profiles>
 </project>

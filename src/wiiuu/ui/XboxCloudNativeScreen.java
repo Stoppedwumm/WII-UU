@@ -430,7 +430,7 @@ final class XboxCloudNativeScreen implements AutoCloseable {
     private void toggleNativeRtc() {
         config.set("xcloud.nativeRtc", Boolean.toString(!nativeRtc()));
         config.save();
-        status=nativeRtc()?"Experimental native RTC selected. Install the Java RTC runtime first.":"Chromium RTC selected.";
+        status=nativeRtc()?"Experimental Java RTC selected.":"Chromium RTC selected.";
         repaint.run();
     }
     private boolean autoAudio() { return config.getBool("xcloud.audioAutoplay", true); }

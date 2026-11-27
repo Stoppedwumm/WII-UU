@@ -270,25 +270,25 @@ session signaling and controller-manager mappings. No Python, Chromium,
 Electron, browser JavaScript or second JVM runs in the selected Java media client.
 The player opens a Swing window inside the existing JVM. A dedicated worker
 handles signaling; Java receives controller frames directly from WII-UU.
-Restart WII-UU after updating or relocating the optional JNI runtime.
+Restart WII-UU after updating or relocating the JNI runtime.
 
-Build the experimental helper on the target machine using Java 17+ and Maven:
+The Java player and its pinned dependencies are included in `wiiuu.jar` on
+normal builds and release ZIPs. Native libraries are bundled for Linux x64
+and ARM64, macOS Intel and Apple Silicon, and Windows x64. At first launch
+WII-UU verifies and extracts just the required platform jars into a
+content-addressed cache under `<WII-UU home>/native/xcloud/java-rtc/`.
+No Maven or manual JAR copying is needed on the installed device.
 
-```sh
-mvn -f native/java-rtc/pom.xml clean package
-```
-
-Copy `native/java-rtc/target/java-rtc.jar` and the entire
-`native/java-rtc/target/dependency/` directory into
-`<WII-UU home>/native/xcloud/java-rtc/` (create the directory first).
-Maven resolves the native library for the current OS and CPU. Do not copy a
-dependency directory built on a different architecture. Install the original
-Xbox runtime first, then select Native (beta) and launch a game.
+Install the existing Xbox runtime for Microsoft login and the Chromium
+fallback, then select **RTC: Native (beta)** and launch a game.
+Source builds use Maven on the build machine; `WIIUU_SKIP_JAVA_RTC=1`
+allows a development build without the RTC bundle. Release packaging
+always includes it.
 
 This prototype requests H.264/Opus, 720p/30, receives video through a native
 libwebrtc decoder and uses its audio device playout. Escape closes the player.
 It sends mapped controller input; native keyboard/mouse fallback, rumble,
-frame timing reports, hardware decoder tuning and automatic installation
+frame timing reports, hardware decoder tuning
 remain future work. Startup errors appear in the game library. The initial runtime installer
 still requires Chromium for the fallback. No silent automatic session retry.
 Live Xbox compatibility, Raspberry Pi performance and native audio need testing.

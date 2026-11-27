@@ -10,7 +10,7 @@ if ! grep -qE "^## v?${BASE_VERSION//./\\.}( |$)" CHANGELOG.md; then
   exit 1
 fi
 python3 tools/package-cloudflared.py
-WIIUU_SLIM_RELAY=1 ./build.sh
+WIIUU_SLIM_RELAY=1 WIIUU_SKIP_JAVA_RTC=0 ./build.sh
 VERSION="$(python3 -c 'import json; print(json.load(open("build/version.json"))["releaseVersion"])')"
 CHANNEL="$(python3 -c 'import json; print(json.load(open("build/version.json"))["channel"])')"
 NAME="WII-UU-$VERSION"

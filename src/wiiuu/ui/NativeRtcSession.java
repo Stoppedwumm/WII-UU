@@ -28,12 +28,18 @@ final class NativeRtcSession implements AutoCloseable {
         root=root.toAbsolutePath().normalize();
         if(loader!=null&&!root.equals(loadedRoot))throw new IOException("Restart WII-UU after moving the RTC runtime");
         if(loader==null){
-            Path jar=root.resolve("java-rtc.jar"),dependencies=root.resolve("dependency");
-            if(!Files.isRegularFile(jar)||!Files.isDirectory(dependencies))throw new IOException("Java RTC not installed (see docs/xbox-cloud.md)");
-            List<URL> urls=new ArrayList<>();
-            urls.add(jar.toUri().toURL());
-            try(var files=Files.list(dependencies)){
-                for(Path file:files.filter(p->Files.isRegularFile(p)&&p.getFileName().toString().endsWith(".jar")).sorted().toList())urls.add(file.toUri().toURL());
+            List<URL> urls;
+            if(NativeRtcBundle.present()){
+                urls=NativeRtcBundle.extract(root);
+            }else{
+                // Development-only JDK builds and the offline classloader fixture.
+                Path jar=root.resolve("java-rtc.jar"),dependencies=root.resolve("dependency");
+                if(!Files.isRegularFile(jar)||!Files.isDirectory(dependencies))throw new IOException("Java RTC not bundled in this development build");
+                urls=new ArrayList<>();
+                urls.add(jar.toUri().toURL());
+                try(var files=Files.list(dependencies)){
+                    for(Path file:files.filter(p->Files.isRegularFile(p)&&p.getFileName().toString().endsWith(".jar")).sorted().toList())urls.add(file.toUri().toURL());
+                }
             }
             loader=new URLClassLoader(urls.toArray(URL[]::new),NativeRtcSession.class.getClassLoader());
             loadedRoot=root;
