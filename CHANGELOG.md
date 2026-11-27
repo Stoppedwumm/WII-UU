@@ -3,6 +3,9 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.2.2 (2026-11-17)
+- Improve native RTC performance
+
 ## 2.2.1 (2026-11-17)
 **Bug fixes**
 - Fixed unexpected frame protocol byte in choccy
