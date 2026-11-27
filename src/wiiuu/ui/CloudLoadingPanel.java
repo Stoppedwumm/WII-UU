@@ -13,6 +13,9 @@ final class CloudLoadingPanel extends JComponent {
     CloudLoadingPanel(AnimatedMascot mascot){
         this.mascot=mascot;
         setOpaque(true);
+        // Pass the live menu wordmark styling across the optional RTC module boundary.
+        putClientProperty("wiiuu.cloud.logoFont",MenuView.font(Font.BOLD,100f));
+        putClientProperty("wiiuu.cloud.logoAccent",MenuView.ACCENT);
         timer=new Timer(50,e->repaint()); // 20 fps only while waiting for the first picture
         timer.setCoalesce(true);
         addPropertyChangeListener("wiiuu.cloud.loadingStatus",e->{
