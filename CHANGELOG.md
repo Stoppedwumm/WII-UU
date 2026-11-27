@@ -6,6 +6,7 @@ in Settings > General > What's new, and before installing an update.
 ## 2.2.1 (2026-11-17)
 **Bug fixes**
 - Fixed unexpected frame protocol byte in choccy
+- Fixed DS Online
 
 ## 2.2.0 (2026-11-26)
 **Xbox Cloud Gaming (experimental)**
