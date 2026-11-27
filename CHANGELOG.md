@@ -3,6 +3,10 @@
 What changed in each WII-UU release, newest first. WII-UU shows these notes after an update,
 in Settings > General > What's new, and before installing an update.
 
+## 2.2.1 (2026-11-17)
+**Bug fixes**
+- Fixed unexpected frame protocol byte in choccy
+
 ## 2.2.0 (2026-11-26)
 **Xbox Cloud Gaming (experimental)**
 - Add an optional Java-native WebRTC player using JNI/libwebrtc, with native video/audio and direct WII-UU controller-manager mappings. Select RTC: Native (beta) in the Xbox library; Chromium remains the default and can be selected as a fallback.
