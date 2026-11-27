@@ -8,7 +8,7 @@ import java.awt.image.BufferedImage;
 
 /** Short original cinematic Wii-UU ident; uses cached wordmark paths and a bounded Swing timer. */
 final class CloudLogoIntro extends JComponent {
-    static final int LENGTH_MS=1500;
+    static final int LENGTH_MS=2500;
     private final Shape left,right;
     private final Rectangle2D bounds;
     private final Color accent;
@@ -43,50 +43,70 @@ final class CloudLogoIntro extends JComponent {
         Graphics2D g=(Graphics2D)graphics.create();
         try{
             g.setColor(Color.BLACK);g.fillRect(0,0,w,h);
-            if(w<=0||h<=0)return;
+            if(w<=0||h<=0||ms>=LENGTH_MS)return;
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
-            // Blue light rays converge into the wordmark, then travel through it.
-            float t=(float)clamp(ms/LENGTH_MS);
-            float fade=(float)(1-ease((ms-1170)/330));
-            float reveal=(float)ease(ms/520);
-            float intensity=fade*(float)Math.sin(Math.PI*clamp(ms/1150));
-            g.setPaint(new RadialGradientPaint(w/2f,h/2f,Math.max(1f,w*.48f),
-                    new float[]{0,.5f,1},new Color[]{new Color(accent.getRed(),accent.getGreen(),accent.getBlue(),(int)(65*intensity)),
-                    new Color(8,18,33,(int)(130*fade)),Color.BLACK}));
+            double arrive=ease((ms-450)/650),exit=ease((ms-2050)/450);
+            float fade=(float)(1-exit),energy=(float)(Math.sin(Math.PI*clamp(ms/1650))*fade);
+            g.setPaint(new RadialGradientPaint(w*.5f,h*.5f,Math.max(1,w*.54f),new float[]{0,.44f,1},
+                    new Color[]{new Color(12,34,57),new Color(3,12,24),Color.BLACK}));
             g.fillRect(0,0,w,h);
-            for(int i=0;i<10;i++){
-                double q=(i-4.5)/4.5;
-                int x=(int)(w/2.0+q*w*.48*(1-reveal*.48));
-                int rayW=Math.max(1,(int)(w*.005*(1+Math.abs(q))));
-                int rayH=(int)(h*(.17+.65*(1-reveal)));
-                g.setColor(new Color(accent.getRed(),accent.getGreen(),accent.getBlue(),(int)(100*intensity*(1-Math.abs(q)*.5))));
-                g.fillRect(x-rayW/2,(h-rayH)/2,rayW,rayH);
+            // A perspective tunnel of luminous ribbons. The vanishing point opens into the mark.
+            for(int i=0;i<24;i++){
+                double angle=i*Math.PI*2/24+.12*Math.sin(ms/600);
+                double phase=(ms/1050+i*.173)%1, radius=.08+phase*phase*.88;
+                double x=Math.cos(angle)*w*.78,y=Math.sin(angle)*h*.78;
+                double inner=Math.max(.035,radius-.12-.12*phase);
+                int a=(int)(energy*(35+145*phase));
+                g.setColor(new Color(accent.getRed(),accent.getGreen(),accent.getBlue(),a/4));
+                g.setStroke(new BasicStroke((float)(2+phase*9),BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
+                g.draw(new java.awt.geom.Line2D.Double(w*.5+x*inner,h*.5+y*inner,w*.5+x*radius,h*.5+y*radius));
+                g.setColor(new Color(145,225,255,a));g.setStroke(new BasicStroke((float)(.7+phase*1.8)));
+                g.draw(new java.awt.geom.Line2D.Double(w*.5+x*inner,h*.5+y*inner,w*.5+x*radius,h*.5+y*radius));
             }
-            float opacity=fade*(float)ease((ms-100)/310);
-            double zoom=1.17-.17*ease(ms/620)+.045*ease((ms-850)/650);
-            double scale=Math.min(w*.72/bounds.getWidth(),h*.28/bounds.getHeight())*zoom;
+            // A horizontal impact flare, confined to a narrow band rather than a full-screen flash.
+            double impact=Math.exp(-Math.pow((ms-1090)/170,2));
+            float line=(float)(fade*(.13+.87*impact)*ease((ms-600)/400));
+            int span=(int)(w*(.15+.78*impact)*arrive);
+            if(span>0){
+                g.setPaint(new GradientPaint(0,h*.5f-12,new Color(80,200,255,0),0,h*.5f,new Color(140,225,255,(int)(155*line)),true));
+                g.fillRect((w-span)/2,h/2-12,span,24);
+                g.setColor(new Color(205,244,255,(int)(220*line)));g.fillRect((w-span)/2,h/2,span,1);
+            }
+            double zoom=1.22-.22*arrive+.55*exit;
+            double scale=Math.min(w*.70/bounds.getWidth(),h*.26/bounds.getHeight())*zoom;
             g.translate(w/2.0,h/2.0);g.scale(scale,scale);g.translate(-bounds.getCenterX(),-bounds.getCenterY());
-            g.setComposite(AlphaComposite.SrcOver.derive(opacity));
-            // Subtle extrusion gives the letters depth without a 3D renderer.
-            for(int i=6;i>=1;i--){
-                g.translate(0,i*1.2);g.setColor(new Color(9,30,48));g.fill(left);g.setColor(accent.darker().darker());g.fill(right);g.translate(0,-i*1.2);
+            // Two separately moving halves form the wordmark, with a layered metal extrusion.
+            double slide=95*(1-arrive);
+            for(int side=0;side<2;side++){
+                Shape glyph=side==0?left:right;
+                Graphics2D l=(Graphics2D)g.create();
+                try{
+                    double p=ease((ms-220-side*100)/500);
+                    l.translate((side==0?-1:1)*slide,(side==0?-1:1)*14*(1-arrive));
+                    l.shear((side==0?-.16:.16)*(1-arrive),0);
+                    l.setComposite(AlphaComposite.SrcOver.derive((float)(p*fade)));
+                    Color face=side==0?new Color(0xeaf5ff):accent;
+                    for(int d=12;d>=1;d--){
+                        l.translate(d*.48,d*.72);l.setColor(side==0?new Color(22+d,40+d,60+d):accent.darker().darker());l.fill(glyph);l.translate(-d*.48,-d*.72);
+                    }
+                    l.setPaint(new GradientPaint(0,(float)bounds.getMinY(),face.brighter(),0,(float)bounds.getMaxY(),face.darker()));l.fill(glyph);
+                    l.setStroke(new BasicStroke(.65f));l.setColor(new Color(220,246,255,155));l.draw(glyph);
+                    l.clip(glyph);
+                    float sweep=(float)(bounds.getMinX()-100+(bounds.getWidth()+200)*ease((ms-980)/850));
+                    l.setPaint(new GradientPaint(sweep-48,0,new Color(255,255,255,0),sweep,0,new Color(255,255,255,215),true));
+                    l.fill(new Rectangle2D.Double(sweep-48,bounds.getMinY(),96,bounds.getHeight()));
+                }finally{l.dispose();}
             }
-            g.setColor(new Color(0xeaf5ff));g.fill(left);g.setColor(accent);g.fill(right);
-            Shape clip=g.getClip();
-            java.awt.geom.Area wordmark=new java.awt.geom.Area(left);wordmark.add(new java.awt.geom.Area(right));
-            g.clip(wordmark);
-            float sweep=(float)(bounds.getMinX()-80+(bounds.getWidth()+160)*ease((ms-340)/720));
-            g.setPaint(new GradientPaint(sweep-55,0,new Color(255,255,255,0),sweep,0,new Color(255,255,255,190),true));
-            g.fill(new Rectangle2D.Double(sweep-55,bounds.getMinY(),110,bounds.getHeight()));
-            g.setClip(clip);
         }finally{g.dispose();}
+        // Fade the complete scene, including the tunnel, to black.
+        if(ms>2050){Graphics2D end=(Graphics2D)graphics.create();try{end.setColor(new Color(0,0,0,(int)(255*ease((ms-2050)/450))));end.fillRect(0,0,w,h);}finally{end.dispose();}}
     }
     static void selfTest(){
         CloudLogoIntro logo=new CloudLogoIntro(new Font(Font.SANS_SERIF,Font.BOLD,100),new Color(0x58d4f4),()->{});
         BufferedImage image=new BufferedImage(640,360,BufferedImage.TYPE_INT_RGB);
         Graphics2D g=image.createGraphics();
         try{
-            logo.paintAt(g,640,360,700);
+            logo.paintAt(g,640,360,1450);
             int lit=0;
             for(int y=125;y<235;y++)for(int x=100;x<540;x++)if((image.getRGB(x,y)&0xffffff)>0x808080)lit++;
             if(lit<100)throw new AssertionError("Logo wordmark missing");
