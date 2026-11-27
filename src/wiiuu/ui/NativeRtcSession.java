@@ -23,7 +23,7 @@ final class NativeRtcSession implements AutoCloseable {
         this.stop=stop;this.finished=finished;
     }
     static synchronized NativeRtcSession open(Path root,int port,String secret,String title,boolean audio,
-            Supplier<List<Map<String,Object>>> frames)throws IOException {
+            Supplier<List<Map<String,Object>>> frames,Supplier<javax.swing.JComponent> loadingFactory)throws IOException {
         if(active!=null&&!active.isDone())throw new IOException("Another Java RTC session is still stopping");
         root=root.toAbsolutePath().normalize();
         if(loader!=null&&!root.equals(loadedRoot))throw new IOException("Restart WII-UU after moving the RTC runtime");
@@ -47,8 +47,8 @@ final class NativeRtcSession implements AutoCloseable {
         try{
             Class<?> type=Class.forName("wiiuu.xcloud.NativeRtcPlayer",true,loader);
             CompletableFuture<Void> done=new CompletableFuture<>();
-            Runnable stop=(Runnable)type.getMethod("open",int.class,String.class,String.class,boolean.class,Supplier.class,CompletableFuture.class)
-                    .invoke(null,port,secret,title,audio,frames,done);
+            Runnable stop=(Runnable)type.getMethod("open",int.class,String.class,String.class,boolean.class,Supplier.class,CompletableFuture.class,Supplier.class)
+                    .invoke(null,port,secret,title,audio,frames,done,loadingFactory);
             active=done;
             return new NativeRtcSession(stop,done);
         }catch(ReflectiveOperationException|LinkageError e){
